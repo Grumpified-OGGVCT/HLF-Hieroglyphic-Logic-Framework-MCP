@@ -7,6 +7,12 @@
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
+<p align="center">
+  <img src="docs/social_preview.svg" alt="HLF — Hieroglyphic Logic Framework · MCP Server" width="100%"/>
+</p>
+
+> 💡 **Repo social preview**: Go to **Settings → Social preview** and upload a PNG export of [`docs/social_preview.svg`](docs/social_preview.svg) (1280×640px) so this card appears when the link is shared in Discord, forums, and social media.
+
 ---
 
 ## Table of Contents

@@ -11,7 +11,7 @@
 # ║  Triggers: Weekly Sunday 02:00 UTC + manual dispatch                        ║
 # ║  On drift: Opens (or updates) a GitHub Issue labeled "spec-drift"            ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
-name: "Weekly — Spec Sentinel (devstral:24b)"
+name: "Weekly — Spec Sentinel (nemotron-3-super)"
 
 on:
   schedule:

@@ -1,24 +1,24 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  HLF — Weekly Evolution Planner                                              ║
 # ║                                                                              ║
-# ║  Model: kimi-k2:1t-cloud (Moonshot AI)                                      ║
-# ║  Best-in-class: 1T-param MoE, 32B active, 256K ctx, autonomous agentic      ║
-# ║  coding, multi-step task decomposition, tool-use                             ║
-# ║  Why: Only kimi-k2:1t-cloud has a 256K context window large enough to        ║
-# ║        hold the ENTIRE HLF codebase in one pass and reason about the        ║
-# ║        next evolution step. Its agentic nature means it doesn't just         ║
-# ║        describe changes — it proposes multi-step execution plans.            ║
+# ║  Planning model: nemotron-3-super (NVIDIA)                                   ║
+# ║  Best-in-class: 120B LatentMoE+Mamba (12B active), 256K ctx, agentic        ║
+# ║  multi-file reasoning, long-horizon planning, 256K context window.           ║
+# ║  Why: nemotron-3-super's LatentMoE architecture is optimised for complex     ║
+# ║        agentic reasoning and long-horizon planning. It reads the full HLF    ║
+# ║        codebase snapshot (up to 200K chars) and proposes concrete Phase 2    ║
+# ║        implementation steps with rationale.                                   ║
 # ║                                                                              ║
 # ║  Stage 2 (code drafting): devstral:24b                                      ║
-# ║  Why: After kimi identifies WHAT to build, devstral drafts HOW to build it  ║
-# ║        (code-first, SWE-Bench tuned, Apache 2.0 licensed).                  ║
+# ║  Why: After nemotron-3-super identifies WHAT to build, devstral drafts HOW  ║
+# ║        to build it (code-first, SWE-Bench 46.8%, Apache 2.0 licensed).      ║
 # ║                                                                              ║
 # ║  This is a 2-agent swarm within a single workflow — planning then coding.   ║
 # ║                                                                              ║
 # ║  Triggers: Weekly Monday 03:00 UTC (after spec sentinel runs Sunday)        ║
 # ║  Output: GitHub Issue with roadmap analysis + code starters                 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
-name: "Weekly — Evolution Planner (kimi-k2:1t-cloud ⟶ devstral:24b swarm)"
+name: "Weekly — Evolution Planner (nemotron-3-super ⟶ devstral:24b swarm)"
 
 on:
   schedule:
@@ -172,7 +172,7 @@ jobs:
 
           ---
 
-          ## 📋 Strategic Evolution Plan (kimi-k2:1t-cloud)
+          ## 📋 Strategic Evolution Plan (${PLANNER_MODEL})
 
           ISSUE_EOF
 

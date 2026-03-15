@@ -107,16 +107,21 @@ class RAGMemory:
         self._lock = threading.Lock()
         # Hot tier: topic → list of recent entries
         self._hot: dict[str, list[dict[str, Any]]] = {}
+        # Persistent shared connection for `:memory:` databases (each new
+        # sqlite3.connect(":memory:") would open a *distinct* empty database).
+        # For file-backed paths we still share the connection for simplicity
+        # and to avoid WAL conflicts between competing connections.
+        self._conn: sqlite3.Connection = sqlite3.connect(
+            self._db_path, check_same_thread=False
+        )
+        self._conn.row_factory = sqlite3.Row
         self._init_db()
 
     def _init_db(self) -> None:
-        with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+        self._conn.executescript(_SCHEMA)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return self._conn
 
     # ── Store ─────────────────────────────────────────────────────────────────
 

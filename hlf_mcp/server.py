@@ -675,6 +675,46 @@ def hlf_spec_lifecycle(
 _GOVERNANCE_DIR = os.path.join(os.path.dirname(__file__), "..", "governance")
 
 
+def _read_governance_file(filename: str) -> str:
+    """Read a governance file, falling back to a clear error payload if absent.
+
+    In a wheel-installed package the top-level ``governance/`` directory is
+    not included by default (it lives outside ``hlf_mcp``).  Rather than
+    raising an unhandled FileNotFoundError to MCP clients, return a structured
+    JSON payload explaining where to find the file.  Operators should either
+    install from source or add governance/ as package data.
+    """
+    path = os.path.join(_GOVERNANCE_DIR, filename)
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    return json.dumps({
+        "error": "governance_file_not_found",
+        "file": filename,
+        "hint": (
+            "The governance/ directory is not bundled in wheel installs. "
+            "Install from source (`pip install -e .`) or mount the directory "
+            "to the container's working directory."
+        ),
+    }, indent=2)
+
+
+def _read_fixture_file(name: str) -> str:
+    """Read a fixture .hlf file, with informative error on miss."""
+    candidates = [
+        os.path.join(os.path.dirname(__file__), "..", "fixtures", f"{name}.hlf"),
+        os.path.join(os.path.dirname(__file__), "fixtures", f"{name}.hlf"),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                return f.read()
+    available = "hello_world, security_audit, delegation, routing, db_migration, log_analysis, stack_deployment"
+    raise FileNotFoundError(
+        f"Example '{name}' not found. Available: {available}"
+    )
+
+
 @mcp.resource("hlf://grammar")
 def get_grammar() -> str:
     """HLF grammar specification (LALR(1) Lark format)."""
@@ -702,39 +742,25 @@ def get_example(name: str) -> str:
     Available names: hello_world, security_audit, delegation, routing,
                      db_migration, log_analysis, stack_deployment
     """
-    fixtures_dir = os.path.join(os.path.dirname(__file__), "..", "fixtures")
-    path = os.path.join(fixtures_dir, f"{name}.hlf")
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"Example '{name}' not found. Available: hello_world, security_audit, "
-            "delegation, routing, db_migration, log_analysis, stack_deployment"
-        )
-    with open(path) as f:
-        return f.read()
+    return _read_fixture_file(name)
 
 
 @mcp.resource("hlf://governance/host_functions")
 def get_governance_host_functions() -> str:
     """Governance host_functions.json — full host function definitions."""
-    path = os.path.join(_GOVERNANCE_DIR, "host_functions.json")
-    with open(path) as f:
-        return f.read()
+    return _read_governance_file("host_functions.json")
 
 
 @mcp.resource("hlf://governance/bytecode_spec")
 def get_governance_bytecode_spec() -> str:
     """Governance bytecode_spec.yaml — bytecode encoding specification."""
-    path = os.path.join(_GOVERNANCE_DIR, "bytecode_spec.yaml")
-    with open(path) as f:
-        return f.read()
+    return _read_governance_file("bytecode_spec.yaml")
 
 
 @mcp.resource("hlf://governance/align_rules")
 def get_governance_align_rules() -> str:
     """Governance align_rules.json — alignment and safety rules."""
-    path = os.path.join(_GOVERNANCE_DIR, "align_rules.json")
-    with open(path) as f:
-        return f.read()
+    return _read_governance_file("align_rules.json")
 
 
 @mcp.resource("hlf://stdlib")
@@ -751,19 +777,56 @@ def get_stdlib() -> str:
     return json.dumps({"modules": modules}, indent=2)
 
 
+# ── Health endpoint (HTTP transports only) ────────────────────────────────────
+
+def _make_health_app(mcp_app: Any) -> Any:
+    """Wrap the MCP ASGI app with a /health liveness probe.
+
+    Docker and docker-compose health checks need a plain HTTP GET /health → 200
+    that can be queried before the MCP handshake completes.  We mount a tiny
+    Starlette route in front of the MCP ASGI application so both live under
+    the same uvicorn process.
+    """
+    try:
+        from starlette.applications import Starlette
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+        from starlette.routing import Mount, Route
+
+        async def health(request: Request) -> JSONResponse:
+            return JSONResponse({
+                "status": "ok",
+                "transport": os.environ.get("HLF_TRANSPORT", "stdio"),
+            })
+
+        return Starlette(routes=[
+            Route("/health", health),
+            Mount("/", app=mcp_app),
+        ])
+    except ImportError:
+        # Starlette not available (stdio-only installs) — skip health wrapper
+        return mcp_app
+
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 
 def main() -> None:
     """Start the HLF MCP server with the configured transport."""
     transport = os.environ.get("HLF_TRANSPORT", "stdio").lower().strip()
+    host = os.environ.get("HLF_HOST", "0.0.0.0")
+    port = int(os.environ.get("HLF_PORT", "8000"))
 
     if transport == "stdio":
         mcp.run(transport="stdio")
     elif transport in ("sse", "http"):
-        mcp.run(transport="sse")
+        import uvicorn
+        app = _make_health_app(mcp.sse_app())
+        uvicorn.run(app, host=host, port=port)
     elif transport == "streamable-http":
-        mcp.run(transport="streamable-http")
+        import uvicorn
+        app = _make_health_app(mcp.streamable_http_app())
+        uvicorn.run(app, host=host, port=port)
     else:
         print(f"Unknown transport: {transport!r}. Use: stdio, sse, streamable-http", file=sys.stderr)
         sys.exit(1)

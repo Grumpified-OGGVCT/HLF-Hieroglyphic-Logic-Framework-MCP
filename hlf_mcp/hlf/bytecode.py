@@ -473,7 +473,7 @@ def _emit_stmt(
     elif kind == "set_stmt":
         _emit_value(stmt.get("value", {}), instructions, add_const)
         idx = add_const(stmt.get("name", ""))
-        instructions.append(_instr(Op.STORE, idx))
+        instructions.append(_instr(Op.STORE_IMMUT, idx))
 
     elif kind == "immut_stmt":
         _emit_value(stmt.get("value", {}), instructions, add_const)

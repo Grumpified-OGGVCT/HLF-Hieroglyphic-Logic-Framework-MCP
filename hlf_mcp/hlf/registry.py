@@ -110,19 +110,39 @@ class HostFunctionRegistry:
         return self._functions.get(name)
 
     def call(self, name: str, args: list[Any], tier: str = "hearth") -> dict[str, Any]:
-        """Dispatch a host function call (simulated for MCP context)."""
+        """Validate a host function call and return a metadata envelope.
+
+        This method is the *registry layer* — it validates the function name,
+        tier permissions, and argument schema, then returns a validated metadata
+        envelope.  **Actual execution** must be routed through
+        ``hlf_mcp.hlf.runtime.HlfRuntime._dispatch_host()``, which implements
+        every backend (analyze, vote, delegate, HTTP, file I/O, crypto, etc.).
+
+        Callers that need real results should never call this method directly;
+        use the runtime dispatcher instead.  This layer exists so the registry
+        can be queried about costs, tier requirements, and argument shapes
+        independently of the runtime.
+        """
         fn = self._functions.get(name)
         if not fn:
             raise ValueError(f"Unknown host function: {name}")
         if tier not in fn.tiers:
             raise PermissionError(f"Function {name!r} not available in tier {tier!r}")
         fn.validate_args(args)
-        # Hash sensitive outputs
-        result = {"host_fn": name, "status": "simulated", "tier": tier, "gas": fn.gas}
+        # Return validated metadata envelope — callers route through runtime for execution.
+        result: dict[str, Any] = {
+            "host_fn": name,
+            "status": "validated",
+            "tier": tier,
+            "gas": fn.gas,
+            "dispatch": "route_through_runtime",
+        }
         if fn.sensitive:
-            result["result_hash"] = hashlib.sha256(str(args).encode()).hexdigest()[:16]
+            result["args_hash"] = hashlib.sha256(
+                json.dumps(args, sort_keys=True, default=str).encode()
+            ).hexdigest()[:16]
         else:
-            result["args"] = args[:4]  # Limit for safety
+            result["args"] = args[:4]
         return result
 
     def list_all(self) -> list[dict[str, Any]]:

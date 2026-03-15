@@ -47,7 +47,7 @@ opcodes:
   # HLF semantic
   - name: TAG          code: 0x60  operand: true   gas: 1   desc: "Apply semantic tag"
   - name: INTENT       code: 0x61  operand: true   gas: 2   desc: "Express agent intent"
-  - name: RESULT       code: 0x62  operand: true   gas: 1   desc: "Return result"
+  - name: RESULT       code: 0x62  operand: false  gas: 1   desc: "Return result (pops TOS)"
   - name: MEMORY_STORE code: 0x63  operand: false  gas: 3   desc: "Store to RAG memory"
   - name: MEMORY_RECALL code: 0x64 operand: false  gas: 2   desc: "Recall from RAG memory"
   # Instinct SDD lifecycle (0x65–0x68)

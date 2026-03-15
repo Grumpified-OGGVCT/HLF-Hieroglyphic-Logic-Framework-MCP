@@ -958,6 +958,12 @@ graph TD
 | Merkle chain | Tamper-evident audit trail on every memory write |
 | ULID nonce | 600s TTL replay deduplication (planned integration) |
 
+### Ethical Governor (people-first, in progress)
+- Mission: humans first, AI as tool; constraints stay transparent and auditable in-repo.
+- Scope: constitutional hard-law checks, declared red-hat research path, rogue detection, fail-closed termination.
+- Status: scaffolding shipped (`hlf_mcp/hlf/ethics/` stubs + compiler hook); downstream agent must wire full logic.
+- Handoff: see `docs/ETHICAL_GOVERNOR_HANDOFF.md` for required implementation steps and guardrails.
+
 ### Cryptographic Stack
 
 - **AES-256-GCM** — symmetric encryption with authentication tag (via Python `cryptography` library)

@@ -18,6 +18,7 @@
 ## Table of Contents
 
 1. [What is HLF?](#1-what-is-hlf)
+   - [Ethos — People First, Transparent Governance](#ethos--people-first-transparent-governance)
 2. [Quick Start](#2-quick-start)
 3. [Architecture Overview](#3-architecture-overview)
 4. [Grammar & Language Reference](#4-grammar--language-reference)
@@ -73,6 +74,16 @@ Glyph Source  ──compile──▶  JSON AST  ──codegen──▶  .hlb Byt
      │                          ▼                         ▼
 ASCII Source            English Audit             Assembly Listing
 ```
+
+### Ethos — People First, Transparent Governance
+
+- People and their work are the priority; privacy is default, and HLF enforces hard laws rather than paternalistic filters.
+- AI is the tool — humans author the constraints, which stay transparent and auditable in-repo.
+- Ethical Governor (in progress) will fail closed before harm, support declared red-hat research paths, and document every decision.
+- Transparency over surveillance: governance files (ALIGN rules, ethics docs) stay human-readable so constraints can be inspected and debated.
+- Use HLF freely; when boundaries apply, they are explicit, scoped to protect people, and never to suppress legitimate research or creativity.
+
+See `docs/ETHICAL_GOVERNOR_HANDOFF.md` for the handoff brief guiding the downstream ethics module implementation.
 
 ---
 

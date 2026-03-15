@@ -628,6 +628,9 @@ class HLFCompiler:
         # Pass 2: Collect env
         env = _pass1_collect_env(stmts)
 
+        # Ethics Governor hook: run constitutional checks here once
+        # hlf_mcp.hlf.ethics is fully implemented (see docs/ETHICAL_GOVERNOR_HANDOFF.md).
+
         # Pass 3: Expand vars
         expanded_stmts = [_pass2_expand_vars(s, env) for s in stmts]
         ast["statements"] = expanded_stmts

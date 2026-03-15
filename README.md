@@ -3,15 +3,13 @@
 > **The Rosetta Stone for Machines.** A deterministic orchestration protocol that replaces natural language ambiguity with a strictly-typed Hieroglyphic AST — enabling zero-trust agent execution, cryptographic governance, and ultra-dense token efficiency across every model and runtime.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
-[![HLF v0.4](https://img.shields.io/badge/HLF-v0.4.0-purple)](governance/bytecode_spec.yaml)
+[![HLF v0.5](https://img.shields.io/badge/HLF-v0.5.0-purple)](governance/bytecode_spec.yaml)
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 <p align="center">
   <img src="docs/social_preview.svg" alt="HLF — Hieroglyphic Logic Framework · MCP Server" width="100%"/>
 </p>
-
-> 💡 **Repo social preview**: Go to **Settings → Social preview** and upload a PNG export of [`docs/social_preview.svg`](docs/social_preview.svg) (1280×640px) so this card appears when the link is shared in Discord, forums, and social media.
 
 ---
 
@@ -79,7 +77,7 @@ ASCII Source            English Audit             Assembly Listing
 
 - People and their work are the priority; privacy is default, and HLF enforces hard laws rather than paternalistic filters.
 - AI is the tool — humans author the constraints, which stay transparent and auditable in-repo.
-- Ethical Governor (in progress) will fail closed before harm, support declared red-hat research paths, and document every decision.
+- Ethical Governor enforces hard laws at compile time: fails closed before harm, supports declared red-hat research paths, and cryptographically documents every decision.
 - Transparency over surveillance: governance files (ALIGN rules, ethics docs) stay human-readable so constraints can be inspected and debated.
 - Use HLF freely; when boundaries apply, they are explicit, scoped to protect people, and never to suppress legitimate research or creativity.
 
@@ -958,11 +956,21 @@ graph TD
 | Merkle chain | Tamper-evident audit trail on every memory write |
 | ULID nonce | 600s TTL replay deduplication (planned integration) |
 
-### Ethical Governor (people-first, in progress)
-- Mission: humans first, AI as tool; constraints stay transparent and auditable in-repo.
-- Scope: constitutional hard-law checks, declared red-hat research path, rogue detection, fail-closed termination.
-- Status: scaffolding shipped (`hlf_mcp/hlf/ethics/` stubs + compiler hook); downstream agent must wire full logic.
-- Handoff: see `docs/ETHICAL_GOVERNOR_HANDOFF.md` for required implementation steps and guardrails.
+### Ethical Governor — Fully Implemented
+
+The governor is wired into the compiler pipeline as a mandatory pre-flight gate. It runs before bytecode generation and raises `CompileError` on any high-severity signal — no partial execution, no silent bypass.
+
+| Module | Responsibility |
+|---|---|
+| `constitution.py` | Hard-law violations: lethal content, CSAM, absolute blocks; tier escalation checks |
+| `termination.py` | Fail-closed termination, ULID audit log, appealable vs. non-appealable articles |
+| `red_hat.py` | Declared red-hat research scope validation; fingerprint registry |
+| `rogue_detection.py` | Prompt injection, jailbreak, aggressive verb, tier-smuggling detection |
+| `governor.py` | Orchestrates all four modules; exposes `check()` and `raise_if_blocked()` |
+
+**Compiler hook**: `compiler.py` calls `governor.raise_if_blocked()` at the end of Pass 4. Blocked programs raise `CompileError` with `RuleId`, `Article`, and full audit trail.
+
+**Test coverage**: 44 dedicated tests in `tests/test_ethics.py` covering constitutional violations, termination audit log, red-hat declarations, rogue signal detection, and compiler integration.
 
 ### Cryptographic Stack
 
@@ -982,13 +990,15 @@ graph TD
 # Install all dependencies
 uv sync
 
-# Run test suite (42 tests)
+# Run test suite (170 tests)
 uv run pytest tests/ -v
 
 # Run specific test modules
 uv run pytest tests/test_compiler.py -v
+uv run pytest tests/test_ethics.py -v
 uv run pytest tests/test_formatter.py -v
 uv run pytest tests/test_linter.py -v
+uv run pytest tests/test_github_scripts.py -v
 ```
 
 ### CLI Tools
@@ -1067,11 +1077,15 @@ uv run ruff format hlf_mcp/
 - [x] Instinct SDD lifecycle (SPECIFY→PLAN→EXECUTE→VERIFY→MERGE, CoVE gate)
 - [x] FastMCP server: 22 tools, 7 resources, stdio + SSE + streamable-HTTP
 - [x] Multi-stage Docker image + docker-compose with health check
-- [x] 42 passing tests
+- [x] Ethical Governor: 5-module compile-time gate (constitution · termination · red_hat · rogue_detection · governor)
+- [x] 170 passing tests (44 ethics-specific)
 
 ### Phase 2 — Harden Semantics 🔨 (in progress)
 
-- [ ] **Vector embeddings**: install `sqlite-vec` C extension for real cosine search (replacing bag-of-words)
+- [x] **Ollama Cloud client**: streaming, thinking, structured outputs, tool calling, web search, 4-tier fallback chain with circuit breaker (`.github/scripts/ollama_client.py`)
+- [x] **Weekly automated governance**: 8 GitHub Actions — spec-sentinel, ethics-review, model drift detection, code quality, test health (weekly cron + `workflow_dispatch`)
+- [x] **Model drift monitoring**: 7 weighted semantic probes with structured output scoring (`scripts/monitor_model_drift.py`)
+- [ ] **Vector embeddings**: `sqlite-vec` C extension for real cosine search (replacing bag-of-words)
 - [ ] **SHA-256 dedup cache**: pre-embedding content deduplication layer
 - [ ] **Fractal summarisation**: map-reduce context compression when memory approaches token limit
 - [ ] **Hot/Warm/Cold tiering**: Redis hot → SQLite warm → Parquet cold context transfer

@@ -117,7 +117,7 @@ jobs:
           4. Provide the exact README edit needed to make it accurate
 
           Also check:
-          - Are all 22 MCP tools listed in the tools reference table?
+          - Are all MCP tools listed in the tools reference table? (check ACTUAL_TOOLS count above)
           - Does the opcode table in the README list all 37 opcodes (or the actual count)?
           - Are all 8 stdlib modules listed?
           - Are roadmap phase items accurately marked as done/pending?

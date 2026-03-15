@@ -1,0 +1,92 @@
+# HLF MCP Server — Docker Compose
+#
+# Profiles:
+#   (none)          default — HLF MCP server only, no external dependencies
+#   --profile hot   HLF + Valkey hot cache tier (valkey/valkey:8-alpine)
+#   --profile full  HLF + Valkey + future sqlite-vec sidecar (reserved)
+#
+# Usage:
+#   docker compose up                   # stdio / sse on :8000
+#   docker compose --profile hot up     # + Valkey on :6379
+#   docker compose --profile full up    # + hot + full extras
+#
+# Environment overrides (all have safe defaults):
+#   HLF_TRANSPORT   sse | streamable-http | stdio   (default: sse)
+#   HLF_STRICT      1 | 0                           (default: 1)
+#   HLF_HOT_TIER    none | valkey                   (default: none; hot profile sets valkey)
+#   VALKEY_URL      redis://valkey:6379              (set automatically by hot profile)
+
+version: "3.9"
+
+services:
+  # ── HLF MCP Server ────────────────────────────────────────────────────────
+  hlf-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Include [hot] extras when the hot profile brings in Valkey
+        HLF_INSTALL_EXTRAS: "${HLF_INSTALL_EXTRAS:-}"
+    image: hlf-mcp:latest
+    container_name: hlf-mcp
+    restart: unless-stopped
+    ports:
+      - "${HLF_PORT:-8000}:8000"
+    environment:
+      HLF_TRANSPORT: "${HLF_TRANSPORT:-sse}"
+      HLF_HOST: "0.0.0.0"
+      HLF_PORT: "8000"
+      HLF_STRICT: "${HLF_STRICT:-1}"
+      HLF_HOT_TIER: "${HLF_HOT_TIER:-none}"
+      VALKEY_URL: "${VALKEY_URL:-redis://valkey:6379}"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      valkey:
+        condition: service_healthy
+        required: false   # only enforced when the hot/full profile is active
+    networks:
+      - hlf-net
+    volumes:
+      - hlf-data:/app/db
+
+  # ── Valkey hot cache tier (hot + full profiles) ───────────────────────────
+  # Official image: https://hub.docker.com/r/valkey/valkey
+  # Valkey is a BSD-licensed Redis fork (no BSL restrictions).
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: hlf-valkey
+    profiles:
+      - hot
+      - full
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: valkey-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    volumes:
+      - valkey-data:/data
+    networks:
+      - hlf-net
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  hlf-data:
+    driver: local
+  valkey-data:
+    driver: local
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  hlf-net:
+    driver: bridge

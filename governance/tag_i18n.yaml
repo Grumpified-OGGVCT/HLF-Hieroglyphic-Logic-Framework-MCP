@@ -1,0 +1,167 @@
+# HLF Tag Internationalisation Registry
+# All aliases listed here are normalised to the canonical English tag in Pass 0.
+# Languages: en (canonical) · fr · es · de · zh · ja · ar · pt
+# ASCII glyph aliases (for users who cannot or prefer not to use Unicode glyphs)
+#   are also registered here and folded to the canonical Unicode glyph at Pass 0.
+#
+# adding a language: add an ISO-639-1 key under the tag, list surface forms.
+# All lookups are case-insensitive after NFKC normalisation.
+
+version: "1.0"
+
+# ── Glyph ASCII aliases ──────────────────────────────────────────────────────
+# These are pre-glyph prefixes accepted in place of the Unicode glyph character.
+# Format: ASCII_KEYWORD maps to the Unicode glyph.
+glyph_aliases:
+  ANALYZE:   "Δ"
+  ANALYSE:   "Δ"    # British English
+  ANALYSER:  "Δ"    # French verb form
+  ANALIZAR:  "Δ"    # Spanish
+  ENFORCE:   "Ж"
+  CONSTRAIN: "Ж"
+  JOIN:      "⨝"
+  CONSENSUS: "⨝"
+  VOTE:      "⨝"   # common alias
+  CMD:       "⌘"
+  COMMAND:   "⌘"
+  DELEGATE:  "⌘"   # common alias at glyph level
+  SOURCE:    "∇"
+  PARAM:     "∇"   # common alias at glyph level
+  PRIORITY:  "⩕"
+  BRANCH:    "⊎"
+  UNION:     "⊎"
+  END:       "Ω"   # ASCII terminator alias
+  OMEGA:     "Ω"
+
+# ── Tag internationalisation ─────────────────────────────────────────────────
+# Each entry: canonical tag → language → list of accepted surface forms
+tags:
+  INTENT:
+    en: [INTENT, INTENTION, GOAL]
+    fr: [INTENTION, OBJECTIF, BUT]
+    es: [INTENCION, OBJETIVO, META]
+    de: [ABSICHT, ZIEL, VORHABEN]
+    zh: [意图, 目标, 目的]
+    ja: [意図, 目標, 目的]
+    ar: [نية, هدف, غاية]
+    pt: [INTENCAO, OBJETIVO, META]
+
+  CONSTRAINT:
+    en: [CONSTRAINT, CONSTRAIN, RESTRICT, RESTRICTION]
+    fr: [CONTRAINTE, RESTRICTION, LIMITE]
+    es: [RESTRICCION, LIMITACION, CONSTRENIMIENTO]
+    de: [EINSCHRAENKUNG, BESCHRAENKUNG, BEDINGUNG]
+    zh: [约束, 限制, 约束条件]
+    ja: [制約, 制限, 制約条件]
+    ar: [قيد, تقييد, قيود]
+    pt: [RESTRICAO, LIMITACAO, CONDICAO]
+
+  ASSERT:
+    en: [ASSERT, ASSERTION, PRECONDITION, CHECK]
+    fr: [ASSERTION, PRECONDITION, VERIFICATION, AFFIRMER]
+    es: [AFIRMACION, PRECONDICION, VERIFICACION]
+    de: [BEHAUPTUNG, VORBEDINGUNG, PRUEFEN]
+    zh: [断言, 前置条件, 检查]
+    ja: [アサーション, 前提条件, 確認]
+    ar: [تأكيد, شرط مسبق, فحص]
+    pt: [AFIRMACAO, PRECONDICAO, VERIFICACAO]
+
+  EXPECT:
+    en: [EXPECT, EXPECTED, OUTPUT_TYPE]
+    fr: [ATTENDRE, ATTENDU, RESULTAT_ATTENDU]
+    es: [ESPERAR, ESPERADO, TIPO_SALIDA]
+    de: [ERWARTEN, ERWARTET, AUSGABETYP]
+    zh: [期望, 预期, 期待]
+    ja: [期待, 予期, 期待値]
+    ar: [توقع, متوقع, نوع_الإخراج]
+    pt: [ESPERAR, ESPERADO, TIPO_SAIDA]
+
+  DELEGATE:
+    en: [DELEGATE, DELEGATION, ASSIGN_TO, HANDOFF]
+    fr: [DELEGUER, DELEGATION, CONFIER, TRANSFERER]
+    es: [DELEGAR, DELEGACION, ASIGNAR_A]
+    de: [DELEGIEREN, DELEGATION, ZUWEISEN, UEBERGEBEN]
+    zh: [委托, 委派, 代理, 转交]
+    ja: [委譲, デリゲート, 委任, 引き渡し]
+    ar: [تفويض, تفويض_مهمة, إسناد]
+    pt: [DELEGAR, DELEGACAO, ATRIBUIR]
+
+  ROUTE:
+    en: [ROUTE, ROUTING, DISPATCH, FORWARD]
+    fr: [ACHEMINER, ROUTAGE, DISTRIBUER, TRANSMETTRE]
+    es: [ENRUTAR, ENRUTAMIENTO, DESPACHAR]
+    de: [ROUTEN, ROUTING, WEITERLEITEN, VERTEILEN]
+    zh: [路由, 分发, 转发, 调度]
+    ja: [ルーティング, ルート, 転送, ディスパッチ]
+    ar: [توجيه, تمرير, إرسال]
+    pt: [ROTEAR, ROTEAMENTO, ENCAMINHAR]
+
+  SOURCE:
+    en: [SOURCE, INPUT, DATA_SOURCE, FROM]
+    fr: [SOURCE, ENTREE, PROVENANCE, DE]
+    es: [FUENTE, ENTRADA, ORIGEN, DESDE]
+    de: [QUELLE, EINGABE, DATENQUELLE, VON]
+    zh: [来源, 输入, 数据源, 从]
+    ja: [ソース, 入力, データソース, から]
+    ar: [مصدر, إدخال, بيانات_مصدر]
+    pt: [FONTE, ENTRADA, ORIGEM, DE]
+
+  PARAM:
+    en: [PARAM, PARAMETER, ARG, ARGUMENT, CONFIG]
+    fr: [PARAMETRE, ARGUMENT, CONFIGURATION]
+    es: [PARAMETRO, ARGUMENTO, CONFIGURACION]
+    de: [PARAMETER, ARGUMENT, KONFIGURATION]
+    zh: [参数, 配置, 配置项]
+    ja: [パラメータ, 引数, 設定]
+    ar: [معامل, وسيطة, تهيئة]
+    pt: [PARAMETRO, ARGUMENTO, CONFIGURACAO]
+
+  PRIORITY:
+    en: [PRIORITY, URGENCY, WEIGHT, RANK, IMPORTANCE]
+    fr: [PRIORITE, URGENCE, POIDS, RANG, IMPORTANCE]
+    es: [PRIORIDAD, URGENCIA, PESO, RANGO, IMPORTANCIA]
+    de: [PRIORITAET, DRINGLICHKEIT, GEWICHT, RANG, WICHTIGKEIT]
+    zh: [优先级, 紧急度, 权重, 重要性]
+    ja: [優先度, 緊急度, 重み, 重要性]
+    ar: [أولوية, إلحاح, وزن, أهمية]
+    pt: [PRIORIDADE, URGENCIA, PESO, IMPORTANCIA]
+
+  VOTE:
+    en: [VOTE, CONSENSUS, QUORUM, AGREE]
+    fr: [VOTER, CONSENSUS, QUORUM, ACCORD]
+    es: [VOTAR, CONSENSO, QUORUM, ACUERDO]
+    de: [ABSTIMMEN, KONSENS, QUORUM, EINIGUNG]
+    zh: [投票, 共识, 法定人数, 同意]
+    ja: [投票, コンセンサス, 合意, 定足数]
+    ar: [تصويت, توافق, نصاب, موافقة]
+    pt: [VOTAR, CONSENSO, QUORUM, ACORDO]
+
+  RESULT:
+    en: [RESULT, RETURN, OUTPUT, RESPONSE]
+    fr: [RESULTAT, RETOURNER, SORTIE, REPONSE]
+    es: [RESULTADO, RETORNAR, SALIDA, RESPUESTA]
+    de: [ERGEBNIS, RUECKGABE, AUSGABE, ANTWORT]
+    zh: [结果, 返回, 输出, 响应]
+    ja: [結果, 返却, 出力, レスポンス]
+    ar: [نتيجة, إرجاع, إخراج, استجابة]
+    pt: [RESULTADO, RETORNAR, SAIDA, RESPOSTA]
+
+  MEMORY:
+    en: [MEMORY, STORE, REMEMBER, MEMORIZE]
+    fr: [MEMOIRE, STOCKER, SE_SOUVENIR, MEMORISER]
+    es: [MEMORIA, ALMACENAR, RECORDAR, MEMORIZAR]
+    de: [GEDAECHTNIS, SPEICHERN, ERINNERN, MEMORIEREN]
+    zh: [记忆, 存储, 记住, 记忆化]
+    ja: [メモリ, 記憶, 記録, 記憶する]
+    ar: [ذاكرة, تخزين, تذكر, حفظ]
+    pt: [MEMORIA, ARMAZENAR, LEMBRAR, MEMORIZAR]
+
+  RECALL:
+    en: [RECALL, RETRIEVE, REMEMBER, LOOKUP, QUERY]
+    fr: [RAPPELER, RECUPERER, RETOURNER, CHERCHER, INTERROGER]
+    es: [RECORDAR, RECUPERAR, OBTENER, BUSCAR, CONSULTAR]
+    de: [ABRUFEN, ZURUECKRUFEN, SUCHEN, ABFRAGEN, WIEDERFINDEN]
+    zh: [召回, 检索, 记忆, 查找, 查询]
+    ja: [呼び出す, 取得, 検索, 想起, クエリ]
+    ar: [استرجاع, استذكار, بحث, استعلام]
+    pt: [LEMBRAR, RECUPERAR, BUSCAR, CONSULTAR]

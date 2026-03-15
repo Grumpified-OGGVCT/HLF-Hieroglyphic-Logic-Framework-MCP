@@ -250,6 +250,36 @@ TAGS = {
     "ALIGN":       "ALIGN Ledger governance rule",
 }
 
+# ASCII word-form aliases for Unicode glyphs (Pass 0 substitution, glyph-position only).
+# Applied via word-boundary regex BEFORE char-level CONFUSABLES so that string values
+# containing these words (e.g. goal="ANALYZE_MODE") are NOT replaced.
+ASCII_ALIASES: dict[str, str] = {
+    # DELTA Δ — analyze / reason
+    "ANALYZE":  "Δ",
+    "ANALYSE":  "Δ",  # British English
+    "ANALYSER": "Δ",  # French
+    "ANALIZAR": "Δ",  # Spanish
+    # ZHE Ж — enforce / constrain
+    "ENFORCE":   "Ж",
+    "CONSTRAIN": "Ж",
+    # JOIN ⨝ — consensus / merge
+    "JOIN":      "⨝",
+    "CONSENSUS": "⨝",
+    # COMMAND ⌘ — delegate / execute
+    "CMD":     "⌘",
+    "COMMAND": "⌘",
+    # NABLA ∇ — source / gradient
+    "SOURCE": "∇",
+    # BOWTIE ⩕ — priority / weight
+    "PRIORITY": "⩕",
+    # UNION ⊎ — branch / fork
+    "BRANCH": "⊎",
+    "UNION":  "⊎",
+    # OMEGA Ω — end / terminate
+    "END":   "Ω",
+    "OMEGA": "Ω",
+}
+
 # Homoglyph confusables map (Pass 0 normalization)
 CONFUSABLES: dict[str, str] = {
     # Cyrillic lookalikes (IDN homograph attack vector)

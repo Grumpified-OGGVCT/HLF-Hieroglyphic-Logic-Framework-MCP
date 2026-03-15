@@ -629,8 +629,12 @@ class HLFToolProvider:
     def _get_version(self, args: Dict[str, Any] = None) -> Dict[str, Any]:
         """Get current grammar version."""
         if hasattr(self.resources, '_get_version_info'):
-            return self.resources._get_version_info()
+            result = self.resources._get_version_info()
+            if "success" not in result:
+                result["success"] = True
+            return result
         return {
+            "success": True,
             "version": "unknown",
             "grammar_sha256": "unknown",
             "generated_at": time.time()

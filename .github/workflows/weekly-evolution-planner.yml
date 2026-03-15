@@ -1,0 +1,199 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Weekly Evolution Planner                                              ║
+# ║                                                                              ║
+# ║  Model: kimi-k2:1t-cloud (Moonshot AI)                                      ║
+# ║  Best-in-class: 1T-param MoE, 32B active, 256K ctx, autonomous agentic      ║
+# ║  coding, multi-step task decomposition, tool-use                             ║
+# ║  Why: Only kimi-k2:1t-cloud has a 256K context window large enough to        ║
+# ║        hold the ENTIRE HLF codebase in one pass and reason about the        ║
+# ║        next evolution step. Its agentic nature means it doesn't just         ║
+# ║        describe changes — it proposes multi-step execution plans.            ║
+# ║                                                                              ║
+# ║  Stage 2 (code drafting): devstral:24b                                      ║
+# ║  Why: After kimi identifies WHAT to build, devstral drafts HOW to build it  ║
+# ║        (code-first, SWE-Bench tuned, Apache 2.0 licensed).                  ║
+# ║                                                                              ║
+# ║  This is a 2-agent swarm within a single workflow — planning then coding.   ║
+# ║                                                                              ║
+# ║  Triggers: Weekly Monday 03:00 UTC (after spec sentinel runs Sunday)        ║
+# ║  Output: GitHub Issue with roadmap analysis + code starters                 ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Weekly — Evolution Planner (kimi-k2:1t-cloud ⟶ devstral:24b swarm)"
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"   # Every Monday at 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      focus_area:
+        description: "Optional focus area for the planner (e.g. 'ethics module', 'Phase 2')"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  evolution-planner:
+    name: "Swarm: kimi-k2 plans → devstral drafts"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e ".[dev]" --quiet
+
+      - name: Build full codebase snapshot
+        run: |
+          python .github/scripts/codebase_snapshot.py \
+            --output /tmp/codebase_snapshot.txt \
+            --budget 750000
+          echo "Snapshot size: $(wc -c < /tmp/codebase_snapshot.txt) chars"
+
+      - name: Run ethics compliance check
+        run: |
+          python .github/scripts/ethics_compliance_check.py > /tmp/ethics_report.json
+          cat /tmp/ethics_report.json
+
+      - name: Run test suite for baseline
+        run: |
+          pip install pytest --quiet
+          python -m pytest tests/ -q --tb=short 2>&1 | tee /tmp/test_results.txt || true
+          echo "Test output captured."
+
+      - name: "Agent 1 — nemotron-3-super: Strategic evolution planning (primary)"
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          FOCUS="${{ github.event.inputs.focus_area }}"
+          FOCUS_LINE=""
+          if [ -n "$FOCUS" ]; then
+            FOCUS_LINE="The user has requested special focus on: ${FOCUS}"
+          fi
+
+          ETHICS_SUMMARY=$(python -c "import json; d=json.load(open('/tmp/ethics_report.json')); print(d.get('summary_text', 'No ethics report'))")
+          TEST_RESULTS=$(cat /tmp/test_results.txt)
+
+          cat > /tmp/planner_prompt.txt << PROMPT_EOF
+          You are the HLF Evolution Planner. You have full read access to the entire HLF codebase below.
+          Your role is to identify the most impactful next development steps that:
+          1. Advance the stated Phase 2 goals (sqlite-vec, fractal summarisation, LSP, REPL, test runner)
+          2. Address the ethics/governance stubs that are currently unimplemented
+          3. Fix any structural gaps that would block production readiness
+          4. Respect the core ethos: people-first, privacy-first, AI as tool, transparent governance
+
+          ${FOCUS_LINE}
+
+          Ethics Status:
+          ${ETHICS_SUMMARY}
+
+          Test Results:
+          ${TEST_RESULTS}
+
+          For each proposed evolution item, provide:
+          - TITLE: Short, actionable name
+          - WHY: Why this matters now (reference specific code or ethos)
+          - IMPACT: High/Medium/Low + specific metric that would change
+          - EFFORT: Small (1 day) / Medium (1 week) / Large (2+ weeks)
+          - FIRST_STEP: The exact first file to modify and the first function to write
+          - PHASE: Which roadmap phase (1/2/3/4/5) this belongs to
+
+          Produce exactly 7 evolution items, ordered by priority × impact / effort ratio.
+          Be precise and cite specific files and line numbers from the codebase where relevant.
+
+          CODEBASE:
+          PROMPT_EOF
+
+          cat /tmp/codebase_snapshot.txt >> /tmp/planner_prompt.txt
+
+          # Primary: nemotron-3-super (120B MoE, 256K ctx, best-in-class agentic reasoning)
+          # Fallback: qwen3.5:cloud (397B cloud, 256K ctx, broad utility)
+          python .github/scripts/ollama_client.py \
+            --model "nemotron-3-super" \
+            --fallback-model "qwen3.5:cloud" \
+            --system "You are the autonomous HLF Evolution Planner — a 120B mixture-of-experts reasoning agent (nemotron-3-super). You reason across the full codebase with long-horizon planning capability and produce precise, implementation-ready evolution plans that respect the HLF ethos of people-first, privacy-first governance." \
+            --prompt "@/tmp/planner_prompt.txt" \
+            --output /tmp/evolution_plan.json \
+            --temperature 0.15
+          
+          python -c "import json; d=json.load(open('/tmp/evolution_plan.json')); print(d['content'])" > /tmp/evolution_plan.md
+          MODEL_USED=$(python -c "import json; print(json.load(open('/tmp/evolution_plan.json'))['model'])")
+          echo "PLANNER_MODEL=$MODEL_USED" >> $GITHUB_ENV
+          echo "Evolution plan generated by $MODEL_USED ($(wc -c < /tmp/evolution_plan.md) chars)"
+
+      - name: "Agent 2 — devstral:24b: Code starter drafts for top priority item"
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          EVOLUTION_PLAN=$(head -c 8000 /tmp/evolution_plan.md)
+
+          python .github/scripts/ollama_client.py \
+            --model "devstral:24b" \
+            --system "You are an HLF coding agent (devstral) specializing in Python and the HLF language stack. You write clean, non-reductive, fully-implemented code — no stubs, no TODOs, no placeholder comments. Every function you write is complete." \
+            --prompt "Based on this evolution plan from the strategic planner, take the HIGHEST PRIORITY item and write the complete implementation starter code for it. Include:\n1. The exact file path to create or modify\n2. The complete function/class implementation (not stubs)\n3. Any new tests needed in tests/\n4. How it integrates with the existing architecture\n\nEvolution Plan:\n${EVOLUTION_PLAN}\n\nWrite production-quality Python 3.12+ code that follows the existing patterns in the HLF codebase." \
+            --output /tmp/code_starter.json \
+            --temperature 0.05
+          
+          python -c "import json; d=json.load(open('/tmp/code_starter.json')); print(d['content'])" > /tmp/code_starter.md
+          echo "Code starter generated ($(wc -c < /tmp/code_starter.md) chars)"
+
+      - name: Build GitHub issue
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          WEEK=$(date +"%Y-W%V")
+          FOCUS="${{ github.event.inputs.focus_area }}"
+          FOCUS_TAG=""
+          if [ -n "$FOCUS" ]; then
+            FOCUS_TAG=" — Focus: ${FOCUS}"
+          fi
+
+          EVOLUTION_PLAN=$(cat /tmp/evolution_plan.md)
+          CODE_STARTER=$(cat /tmp/code_starter.md)
+
+          cat > /tmp/evolution_issue.md << ISSUE_EOF
+          ## 🧬 HLF Weekly Evolution Plan — ${WEEK}${FOCUS_TAG}
+
+          Generated by a 2-agent swarm:
+          - **Strategic Planner**: \`${PLANNER_MODEL}\` (nemotron-3-super primary → qwen3.5:cloud fallback; 256K ctx, LatentMoE agentic reasoning)
+          - **Code Drafter**: \`devstral:24b\` (SWE-Bench 46.8% — drafted the top-priority implementation starter)
+
+          **Workflow**: [Weekly Evolution Planner]($RUN_URL)
+
+          ---
+
+          ## 📋 Strategic Evolution Plan (kimi-k2:1t-cloud)
+
+          ISSUE_EOF
+
+          echo "$EVOLUTION_PLAN" >> /tmp/evolution_issue.md
+          echo "" >> /tmp/evolution_issue.md
+          echo "---" >> /tmp/evolution_issue.md
+          echo "" >> /tmp/evolution_issue.md
+          echo "## 💻 Code Starter — Top Priority Item (devstral:24b)" >> /tmp/evolution_issue.md
+          echo "" >> /tmp/evolution_issue.md
+          echo "$CODE_STARTER" >> /tmp/evolution_issue.md
+          echo "" >> /tmp/evolution_issue.md
+          echo "---" >> /tmp/evolution_issue.md
+          echo "_This issue is auto-generated weekly. Close when the top-priority item is merged._" >> /tmp/evolution_issue.md
+
+      - name: Create GitHub issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          WEEK=$(date +"%Y-W%V")
+          python .github/scripts/create_github_issue.py \
+            --title "🧬 [Evolution Planner] HLF weekly evolution plan — ${WEEK}" \
+            --body "@/tmp/evolution_issue.md" \
+            --labels "evolution,automated,roadmap"

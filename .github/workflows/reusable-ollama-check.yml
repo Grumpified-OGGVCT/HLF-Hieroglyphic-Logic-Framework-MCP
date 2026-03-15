@@ -1,0 +1,53 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Reusable: Verify Ollama Cloud API connectivity                        ║
+# ║                                                                              ║
+# ║  Called by all weekly workflows before spending time on analysis.            ║
+# ║  Checks that OLLAMA_API_KEY is present and the API responds.                ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Reusable — Ollama API health check"
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: "Model to probe (should be a lightweight one)"
+        required: false
+        default: "devstral:24b"
+    outputs:
+      api_available:
+        description: "true if API is reachable and key is valid"
+        value: ${{ jobs.check.outputs.api_available }}
+    secrets:
+      OLLAMA_API_KEY:
+        required: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api_available: ${{ steps.probe.outputs.api_available }}
+
+    steps:
+      - name: Probe Ollama Cloud API
+        id: probe
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/ollama_probe.json -w "%{http_code}" \
+            -X POST https://ollama.com/api/chat \
+            -H "Authorization: Bearer $OLLAMA_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"model":"${{ inputs.model }}","messages":[{"role":"user","content":"ping"}],"stream":false,"options":{"num_predict":1}}' \
+            --connect-timeout 15 --max-time 30 || echo "000")
+          
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/ollama_probe.json 2>/dev/null || true
+          
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "api_available=true" >> $GITHUB_OUTPUT
+            echo "✅ Ollama Cloud API is available"
+          else
+            echo "api_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Ollama Cloud API unavailable (HTTP $HTTP_STATUS) — workflows will run without AI analysis"
+          fi

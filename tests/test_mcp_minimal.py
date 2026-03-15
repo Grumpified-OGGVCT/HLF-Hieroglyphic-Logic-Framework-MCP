@@ -253,7 +253,8 @@ class TestFrictionReport:
             failure_type="expression",
             attempted_intent="test intent",
             context={},
-            proposed_fix="add new operator"
+            proposed_fix="add new operator",
+            agent_metadata={}
         )
         
         assert report.id == "test123"

@@ -213,7 +213,7 @@ def test_compile_all_fixtures():
     hlf_files = [f for f in os.listdir(fixtures_dir) if f.endswith(".hlf")]
     assert len(hlf_files) > 0, "No fixture files found"
     for fname in hlf_files:
-        with open(os.path.join(fixtures_dir, fname)) as f:
+        with open(os.path.join(fixtures_dir, fname), encoding='utf-8') as f:
             source = f.read()
         result = COMPILER.compile(source)
         assert result["errors"] == [], f"Fixture {fname} failed: {result['errors']}"

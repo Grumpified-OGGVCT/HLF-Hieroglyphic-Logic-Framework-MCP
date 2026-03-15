@@ -700,7 +700,16 @@ def _read_governance_file(filename: str) -> str:
 
 
 def _read_fixture_file(name: str) -> str:
-    """Read a fixture .hlf file, with informative error on miss."""
+    """Read a fixture .hlf file with graceful error payload on miss.
+
+    Searches the fixtures/ directory relative to both the package and the repo
+    root (for source and wheel-installed layouts).  Returns a JSON error
+    payload rather than raising so MCP clients receive a structured response.
+    """
+    _AVAILABLE = (
+        "hello_world, security_audit, delegation, routing, "
+        "db_migration, log_analysis, stack_deployment"
+    )
     candidates = [
         os.path.join(os.path.dirname(__file__), "..", "fixtures", f"{name}.hlf"),
         os.path.join(os.path.dirname(__file__), "fixtures", f"{name}.hlf"),
@@ -709,10 +718,15 @@ def _read_fixture_file(name: str) -> str:
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 return f.read()
-    available = "hello_world, security_audit, delegation, routing, db_migration, log_analysis, stack_deployment"
-    raise FileNotFoundError(
-        f"Example '{name}' not found. Available: {available}"
-    )
+    return json.dumps({
+        "error": "example_not_found",
+        "requested": name,
+        "available": _AVAILABLE,
+        "hint": (
+            "The fixtures/ directory is not bundled in wheel installs. "
+            "Install from source or copy fixtures/ into the package tree."
+        ),
+    })
 
 
 @mcp.resource("hlf://grammar")

@@ -271,6 +271,58 @@ python -c "from hlf.mcp_metrics import get_metrics; print('Metrics OK')"
 
 ---
 
+## Ethical Governor Architecture
+
+HLF includes a **core ethical governor** that differentiates it from corporate AI systems:
+
+| Corporate AI | HLF Approach |
+|--------------|--------------|
+| "We know better than you" | "You're the human, you decide within law" |
+| Blocks are mysterious, no appeal | Constraints are documented, transparent |
+| We protect you from yourself | We enable you to work safely |
+| Research is suspicious | Research is valuable, declare it |
+| Trust the AI | Trust the human, verify the AI |
+
+### Core Principles
+
+1. **Language-level safety** — Constraints built into grammar, not external filters
+2. **Transparent rules** — No black-box moderation
+3. **Human priority** — No "AI nanny"
+4. **Legitimate research support** — Red-hat with declarations, not hostility
+5. **Self-termination** — System shuts down rather than cause harm
+
+### Implementation Files
+
+```
+hlf/ethics/
+├── constitution.py      # Constitutional constraints layer
+├── termination.py       # Self-termination protocol
+├── red_hat.py          # Legitimate security research declarations
+├── rogue_detection.py  # Compromised/hallucinating agent detection
+└── compliance.py       # Transparent governance interaction
+```
+
+### Intent Capsule Tiers
+
+| Tier | Capsabilities | Authorization |
+|------|---------------|---------------|
+| `sovereign` | Full capability | User-authorized |
+| `hearth` | Standard operations | Agent-authorized |
+| `forge` | Limited, sandboxed | Program-authorized |
+
+An agent declared as "forge" tier **cannot** perform operations reserved for "sovereign", even if compromised.
+
+### Self-Termination Triggers
+
+- Constitutional violation detected
+- Illegal intent detected
+- Unauthorized escalation attempt
+- Rogue agent signature detected
+
+**See:** `HLF_ETHICAL_GOVERNOR_ARCHITECTURE.md` for full specification.
+
+---
+
 ## License
 
 Same as HLF_MCP project.

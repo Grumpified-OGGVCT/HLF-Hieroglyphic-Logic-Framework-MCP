@@ -94,7 +94,7 @@ def test_lint_all_fixtures():
     for fname in os.listdir(fixtures_dir):
         if not fname.endswith(".hlf"):
             continue
-        with open(os.path.join(fixtures_dir, fname)) as f:
+        with open(os.path.join(fixtures_dir, fname), encoding='utf-8') as f:
             source = f.read()
         diags = LINTER.lint(source)
         errors = [d for d in diags if d["level"] == "error"]

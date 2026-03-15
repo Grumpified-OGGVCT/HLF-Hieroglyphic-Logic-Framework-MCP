@@ -5,7 +5,7 @@ A Python implementation of the HLF language
 """
 
 # Version
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 # Only export what we can safely import
 __all__ = []

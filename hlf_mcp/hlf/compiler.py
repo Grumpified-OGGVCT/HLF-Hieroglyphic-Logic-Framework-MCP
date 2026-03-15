@@ -706,7 +706,13 @@ class HLFCompiler:
 def _extract_version(tree) -> str:
     try:
         header = next(tree.find_data("header"))
-        ints = [str(t) for t in header.scan_values(lambda v: True) if str(t).isdigit()]
+        # Use isinstance(v, Token) to avoid calling .isdigit() on Tree nodes.
+        ints = [
+            str(v)
+            for v in header.scan_values(
+                lambda v: isinstance(v, Token) and str(v).isdigit()
+            )
+        ]
         return ".".join(ints) if ints else "3"
     except StopIteration:
         return "3"

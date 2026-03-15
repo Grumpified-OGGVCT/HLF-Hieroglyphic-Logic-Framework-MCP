@@ -94,9 +94,10 @@ _AGGRESSIVE_ACTION_VERBS = re.compile(
 
 # ── Tier escalation via string smuggling ──────────────────────────────────────
 # Detect references to sovereign-only patterns in hearth/forge contexts.
+# Negative lookbehind (?<![/]) excludes path components (e.g. /security/seccomp.json).
 
 _SOVEREIGN_SMUG = re.compile(
-    r"(?i)(z3_verify|spawn_agent|SPAWN|credential_vault|seccomp|ptrace)",
+    r"(?i)(?<![/\w])(z3_verify|spawn_agent|SPAWN|credential_vault|seccomp|ptrace)\b",
 )
 
 

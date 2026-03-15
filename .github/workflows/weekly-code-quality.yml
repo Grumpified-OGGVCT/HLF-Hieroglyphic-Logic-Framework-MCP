@@ -1,0 +1,160 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Weekly Code Quality Gate                                              ║
+# ║                                                                              ║
+# ║  Runs every Monday at 00:00 UTC (matches org pattern, before other weekly   ║
+# ║  jobs so quality baseline is set before AI analysis workflows run).          ║
+# ║                                                                              ║
+# ║  Steps:                                                                      ║
+# ║  1. ruff lint + format-check (PEP8, import order, unused imports)            ║
+# ║  2. CodeQL SAST analysis (Python — security vulnerabilities)                 ║
+# ║  3. pytest + pytest-cov (unit tests + coverage report)                       ║
+# ║  4. Codecov upload (coverage tracking over time)                             ║
+# ║  5. SonarCloud scan + quality gate enforcement                               ║
+# ║                                                                              ║
+# ║  Required secrets (org-level, scoped to this repo):                         ║
+# ║    CODECOV_TOKEN   — Codecov upload token                                   ║
+# ║    SONAR_TOKEN     — SonarCloud analysis token                              ║
+# ║    SONAR_PROJECT_KEY    — SonarCloud project key                            ║
+# ║    SONAR_ORGANIZATION   — SonarCloud organization slug                      ║
+# ║  GITHUB_TOKEN is auto-provided by Actions for CodeQL/PR creation.           ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Weekly — Code Quality Gate"
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"   # Every Monday at 00:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "hlf_mcp/**"
+      - "tests/**"
+      - "pyproject.toml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "hlf_mcp/**"
+      - "tests/**"
+
+permissions:
+  contents: read
+  security-events: write    # CodeQL SARIF upload
+  actions: read             # CodeQL init
+
+jobs:
+  code-quality:
+    name: "Lint + SAST + Tests + Coverage + SonarCloud"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Full history required by SonarCloud for blame/coverage mapping
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install package + dev dependencies
+        run: |
+          pip install -e ".[dev]" --quiet
+          pip install pytest-cov --quiet
+
+      # ── Step 1: ruff lint ──────────────────────────────────────────────────
+      - name: "ruff — lint (E, F, I, UP rules)"
+        run: |
+          ruff check hlf_mcp/ tests/ .github/scripts/ --output-format=github
+        # Note: ruff is configured in pyproject.toml [tool.ruff]
+        # Rules: E (pycodestyle), F (pyflakes), I (isort), UP (pyupgrade)
+        # E501 (line-too-long) is ignored per pyproject.toml
+        # IMPORTANT: ruff must NOT flag unused imports in modules where
+        # the import is required by a sub-module that may be out of scope.
+        # Use # noqa: F401 for intentional public re-exports.
+
+      - name: "ruff — format check (no auto-fix in CI)"
+        run: |
+          ruff format --check hlf_mcp/ tests/ .github/scripts/
+
+      # ── Step 2: CodeQL SAST ───────────────────────────────────────────────
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-and-quality
+
+      - name: Autobuild (CodeQL)
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "python-security"
+
+      # ── Step 3: pytest + coverage ─────────────────────────────────────────
+      - name: "pytest — full test suite with coverage"
+        run: |
+          python -m pytest tests/ \
+            --cov=hlf_mcp \
+            --cov-report=term-missing \
+            --cov-report=xml:/tmp/coverage.xml \
+            --cov-report=html:/tmp/coverage-html \
+            --tb=short \
+            -q
+        # All 42+ tests must pass. Coverage XML is used by both Codecov and SonarCloud.
+
+      # ── Step 4: Codecov upload ────────────────────────────────────────────
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: /tmp/coverage.xml
+          flags: unittests
+          name: hlf-mcp
+          fail_ci_if_error: false   # Codecov is non-blocking; test failures block CI
+        # CODECOV_TOKEN must be set as an org secret scoped to this repo.
+        # If not set, this step is skipped gracefully (fail_ci_if_error: false).
+
+      # ── Step 5: SonarCloud ────────────────────────────────────────────────
+      - name: SonarCloud scan
+        uses: SonarSource/sonarcloud-github-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.python.coverage.reportPaths=/tmp/coverage.xml
+            -Dsonar.sources=hlf_mcp
+            -Dsonar.tests=tests
+            -Dsonar.python.version=3.12
+        # SONAR_TOKEN, SONAR_PROJECT_KEY, SONAR_ORGANIZATION must be set as
+        # org secrets scoped to this repo. Steps skips if secrets are absent.
+        if: ${{ secrets.SONAR_TOKEN != '' }}
+        continue-on-error: true   # SonarCloud is advisory; doesn't block merge
+
+      - name: SonarCloud Quality Gate check
+        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        if: ${{ secrets.SONAR_TOKEN != '' }}
+        continue-on-error: true   # Gate result is reported but not blocking until
+                                  # baseline is established (Phase 2)
+
+      # ── Summary ───────────────────────────────────────────────────────────
+      - name: Print quality summary
+        if: always()
+        run: |
+          echo "=== HLF Code Quality Summary ==="
+          echo "Python: $(python --version)"
+          echo "ruff: $(ruff --version)"
+          echo "pytest: $(python -m pytest --version)"
+          echo ""
+          echo "Coverage XML: $([ -f /tmp/coverage.xml ] && echo 'generated' || echo 'missing')"
+          echo "CodeQL: see Security tab in GitHub"
+          echo "SonarCloud: https://sonarcloud.io/project/overview?id=${{ secrets.SONAR_PROJECT_KEY }}"

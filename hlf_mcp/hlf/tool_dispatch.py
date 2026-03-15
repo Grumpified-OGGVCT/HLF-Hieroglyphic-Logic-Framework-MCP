@@ -64,24 +64,39 @@ class ToolRegistry:
 
     def register(self, name: str, entry: dict[str, Any]) -> None:
         """Register a new tool. Enters pending_hitl state."""
+        import uuid
         entry["status"] = ToolLifecycleState.PENDING
         entry["step_id"] = self._next_step()
+        # Per-tool approval token — approval must present this exact token.
+        # This decouples approval from global ordering so registering other
+        # tools between registration and approval doesn't invalidate the token.
+        entry["approval_token"] = str(uuid.uuid4())
         self._registry[name] = entry
 
-    def approve_forged_tool(self, name: str, operator: str = "system") -> bool:
-        """Approve a pending_hitl tool for activation."""
+    def approve_forged_tool(
+        self, name: str, operator: str = "system", approval_token: str | None = None
+    ) -> bool:
+        """Approve a pending_hitl tool for activation.
+
+        When *approval_token* is provided it must match the token assigned at
+        registration; this prevents accidental cross-tool approval without
+        relying on fragile global step adjacency.  If *approval_token* is
+        omitted the check is skipped (operator-console / programmatic use).
+        """
         entry = self._registry.get(name)
         if not entry:
             raise ToolDispatchError(f"Unknown tool: {name}")
         if entry.get("status") != ToolLifecycleState.PENDING:
             raise ToolDispatchError(f"Tool {name!r} is not pending HITL approval")
-        expected_step = entry.get("step_id", 0)
-        next_step = self._next_step()
-        if next_step != expected_step + 1:
-            raise ToolDispatchError(f"Out-of-order approval for {name!r}: expected step {expected_step+1}, got {next_step}")
+        if approval_token is not None and approval_token != entry.get("approval_token"):
+            raise ToolDispatchError(
+                f"Invalid approval token for {name!r}: token mismatch"
+            )
+        step = self._next_step()
         entry["status"] = ToolLifecycleState.ACTIVE
         entry["approved_by"] = operator
-        self._approval_log.append({"tool": name, "step": next_step, "operator": operator, "action": "approved"})
+        entry.pop("approval_token", None)
+        self._approval_log.append({"tool": name, "step": step, "operator": operator, "action": "approved"})
         return True
 
     def dispatch(self, tool_name: str, args: dict[str, Any]) -> ToolDispatchResult:

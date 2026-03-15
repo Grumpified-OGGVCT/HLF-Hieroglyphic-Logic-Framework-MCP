@@ -32,7 +32,7 @@ _MEMORY_RE = re.compile(r"^\s*MEMORY\s*\[\s*(\w+)\s*\]")
 _RECALL_RE = re.compile(r"^\s*RECALL\s*\[\s*(\w+)\s*\]")
 _SPEC_DEFINE_RE = re.compile(r"^\s*SPEC_DEFINE\b")
 _SPEC_SEAL_RE = re.compile(r"^\s*SPEC_SEAL\b")
-_CALL_RE = re.compile(r"^\s*(CALL|⌘)\b")
+_CALL_RE = re.compile(r"^\s*CALL\b|^\s*⌘")
 
 
 class HLFLinter:

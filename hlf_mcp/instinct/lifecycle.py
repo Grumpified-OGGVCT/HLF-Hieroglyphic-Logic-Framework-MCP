@@ -14,7 +14,9 @@ Rules:
 
 from __future__ import annotations
 
+import copy
 import hashlib
+import json
 import time
 import threading
 from typing import Any
@@ -157,14 +159,16 @@ class InstinctLifecycle:
             mission["artifacts"][phase] = {
                 "payload": payload,
                 "timestamp": time.time(),
-                "sha256": hashlib.sha256(str(payload).encode()).hexdigest(),
+                "sha256": hashlib.sha256(
+                    json.dumps(payload, sort_keys=True, default=str).encode()
+                ).hexdigest(),
             }
 
             # Seal on merge
             if phase == "merge":
                 mission["sealed"] = True
                 mission["seal_hash"] = hashlib.sha256(
-                    str(mission["artifacts"]).encode()
+                    json.dumps(mission["artifacts"], sort_keys=True, default=str).encode()
                 ).hexdigest()
 
             self._log_ledger(mission_id, "transitioned", phase, payload)
@@ -173,7 +177,7 @@ class InstinctLifecycle:
     def get_mission(self, mission_id: str) -> dict[str, Any] | None:
         with self._lock:
             m = self._missions.get(mission_id)
-            return dict(m) if m else None
+            return copy.deepcopy(m) if m else None
 
     def list_missions(self) -> list[dict[str, Any]]:
         with self._lock:

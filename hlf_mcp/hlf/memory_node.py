@@ -41,7 +41,12 @@ class MemoryNode:
         return hashlib.sha256(self.content.encode()).hexdigest()
 
     def compute_embedding(self) -> list[float]:
-        """Bag-of-words TF vector as a lightweight embedding proxy."""
+        """Bag-of-words TF vector as a lightweight embedding proxy.
+
+        Keys are sorted alphabetically so that two nodes with overlapping
+        vocabulary produce vectors with dimensions in the same order, making
+        cosine similarity comparisons meaningful.
+        """
         words = re.findall(r"[a-z0-9]+", self.content.lower())
         vocab: dict[str, int] = {}
         for w in words:
@@ -49,7 +54,7 @@ class MemoryNode:
         if not vocab:
             return []
         total = sum(vocab.values())
-        return [v / total for v in vocab.values()]
+        return [vocab[k] / total for k in sorted(vocab)]
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)

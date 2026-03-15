@@ -1,0 +1,224 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Weekly Model Drift Detection                                          ║
+# ║                                                                              ║
+# ║  Runs every Sunday at 00:00 UTC (end-of-week baseline measurement).          ║
+# ║  Also available via workflow_dispatch for manual live testing.               ║
+# ║                                                                              ║
+# ║  Architecture:                                                               ║
+# ║  Python script (scripts/monitor_model_drift.py) runs structured semantic    ║
+# ║  probes against the HLF specification using Ollama Cloud API with:           ║
+# ║    • Structured outputs (JSON schema enforcement for parseable results)      ║
+# ║    • Tiered fallback: nemotron-3-super → kimi-k2:1t-cloud → qwen3.5:cloud   ║
+# ║    • Streaming with buffer protection                                        ║
+# ║    • Web search tool (model can check for spec updates)                     ║
+# ║    • Circuit breaker + exponential backoff retries                          ║
+# ║                                                                              ║
+# ║  Drift score: fraction of weighted probes that answered incorrectly.        ║
+# ║    0-15%  → OK    (no action)                                               ║
+# ║    15-40% → WARN  (GitHub issue created, labelled 'model-drift')            ║
+# ║    >40%   → ALERT (GitHub issue created with priority label, notify team)   ║
+# ║                                                                              ║
+# ║  Required secrets (org-level, scoped to this repo):                         ║
+# ║    OLLAMA_API_KEY — Ollama Cloud API key                                    ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Weekly — Model Drift Detection"
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"   # Every Sunday 00:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip issue creation)"
+        type: boolean
+        default: false
+      probe_subset:
+        description: "Comma-separated probe IDs to run (blank = all)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift-detection:
+    name: "Semantic drift probes (nemotron-3-super)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" --quiet
+
+      - name: Validate OLLAMA_API_KEY is set
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          if [ -z "$OLLAMA_API_KEY" ]; then
+            echo "::error::OLLAMA_API_KEY secret is not set. Add it as an org secret scoped to this repo."
+            echo "::notice::To add: GitHub Org Settings → Secrets → Actions → New org secret"
+            exit 1
+          fi
+          echo "::notice::OLLAMA_API_KEY is set (${#OLLAMA_API_KEY} chars)"
+
+      - name: Run drift probes via Ollama Cloud
+        id: drift
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          PYTHONPATH: .github/scripts
+        run: |
+          echo "Running HLF semantic drift probes..."
+          echo "Primary model: nemotron-3-super (120B MoE, LatentMoE+Mamba)"
+          echo "Fallback chain: kimi-k2:1t-cloud -> qwen3.5:cloud -> deepseek-r1:14b"
+          echo "Capabilities: structured outputs + web search + streaming + circuit breaker"
+          echo ""
+
+          python scripts/monitor_model_drift.py --output /tmp/drift_output.json
+
+          # Extract key fields for downstream steps
+          DRIFT_SCORE=$(python -c "import json; d=json.load(open('/tmp/drift_output.json')); print(d['driftScore'])")
+          DRIFT_STATUS=$(python -c "import json; d=json.load(open('/tmp/drift_output.json')); print(d['status'])")
+          DRIFT_SUMMARY=$(python -c "import json; d=json.load(open('/tmp/drift_output.json')); print(d['summary'])")
+          MODEL_USED=$(python -c "import json; d=json.load(open('/tmp/drift_output.json')); print(d['modelUsed'])")
+          TIER_USED=$(python -c "import json; d=json.load(open('/tmp/drift_output.json')); print(d['tier'])")
+          CORRECT=$(python -c "import json; d=json.load(open('/tmp/drift_output.json')); print(d.get('correct', '?'))")
+          TOTAL=$(python -c "import json; d=json.load(open('/tmp/drift_output.json')); print(d.get('total', '?'))")
+
+          echo "DRIFT_SCORE=$DRIFT_SCORE" >> $GITHUB_ENV
+          echo "DRIFT_STATUS=$DRIFT_STATUS" >> $GITHUB_ENV
+          echo "DRIFT_SUMMARY=$DRIFT_SUMMARY" >> $GITHUB_ENV
+          echo "MODEL_USED=$MODEL_USED" >> $GITHUB_ENV
+          echo "TIER_USED=$TIER_USED" >> $GITHUB_ENV
+          echo "CORRECT=$CORRECT" >> $GITHUB_ENV
+          echo "TOTAL=$TOTAL" >> $GITHUB_ENV
+
+          echo ""
+          echo "=== DRIFT RESULTS ==="
+          echo "Score:   $DRIFT_SCORE"
+          echo "Status:  $DRIFT_STATUS"
+          echo "Summary: $DRIFT_SUMMARY"
+          echo "Model:   $MODEL_USED (tier $TIER_USED)"
+          echo ""
+
+          # Print probe breakdown
+          python -c "
+          import json
+          data = json.load(open('/tmp/drift_output.json'))
+          print('Probe results:')
+          for p in data.get('probes', []):
+              icon = '✓' if p.get('correct') else '✗'
+              err = p.get('error', '')[:60] if not p.get('correct') else ''
+              print(f'  {icon} {p[\"id\"]} [{p[\"category\"]}] weight={p[\"weight\"]} answer={p.get(\"answer\",\"ERR\")!r} {err}')
+          "
+
+      - name: Upload drift report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: "drift-report-${{ github.run_id }}"
+          path: /tmp/drift_output.json
+          retention-days: 90
+
+      - name: Build detailed issue body
+        if: env.DRIFT_STATUS != 'OK' && github.event.inputs.dry_run != 'true'
+        run: |
+          WEEK=$(date -u +"%Y-W%V")
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          PROBE_TABLE=$(python -c "
+          import json
+          data = json.load(open('/tmp/drift_output.json'))
+          rows = []
+          for p in data.get('probes', []):
+              icon = '✅' if p.get('correct') else '❌'
+              answer = p.get('answer', 'ERROR')[:40]
+              expected = str(p.get('expected', '?'))[:30]
+              rows.append(f'| {icon} | {p[\"id\"]} | {p[\"category\"]} | {p[\"weight\"]} | {expected} | {answer} |')
+          print('\n'.join(rows))
+          ")
+
+          cat > /tmp/drift_issue.md << ISSUE_EOF
+          ## 🔬 HLF Model Drift Report — ${WEEK}
+
+          **Drift Score:** \`${{ env.DRIFT_SCORE }}\` (0=perfect, 1=full regression)
+          **Status:** ${{ env.DRIFT_STATUS == 'ALERT' && '🚨 **ALERT** — significant semantic drift detected' || '⚠️ **WARN** — minor drift detected' }}
+          **Model Used:** \`${{ env.MODEL_USED }}\` (fallback tier ${{ env.TIER_USED }})
+          **Probes:** ${{ env.CORRECT }}/${{ env.TOTAL }} correct
+
+          **Run:** [$RUN_URL]($RUN_URL)
+
+          ---
+
+          ### Probe Breakdown
+
+          | Result | ID | Category | Weight | Expected | Got |
+          |--------|-----|----------|--------|----------|-----|
+          $PROBE_TABLE
+
+          ---
+
+          ### What to do
+
+          1. Review the failing probes above — each one corresponds to a core HLF contract.
+          2. If the model's answer was wrong: the model's training data may have drifted away
+             from the HLF specification. Consider updating the spec documentation or adding
+             training examples to correct the model's understanding.
+          3. If an error occurred: check that the Ollama Cloud API is accessible and
+             \`OLLAMA_API_KEY\` is valid. The fallback chain was:
+             \`nemotron-3-super → kimi-k2:1t-cloud → qwen3.5:cloud → deepseek-r1:14b\`
+          4. If status persists as ALERT for 2+ weeks, open a Phase 2 issue to add
+             a model fine-tuning checkpoint with HLF-specific examples.
+
+          ---
+          *Automatically generated by the weekly drift detection workflow.*
+          *This issue will be updated or a new one created each week.*
+          ISSUE_EOF
+
+          echo "Issue body written ($(wc -c < /tmp/drift_issue.md) chars)"
+
+      - name: Create or update GitHub issue on WARN/ALERT
+        if: >
+          (env.DRIFT_STATUS == 'WARN' || env.DRIFT_STATUS == 'ALERT') &&
+          github.event.inputs.dry_run != 'true'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: 1
+          body-path: /tmp/drift_issue.md
+        continue-on-error: true   # Don't fail if issue 1 doesn't exist
+
+      - name: Create new issue if ALERT
+        if: env.DRIFT_STATUS == 'ALERT' && github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          WEEK=$(date -u +"%Y-W%V")
+          gh issue create \
+            --title "🚨 Model Drift ALERT — ${WEEK} (score=${{ env.DRIFT_SCORE }})" \
+            --body-file /tmp/drift_issue.md \
+            --label "model-drift,priority:high" \
+            --repo "${{ github.repository }}" \
+            || echo "::warning::Issue creation failed (labels may not exist yet — create 'model-drift' and 'priority:high' labels)"
+
+      - name: Fail CI on ALERT status
+        if: env.DRIFT_STATUS == 'ALERT'
+        run: |
+          echo "::error::Model drift score ${{ env.DRIFT_SCORE }} exceeds ALERT threshold (0.40)."
+          echo "::error::${{ env.DRIFT_SUMMARY }}"
+          exit 1
+
+      - name: Success summary
+        if: env.DRIFT_STATUS == 'OK'
+        run: |
+          echo "::notice::✅ Model drift score ${{ env.DRIFT_SCORE }} — all within OK threshold (<0.15)"
+          echo "::notice::${{ env.DRIFT_SUMMARY }}"

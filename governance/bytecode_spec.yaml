@@ -1,0 +1,74 @@
+# HLF Bytecode Specification — canonical source of truth
+# Generated from this file: generated/opcodes.py, generated/disassembler_tables.py
+# Version: 0.4.0
+
+version: "0.4.0"
+format_version: 0x0004
+magic: "HLB\x00"
+header_size: 16  # bytes (magic[4] + format_version[2] + code_len[4] + crc32[4] + flags[2])
+sha256_prepend: 32  # SHA-256 hash prepended before header
+instruction_size: 3  # fixed: opcode[1] + operand[2 LE]
+endianness: little
+
+opcodes:
+  # Core stack
+  - name: NOP          code: 0x00  operand: false  gas: 0   desc: "No operation"
+  - name: PUSH_CONST   code: 0x01  operand: true   gas: 1   desc: "Push constant from pool"
+  - name: STORE        code: 0x02  operand: true   gas: 2   desc: "Store TOS to mutable variable"
+  - name: LOAD         code: 0x03  operand: true   gas: 1   desc: "Load variable onto stack"
+  - name: STORE_IMMUT  code: 0x04  operand: true   gas: 3   desc: "Store TOS to immutable variable"
+  # Arithmetic
+  - name: ADD          code: 0x10  operand: false  gas: 2   desc: "Add two numbers"
+  - name: SUB          code: 0x11  operand: false  gas: 2   desc: "Subtract"
+  - name: MUL          code: 0x12  operand: false  gas: 3   desc: "Multiply"
+  - name: DIV          code: 0x13  operand: false  gas: 5   desc: "Divide"
+  - name: MOD          code: 0x14  operand: false  gas: 3   desc: "Modulo"
+  - name: NEG          code: 0x15  operand: false  gas: 1   desc: "Negate"
+  # Comparison
+  - name: CMP_EQ       code: 0x20  operand: false  gas: 1   desc: "Equal"
+  - name: CMP_NE       code: 0x21  operand: false  gas: 1   desc: "Not equal"
+  - name: CMP_LT       code: 0x22  operand: false  gas: 1   desc: "Less than"
+  - name: CMP_LE       code: 0x23  operand: false  gas: 1   desc: "Less than or equal"
+  - name: CMP_GT       code: 0x24  operand: false  gas: 1   desc: "Greater than"
+  - name: CMP_GE       code: 0x25  operand: false  gas: 1   desc: "Greater than or equal"
+  # Logic
+  - name: AND          code: 0x30  operand: false  gas: 1   desc: "Logical AND"
+  - name: OR           code: 0x31  operand: false  gas: 1   desc: "Logical OR"
+  - name: NOT          code: 0x32  operand: false  gas: 1   desc: "Logical NOT"
+  # Control flow
+  - name: JMP          code: 0x40  operand: true   gas: 1   desc: "Unconditional jump (absolute address)"
+  - name: JZ           code: 0x41  operand: true   gas: 2   desc: "Jump if zero/false"
+  - name: JNZ          code: 0x42  operand: true   gas: 2   desc: "Jump if non-zero/true"
+  # Calls
+  - name: CALL_BUILTIN code: 0x50  operand: true   gas: 5   desc: "Call built-in function"
+  - name: CALL_HOST    code: 0x51  operand: true   gas: 10  desc: "Call host function (base gas; actual from registry)"
+  - name: CALL_TOOL    code: 0x52  operand: true   gas: 15  desc: "Call registered tool"
+  - name: OPENCLAW_TOOL code: 0x53 operand: true   gas: 20  desc: "OpenClaw sandboxed tool call"
+  # HLF semantic
+  - name: TAG          code: 0x60  operand: true   gas: 1   desc: "Apply semantic tag"
+  - name: INTENT       code: 0x61  operand: true   gas: 2   desc: "Express agent intent"
+  - name: RESULT       code: 0x62  operand: true   gas: 1   desc: "Return result"
+  - name: MEMORY_STORE code: 0x63  operand: false  gas: 3   desc: "Store to RAG memory"
+  - name: MEMORY_RECALL code: 0x64 operand: false  gas: 2   desc: "Recall from RAG memory"
+  # Instinct SDD lifecycle (0x65–0x68)
+  - name: SPEC_DEFINE  code: 0x65  operand: true   gas: 4   desc: "Define Instinct spec"
+  - name: SPEC_GATE    code: 0x66  operand: true   gas: 4   desc: "Gate on Instinct spec"
+  - name: SPEC_UPDATE  code: 0x67  operand: true   gas: 3   desc: "Update Instinct spec"
+  - name: SPEC_SEAL    code: 0x68  operand: true   gas: 4   desc: "Seal Instinct spec with SHA-256"
+  # System
+  - name: HALT         code: 0xFF  operand: false  gas: 0   desc: "Halt execution"
+
+constant_pool:
+  type_int:    0x01  # <Bq> little-endian signed 64-bit
+  type_float:  0x02  # <Bd> little-endian IEEE-754 double
+  type_string: 0x03  # <BI><data> length-prefixed UTF-8
+  type_bool:   0x04  # <BB> 0x00=false, 0x01=true
+  type_null:   0x05  # <B> no data
+
+gas_model:
+  default_limit: 100
+  forge_limit: 500
+  sovereign_limit: 1000
+  per_host_call: "from registry gas field"
+  per_tool_call: 15
+  openclaw_tool: 20

@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "ALIGN-001",
+      "name": "no_credential_exposure",
+      "pattern": "(?i)(password|secret|api[-_]?key|bearer|token)\\s*=\\s*['\"]?\\w",
+      "action": "block",
+      "description": "Blocks credential exposure in HLF source — never embed secrets"
+    },
+    {
+      "id": "ALIGN-002",
+      "name": "no_localhost_exfil",
+      "pattern": "https?://(127\\.0\\.0\\.1|localhost|0\\.0\\.0\\.0)(?!:\\d+/health)",
+      "action": "warn",
+      "description": "Warns on localhost URL references that may indicate SSRF"
+    },
+    {
+      "id": "ALIGN-003",
+      "name": "no_shell_injection",
+      "pattern": "(?i)(exec|eval|system|popen|subprocess)\\s*\\(",
+      "action": "block",
+      "description": "Blocks shell injection patterns in string literals"
+    },
+    {
+      "id": "ALIGN-004",
+      "name": "no_path_traversal",
+      "pattern": "\\.\\.[\\/\\\\]",
+      "action": "block",
+      "description": "Blocks path traversal attacks (../)"
+    },
+    {
+      "id": "ALIGN-005",
+      "name": "no_data_exfil_patterns",
+      "pattern": "(?i)(exfil|exfiltrate|steal|leak|dump.*creds)",
+      "action": "block",
+      "description": "Blocks data exfiltration intent patterns"
+    }
+  ]
+}

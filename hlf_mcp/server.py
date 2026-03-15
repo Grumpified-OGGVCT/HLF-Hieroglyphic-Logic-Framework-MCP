@@ -33,6 +33,11 @@ from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.runtime import HLFRuntime
 from hlf_mcp.hlf.bytecode import HLFBytecode, OPCODES
 from hlf_mcp.hlf.benchmark import HLFBenchmark
+from hlf_mcp.hlf.translator import english_to_hlf, hlf_to_english
+from hlf_mcp.hlf import insaits
+from hlf_mcp.hlf.capsules import capsule_for_tier
+from hlf_mcp.hlf.registry import HostFunctionRegistry
+from hlf_mcp.hlf.tool_dispatch import ToolRegistry
 from hlf_mcp.rag.memory import RAGMemory
 from hlf_mcp.instinct.lifecycle import InstinctLifecycle
 
@@ -57,25 +62,40 @@ Key properties:
   - Cross-model alignment — any agent can read and emit valid HLF
 
 Available tools:
-  hlf_compile       — Parse HLF source → JSON AST + bytecode
-  hlf_format        — Canonicalize HLF source (uppercase tags, trailing Ω)
-  hlf_lint          — Static analysis: token budget, gas, variables, specs
-  hlf_run           — Execute HLF in the stack-machine VM
-  hlf_validate      — Quick syntax validation (true/false + details)
-  hlf_benchmark     — Token compression analysis vs NLP equivalents
-  hlf_disassemble   — Disassemble .hlb bytecode to human-readable assembly
-  hlf_memory_store  — Store a fact in the Infinite RAG memory
-  hlf_memory_query  — Semantic search over the Infinite RAG memory
-  hlf_memory_stats  — Memory store statistics
-  hlf_instinct_step — Advance an Instinct SDD lifecycle mission
-  hlf_instinct_get  — Get current state of an Instinct mission
-  hlf_benchmark_suite — Run full compression benchmark suite
+  hlf_compile            — Parse HLF source → JSON AST + bytecode
+  hlf_format             — Canonicalize HLF source (uppercase tags, trailing Ω)
+  hlf_lint               — Static analysis: token budget, gas, variables, specs
+  hlf_run                — Execute HLF in the stack-machine VM
+  hlf_validate           — Quick syntax validation (true/false + details)
+  hlf_benchmark          — Token compression analysis vs NLP equivalents
+  hlf_disassemble        — Disassemble .hlb bytecode to human-readable assembly
+  hlf_memory_store       — Store a fact in the Infinite RAG memory
+  hlf_memory_query       — Semantic search over the Infinite RAG memory
+  hlf_memory_stats       — Memory store statistics
+  hlf_instinct_step      — Advance an Instinct SDD lifecycle mission
+  hlf_instinct_get       — Get current state of an Instinct mission
+  hlf_benchmark_suite    — Run full compression benchmark suite
+  hlf_translate_to_hlf   — Convert English text to HLF source
+  hlf_translate_to_english — Convert HLF source to English summary
+  hlf_decompile_ast      — Decompile HLF source → structured English docs (AST)
+  hlf_decompile_bytecode — Decompile HLF source → structured English docs (bytecode)
+  hlf_capsule_validate   — Validate AST against intent capsule for a tier
+  hlf_capsule_run        — Capsule-sandboxed compile + run
+  hlf_host_functions     — List host functions available for a tier
+  hlf_host_call          — Call a host function from the registry
+  hlf_tool_list          — List tools from the ToolRegistry
+  hlf_similarity_gate    — Compare two HLF programs for semantic similarity
+  hlf_spec_lifecycle     — Manage an Instinct spec lifecycle mission
 
 Resources:
-  hlf://grammar           — LALR(1) Lark grammar specification
-  hlf://opcodes           — Bytecode opcode table (34 opcodes)
-  hlf://host_functions    — Available host function registry
-  hlf://examples/{name}   — Example HLF programs
+  hlf://grammar                   — LALR(1) Lark grammar specification
+  hlf://opcodes                   — Bytecode opcode table (37 opcodes)
+  hlf://host_functions            — Available host function registry
+  hlf://examples/{name}           — Example HLF programs
+  hlf://governance/host_functions — governance/host_functions.json
+  hlf://governance/bytecode_spec  — governance/bytecode_spec.yaml
+  hlf://governance/align_rules    — governance/align_rules.json
+  hlf://stdlib                    — Available stdlib modules
 
 Example HLF program (security audit):
   [HLF-v3]
@@ -91,14 +111,24 @@ Example HLF program (security audit):
 
 # ── Module-level singletons ────────────────────────────────────────────────────
 
-_compiler = HLFCompiler()
-_formatter = HLFFormatter()
-_linter = HLFLinter()
+compiler = HLFCompiler()
+formatter = HLFFormatter()
+linter = HLFLinter()
 _runtime = HLFRuntime()
-_bytecode = HLFBytecode()
+bytecoder = HLFBytecode()
 _benchmark = HLFBenchmark()
-_memory = RAGMemory()
-_instinct = InstinctLifecycle()
+memory_store = RAGMemory()
+instinct_mgr = InstinctLifecycle()
+host_registry = HostFunctionRegistry()
+tool_registry = ToolRegistry()
+
+# Internal aliases kept for backward-compat with any imports referencing old names
+_compiler = compiler
+_formatter = formatter
+_linter = linter
+_bytecode = bytecoder
+_memory = memory_store
+_instinct = instinct_mgr
 
 
 # ── Tools ──────────────────────────────────────────────────────────────────────
@@ -115,8 +145,8 @@ def hlf_compile(source: str) -> dict[str, Any]:
         source: HLF source code (Unicode glyphs or ASCII keywords)
     """
     try:
-        result = _compiler.compile(source)
-        bc = _bytecode.encode(result["ast"])
+        result = compiler.compile(source)
+        bc = bytecoder.encode(result["ast"])
         return {
             "status": "ok",
             "ast": result["ast"],
@@ -162,8 +192,8 @@ def hlf_format(source: str) -> dict[str, Any]:
         source: Raw HLF source code (any formatting)
     """
     try:
-        formatted = _formatter.format(source)
-        diff = _formatter.diff_summary(source, formatted)
+        formatted = formatter.format(source)
+        diff = formatter.diff_summary(source, formatted)
         return {"status": "ok", "formatted": formatted, "diff_summary": diff}
     except Exception as exc:
         return {"status": "error", "formatted": source, "diff_summary": str(exc)}
@@ -181,7 +211,7 @@ def hlf_lint(source: str, gas_limit: int = 1000, token_limit: int = 30) -> dict[
         gas_limit: Maximum allowed gas units (default 1000)
         token_limit: Per-line token budget (default 30)
     """
-    diags = _linter.lint(source, gas_limit=gas_limit, token_limit=token_limit)
+    diags = linter.lint(source, gas_limit=gas_limit, token_limit=token_limit)
     return {
         "passed": all(d["level"] != "error" for d in diags),
         "diagnostics": diags,
@@ -208,11 +238,11 @@ def hlf_run(
         variables: Initial variable bindings e.g. {"DEPLOYMENT_TIER": "hearth"}
     """
     try:
-        result = _compiler.compile(source)
+        result = compiler.compile(source)
         if result.get("errors"):
             return {"status": "compile_error", "error": result["errors"], "gas_used": 0,
                     "trace": [], "side_effects": []}
-        bc = _bytecode.encode(result["ast"])
+        bc = bytecoder.encode(result["ast"])
         return _runtime.run(bc, gas_limit=gas_limit, variables=variables or {})
     except CompileError as exc:
         return {"status": "compile_error", "error": str(exc), "gas_used": 0,
@@ -229,7 +259,7 @@ def hlf_validate(source: str) -> dict[str, Any]:
     Args:
         source: HLF source code
     """
-    return _compiler.validate(source)
+    return compiler.validate(source)
 
 
 @mcp.tool()
@@ -267,7 +297,7 @@ def hlf_disassemble(bytecode_hex: str) -> dict[str, Any]:
     """
     try:
         bc_bytes = bytes.fromhex(bytecode_hex.strip())
-        result = _bytecode.disassemble(bc_bytes)
+        result = bytecoder.disassemble(bc_bytes)
         return {"status": "ok", **result}
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
@@ -293,8 +323,8 @@ def hlf_memory_store(
         provenance: Source identifier (agent name, tool, etc.)
         tags: Optional list of retrieval tags
     """
-    return _memory.store(content, topic=topic, confidence=confidence,
-                         provenance=provenance, tags=tags or [])
+    return memory_store.store(content, topic=topic, confidence=confidence,
+                              provenance=provenance, tags=tags or [])
 
 
 @mcp.tool()
@@ -315,7 +345,7 @@ def hlf_memory_query(
         topic: Optional topic filter
         min_confidence: Minimum confidence threshold (default 0.0)
     """
-    return _memory.query(query, top_k=top_k, topic=topic, min_confidence=min_confidence)
+    return memory_store.query(query, top_k=top_k, topic=topic, min_confidence=min_confidence)
 
 
 @mcp.tool()
@@ -324,7 +354,7 @@ def hlf_memory_stats() -> dict[str, Any]:
 
     Includes: total facts, Merkle chain depth, hot tier topics, top topics.
     """
-    return _memory.stats()
+    return memory_store.stats()
 
 
 @mcp.tool()
@@ -348,7 +378,7 @@ def hlf_instinct_step(
         override: Force backward/skip transitions (use with caution)
         cove_result: CoVE verification result dict with 'passed' boolean
     """
-    return _instinct.step(
+    return instinct_mgr.step(
         mission_id, phase=phase, payload=payload or {},
         override=override, cove_result=cove_result,
     )
@@ -361,14 +391,288 @@ def hlf_instinct_get(mission_id: str) -> dict[str, Any]:
     Args:
         mission_id: Mission identifier
     """
-    mission = _instinct.get_mission(mission_id)
+    mission = instinct_mgr.get_mission(mission_id)
     if mission is None:
         return {"error": f"Mission '{mission_id}' not found", "mission_id": mission_id}
     from hlf_mcp.instinct.lifecycle import _ok_state
     return _ok_state(mission)
 
 
+# ── New tools ──────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def hlf_translate_to_hlf(english_text: str, version: str = "3") -> dict[str, Any]:
+    """Convert English instructions to HLF source code.
+
+    Uses tone detection and heuristic action extraction to produce a valid
+    HLF program from natural language. The version parameter controls the
+    [HLF-vN] header emitted (default "3").
+
+    Args:
+        english_text: Natural language description of the desired program
+        version: HLF version string (default "3")
+    """
+    try:
+        source = english_to_hlf(english_text, version=version)
+        return {"status": "ok", "source": source}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_translate_to_english(source: str) -> dict[str, Any]:
+    """Convert HLF source code to a human-readable English summary.
+
+    Compiles the source to obtain an AST (with human_readable fields populated
+    by InsAIts), then calls insaits.decompile() to produce structured prose.
+
+    Args:
+        source: HLF source code
+    """
+    try:
+        result = compiler.compile(source)
+        summary = insaits.decompile(result["ast"])
+        return {"status": "ok", "summary": summary}
+    except CompileError as exc:
+        return {"status": "error", "error": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_decompile_ast(source: str) -> dict[str, Any]:
+    """Compile HLF source and return structured English documentation from the AST.
+
+    Uses insaits.decompile() which reads human_readable fields on every AST node
+    and produces annotated prose output.
+
+    Args:
+        source: HLF source code
+    """
+    try:
+        result = compiler.compile(source)
+        docs = insaits.decompile(result["ast"])
+        return {"status": "ok", "docs": docs, "ast": result["ast"]}
+    except CompileError as exc:
+        return {"status": "error", "error": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_decompile_bytecode(source: str) -> dict[str, Any]:
+    """Compile HLF source → encode to bytecode → disassemble → produce English docs.
+
+    Pipeline: compile → encode → disassemble → insaits.decompile_bytecode()
+
+    Args:
+        source: HLF source code
+    """
+    try:
+        result = compiler.compile(source)
+        bc = bytecoder.encode(result["ast"])
+        docs = insaits.decompile_bytecode(bc)
+        return {"status": "ok", "docs": docs, "bytecode_hex": bc.hex()}
+    except CompileError as exc:
+        return {"status": "error", "error": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_capsule_validate(source: str, tier: str = "hearth") -> dict[str, Any]:
+    """Validate HLF source AST against the intent capsule for the given tier.
+
+    Tiers: hearth (minimal), forge (moderate), sovereign (full).
+    Returns a list of capability violations if any exist.
+
+    Args:
+        source: HLF source code
+        tier: Execution tier — hearth | forge | sovereign (default hearth)
+    """
+    try:
+        result = compiler.compile(source)
+        capsule = capsule_for_tier(tier)
+        stmts = result["ast"].get("statements", [])
+        violations = capsule.validate_ast(stmts)
+        return {
+            "status": "ok",
+            "tier": tier,
+            "violations": violations,
+            "passed": len(violations) == 0,
+        }
+    except CompileError as exc:
+        return {"status": "error", "error": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_capsule_run(
+    source: str,
+    tier: str = "hearth",
+    gas_limit: int = 1000,
+) -> dict[str, Any]:
+    """Compile, capsule-validate, then execute HLF source within a sandboxed tier.
+
+    Tiers: hearth (gas≤100), forge (gas≤500), sovereign (gas≤1000).
+    Raises an error listing all capsule violations before executing.
+
+    Args:
+        source: HLF source code
+        tier: Execution tier — hearth | forge | sovereign (default hearth)
+        gas_limit: Maximum gas units (capped to tier maximum)
+    """
+    try:
+        result = compiler.compile(source)
+        capsule = capsule_for_tier(tier)
+        stmts = result["ast"].get("statements", [])
+        violations = capsule.validate_ast(stmts)
+        if violations:
+            return {
+                "status": "capsule_violation",
+                "tier": tier,
+                "violations": violations,
+            }
+        effective_gas = min(gas_limit, capsule.max_gas)
+        bc = bytecoder.encode(result["ast"])
+        run_result = _runtime.run(bc, gas_limit=effective_gas)
+        run_result["tier"] = tier
+        return run_result
+    except CompileError as exc:
+        return {"status": "compile_error", "error": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_host_functions(tier: str = "hearth") -> dict[str, Any]:
+    """List host functions available for the given execution tier.
+
+    Args:
+        tier: Execution tier — hearth | forge | sovereign (default hearth)
+    """
+    try:
+        functions = host_registry.list_for_tier(tier)
+        return {"status": "ok", "tier": tier, "functions": functions, "count": len(functions)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_host_call(
+    function_name: str,
+    args_json: str = "[]",
+    tier: str = "hearth",
+) -> dict[str, Any]:
+    """Call a host function from the registry.
+
+    Parses args_json as a JSON array and dispatches to the named host function.
+    The tier is used for access-control validation.
+
+    Args:
+        function_name: Name of the host function (e.g. "fs_read")
+        args_json: JSON-encoded argument list (default "[]")
+        tier: Execution tier for access control (default hearth)
+    """
+    try:
+        args = json.loads(args_json)
+        if not isinstance(args, list):
+            return {"status": "error", "error": "args_json must be a JSON array"}
+        result = host_registry.call(function_name, args, tier)
+        return {"status": "ok", "result": result}
+    except json.JSONDecodeError as exc:
+        return {"status": "error", "error": f"Invalid args_json: {exc}"}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_tool_list() -> dict[str, Any]:
+    """List all tools registered in the HLF ToolRegistry.
+
+    Returns tool names, lifecycle states, and metadata from tool_registry.json.
+    """
+    try:
+        tools = tool_registry.list_tools()
+        return {"status": "ok", "tools": tools, "count": len(tools)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_similarity_gate(source_a: str, source_b: str) -> dict[str, Any]:
+    """Compare two HLF programs for semantic similarity using InsAIts similarity gate.
+
+    Compiles both programs, extracts their human-readable text, and computes
+    a cosine similarity score over token frequency vectors.
+
+    Args:
+        source_a: First HLF source program
+        source_b: Second HLF source program
+    """
+    try:
+        result_a = compiler.compile(source_a)
+        result_b = compiler.compile(source_b)
+        text_a = insaits.decompile(result_a["ast"])
+        text_b = insaits.decompile(result_b["ast"])
+        score = insaits.similarity_gate(text_a, text_b)
+        return {"status": "ok", "similarity": score}
+    except CompileError as exc:
+        return {"status": "error", "error": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@mcp.tool()
+def hlf_spec_lifecycle(
+    mission_id: str,
+    phase: str,
+    action: str = "advance",
+    evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Manage an Instinct spec lifecycle mission through SPECIFY→PLAN→EXECUTE→VERIFY→MERGE.
+
+    Wraps instinct_mgr.step() with spec-oriented phase naming and returns the
+    mission state dict. Use action="advance" to move forward or action="get" to
+    read the current state without advancing.
+
+    Args:
+        mission_id: Unique mission identifier
+        phase: One of: SPECIFY | PLAN | EXECUTE | VERIFY | MERGE
+        action: "advance" (default) to step the phase, "get" to read state only
+        evidence: Optional phase payload / evidence dict
+    """
+    _VALID_PHASES = {"SPECIFY", "PLAN", "EXECUTE", "VERIFY", "MERGE"}
+    phase_upper = phase.upper()
+    if phase_upper not in _VALID_PHASES:
+        return {
+            "status": "error",
+            "error": f"Invalid phase {phase!r}. Must be one of: {', '.join(sorted(_VALID_PHASES))}",
+        }
+
+    if action == "get":
+        mission = instinct_mgr.get_mission(mission_id)
+        if mission is None:
+            return {"status": "error", "error": f"Mission '{mission_id}' not found"}
+        from hlf_mcp.instinct.lifecycle import _ok_state
+        return {"status": "ok", "mission": _ok_state(mission)}
+
+    try:
+        result = instinct_mgr.step(
+            mission_id,
+            phase=phase_upper.lower(),
+            payload=evidence or {},
+        )
+        return {"status": "ok", "mission": result}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 # ── Resources ──────────────────────────────────────────────────────────────────
+
+_GOVERNANCE_DIR = os.path.join(os.path.dirname(__file__), "..", "governance")
 
 
 @mcp.resource("hlf://grammar")
@@ -380,7 +684,7 @@ def get_grammar() -> str:
 
 @mcp.resource("hlf://opcodes")
 def get_opcodes() -> str:
-    """HLF bytecode opcode table (34 opcodes)."""
+    """HLF bytecode opcode table (37 opcodes)."""
     return json.dumps(OPCODES, indent=2)
 
 
@@ -401,9 +705,50 @@ def get_example(name: str) -> str:
     fixtures_dir = os.path.join(os.path.dirname(__file__), "..", "fixtures")
     path = os.path.join(fixtures_dir, f"{name}.hlf")
     if not os.path.exists(path):
-        raise FileNotFoundError(f"Example '{name}' not found. Available: hello_world, security_audit, delegation, routing, db_migration, log_analysis, stack_deployment")
+        raise FileNotFoundError(
+            f"Example '{name}' not found. Available: hello_world, security_audit, "
+            "delegation, routing, db_migration, log_analysis, stack_deployment"
+        )
     with open(path) as f:
         return f.read()
+
+
+@mcp.resource("hlf://governance/host_functions")
+def get_governance_host_functions() -> str:
+    """Governance host_functions.json — full host function definitions."""
+    path = os.path.join(_GOVERNANCE_DIR, "host_functions.json")
+    with open(path) as f:
+        return f.read()
+
+
+@mcp.resource("hlf://governance/bytecode_spec")
+def get_governance_bytecode_spec() -> str:
+    """Governance bytecode_spec.yaml — bytecode encoding specification."""
+    path = os.path.join(_GOVERNANCE_DIR, "bytecode_spec.yaml")
+    with open(path) as f:
+        return f.read()
+
+
+@mcp.resource("hlf://governance/align_rules")
+def get_governance_align_rules() -> str:
+    """Governance align_rules.json — alignment and safety rules."""
+    path = os.path.join(_GOVERNANCE_DIR, "align_rules.json")
+    with open(path) as f:
+        return f.read()
+
+
+@mcp.resource("hlf://stdlib")
+def get_stdlib() -> str:
+    """List all available HLF stdlib modules."""
+    stdlib_dir = os.path.join(os.path.dirname(__file__), "hlf", "stdlib")
+    if not os.path.isdir(stdlib_dir):
+        return json.dumps({"modules": []})
+    modules = sorted(
+        name[:-3]
+        for name in os.listdir(stdlib_dir)
+        if name.endswith(".py") and not name.startswith("_")
+    )
+    return json.dumps({"modules": modules}, indent=2)
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

@@ -2,192 +2,458 @@
 HLF Bytecode — binary .hlb format encoder, decoder, and disassembler.
 
 Binary format:
-  Header  (16 bytes): magic[4] version[2] code_len[4] crc32[4] flags[2]
-  Const Pool: uint16 count, then per-constant: type[1] len[2] data[len]
-  Code Section: sequence of instructions
-
-Each instruction: opcode[1] [operand: uint16]?
-  Opcodes with operand: PUSH, STORE, LOAD, CALL_HOST, CALL_TOOL, JMP, JMP_IF,
-                        OPENCLAW_TOOL, SPEC_DEFINE, SPEC_GATE, SPEC_UPDATE, SPEC_SEAL
+  SHA-256   (32 bytes): hash of entire payload for integrity
+  Header    (16 bytes): magic[4] version[2] code_len[4] crc32[4] flags[2]  (little-endian)
+  Const Pool: uint32 count (LE), then per-constant typed entries
+  Code Section: sequence of fixed 3-byte instructions (opcode[1] + operand[2 LE])
 """
 
 from __future__ import annotations
 
 import hashlib
 import struct
+import sys
 import zlib
+from enum import IntEnum
 from typing import Any
+
 
 # ── Opcode table ──────────────────────────────────────────────────────────────
 
-OPCODES: dict[str, dict[str, Any]] = {
-    "PUSH":           {"code": 0x01, "operand": True,  "desc": "Push constant from pool"},
-    "POP":            {"code": 0x02, "operand": False, "desc": "Pop top of stack"},
-    "STORE":          {"code": 0x03, "operand": True,  "desc": "Store TOS to variable slot"},
-    "LOAD":           {"code": 0x04, "operand": True,  "desc": "Load variable slot onto stack"},
-    "CALL_HOST":      {"code": 0x05, "operand": True,  "desc": "Call host function by name index"},
-    "CALL_TOOL":      {"code": 0x06, "operand": True,  "desc": "Call registered tool by name index"},
-    "MEMORY_STORE":   {"code": 0x07, "operand": False, "desc": "Store TOS to RAG memory"},
-    "MEMORY_RECALL":  {"code": 0x08, "operand": False, "desc": "Recall from RAG memory by key"},
-    "APPLY_CONSTRAINT": {"code": 0x09, "operand": True, "desc": "Apply typed constraint"},
-    "VOTE":           {"code": 0x0A, "operand": True,  "desc": "Consensus vote"},
-    "DELEGATE":       {"code": 0x0B, "operand": True,  "desc": "Delegate to sub-agent"},
-    "ROUTE":          {"code": 0x0C, "operand": True,  "desc": "Route to model"},
-    "ASSERT":         {"code": 0x0D, "operand": False, "desc": "Assert TOS is truthy"},
-    "JMP_IF":         {"code": 0x0E, "operand": True,  "desc": "Conditional jump"},
-    "JMP":            {"code": 0x0F, "operand": True,  "desc": "Unconditional jump"},
-    "HALT":           {"code": 0x10, "operand": False, "desc": "Halt execution"},
-    "GAS_METER":      {"code": 0x11, "operand": True,  "desc": "Deduct gas units"},
-    "LOG_EMIT":       {"code": 0x12, "operand": True,  "desc": "Emit log message"},
-    "RETURN":         {"code": 0x13, "operand": False, "desc": "Return TOS"},
-    "CMP_GT":         {"code": 0x20, "operand": False, "desc": "> comparison"},
-    "CMP_LT":         {"code": 0x21, "operand": False, "desc": "< comparison"},
-    "CMP_EQ":         {"code": 0x22, "operand": False, "desc": "== comparison"},
-    "CMP_NE":         {"code": 0x23, "operand": False, "desc": "!= comparison"},
-    "CMP_GE":         {"code": 0x24, "operand": False, "desc": ">= comparison"},
-    "CMP_LE":         {"code": 0x25, "operand": False, "desc": "<= comparison"},
-    "SET_VAR":        {"code": 0x30, "operand": True,  "desc": "Set variable binding"},
-    "CALL_FUNC":      {"code": 0x31, "operand": True,  "desc": "Call user-defined function"},
-    "IMPORT_MOD":     {"code": 0x32, "operand": True,  "desc": "Import module by path"},
-    "OPENCLAW_TOOL":  {"code": 0x40, "operand": True,  "desc": "OpenClaw sandboxed tool call"},
-    # Instinct SDD opcodes (0x65–0x68 per governance/bytecode_spec.yaml)
-    "SPEC_DEFINE":    {"code": 0x65, "operand": True,  "desc": "Define Instinct spec"},
-    "SPEC_GATE":      {"code": 0x66, "operand": True,  "desc": "Gate on Instinct spec"},
-    "SPEC_UPDATE":    {"code": 0x67, "operand": True,  "desc": "Update Instinct spec"},
-    "SPEC_SEAL":      {"code": 0x68, "operand": True,  "desc": "Seal Instinct spec with SHA-256"},
+class Op(IntEnum):
+    NOP           = 0x00
+    PUSH_CONST    = 0x01
+    STORE         = 0x02
+    LOAD          = 0x03
+    STORE_IMMUT   = 0x04
+    ADD           = 0x10
+    SUB           = 0x11
+    MUL           = 0x12
+    DIV           = 0x13
+    MOD           = 0x14
+    NEG           = 0x15
+    CMP_EQ        = 0x20
+    CMP_NE        = 0x21
+    CMP_LT        = 0x22
+    CMP_LE        = 0x23
+    CMP_GT        = 0x24
+    CMP_GE        = 0x25
+    AND           = 0x30
+    OR            = 0x31
+    NOT           = 0x32
+    JMP           = 0x40
+    JZ            = 0x41
+    JNZ           = 0x42
+    CALL_BUILTIN  = 0x50
+    CALL_HOST     = 0x51
+    CALL_TOOL     = 0x52
+    OPENCLAW_TOOL = 0x53
+    TAG           = 0x60
+    INTENT        = 0x61
+    RESULT        = 0x62
+    MEMORY_STORE  = 0x63
+    MEMORY_RECALL = 0x64
+    SPEC_DEFINE   = 0x65
+    SPEC_GATE     = 0x66
+    SPEC_UPDATE   = 0x67
+    SPEC_SEAL     = 0x68
+    HALT          = 0xFF
+
+
+# ── Gas costs ─────────────────────────────────────────────────────────────────
+
+GAS_COSTS: dict[Op, int] = {
+    Op.NOP:           0,
+    Op.PUSH_CONST:    1,
+    Op.STORE:         2,
+    Op.LOAD:          1,
+    Op.STORE_IMMUT:   3,
+    Op.ADD:           2,
+    Op.SUB:           2,
+    Op.MUL:           3,
+    Op.DIV:           5,
+    Op.MOD:           3,
+    Op.NEG:           1,
+    Op.CMP_EQ:        1,
+    Op.CMP_NE:        1,
+    Op.CMP_LT:        1,
+    Op.CMP_LE:        1,
+    Op.CMP_GT:        1,
+    Op.CMP_GE:        1,
+    Op.AND:           1,
+    Op.OR:            1,
+    Op.NOT:           1,
+    Op.JMP:           1,
+    Op.JZ:            2,
+    Op.JNZ:           2,
+    Op.CALL_BUILTIN:  5,
+    Op.CALL_HOST:     10,
+    Op.CALL_TOOL:     15,
+    Op.OPENCLAW_TOOL: 20,
+    Op.TAG:           1,
+    Op.INTENT:        2,
+    Op.RESULT:        1,
+    Op.MEMORY_STORE:  3,
+    Op.MEMORY_RECALL: 2,
+    Op.SPEC_DEFINE:   4,
+    Op.SPEC_GATE:     4,
+    Op.SPEC_UPDATE:   4,
+    Op.SPEC_SEAL:     4,
+    Op.HALT:          0,
 }
 
-# Reverse lookup: code → name
-_CODE_TO_NAME: dict[int, str] = {v["code"]: k for k, v in OPCODES.items()}
 
-# Glyph → primary opcode
-_GLYPH_OP: dict[str, str] = {
-    "Δ": "CALL_HOST",
-    "Ж": "APPLY_CONSTRAINT",
-    "⨝": "VOTE",
-    "⌘": "DELEGATE",
-    "∇": "PUSH",
-    "⩕": "GAS_METER",
-    "⊎": "JMP_IF",
-}
+# ── Constant Pool ─────────────────────────────────────────────────────────────
+
+TYPE_INT    = 0x01
+TYPE_FLOAT  = 0x02
+TYPE_STRING = 0x03
+TYPE_BOOL   = 0x04
+TYPE_NULL   = 0x05
+
+
+class ConstantPool:
+    """Typed constant pool for HLF bytecode."""
+
+    def __init__(self) -> None:
+        self._entries: list[Any] = []
+
+    def add(self, value: Any) -> int:
+        """Add a value and return its pool index."""
+        self._entries.append(value)
+        return len(self._entries) - 1
+
+    def get(self, index: int) -> Any:
+        if 0 <= index < len(self._entries):
+            return self._entries[index]
+        return None
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def encode(self) -> bytes:
+        """Encode pool to bytes with typed entries (little-endian)."""
+        parts = [struct.pack("<I", len(self._entries))]
+        for entry in self._entries:
+            parts.append(_encode_const(entry))
+        return b"".join(parts)
+
+    @classmethod
+    def decode(cls, data: bytes) -> tuple["ConstantPool", int]:
+        """Decode pool from bytes; returns (pool, bytes_consumed)."""
+        if len(data) < 4:
+            return cls(), 0
+        count = struct.unpack("<I", data[:4])[0]
+        offset = 4
+        pool = cls()
+        for _ in range(count):
+            if offset >= len(data):
+                break
+            val, size = _decode_const(data[offset:])
+            pool.add(val)
+            offset += size
+        return pool, offset
+
+
+def _encode_const(value: Any) -> bytes:
+    if value is None:
+        return bytes([TYPE_NULL])
+    if isinstance(value, bool):
+        return bytes([TYPE_BOOL]) + struct.pack("<B", 1 if value else 0)
+    if isinstance(value, int):
+        return bytes([TYPE_INT]) + struct.pack("<q", value)
+    if isinstance(value, float):
+        return bytes([TYPE_FLOAT]) + struct.pack("<d", value)
+    # string (default)
+    enc = str(value).encode("utf-8")
+    return bytes([TYPE_STRING]) + struct.pack("<I", len(enc)) + enc
+
+
+def _decode_const(data: bytes) -> tuple[Any, int]:
+    if not data:
+        return None, 1
+    typ = data[0]
+    if typ == TYPE_NULL:
+        return None, 1
+    if typ == TYPE_BOOL:
+        if len(data) < 2:
+            return False, 2
+        return bool(data[1]), 2
+    if typ == TYPE_INT:
+        if len(data) < 9:
+            return 0, 9
+        return struct.unpack("<q", data[1:9])[0], 9
+    if typ == TYPE_FLOAT:
+        if len(data) < 9:
+            return 0.0, 9
+        return struct.unpack("<d", data[1:9])[0], 9
+    if typ == TYPE_STRING:
+        if len(data) < 5:
+            return "", 5
+        length = struct.unpack("<I", data[1:5])[0]
+        raw = data[5: 5 + length]
+        try:
+            return raw.decode("utf-8"), 5 + length
+        except UnicodeDecodeError:
+            return raw.hex(), 5 + length
+    # Unknown type — skip 1 byte
+    return None, 1
+
+
+# ── Binary header ─────────────────────────────────────────────────────────────
 
 _MAGIC = b"HLB\x00"
 _FORMAT_VERSION = 0x0004  # v0.4
+_HEADER_SIZE = 16  # magic[4] + version[2] + code_len[4] + crc32[4] + flags[2]
 
 
-class HLFBytecode:
-    """Encode AST to .hlb bytecode and decode/disassemble .hlb files."""
+def _encode_header(code_len: int, crc: int, flags: int = 0) -> bytes:
+    return struct.pack("<4sHIIH", _MAGIC, _FORMAT_VERSION, code_len, crc, flags)
+
+
+def _decode_header(data: bytes) -> dict[str, Any]:
+    magic, version, code_len, crc32, flags = struct.unpack("<4sHIIH", data[:_HEADER_SIZE])
+    return {
+        "magic": magic,
+        "format_version": version,
+        "code_len": code_len,
+        "crc32": crc32,
+        "flags": flags,
+    }
+
+
+# ── Glyph → opcode mapping ────────────────────────────────────────────────────
+
+_GLYPH_OP: dict[str, Op] = {
+    "Δ": Op.CALL_HOST,
+    "Ж": Op.TAG,
+    "⨝": Op.INTENT,
+    "⌘": Op.CALL_HOST,
+    "∇": Op.PUSH_CONST,
+    "⩕": Op.TAG,
+    "⊎": Op.JZ,
+}
+
+
+# ── Operand flags and descriptions ───────────────────────────────────────────
+
+_OP_HAS_OPERAND: dict[Op, bool] = {
+    Op.NOP:           False,
+    Op.PUSH_CONST:    True,
+    Op.STORE:         True,
+    Op.LOAD:          True,
+    Op.STORE_IMMUT:   True,
+    Op.ADD:           False,
+    Op.SUB:           False,
+    Op.MUL:           False,
+    Op.DIV:           False,
+    Op.MOD:           False,
+    Op.NEG:           False,
+    Op.CMP_EQ:        False,
+    Op.CMP_NE:        False,
+    Op.CMP_LT:        False,
+    Op.CMP_LE:        False,
+    Op.CMP_GT:        False,
+    Op.CMP_GE:        False,
+    Op.AND:           False,
+    Op.OR:            False,
+    Op.NOT:           False,
+    Op.JMP:           True,
+    Op.JZ:            True,
+    Op.JNZ:           True,
+    Op.CALL_BUILTIN:  True,
+    Op.CALL_HOST:     True,
+    Op.CALL_TOOL:     True,
+    Op.OPENCLAW_TOOL: True,
+    Op.TAG:           True,
+    Op.INTENT:        True,
+    Op.RESULT:        False,
+    Op.MEMORY_STORE:  False,
+    Op.MEMORY_RECALL: False,
+    Op.SPEC_DEFINE:   True,
+    Op.SPEC_GATE:     True,
+    Op.SPEC_UPDATE:   True,
+    Op.SPEC_SEAL:     True,
+    Op.HALT:          False,
+}
+
+_OP_DESC: dict[Op, str] = {
+    Op.NOP:           "No operation",
+    Op.PUSH_CONST:    "Push constant from pool",
+    Op.STORE:         "Store TOS to variable slot",
+    Op.LOAD:          "Load variable slot onto stack",
+    Op.STORE_IMMUT:   "Store immutable variable",
+    Op.ADD:           "Add top two stack values",
+    Op.SUB:           "Subtract top two stack values",
+    Op.MUL:           "Multiply top two stack values",
+    Op.DIV:           "Divide top two stack values",
+    Op.MOD:           "Modulo top two stack values",
+    Op.NEG:           "Negate top of stack",
+    Op.CMP_EQ:        "== comparison",
+    Op.CMP_NE:        "!= comparison",
+    Op.CMP_LT:        "< comparison",
+    Op.CMP_LE:        "<= comparison",
+    Op.CMP_GT:        "> comparison",
+    Op.CMP_GE:        ">= comparison",
+    Op.AND:           "Logical AND",
+    Op.OR:            "Logical OR",
+    Op.NOT:           "Logical NOT",
+    Op.JMP:           "Unconditional jump",
+    Op.JZ:            "Jump if zero/false",
+    Op.JNZ:           "Jump if nonzero/true",
+    Op.CALL_BUILTIN:  "Call built-in function",
+    Op.CALL_HOST:     "Call host function by name index",
+    Op.CALL_TOOL:     "Call registered tool by name index",
+    Op.OPENCLAW_TOOL: "OpenClaw sandboxed tool call",
+    Op.TAG:           "Tag/label annotation",
+    Op.INTENT:        "Declare intent",
+    Op.RESULT:        "Push result value",
+    Op.MEMORY_STORE:  "Store TOS to RAG memory",
+    Op.MEMORY_RECALL: "Recall from RAG memory by key",
+    Op.SPEC_DEFINE:   "Define Instinct spec",
+    Op.SPEC_GATE:     "Gate on Instinct spec",
+    Op.SPEC_UPDATE:   "Update Instinct spec",
+    Op.SPEC_SEAL:     "Seal Instinct spec with SHA-256",
+    Op.HALT:          "Halt execution",
+}
+
+
+# ── Backward-compat OPCODES dict ─────────────────────────────────────────────
+# Maps op name → {"code": int, "operand": bool, "desc": str}
+
+OPCODES: dict[str, dict[str, Any]] = {
+    op.name: {
+        "code": op.value,
+        "operand": _OP_HAS_OPERAND[op],
+        "desc": _OP_DESC[op],
+    }
+    for op in Op
+}
+
+# Reverse lookups
+_CODE_TO_OP: dict[int, Op] = {op.value: op for op in Op}
+_CODE_TO_NAME: dict[int, str] = {op.value: op.name for op in Op}
+
+
+# ── Instruction helper ────────────────────────────────────────────────────────
+
+def _instr(op: Op, operand: int = 0) -> bytes:
+    """Encode a fixed 3-byte instruction (little-endian operand)."""
+    return struct.pack("<BH", op.value, operand)
+
+
+# ── BytecodeCompiler ──────────────────────────────────────────────────────────
+
+class BytecodeCompiler:
+    """Compile AST dicts to .hlb bytecode."""
 
     def encode(self, ast: dict[str, Any]) -> bytes:
         """Compile AST to binary .hlb bytecode."""
-        const_pool: list[bytes] = []
+        pool = ConstantPool()
         instructions: list[bytes] = []
-
-        def add_const(value: str) -> int:
-            enc = value.encode("utf-8")
-            const_pool.append(bytes([0x00]) + struct.pack(">H", len(enc)) + enc)
-            return len(const_pool) - 1
 
         statements = ast.get("statements", [])
         for stmt in statements:
-            _emit_stmt(stmt, instructions, const_pool, add_const)
+            _emit_stmt(stmt, instructions, pool, pool.add)
 
-        # Emit HALT at end
-        instructions.append(bytes([OPCODES["HALT"]["code"]]))
+        instructions.append(_instr(Op.HALT))
 
         code_bytes = b"".join(instructions)
-        pool_bytes = _encode_pool(const_pool)
+        pool_bytes = pool.encode()
 
-        # CRC32 over code section
         crc = zlib.crc32(code_bytes) & 0xFFFFFFFF
-
-        header = (
-            _MAGIC
-            + struct.pack(">H", _FORMAT_VERSION)
-            + struct.pack(">I", len(code_bytes))
-            + struct.pack(">I", crc)
-            + struct.pack(">H", 0x0000)  # flags
-        )
-
+        header = _encode_header(len(code_bytes), crc)
         payload = header + pool_bytes + code_bytes
 
-        # Prepend SHA-256 of payload (32 bytes) for integrity
         sha = hashlib.sha256(payload).digest()
         return sha + payload
 
+
+# Backward compat alias
+HLFBytecode = BytecodeCompiler
+
+
+# ── Disassembler ──────────────────────────────────────────────────────────────
+
+class Disassembler:
+    """Disassemble .hlb bytecode to human-readable form."""
+
     def disassemble(self, data: bytes) -> dict[str, Any]:
-        """Disassemble .hlb binary to human-readable assembly."""
-        if len(data) < 48:
+        """Disassemble .hlb binary; returns structured result dict."""
+        if len(data) < 32 + _HEADER_SIZE:
             raise ValueError("Truncated .hlb file")
 
-        sha256 = data[:32].hex()
+        stored_sha = data[:32].hex()
         payload = data[32:]
 
         if payload[:4] != _MAGIC:
             raise ValueError("Invalid .hlb magic bytes")
 
-        fmt_ver = struct.unpack(">H", payload[4:6])[0]
-        code_len = struct.unpack(">I", payload[6:10])[0]
-        stored_crc = struct.unpack(">I", payload[10:14])[0]
-        flags = struct.unpack(">H", payload[14:16])[0]
+        hdr = _decode_header(payload[:_HEADER_SIZE])
+        fmt_ver  = hdr["format_version"]
+        code_len = hdr["code_len"]
+        stored_crc = hdr["crc32"]
+        flags    = hdr["flags"]
 
-        # Parse constant pool
-        pool, pool_size = _decode_pool(payload[16:])
-        code_start = 16 + pool_size
-        code_bytes = payload[code_start : code_start + code_len]
+        pool, pool_size = ConstantPool.decode(payload[_HEADER_SIZE:])
+        code_start = _HEADER_SIZE + pool_size
+        code_bytes = payload[code_start: code_start + code_len]
 
-        # Verify CRC
         actual_crc = zlib.crc32(code_bytes) & 0xFFFFFFFF
-        crc_ok = actual_crc == stored_crc
-
-        # Verify SHA-256
-        sha_ok = hashlib.sha256(payload).digest().hex() == sha256
+        crc_ok  = actual_crc == stored_crc
+        sha_ok  = hashlib.sha256(payload).digest().hex() == stored_sha
 
         instructions: list[dict[str, Any]] = []
         disasm_lines: list[str] = []
         pc = 0
         while pc < len(code_bytes):
             op_byte = code_bytes[pc]
-            op_name = _CODE_TO_NAME.get(op_byte, f"UNKNOWN(0x{op_byte:02X})")
-            op_info = OPCODES.get(op_name, {})
-            has_operand = op_info.get("operand", False)
+            op = _CODE_TO_OP.get(op_byte)
+            op_name = op.name if op is not None else f"UNKNOWN(0x{op_byte:02X})"
+            has_operand = _OP_HAS_OPERAND.get(op, False) if op is not None else False
 
-            if has_operand and pc + 2 < len(code_bytes):
-                operand = struct.unpack(">H", code_bytes[pc + 1 : pc + 3])[0]
-                const_val = pool[operand] if operand < len(pool) else f"<idx {operand}>"
-                disasm_lines.append(f"  {pc:04X}  {op_name:<18} #{operand}  ; {const_val!r}")
+            if pc + 2 < len(code_bytes):
+                operand = struct.unpack("<H", code_bytes[pc + 1: pc + 3])[0]
+            else:
+                operand = 0
+
+            if has_operand:
+                const_val = pool.get(operand)
+                disasm_lines.append(
+                    f"  {pc:04X}  {op_name:<18} #{operand}  ; {const_val!r}"
+                )
                 instructions.append({"pc": pc, "op": op_name, "operand": operand, "const": const_val})
-                pc += 3
             else:
                 disasm_lines.append(f"  {pc:04X}  {op_name}")
                 instructions.append({"pc": pc, "op": op_name})
-                pc += 1
 
+            pc += 3  # fixed 3-byte instruction width
+
+        pool_values = [pool.get(i) for i in range(len(pool))]
         header_info = {
             "format_version": f"0x{fmt_ver:04X}",
             "code_length": code_len,
             "constant_pool_size": len(pool),
             "crc32_ok": crc_ok,
             "sha256_ok": sha_ok,
-            "sha256": sha256,
+            "sha256": stored_sha,
             "flags": f"0x{flags:04X}",
         }
 
         return {
             "header": header_info,
-            "constant_pool": pool,
+            "constant_pool": pool_values,
             "instructions": instructions,
             "disassembly": "\n".join(disasm_lines),
         }
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
-
+# ── AST emission helpers ──────────────────────────────────────────────────────
 
 def _emit_stmt(
     stmt: dict[str, Any],
     instructions: list[bytes],
-    const_pool: list[bytes],
+    pool: ConstantPool,
     add_const,
 ) -> None:
     """Emit bytecode instructions for one AST statement."""
@@ -195,94 +461,84 @@ def _emit_stmt(
 
     if kind == "glyph_stmt":
         glyph = stmt.get("glyph", "Δ")
-        tag = stmt.get("tag", "")
-        args = stmt.get("arguments", [])
-        op_name = _GLYPH_OP.get(glyph, "CALL_HOST")
-        desc = f"{glyph} [{tag}]" if tag else str(glyph)
-        idx = add_const(desc)
-        # Emit GAS_METER first
-        instructions.append(bytes([OPCODES["GAS_METER"]["code"]]) + struct.pack(">H", 2))
-        # Push arguments
+        tag   = stmt.get("tag", "")
+        args  = stmt.get("arguments", [])
+        op    = _GLYPH_OP.get(glyph, Op.CALL_HOST)
+        desc  = f"{glyph} [{tag}]" if tag else str(glyph)
+        idx   = add_const(desc)
         for arg in args:
             _emit_arg(arg, instructions, add_const)
-        # Emit primary opcode
-        instructions.append(bytes([OPCODES[op_name]["code"]]) + struct.pack(">H", idx))
+        instructions.append(_instr(op, idx))
 
     elif kind == "set_stmt":
-        name = stmt.get("name", "")
-        value = stmt.get("value", {})
-        _emit_value(value, instructions, add_const)
-        idx = add_const(name)
-        instructions.append(bytes([OPCODES["SET_VAR"]["code"]]) + struct.pack(">H", idx))
+        _emit_value(stmt.get("value", {}), instructions, add_const)
+        idx = add_const(stmt.get("name", ""))
+        instructions.append(_instr(Op.STORE, idx))
+
+    elif kind == "immut_stmt":
+        _emit_value(stmt.get("value", {}), instructions, add_const)
+        idx = add_const(stmt.get("name", ""))
+        instructions.append(_instr(Op.STORE_IMMUT, idx))
 
     elif kind == "memory_stmt":
-        name = stmt.get("name", "")
-        args = stmt.get("arguments", [])
-        for arg in args:
+        for arg in stmt.get("arguments", []):
             _emit_arg(arg, instructions, add_const)
-        idx = add_const(name)
-        instructions.append(bytes([OPCODES["MEMORY_STORE"]["code"]]))
+        instructions.append(_instr(Op.MEMORY_STORE))
 
     elif kind == "recall_stmt":
-        name = stmt.get("name", "")
-        idx = add_const(name)
-        instructions.append(bytes([OPCODES["PUSH"]["code"]]) + struct.pack(">H", idx))
-        instructions.append(bytes([OPCODES["MEMORY_RECALL"]["code"]]))
+        idx = add_const(stmt.get("name", ""))
+        instructions.append(_instr(Op.PUSH_CONST, idx))
+        instructions.append(_instr(Op.MEMORY_RECALL))
 
     elif kind in ("spec_define_stmt", "spec_gate_stmt", "spec_update_stmt", "spec_seal_stmt"):
         op_map = {
-            "spec_define_stmt": "SPEC_DEFINE",
-            "spec_gate_stmt":   "SPEC_GATE",
-            "spec_update_stmt": "SPEC_UPDATE",
-            "spec_seal_stmt":   "SPEC_SEAL",
+            "spec_define_stmt": Op.SPEC_DEFINE,
+            "spec_gate_stmt":   Op.SPEC_GATE,
+            "spec_update_stmt": Op.SPEC_UPDATE,
+            "spec_seal_stmt":   Op.SPEC_SEAL,
         }
-        op_name = op_map[kind]
-        tag = stmt.get("tag", "")
-        idx = add_const(tag)
-        instructions.append(bytes([OPCODES[op_name]["code"]]) + struct.pack(">H", idx))
+        idx = add_const(stmt.get("tag", ""))
+        instructions.append(_instr(op_map[kind], idx))
 
-    elif kind == "import_stmt":
-        path = stmt.get("path", "")
-        idx = add_const(path)
-        instructions.append(bytes([OPCODES["IMPORT_MOD"]["code"]]) + struct.pack(">H", idx))
+    elif kind == "tag_stmt":
+        idx = add_const(stmt.get("tag", ""))
+        instructions.append(_instr(Op.TAG, idx))
 
-    elif kind == "log_stmt":
-        value = stmt.get("value", {})
-        _emit_value(value, instructions, add_const)
-        idx = add_const("log")
-        instructions.append(bytes([OPCODES["LOG_EMIT"]["code"]]) + struct.pack(">H", idx))
+    elif kind == "intent_stmt":
+        idx = add_const(stmt.get("intent", ""))
+        instructions.append(_instr(Op.INTENT, idx))
 
     elif kind == "if_stmt":
-        # Simplified: push condition, emit JMP_IF (target filled later)
-        name = stmt.get("name", "")
-        value = stmt.get("value", {})
-        idx_name = add_const(name)
-        instructions.append(bytes([OPCODES["LOAD"]["code"]]) + struct.pack(">H", idx_name))
-        _emit_value(value, instructions, add_const)
-        cmp_op = {"<": "CMP_LT", ">": "CMP_GT", "==": "CMP_EQ",
-                  "!=": "CMP_NE", ">=": "CMP_GE", "<=": "CMP_LE"}.get(
-            stmt.get("cmp", "=="), "CMP_EQ"
-        )
-        instructions.append(bytes([OPCODES[cmp_op]["code"]]))
-        instructions.append(bytes([OPCODES["JMP_IF"]["code"]]) + struct.pack(">H", 0x0000))
+        idx_name = add_const(stmt.get("name", ""))
+        instructions.append(_instr(Op.LOAD, idx_name))
+        _emit_value(stmt.get("value", {}), instructions, add_const)
+        cmp_op = {
+            "<": Op.CMP_LT, ">": Op.CMP_GT, "==": Op.CMP_EQ,
+            "!=": Op.CMP_NE, ">=": Op.CMP_GE, "<=": Op.CMP_LE,
+        }.get(stmt.get("cmp", "=="), Op.CMP_EQ)
+        instructions.append(_instr(cmp_op))
+        instructions.append(_instr(Op.JZ, 0x0000))
 
     elif kind == "return_stmt":
         value = stmt.get("value")
         if value:
             _emit_value(value, instructions, add_const)
-        instructions.append(bytes([OPCODES["RETURN"]["code"]]))
+        instructions.append(_instr(Op.RESULT))
 
     elif kind == "call_stmt":
-        name = stmt.get("name", "")
-        args = stmt.get("arguments", [])
-        for arg in args:
+        for arg in stmt.get("arguments", []):
             _emit_arg(arg, instructions, add_const)
-        idx = add_const(name)
-        instructions.append(bytes([OPCODES["CALL_FUNC"]["code"]]) + struct.pack(">H", idx))
+        idx = add_const(stmt.get("name", ""))
+        instructions.append(_instr(Op.CALL_HOST, idx))
+
+    elif kind == "tool_stmt":
+        for arg in stmt.get("arguments", []):
+            _emit_arg(arg, instructions, add_const)
+        idx = add_const(stmt.get("name", ""))
+        instructions.append(_instr(Op.CALL_TOOL, idx))
 
     else:
-        # Fallback: no-op with comment
-        pass
+        instructions.append(_instr(Op.NOP))
 
 
 def _emit_arg(arg: dict[str, Any], instructions: list[bytes], add_const) -> None:
@@ -290,42 +546,51 @@ def _emit_arg(arg: dict[str, Any], instructions: list[bytes], add_const) -> None
     if kind == "kv_arg":
         _emit_value(arg.get("value", {}), instructions, add_const)
         idx = add_const(arg.get("name", ""))
-        instructions.append(bytes([OPCODES["STORE"]["code"]]) + struct.pack(">H", idx))
+        instructions.append(_instr(Op.STORE, idx))
     elif kind in ("path_arg", "var_arg", "pos_arg"):
-        val_str = str(arg.get("value", ""))
-        idx = add_const(val_str)
-        instructions.append(bytes([OPCODES["PUSH"]["code"]]) + struct.pack(">H", idx))
+        idx = add_const(str(arg.get("value", "")))
+        instructions.append(_instr(Op.PUSH_CONST, idx))
 
 
 def _emit_value(value: dict[str, Any], instructions: list[bytes], add_const) -> None:
     if not value:
         return
-    v = str(value.get("value", ""))
+    v = value.get("value", "")
+    # Preserve Python types where possible
+    if not isinstance(v, (bool, int, float)):
+        v = str(v)
     idx = add_const(v)
-    instructions.append(bytes([OPCODES["PUSH"]["code"]]) + struct.pack(">H", idx))
+    instructions.append(_instr(Op.PUSH_CONST, idx))
 
 
-def _encode_pool(pool: list[bytes]) -> bytes:
-    return struct.pack(">H", len(pool)) + b"".join(pool)
+# ── Legacy pool helpers (kept for any remaining callers) ──────────────────────
+
+def _decode_pool(data: bytes) -> tuple[list[Any], int]:
+    """Legacy shim: decode pool and return (list_of_values, bytes_consumed)."""
+    pool, consumed = ConstantPool.decode(data)
+    return [pool.get(i) for i in range(len(pool))], consumed
 
 
-def _decode_pool(data: bytes) -> tuple[list[str], int]:
-    if len(data) < 2:
-        return [], 0
-    count = struct.unpack(">H", data[:2])[0]
-    offset = 2
-    pool: list[str] = []
-    for _ in range(count):
-        if offset >= len(data):
-            break
-        _type = data[offset]
-        offset += 1
-        length = struct.unpack(">H", data[offset : offset + 2])[0]
-        offset += 2
-        raw = data[offset : offset + length]
-        offset += length
-        try:
-            pool.append(raw.decode("utf-8"))
-        except UnicodeDecodeError:
-            pool.append(raw.hex())
-    return pool, offset
+# ── CLI ───────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    """CLI: hlfdis <file.hlb>  — disassemble an HLF bytecode file."""
+    import argparse
+    import json
+
+    ap = argparse.ArgumentParser(description="Disassemble HLF .hlb bytecode")
+    ap.add_argument("file", help=".hlb file to disassemble")
+    args = ap.parse_args()
+
+    with open(args.file, "rb") as f:
+        data = f.read()
+
+    d = Disassembler()
+    try:
+        result = d.disassemble(data)
+        print(result["disassembly"])
+        print("\n; Header:", json.dumps(result["header"], indent=2))
+        print("; Constant pool:", result["constant_pool"])
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        sys.exit(1)

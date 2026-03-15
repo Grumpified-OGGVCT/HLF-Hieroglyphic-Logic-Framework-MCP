@@ -1,18 +1,30 @@
 """
-Ethical Governor module placeholder.
+HLF Ethical Governor package.
 
-This package is intentionally skeletal so downstream agents can wire in:
-- Constitutional constraints (language-level hard laws)
-- Self-termination protocol (fail closed on violation)
-- Red-hat declaration/attestation path
-- Rogue-behavior detection and remediation
+Layers:
+  constitution    — C-1 through C-5 hard constitutional constraints
+  termination     — self-termination protocol, audit log
+  red_hat         — security research declaration pathway
+  rogue_detection — compromised / hallucinating agent detection
+  governor        — orchestrator: runs all layers, single public API
 
-See docs/ETHICAL_GOVERNOR_HANDOFF.md for the required implementation steps.
+Primary entry point for the compiler and runtime::
+
+    from hlf_mcp.hlf.ethics.governor import GovernorError, check
+    result = check(ast, env, source=normalized, tier=tier)
+    result.raise_if_blocked()
 """
+
+from .governor import EthicalGovernor, GovernorError, GovernorResult, check
 
 __all__ = [
     "constitution",
     "termination",
     "red_hat",
     "rogue_detection",
+    "governor",
+    "EthicalGovernor",
+    "GovernorError",
+    "GovernorResult",
+    "check",
 ]

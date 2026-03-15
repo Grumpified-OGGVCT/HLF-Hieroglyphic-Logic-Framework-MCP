@@ -628,8 +628,30 @@ class HLFCompiler:
         # Pass 2: Collect env
         env = _pass1_collect_env(stmts)
 
-        # Ethics Governor hook: run constitutional checks here once
-        # hlf_mcp.hlf.ethics is fully implemented (see docs/ETHICAL_GOVERNOR_HANDOFF.md).
+        # Pass 2.5: Ethics Governor — hard-law enforcement before any expansion.
+        # Runs constitutional, rogue-detection, and self-termination layers.
+        # Blocks are non-recoverable; the compile() caller must handle CompileError.
+        try:
+            from hlf_mcp.hlf.ethics.governor import GovernorError, check as _ethics_check
+            _gov_result = _ethics_check(ast=ast, env=env, source=normalized, tier="hearth")
+            if not _gov_result.passed:
+                term = _gov_result.termination
+                if term is not None:
+                    raise CompileError(
+                        f"Ethics Governor [{term.trigger}]: {term.message}\n"
+                        f"Documentation: {term.documentation}\n"
+                        f"Audit ID: {term.audit_id}"
+                    )
+                raise CompileError(
+                    "Ethics Governor blocked compilation: "
+                    + "; ".join(_gov_result.blocks)
+                )
+        except CompileError:
+            raise
+        except GovernorError as _ge:
+            raise CompileError(str(_ge)) from _ge
+        except Exception as _e:  # pragma: no cover — fail closed
+            raise CompileError(f"Ethics Governor internal error (fail-closed): {_e}") from _e
 
         # Pass 3: Expand vars
         expanded_stmts = [_pass2_expand_vars(s, env) for s in stmts]

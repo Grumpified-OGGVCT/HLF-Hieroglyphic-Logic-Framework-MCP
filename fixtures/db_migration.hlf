@@ -1,0 +1,11 @@
+# HLF v3 — Database Migration
+# Execute a production DB migration with schema versioning and verification.
+[HLF-v3]
+⌘ [DELEGATE] agent="db_agent" goal="migrate"
+  ∇ [SOURCE] /data/prod.db
+  ∇ [PARAM] schema_version="2.1"
+  Ж [ASSERT] table="users"
+  Ж [EXPECT] migration_success
+SPEC_DEFINE [MIGRATION_SPEC] version="2.1" idempotent=true
+SPEC_GATE [MIGRATION_SPEC] rollback_on_fail=true
+Ω

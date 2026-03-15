@@ -1,0 +1,10 @@
+# HLF v3 — Log Analysis
+# Analyze system log with read-only constraint, extract error patterns.
+[HLF-v3]
+Δ analyze /var/log/system.log
+  Ж [CONSTRAINT] mode="ro"
+  Ж [EXPECT] error_patterns
+  ∇ [PARAM] top_k=10
+  ∇ [PARAM] include_timestamps=true
+  ⨝ [VOTE] consensus="majority"
+Ω

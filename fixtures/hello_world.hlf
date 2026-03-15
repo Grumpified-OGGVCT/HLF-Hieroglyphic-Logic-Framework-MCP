@@ -1,0 +1,7 @@
+# HLF v3 — Hello World
+# Minimal conformance test: header, one primary intent, assertion, result, terminator.
+[HLF-v3]
+Δ [INTENT] goal="hello_world"
+  Ж [ASSERT] status="ok"
+  ∇ [RESULT] message="Hello, World!"
+Ω

@@ -1,0 +1,16 @@
+# Normalize line endings to LF in the repo, checkout as-is
+* text=auto eol=lf
+
+# Binary files — no conversion
+*.db     binary
+*.sqlite binary
+*.sqlite3 binary
+*.hlb    binary
+*.png    binary
+*.jpg    binary
+*.gif    binary
+*.ico    binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.eot    binary

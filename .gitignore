@@ -1,0 +1,115 @@
+# ── Secrets & environment ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.envrc
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+secrets/
+credentials/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.pdm-python
+.pdm-build/
+.pixi/
+__pypackages__/
+.hypothesis/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+cython_debug/
+.ruff_cache/
+.pypirc
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ── Databases & runtime data ───────────────────────────────────────────────────
+db/*.db
+db/*.sqlite
+db/*.sqlite3
+db/*.db-shm
+db/*.db-wal
+hlf_source/data/sqlite/*.db
+hlf_source/data/sqlite/*.sqlite3
+hlf_source/data/sqlite/*.db-shm
+hlf_source/data/sqlite/*.db-wal
+hlf_source/data/cold_archive/*
+hlf_source/data/quarantine_dumps/*
+hlf_source/data/align_staging/*
+hlf_source/data/redis/
+!hlf_source/data/cold_archive/.gitkeep
+!hlf_source/data/quarantine_dumps/.gitkeep
+!hlf_source/data/align_staging/.gitkeep
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+*.log.*
+
+# ── Node / JS (examples) ──────────────────────────────────────────────────────
+node_modules/
+.npm/
+dist/
+*.tsbuildinfo
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.docker/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ── uv / lock files (optional – team preference) ────────────────────────────
+# uv.lock  # keep in VCS for reproducibility
+.pdm-python
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+__marimo__/
+
+# ── Docs build ────────────────────────────────────────────────────────────────
+docs/_build/
+site/
+
+# ── HLF OCI cache ─────────────────────────────────────────────────────────────
+.hlf/oci_cache/

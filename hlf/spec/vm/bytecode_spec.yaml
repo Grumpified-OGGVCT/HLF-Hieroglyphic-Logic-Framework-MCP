@@ -1,0 +1,928 @@
+# HLF Bytecode Specification v0.5.0
+# Stack-based virtual machine instruction set
+
+version: "0.5.0"
+date: "2025-01-15"
+status: "draft"
+
+# ============================================================================
+# 1. BYTECODE FORMAT
+# ============================================================================
+
+format:
+  magic: "HLFB"  # 4 bytes
+  version: 2 bytes (major, minor)
+  flags: 2 bytes
+  constant_pool_offset: 4 bytes
+  code_offset: 4 bytes
+  debug_info_offset: 4 bytes
+  entry_point: 4 bytes (function index)
+  
+  sections:
+    - header (16 bytes)
+    - constant_pool (variable)
+    - code (variable)
+    - debug_info (optional)
+    
+  endianness: little
+  alignment: 4 bytes
+
+# ============================================================================
+# 2. CONSTANT POOL
+# ============================================================================
+
+constant_pool:
+  entry_types:
+    0x01: INTEGER
+    0x02: FLOAT
+    0x03: STRING
+    0x04: ATOM
+    0x05: FUNCTION_REF
+    0x06: TYPE_REF
+    0x07: MODULE_REF
+    0x08: EFFECT_REF
+    
+  encoding:
+    INTEGER: |
+      tag: 1 byte (0x01)
+      value: 8 bytes (int64)
+      
+    FLOAT: |
+      tag: 1 byte (0x02)
+      value: 8 bytes (IEEE 754 double)
+      
+    STRING: |
+      tag: 1 byte (0x03)
+      length: 4 bytes
+      bytes: UTF-8 encoded
+      padding: to 4-byte alignment
+      
+    ATOM: |
+      tag: 1 byte (0x04)
+      index: 4 bytes (into atom table)
+      
+    FUNCTION_REF: |
+      tag: 1 byte (0x05)
+      module: 4 bytes (constant pool index)
+      name: 4 bytes (constant pool index)
+      arity: 1 byte
+      
+    TYPE_REF: |
+      tag: 1 byte (0x06)
+      name: 4 bytes (constant pool index)
+      params: 4 bytes (count, then indices)
+
+# ============================================================================
+# 3. INSTRUCTION SET
+# ============================================================================
+
+instructions:
+  # Format: opcode (1 byte), operands (variable)
+  # Stack effect notation: (before -- after)
+  
+  # --------------------------------------------------------------------------
+  # 0x00-0x0F: Stack Operations
+  # --------------------------------------------------------------------------
+  
+  NOP:
+    opcode: 0x00
+    operands: []
+    stack: "( -- )"
+    description: "No operation"
+    gas: 1
+    
+  POP:
+    opcode: 0x01
+    operands: []
+    stack: "(a -- )"
+    description: "Pop top of stack"
+    gas: 1
+    
+  DUP:
+    opcode: 0x02
+    operands: []
+    stack: "(a -- a a)"
+    description: "Duplicate top of stack"
+    gas: 1
+    
+  DUP_N:
+    opcode: 0x03
+    operands: [n: u8]
+    stack: "(... a_n ... a_0 -- ... a_n ... a_0 a_n)"
+    description: "Duplicate nth item from top"
+    gas: 2
+    
+  SWAP:
+    opcode: 0x04
+    operands: []
+    stack: "(a b -- b a)"
+    description: "Swap top two items"
+    gas: 1
+    
+  ROT:
+    opcode: 0x05
+    operands: []
+    stack: "(a b c -- b c a)"
+    description: "Rotate top three items"
+    gas: 2
+    
+  PICK:
+    opcode: 0x06
+    operands: [n: u8]
+    stack: "(... -- ... a_n)"
+    description: "Push nth item from top"
+    gas: 2
+    
+  DROP_N:
+    opcode: 0x07
+    operands: [n: u8]
+    stack: "(a_1 ... a_n -- )"
+    description: "Drop n items from stack"
+    gas: n
+    
+  # --------------------------------------------------------------------------
+  # 0x10-0x1F: Constant Loading
+  # --------------------------------------------------------------------------
+  
+  LOAD_CONST:
+    opcode: 0x10
+    operands: [idx: u16]
+    stack: "( -- value)"
+    description: "Load constant from pool"
+    gas: 2
+    
+  LOAD_CONST_FAST:
+    opcode: 0x11
+    operands: [idx: u8]
+    stack: "( -- value)"
+    description: "Load constant from first 256 entries"
+    gas: 1
+    
+  LOAD_TRUE:
+    opcode: 0x12
+    operands: []
+    stack: "( -- true)"
+    description: "Push true"
+    gas: 1
+    
+  LOAD_FALSE:
+    opcode: 0x13
+    operands: []
+    stack: "( -- false)"
+    description: "Push false"
+    gas: 1
+    
+  LOAD_UNIT:
+    opcode: 0x14
+    operands: []
+    stack: "( -- ())"
+    description: "Push unit value"
+    gas: 1
+    
+  LOAD_INT_SMALL:
+    opcode: 0x15
+    operands: [value: i8]
+    stack: "( -- int)"
+    description: "Push small integer (-128 to 127)"
+    gas: 1
+    
+  LOAD_ATOM:
+    opcode: 0x16
+    operands: [idx: u16]
+    stack: "( -- atom)"
+    description: "Push atom from constant pool"
+    gas: 2
+    
+  # --------------------------------------------------------------------------
+  # 0x20-0x2F: Local Variables
+  # --------------------------------------------------------------------------
+  
+  LOAD_LOCAL:
+    opcode: 0x20
+    operands: [idx: u8]
+    stack: "( -- value)"
+    description: "Load local variable"
+    gas: 2
+    
+  LOAD_LOCAL_WIDE:
+    opcode: 0x21
+    operands: [idx: u16]
+    stack: "( -- value)"
+    description: "Load local variable (large index)"
+    gas: 3
+    
+  STORE_LOCAL:
+    opcode: 0x22
+    operands: [idx: u8]
+    stack: "(value -- )"
+    description: "Store to local variable"
+    gas: 2
+    
+  STORE_LOCAL_WIDE:
+    opcode: 0x23
+    operands: [idx: u16]
+    stack: "(value -- )"
+    description: "Store to local variable (large index)"
+    gas: 3
+    
+  LOAD_ARG:
+    opcode: 0x24
+    operands: [idx: u8]
+    stack: "( -- value)"
+    description: "Load argument"
+    gas: 1
+    
+  LOAD_ARG_WIDE:
+    opcode: 0x25
+    operands: [idx: u16]
+    stack: "( -- value)"
+    description: "Load argument (large index)"
+    gas: 2
+    
+  LOAD_CLOSURE:
+    opcode: 0x26
+    operands: [idx: u8]
+    stack: "( -- value)"
+    description: "Load from closure cell"
+    gas: 3
+    
+  STORE_CLOSURE:
+    opcode: 0x27
+    operands: [idx: u8]
+    stack: "(value -- )"
+    description: "Store to closure cell"
+    gas: 3
+    
+  # --------------------------------------------------------------------------
+  # 0x30-0x4F: Arithmetic
+  # --------------------------------------------------------------------------
+  
+  ADD_INT:
+    opcode: 0x30
+    operands: []
+    stack: "(a b -- a+b)"
+    description: "Integer addition"
+    gas: 2
+    
+  SUB_INT:
+    opcode: 0x31
+    operands: []
+    stack: "(a b -- a-b)"
+    description: "Integer subtraction"
+    gas: 2
+    
+  MUL_INT:
+    opcode: 0x32
+    operands: []
+    stack: "(a b -- a*b)"
+    description: "Integer multiplication"
+    gas: 3
+    
+  DIV_INT:
+    opcode: 0x33
+    operands: []
+    stack: "(a b -- a/b)"
+    description: "Integer division"
+    gas: 5
+    traps: ["DivisionByZero"]
+    
+  MOD_INT:
+    opcode: 0x34
+    operands: []
+    stack: "(a b -- a%b)"
+    description: "Integer modulo"
+    gas: 5
+    traps: ["DivisionByZero"]
+    
+  NEG_INT:
+    opcode: 0x35
+    operands: []
+    stack: "(a -- -a)"
+    description: "Integer negation"
+    gas: 2
+    
+  ADD_FLOAT:
+    opcode: 0x36
+    operands: []
+    stack: "(a b -- a+b)"
+    description: "Float addition"
+    gas: 3
+    
+  SUB_FLOAT:
+    opcode: 0x37
+    operands: []
+    stack: "(a b -- a-b)"
+    description: "Float subtraction"
+    gas: 3
+    
+  MUL_FLOAT:
+    opcode: 0x38
+    operands: []
+    stack: "(a b -- a*b)"
+    description: "Float multiplication"
+    gas: 4
+    
+  DIV_FLOAT:
+    opcode: 0x39
+    operands: []
+    stack: "(a b -- a/b)"
+    description: "Float division"
+    gas: 5
+    
+  NEG_FLOAT:
+    opcode: 0x3A
+    operands: []
+    stack: "(a -- -a)"
+    description: "Float negation"
+    gas: 2
+    
+  POW_FLOAT:
+    opcode: 0x3B
+    operands: []
+    stack: "(a b -- a^b)"
+    description: "Float power"
+    gas: 10
+    
+  # --------------------------------------------------------------------------
+  # 0x50-0x6F: Comparisons & Logic
+  # --------------------------------------------------------------------------
+  
+  EQ:
+    opcode: 0x50
+    operands: []
+    stack: "(a b -- a==b)"
+    description: "Equality"
+    gas: 2
+    
+  NE:
+    opcode: 0x51
+    operands: []
+    stack: "(a b -- a!=b)"
+    description: "Not equal"
+    gas: 2
+    
+  LT_INT:
+    opcode: 0x52
+    operands: []
+    stack: "(a b -- a<b)"
+    description: "Less than (int)"
+    gas: 2
+    
+  LE_INT:
+    opcode: 0x53
+    operands: []
+    stack: "(a b -- a<=b)"
+    description: "Less or equal (int)"
+    gas: 2
+    
+  GT_INT:
+    opcode: 0x54
+    operands: []
+    stack: "(a b -- a>b)"
+    description: "Greater than (int)"
+    gas: 2
+    
+  GE_INT:
+    opcode: 0x55
+    operands: []
+    stack: "(a b -- a>=b)"
+    description: "Greater or equal (int)"
+    gas: 2
+    
+  LT_FLOAT:
+    opcode: 0x56
+    operands: []
+    stack: "(a b -- a<b)"
+    description: "Less than (float)"
+    gas: 3
+    
+  LE_FLOAT:
+    opcode: 0x57
+    operands: []
+    stack: "(a b -- a<=b)"
+    description: "Less or equal (float)"
+    gas: 3
+    
+  GT_FLOAT:
+    opcode: 0x58
+    operands: []
+    stack: "(a b -- a>b)"
+    description: "Greater than (float)"
+    gas: 3
+    
+  GE_FLOAT:
+    opcode: 0x59
+    operands: []
+    stack: "(a b -- a>=b)"
+    description: "Greater or equal (float)"
+    gas: 3
+    
+  NOT:
+    opcode: 0x5A
+    operands: []
+    stack: "(a -- !a)"
+    description: "Logical not"
+    gas: 1
+    
+  AND:
+    opcode: 0x5B
+    operands: []
+    stack: "(a b -- a&&b)"
+    description: "Logical and"
+    gas: 2
+    
+  OR:
+    opcode: 0x5C
+    operands: []
+    stack: "(a b -- a||b)"
+    description: "Logical or"
+    gas: 2
+    
+  IS_NIL:
+    opcode: 0x5D
+    operands: []
+    stack: "(a -- a==nil)"
+    description: "Check for nil"
+    gas: 2
+    
+  # --------------------------------------------------------------------------
+  # 0x70-0x8F: Control Flow
+  # --------------------------------------------------------------------------
+  
+  JUMP:
+    opcode: 0x70
+    operands: [offset: i16]
+    stack: "( -- )"
+    description: "Unconditional jump"
+    gas: 2
+    
+  JUMP_IF_TRUE:
+    opcode: 0x71
+    operands: [offset: i16]
+    stack: "(cond -- )"
+    description: "Jump if condition is true"
+    gas: 3
+    
+  JUMP_IF_FALSE:
+    opcode: 0x72
+    operands: [offset: i16]
+    stack: "(cond -- )"
+    description: "Jump if condition is false"
+    gas: 3
+    
+  JUMP_FORWARD:
+    opcode: 0x73
+    operands: [offset: u16]
+    stack: "( -- )"
+    description: "Jump forward (positive offset)"
+    gas: 2
+    
+  CALL:
+    opcode: 0x74
+    operands: [idx: u16, argc: u8]
+    stack: "(arg_n ... arg_0 -- result)"
+    description: "Call function by constant pool index"
+    gas: 10
+    
+  CALL_LOCAL:
+    opcode: 0x75
+    operands: [offset: i16, argc: u8]
+    stack: "(arg_n ... arg_0 -- result)"
+    description: "Call local function (relative offset)"
+    gas: 8
+    
+  TAIL_CALL:
+    opcode: 0x76
+    operands: [idx: u16, argc: u8]
+    stack: "(arg_n ... arg_0 -- result)"
+    description: "Tail call optimization"
+    gas: 8
+    
+  RETURN:
+    opcode: 0x77
+    operands: []
+    stack: "(value -- ) [caller]"
+    description: "Return from function"
+    gas: 3
+    
+  RETURN_UNIT:
+    opcode: 0x78
+    operands: []
+    stack: "( -- ) [caller]"
+    description: "Return unit value"
+    gas: 2
+    
+  MATCH_JUMP:
+    opcode: 0x79
+    operands: [table_idx: u16]
+    stack: "(value -- )"
+    description: "Jump table for pattern matching"
+    gas: 5
+    
+  # --------------------------------------------------------------------------
+  # 0x90-0xAF: Data Structures
+  # --------------------------------------------------------------------------
+  
+  MAKE_LIST:
+    opcode: 0x90
+    operands: [count: u8]
+    stack: "(item_n ... item_0 -- list)"
+    description: "Create list from stack items"
+    gas: 2 + count
+    
+  MAKE_LIST_EMPTY:
+    opcode: 0x91
+    operands: []
+    stack: "( -- [])"
+    description: "Create empty list"
+    gas: 2
+    
+  MAKE_TUPLE:
+    opcode: 0x92
+    operands: [count: u8]
+    stack: "(item_n ... item_0 -- tuple)"
+    description: "Create tuple from stack items"
+    gas: 2 + count
+    
+  MAKE_RECORD:
+    opcode: 0x93
+    operands: [count: u8]
+    stack: "(value_n ... value_0 -- record)"
+    description: "Create record from stack items"
+    gas: 3 + count
+    
+  MAKE_RECORD_NAMED:
+    opcode: 0x94
+    operands: [idx: u16]  # Index into field name table
+    stack: "(value -- record)"
+    description: "Create singleton record"
+    gas: 3
+    
+  MAKE_CLOSURE:
+    opcode: 0x95
+    operands: [idx: u16, capture_count: u8]
+    stack: "(capture_n ... capture_0 -- closure)"
+    description: "Create closure"
+    gas: 5 + capture_count
+    
+  GET_FIELD:
+    opcode: 0x96
+    operands: [idx: u8]
+    stack: "(record -- value)"
+    description: "Get field by index"
+    gas: 3
+    
+  GET_FIELD_BY_NAME:
+    opcode: 0x97
+    operands: [idx: u16]
+    stack: "(record -- value)"
+    description: "Get field by name (constant pool)"
+    gas: 4
+    
+  SET_FIELD:
+    opcode: 0x98
+    operands: [idx: u8]
+    stack: "(record value -- record)"
+    description: "Set field by index (immutable update)"
+    gas: 5
+    
+  GET_INDEX:
+    opcode: 0x99
+    operands: []
+    stack: "(collection index -- value)"
+    description: "Get item by index"
+    gas: 4
+    traps: ["IndexOutOfBounds"]
+    
+  SET_INDEX:
+    opcode: 0x9A
+    operands: []
+    stack: "(collection index value -- collection)"
+    description: "Set item by index"
+    gas: 5
+    traps: ["IndexOutOfBounds"]
+    
+  LIST_LEN:
+    opcode: 0x9B
+    operands: []
+    stack: "(list -- length)"
+    description: "Get list length"
+    gas: 2
+    
+  LIST_APPEND:
+    opcode: 0x9C
+    operands: []
+    stack: "(list item -- new_list)"
+    description: "Append to list (immutable)"
+    gas: 5
+    
+  LIST_CONS:
+    opcode: 0x9D
+    operands: []
+    stack: "(item list -- new_list)"
+    description: "Prepend to list (immutable)"
+    gas: 4
+    
+  LIST_HEAD:
+    opcode: 0x9E
+    operands: []
+    stack: "(list -- head)"
+    description: "Get first element"
+    gas: 2
+    traps: ["EmptyList"]
+    
+  LIST_TAIL:
+    opcode: 0x9F
+    operands: []
+    stack: "(list -- tail)"
+    description: "Get list without first element"
+    gas: 2
+    traps: ["EmptyList"]
+    
+  # --------------------------------------------------------------------------
+  # 0xB0-0xCF: Host Functions & Effects
+  # --------------------------------------------------------------------------
+  
+  CALL_HOST:
+    opcode: 0xB0
+    operands: [idx: u16, argc: u8]
+    stack: "(arg_n ... arg_0 -- result)"
+    description: "Call host function"
+    gas: dynamic  # Determined by host function
+    effects: dynamic  # Determined by host function
+    
+  CALL_TOOL:
+    opcode: 0xB1
+    operands: [idx: u16, argc: u8]
+    stack: "(arg_n ... arg_0 -- result)"
+    description: "Call external tool"
+    gas: 100  # Base cost
+    effects: [network, external]
+    
+  MEMORY_STORE:
+    opcode: 0xB2
+    operands: []
+    stack: "(key value -- )"
+    description: "Store in Infinite RAG"
+    gas: 20
+    effects: [memory, write]
+    
+  MEMORY_RECALL:
+    opcode: 0xB3
+    operands: []
+    stack: "(key -- value)"
+    description: "Recall from Infinite RAG"
+    gas: 15
+    effects: [memory, read]
+    
+  OPENCLAW_TOOL:
+    opcode: 0xB4
+    operands: [idx: u16]
+    stack: "(config -- result)"
+    description: "Call OpenClaw security tool"
+    gas: 500
+    effects: [security, audit, external]
+    requires_tier: [forge]
+    
+  SPEC_DEFINE:
+    opcode: 0xB5
+    operands: [idx: u16]
+    stack: "(spec -- )"
+    description: "Define specification"
+    gas: 50
+    effects: [spec, governance]
+    requires_tier: [forge, sovereign]
+    
+  SPEC_GATE:
+    opcode: 0xB6
+    operands: []
+    stack: "(value spec -- value | trap)"
+    description: "Validate against spec"
+    gas: 30
+    effects: [spec, validation]
+    
+  SPEC_UPDATE:
+    opcode: 0xB7
+    operands: []
+    stack: "(spec changes -- new_spec)"
+    description: "Propose spec update"
+    gas: 100
+    effects: [spec, governance, vote]
+    requires_tier: [forge]
+    
+  SPEC_SEAL:
+    opcode: 0xB8
+    operands: []
+    stack: "(spec -- sealed_spec)"
+    description: "Seal specification (ALIGN)"
+    gas: 200
+    effects: [spec, governance, seal]
+    requires_tier: [forge]
+    
+  # --------------------------------------------------------------------------
+  # 0xD0-0xEF: Exception Handling & Effects
+  # --------------------------------------------------------------------------
+  
+  PUSH_HANDLER:
+    opcode: 0xD0
+    operands: [offset: u16, effect_mask: u32]
+    stack: "( -- )"
+    description: "Push exception handler"
+    gas: 5
+    
+  POP_HANDLER:
+    opcode: 0xD1
+    operands: []
+    stack: "( -- )"
+    description: "Pop exception handler"
+    gas: 2
+    
+  RAISE:
+    opcode: 0xD2
+    operands: [code: u8]
+    stack: "(value -- )"
+    description: "Raise exception"
+    gas: 10
+    
+  CHECK_EFFECT:
+    opcode: 0xD3
+    operands: [effect_idx: u16]
+    stack: "( -- bool)"
+    description: "Check if effect is allowed"
+    gas: 3
+    
+  CHECK_TIER:
+    opcode: 0xD4
+    operands: [tier_idx: u8]
+    stack: "( -- bool)"
+    description: "Check if tier is allowed"
+    gas: 2
+    
+  # --------------------------------------------------------------------------
+  # 0xF0-0xFF: Special & Debugging
+  # --------------------------------------------------------------------------
+  
+  BREAKPOINT:
+    opcode: 0xF0
+    operands: []
+    stack: "( -- )"
+    description: "Debugger breakpoint"
+    gas: 0
+    debug_only: true
+    
+  TRACE:
+    opcode: 0xF1
+    operands: [level: u8]
+    stack: "(value -- value)"
+    description: "Trace value (passthrough)"
+    gas: 5
+    
+  ASSERT:
+    opcode: 0xF2
+    operands: [msg_idx: u16]
+    stack: "(cond -- )"
+    description: "Runtime assertion"
+    gas: 3
+    traps: ["AssertionFailed"]
+    
+  GAS_CHECK:
+    opcode: 0xF3
+    operands: [amount: u32]
+    stack: "( -- )"
+    description: "Check gas availability"
+    gas: 2
+    traps: ["OutOfGas"]
+    
+  HALT:
+    opcode: 0xFF
+    operands: [exit_code: u8]
+    stack: "( -- )"
+    description: "Halt execution"
+    gas: 0
+
+# ============================================================================
+# 4. FUNCTION HEADER
+# ============================================================================
+
+function_header:
+  format:
+    flags: 1 byte
+      bit 0: has_effects
+      bit 1: has_gas_limit
+      bit 2: is_exported
+      bit 3: is_variadic
+      bit 4: has_defaults
+    arity: 1 byte
+    local_count: 2 bytes
+    max_stack: 2 bytes
+    gas_limit: 4 bytes (optional, based on flags)
+    effect_count: 1 byte (optional)
+    effects: [effect_idx: u16] * effect_count
+    name_idx: 2 bytes (into constant pool)
+    doc_idx: 2 bytes (optional, 0xFFFF if none)
+
+# ============================================================================
+# 5. TRAPS (Exceptions)
+# ============================================================================
+
+traps:
+  0x01: DivisionByZero
+  0x02: IndexOutOfBounds
+  0x03: EmptyList
+  0x04: KeyNotFound
+  0x05: TypeMismatch
+  0x06: EffectNotAllowed
+  0x07: TierViolation
+  0x08: OutOfGas
+  0x09: StackOverflow
+  0x0A: AssertionFailed
+  0x0B: HostFunctionNotFound
+  0x0C: InvalidBytecode
+  0x0D: MemoryExhausted
+
+# ============================================================================
+# 6. GAS COSTS
+# ============================================================================
+
+gas_costs:
+  base_arithmetic: 2
+  base_comparison: 2
+  base_logical: 2
+  memory_access: 3
+  allocation_small: 5
+  allocation_large: 10
+  function_call: 10
+  host_function_base: 50
+  io_operation: 100
+  network_call: 200
+  spec_validation: 30
+  seal_operation: 200
+  
+  formula: |
+    total_gas = sum(instruction_gas) + allocation_overhead + io_overhead
+    
+    Where:
+    - allocation_overhead = bytes_allocated / 1024 * 5
+    - io_overhead = bytes_read / 1024 * 2 + bytes_written / 1024 * 3
+
+# ============================================================================
+# 7. EXECUTION ENVIRONMENT
+# ============================================================================
+
+environment:
+  stack:
+    default_size: 65536  # 64K slots
+    max_size: 1048576    # 1M slots
+    slot_size: 16        # bytes per slot (tagged pointer)
+    
+  heap:
+    initial_size: 65536  # 64KB
+    max_size: 536870912  # 512MB
+    growth_factor: 2
+    
+  locals:
+    max_per_function: 65536
+    
+  globals:
+    max: 65536
+    
+  call_stack:
+    max_depth: 1024
+    
+  modules:
+    max_loaded: 256
+
+# ============================================================================
+# 8. SERIALIZATION
+# ============================================================================
+
+serialization:
+  text_format: |
+    ; HLF Bytecode
+    ; Module: <name>
+    ; Version: <version>
+    
+    .const
+      0: int 42
+      1: string "hello"
+      2: atom :ok
+      
+    .func add/2
+      locals: 2
+      max_stack: 4
+      gas: 100
+      
+      load_arg 0
+      load_arg 1
+      add_int
+      return
+      
+    .func main/0
+      ; entry point
+      load_const 0
+      load_const 0
+      call add/2
+      return
+      
+  binary_format: |
+    See format section above

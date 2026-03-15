@@ -1,0 +1,175 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Weekly Ethics Alignment Review                                        ║
+# ║                                                                              ║
+# ║  Model: deepseek-r1:14b (DeepSeek)                                          ║
+# ║  Best-in-class: Chain-of-thought reasoning, transparent thinking traces     ║
+# ║  Why: Ethics review is a REASONING task, not a coding task. The question    ║
+# ║        "does this PR violate the people-first ethos?" requires weighing      ║
+# ║        competing considerations — exactly what chain-of-thought excels at.  ║
+# ║        The "thinking" flag shows the full reasoning, making it auditable     ║
+# ║        (itself an ethos requirement: transparency in governance).            ║
+# ║                                                                              ║
+# ║  Triggers: Weekly Tuesday 02:00 UTC                                         ║
+# ║  Output: GitHub Issue with ethics compliance report + reasoning traces       ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Weekly — Ethics Alignment Review (deepseek-r1:14b)"
+
+on:
+  schedule:
+    - cron: "0 2 * * 2"   # Every Tuesday at 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ethics-review:
+    name: "Ethics & ethos compliance review"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 30   # Last 30 commits for recent activity analysis
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e ".[dev]" --quiet
+
+      - name: Run ethics compliance check
+        run: |
+          python .github/scripts/ethics_compliance_check.py > /tmp/ethics_report.json
+          python -c "import json; d=json.load(open('/tmp/ethics_report.json')); print(d['summary_text'])"
+
+      - name: Gather recent commit activity
+        run: |
+          git --no-pager log --oneline -20 > /tmp/recent_commits.txt
+          git --no-pager diff HEAD~10 HEAD -- hlf_mcp/ governance/ > /tmp/recent_diff.txt 2>/dev/null || true
+          echo "Recent commits:"
+          cat /tmp/recent_commits.txt
+          # Limit diff size
+          head -c 20000 /tmp/recent_diff.txt > /tmp/recent_diff_truncated.txt
+
+      - name: Read ALIGN rules and ethics stubs
+        run: |
+          ALIGN_CONTENT=$(cat governance/align_rules.json 2>/dev/null || echo '{}')
+          ETHICS_FILES=""
+          for f in hlf_mcp/hlf/ethics/*.py; do
+            if [ -f "$f" ]; then
+              ETHICS_FILES="$ETHICS_FILES\n\n### $f\n$(cat $f)"
+            fi
+          done
+          echo "$ALIGN_CONTENT" > /tmp/align_rules.txt
+          printf "$ETHICS_FILES" > /tmp/ethics_stubs.txt
+
+      - name: "deepseek-r1:14b — Reasoning ethics review"
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          ETHICS_STATUS=$(python -c "import json; d=json.load(open('/tmp/ethics_report.json')); print(d['summary_text'])")
+          RECENT_COMMITS=$(cat /tmp/recent_commits.txt)
+          RECENT_DIFF=$(cat /tmp/recent_diff_truncated.txt)
+          ALIGN_RULES=$(cat /tmp/align_rules.txt)
+          ETHICS_STUBS=$(cat /tmp/ethics_stubs.txt)
+
+          cat > /tmp/ethics_prompt.txt << PROMPT_EOF
+          You are reviewing the HLF (Hieroglyphic Logic Framework) repository for ethics and ethos alignment.
+          
+          The HLF ethos mandates:
+          1. PEOPLE FIRST — human privacy and work are private by default; no surveillance
+          2. AI AS TOOL — AI serves humans, not the other way around
+          3. TRANSPARENCY — all governance rules are in public files, not black-box
+          4. HARD LAWS — constitutional constraints are enforced, not just recommended
+          5. SELF-TERMINATION — system shuts down before allowing violations
+          6. NON-OPPRESSIVE — enables creativity and legitimate research (red-hat path)
+
+          Your task:
+          A) Review the ethics compliance status and identify the MOST CRITICAL gap
+          B) Review the recent code changes and check if any violate or weaken the ethos
+          C) Identify which ALIGN rules are missing or insufficient
+          D) For each finding, reason through WHY it matters to real people, not just abstract principles
+          E) Propose the single most important concrete action for the local agent to take this week
+
+          Think step by step. Show your reasoning. Be honest about gaps — do not soften findings.
+
+          --- ETHICS MODULE STATUS ---
+          ${ETHICS_STATUS}
+
+          --- RECENT COMMITS (last 20) ---
+          ${RECENT_COMMITS}
+
+          --- RECENT DIFF (last 10 commits, truncated) ---
+          ${RECENT_DIFF}
+
+          --- ALIGN RULES ---
+          ${ALIGN_RULES}
+
+          --- ETHICS MODULE STUBS ---
+          ${ETHICS_STUBS}
+          PROMPT_EOF
+
+          python .github/scripts/ollama_client.py \
+            --model "deepseek-r1:14b" \
+            --fallback-model "nemotron-3-super" \
+            --system "You are a constitutional AI ethics reviewer. You reason carefully and transparently, showing your thinking. You care deeply about real people — not abstract concepts. Your reviews are honest, non-reductive, and actionable. You do NOT sanitize findings." \
+            --prompt "@/tmp/ethics_prompt.txt" \
+            --output /tmp/ethics_review.json \
+            --think \
+            --temperature 0.1
+
+          python -c "import json; d=json.load(open('/tmp/ethics_review.json')); print(d['content'])" > /tmp/ethics_review.md
+          echo "Ethics review generated ($(wc -c < /tmp/ethics_review.md) chars)"
+
+      - name: Build issue body
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          WEEK=$(date +"%Y-W%V")
+          ETHICS_STATUS=$(python -c "import json; d=json.load(open('/tmp/ethics_report.json')); print(d['summary_text'])")
+          REVIEW=$(cat /tmp/ethics_review.md)
+
+          cat > /tmp/ethics_issue.md << ISSUE_EOF
+          ## ⚖️ HLF Ethics Alignment Review — ${WEEK}
+
+          **Reviewed by**: \`deepseek-r1:14b\` (chain-of-thought reasoning, thinking traces enabled)
+          **Workflow**: [Weekly Ethics Review]($RUN_URL)
+
+          > _This review is produced by a reasoning model with transparent thinking enabled.
+          > The "think" flag means the model's reasoning process is visible, not just its conclusion.
+          > This is itself an ethos requirement: governance must be transparent, not black-box._
+
+          ---
+
+          ## 📊 Ethics Compliance Status (machine check)
+
+          \`\`\`
+          ${ETHICS_STATUS}
+          \`\`\`
+
+          ---
+
+          ## 🧠 AI Ethics Review (deepseek-r1:14b, thinking enabled)
+
+          ISSUE_EOF
+
+          echo "$REVIEW" >> /tmp/ethics_issue.md
+          echo "" >> /tmp/ethics_issue.md
+          echo "---" >> /tmp/ethics_issue.md
+          echo "_This issue is auto-generated weekly. Close when the top ethics finding is resolved._" >> /tmp/ethics_issue.md
+
+      - name: Create GitHub issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          WEEK=$(date +"%Y-W%V")
+          python .github/scripts/create_github_issue.py \
+            --title "⚖️ [Ethics Review] HLF ethics alignment — ${WEEK}" \
+            --body "@/tmp/ethics_issue.md" \
+            --labels "ethics,governance,automated"

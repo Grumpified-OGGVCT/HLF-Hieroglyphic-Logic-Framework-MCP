@@ -1,0 +1,750 @@
+# HLF Language Specification v0.5.0
+# Single Source of Truth for Grammar
+# Generated: All other formats derive from this
+
+version: "0.5.0"
+date: "2025-01-15"
+status: "draft"
+
+# ============================================================================
+# 1. LEXICAL GRAMMAR
+# ============================================================================
+
+lexical:
+  # Whitespace
+  whitespace:
+    pattern: "[ \\t\\r\\n]+"
+    description: "Spaces, tabs, newlines"
+    
+  # Comments (nestable)
+  comment:
+    block:
+      open: "/*"
+      close: "*/"
+      nestable: true
+    line:
+      prefix: "//"
+      
+  # Identifiers
+  identifier:
+    pattern: "[a-zA-Z_][a-zA-Z0-9_]*"
+    reserved: ["module", "fn", "let", "const", "if", "else", "match", "for", "in", "return", "spec", "effect", "tier", "gas"]
+    
+  # Literals
+  literals:
+    integer:
+      decimal: "[0-9]+"
+      hex: "0x[0-9a-fA-F]+"
+      binary: "0b[01]+"
+      
+    float:
+      pattern: "[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?"
+      
+    string:
+      double: '"([^"\\\\]|\\\\.)*"'
+      single: "'([^'\\\\]|\\\\.)*'"
+      template: '`([^`\\\\]|\\\\.)*`'
+      
+    boolean:
+      values: ["true", "false"]
+      
+    atom:
+      pattern: ":[a-zA-Z_][a-zA-Z0-9_]*"
+      description: "Symbolic constants (e.g., :ok, :error, :pending)"
+
+# ============================================================================
+# 2. SURFACE SYNTAX (ASCII - Ergonomic Authoring)
+# ============================================================================
+
+ascii_surface:
+  module_decl:
+    syntax: "module <identifier> <version>? <imports>?"
+    example: "module risk_engine v0.5.0 import std::math"
+    
+  function_decl:
+    syntax: "fn <identifier>(<params>) <return_type>? <effects>? <tier>? <gas>? <body>"
+    example: |
+      fn calculate_risk(score: int) -> RiskLevel
+        tier: [forge, sovereign]
+        gas: 10
+        effects: [read_db, compute]
+      {
+        if score > 80 then :critical
+        else if score > 50 then :elevated
+        else :low
+      }
+      
+  spec_block:
+    syntax: "spec <identifier> { <constraints> }"
+    example: |
+      spec RiskLevel {
+        invariant: score >= 0 and score <= 100
+        ensures: result in [:critical, :elevated, :low]
+      }
+      
+  effect_annotation:
+    syntax: "@effect(<effect_list>)"
+    example: "@effect([read_fs, network])"
+    
+  gas_annotation:
+    syntax: "@gas(<integer>)"
+    example: "@gas(100)"
+    
+  tier_annotation:
+    syntax: "@tier(<tier_list>)"
+    example: "@tier([forge])"
+    
+  let_binding:
+    syntax: "let <identifier> = <expr>"
+    example: "let threshold = 80"
+    
+  const_binding:
+    syntax: "const <identifier> = <expr>"
+    example: "const MAX_SCORE = 100"
+    
+  if_expression:
+    syntax: "if <cond> then <then_expr> else <else_expr>"
+    example: "if score > 80 then :critical else :low"
+    
+  match_expression:
+    syntax: |
+      match <expr> {
+        <pattern> => <expr>,
+        ...
+      }
+    example: |
+      match risk_level {
+        :critical => escalate(),
+        :elevated => notify(),
+        :low => log()
+      }
+      
+  for_expression:
+    syntax: "for <ident> in <collection> { <body> }"
+    example: "for item in items { process(item) }"
+    
+  call_expression:
+    syntax: "<callee>(<args>)"
+    examples:
+      - "add(a, b)"
+      - "READ_FILE(path)"
+      - "http.get(url)"
+      
+  record_literal:
+    syntax: "{ <field>: <expr>, ... }"
+    example: "{ name: \"test\", value: 42 }"
+    
+  list_literal:
+    syntax: "[ <expr>, ... ]"
+    example: "[1, 2, 3]"
+    
+  tuple_literal:
+    syntax: "(<expr>, <expr>, ...)"
+    example: "(1, \"hello\", true)"
+    
+  pipeline:
+    syntax: "<expr> |> <function>"
+    example: "data |> parse |> validate |> store"
+    
+  comprehension:
+    syntax: "[ <expr> for <ident> in <collection> if <cond> ]"
+    example: "[x * 2 for x in items if x > 0]"
+
+# ============================================================================
+# 3. SURFACE SYNTAX (Glyph - Compact Unicode)
+# ============================================================================
+
+glyph_surface:
+  description: "Unicode glyph mapping for compact representation"
+  
+  mappings:
+    "module": "◈"
+    "fn": "λ"
+    "let": "≔"
+    "const": "≡"
+    "if": "?"
+    "then": "⇒"
+    "else": "‖"
+    "match": "⋔"
+    "for": "∀"
+    "in": "∈"
+    "return": "↵"
+    "spec": "◆"
+    "effect": "⚡"
+    "tier": "★"
+    "gas": "⛽"
+    "true": "⊤"
+    "false": "⊥"
+    "and": "∧"
+    "or": "∨"
+    "not": "¬"
+    "->": "→"
+    "=>": "⇒"
+    "|>": "▷"
+    "<=": "≤"
+    ">=": "≥"
+    "!=": "≠"
+    ">>": "»"
+    "<<": "«"
+    
+  examples:
+    glyph: "λ calc(x) ⇒ x + 1"
+    ascii: "fn calc(x) => x + 1"
+    
+    glyph: "? x > 0 ⇒ :pos ‖ :neg"
+    ascii: "if x > 0 then :pos else :neg"
+
+# ============================================================================
+# 4. TYPE SYSTEM
+# ============================================================================
+
+types:
+  primitives:
+    - name: "int"
+      bits: 64
+      signed: true
+      
+    - name: "float"
+      bits: 64
+      ieee754: true
+      
+    - name: "bool"
+      values: [true, false]
+      
+    - name: "string"
+      encoding: "utf-8"
+      max_length: 16777216  # 16MB
+      
+    - name: "atom"
+      description: "Symbolic constants"
+      
+    - name: "unit"
+      representation: "()"
+      
+  composites:
+    record:
+      syntax: "{ <field>: <type>, ... }"
+      example: "{ name: string, age: int }"
+      
+    list:
+      syntax: "[<type>]"
+      example: "[int]"
+      
+    tuple:
+      syntax: "(<type>, <type>, ...)"
+      example: "(int, string, bool)"
+      
+    option:
+      syntax: "?<type>"
+      example: "?string"  # Some(string) or None
+      
+    result:
+      syntax: "!<type, <error_type>>"
+      example: "!string, Error"  # Ok(string) or Err(Error)
+      
+    map:
+      syntax: "map<<key>, <value>>"
+      example: "map<string, int>"
+      
+    function:
+      syntax: "fn(<param_types>) -> <return_type>"
+      example: "fn(int, int) -> int"
+      
+  user_defined:
+    enum:
+      syntax: "enum <name> { <variant>, ... }"
+      example: |
+        enum RiskLevel {
+          Critical,
+          Elevated { score: int },
+          Low
+        }
+        
+    spec:
+      syntax: "spec <name> { <constraints> }"
+      description: "Verified specification with invariants"
+
+# ============================================================================
+# 5. EFFECT SYSTEM
+# ============================================================================
+
+effects:
+  description: "Capabilities that functions may require"
+  
+  categories:
+    io:
+      - READ_FILE
+      - WRITE_FILE
+      - DELETE_FILE
+      - READ_FS
+      - WRITE_FS
+      
+    network:
+      - HTTP_GET
+      - HTTP_POST
+      - HTTP_PUT
+      - HTTP_DELETE
+      - WEB_SEARCH
+      - NETWORK_SEND
+      - NETWORK_RECEIVE
+      
+    compute:
+      - COMPUTE
+      - GPU_COMPUTE
+      - PARALLEL
+      
+    memory:
+      - MEMORY_STORE
+      - MEMORY_RECALL
+      
+    external:
+      - CALL_HOST
+      - CALL_TOOL
+      - OPENCLAW_TOOL
+      
+    spec:
+      - SPEC_DEFINE
+      - SPEC_GATE
+      - SPEC_UPDATE
+      - SPEC_SEAL
+      
+  syntax:
+    annotation: "@effect([<effect>, ...])"
+    polymorphism: "@effect(e) where e <: IO"
+    
+  propagation:
+    rule: "Effects propagate upward unless handled"
+    example: |
+      @effect([READ_FILE])
+      fn read_config() -> string { ... }
+      
+      # caller automatically has READ_FILE effect
+      fn use_config() { read_config() }
+
+# ============================================================================
+# 6. GAS SYSTEM
+# ============================================================================
+
+gas:
+  description: "Resource metering for computational work"
+  
+  model:
+    unit: "gas"
+    base_costs:
+      arithmetic: 1
+      comparison: 1
+      memory_access: 2
+      function_call: 5
+      host_function: 10
+      io_operation: 50
+      network_call: 100
+      
+  annotations:
+    static: "@gas(<upper_bound>)"
+    dynamic: "@gas_metered"  # Runtime tracking
+    
+  limits:
+    default_block: 10000000  # 10M gas per block/transaction
+    default_call: 1000000    # 1M gas per call
+    
+  overflow_behavior: "panic with OutOfGas error"
+
+# ============================================================================
+# 7. TIER SYSTEM
+# ============================================================================
+
+tiers:
+  description: "Execution privilege levels"
+  
+  levels:
+    machine:
+      priority: 0
+      capabilities: [raw_memory, native_code, unbounded_io]
+      description: "Unsafe machine code"
+      
+    forge:
+      priority: 1
+      capabilities: [all_host_functions, spec_modification, governance]
+      description: "System builders"
+      
+    sovereign:
+      priority: 2
+      capabilities: [most_host_functions, delegation, voting]
+      description: "User agents"
+      
+    guest:
+      priority: 3
+      capabilities: [read_only, sandboxed_io, limited_compute]
+      description: "Untrusted code"
+      
+  syntax: "@tier([<tier>, ...])"
+  
+  enforcement:
+    compile_time: "Check against allowed functions"
+    runtime: "Capability checks on host calls"
+
+# ============================================================================
+# 8. STATEMENTS vs EXPRESSIONS
+# ============================================================================
+
+statements:
+  description: "Imperative constructs with side effects"
+  
+  types:
+    let_stmt:
+      syntax: "let <ident> = <expr>;"
+      
+    const_stmt:
+      syntax: "const <ident> = <expr>;"
+      
+    expr_stmt:
+      syntax: "<expr>;"
+      
+    return_stmt:
+      syntax: "return <expr>?;"
+      
+    if_stmt:
+      syntax: "if <cond> <block> (else <block>)?"
+      
+    match_stmt:
+      syntax: "match <expr> { <arm>, ... }"
+      
+    for_stmt:
+      syntax: "for <ident> in <expr> <block>"
+      
+    break_stmt:
+      syntax: "break;"
+      
+    continue_stmt:
+      syntax: "continue;"
+
+expressions:
+  description: "Pure values that can be composed"
+  
+  types:
+    literal_expr: "<literal>"
+    ident_expr: "<identifier>"
+    binary_expr: "<left> <op> <right>"
+    unary_expr: "<op> <operand>"
+    call_expr: "<callee>(<args>)"
+    field_expr: "<expr>.<field>"
+    index_expr: "<expr>[<index>]"
+    if_expr: "if <cond> then <then> else <else>"
+    block_expr: "{ <stmts>* <expr> }"
+    lambda_expr: "fn(<params>) => <expr>"
+    record_expr: "{ <field>: <expr>, ... }"
+    list_expr: "[ <expr>, ... ]"
+
+# ============================================================================
+# 9. OPERATORS (Precedence)
+# ============================================================================
+
+operators:
+  precedence_high_to_low:
+    - level: 1
+      operators: ["." , "::", "["]  # Field access, namespace, index
+      associativity: left
+      
+    - level: 2
+      operators: ["!", "-", "¬"]  # Not, negate
+      associativity: right
+      
+    - level: 3
+      operators: ["*", "/", "%", "×", "÷"]
+      associativity: left
+      
+    - level: 4
+      operators: ["+", "-", "∪"]
+      associativity: left
+      
+    - level: 5
+      operators: ["..", "..."]  # Range operators
+      associativity: none
+      
+    - level: 6
+      operators: ["<", ">", "<=", ">=", "≤", "≥", "==", "!=", "≠"]
+      associativity: none
+      
+    - level: 7
+      operators: ["∧", "and"]
+      associativity: left
+      
+    - level: 8
+      operators: ["∨", "or"]
+      associativity: left
+      
+    - level: 9
+      operators: ["|>"]
+      associativity: left
+      
+    - level: 10
+      operators: ["=", ":=", "≔"]
+      associativity: right
+
+# ============================================================================
+# 10. EXAMPLES
+# ============================================================================
+
+examples:
+  hello_world:
+    name: "Hello World"
+    code: |
+      module hello v0.1.0
+      
+      fn main() {
+        println("Hello, HLF!")
+      }
+      
+  fibonacci:
+    name: "Fibonacci"
+    code: |
+      module math v0.1.0
+      
+      fn fib(n: int) -> int
+        @tier([forge, sovereign])
+        @gas(100)
+      {
+        if n <= 1 then n
+        else fib(n - 1) + fib(n - 2)
+      }
+      
+  risk_engine:
+    name: "Risk Engine with Effects"
+    code: |
+      module risk_engine v0.5.0
+      import std::math
+      
+      spec RiskLevel {
+        invariant: score >= 0 and score <= 100
+      }
+      
+      @effect([READ_FILE, COMPUTE])
+      @tier([forge])
+      @gas(50)
+      fn assess_risk(config_path: string) -> RiskLevel {
+        let config = READ_FILE(config_path);
+        let score = parse_score(config);
+        
+        match score {
+          s if s > 80 => :critical,
+          s if s > 50 => :elevated,
+          _ => :low
+        }
+      }
+      
+  agent_delegation:
+    name: "Agent Delegation"
+    code: |
+      module agent v0.5.0
+      
+      spec Task {
+        requires: [valid_input, within_quota]
+        ensures: [result_verified]
+      }
+      
+      @tier([sovereign])
+      @gas(1000)
+      fn delegate_task(task: Task) -> Result {
+        let capsule = seal_intent(task);
+        let result = route_to_agent(capsule);
+        verify_result(result, task.spec)
+      }
+
+# ============================================================================
+# 11. GRAMMAR BNF (Formal)
+# ============================================================================
+
+bnf:
+  start: "<module>"
+  
+  rules:
+    module: "MODULE identifier version? import* decl*"
+    version: "VERSION string"
+    import: "IMPORT path (AS identifier)?"
+    path: "identifier ("::" identifier)*"
+    
+    decl: "function_decl | spec_decl | const_decl | type_decl"
+    
+    function_decl: |
+      FN identifier "(" param_list? ")" 
+      return_type? 
+      effect_annotation? 
+      tier_annotation? 
+      gas_annotation? 
+      block
+      
+    param_list: "param ("," param)*"
+    param: "identifier ":" type"
+    return_type: "->" type
+    
+    effect_annotation: "@EFFECT(" effect_list ")"
+    effect_list: "effect ("," effect)*"
+    effect: "identifier"
+    
+    tier_annotation: "@TIER(" tier_list ")"
+    tier_list: "tier ("," tier)*"
+    tier: "identifier"
+    
+    gas_annotation: "@GAS(" integer ")"
+    
+    spec_decl: "SPEC identifier "{" constraint* "}"
+    constraint: "invariant | ensures | requires"
+    
+    const_decl: "CONST identifier "=" expr ";"
+    
+    type_decl: "TYPE identifier "=" type ";"
+    
+    block: "{" stmt* "}"
+    
+    stmt: |
+      let_stmt |
+      const_stmt |
+      expr_stmt |
+      return_stmt |
+      if_stmt |
+      match_stmt |
+      for_stmt
+      
+    let_stmt: "LET identifier "=" expr ";"
+    const_stmt: "CONST identifier "=" expr ";"
+    expr_stmt: "expr ";"
+    return_stmt: "RETURN expr? ";"
+    if_stmt: "IF expr block (ELSE block)?"
+    match_stmt: "MATCH expr "{" match_arm* "}"
+    match_arm: "pattern "=>" expr ","
+    pattern: "literal | identifier | constructor_pattern | wildcard"
+    constructor_pattern: "identifier "{" field_pattern* "}"
+    field_pattern: "identifier (":" pattern)?"
+    wildcard: "_"
+    for_stmt: "FOR identifier IN expr block"
+    
+    expr: |
+      literal |
+      identifier |
+      binary_expr |
+      unary_expr |
+      call_expr |
+      field_expr |
+      index_expr |
+      if_expr |
+      block_expr |
+      lambda_expr |
+      record_expr |
+      list_expr |
+      tuple_expr |
+      pipeline_expr
+      
+    binary_expr: "expr operator expr"
+    unary_expr: "operator expr"
+    call_expr: "expr "(" arg_list? ")"
+    arg_list: "expr ("," expr)*"
+    field_expr: "expr "." identifier"
+    index_expr: "expr "[" expr "]"
+    if_expr: "IF expr THEN expr ELSE expr"
+    block_expr: "{" stmt* expr "}"
+    lambda_expr: "FN "(" param_list? ")" "=>" expr"
+    record_expr: "{" field_init* "}"
+    field_init: "identifier ":" expr ","
+    list_expr: "[" expr_list? "]"
+    tuple_expr: "(" expr_list ")"
+    pipeline_expr: "expr "|>" expr"
+    expr_list: "expr ("," expr)*"
+    
+    type: |
+      primitive_type |
+      named_type |
+      function_type |
+      generic_type |
+      record_type |
+      list_type |
+      option_type |
+      result_type
+      
+    primitive_type: "INT | FLOAT | BOOL | STRING | ATOM | UNIT"
+    named_type: "identifier"
+    function_type: "FN "(" type_list? ")" "->" type"
+    type_list: "type ("," type)*"
+    generic_type: "identifier "<" type_list ">"
+    record_type: "{" field_type* "}"
+    field_type: "identifier ":" type ","
+    list_type: "[" type "]"
+    option_type: "?" type
+    result_type: "!" type "," type
+    
+    literal: "integer | float | string | boolean | atom | unit"
+    integer: "[0-9]+"
+    float: "[0-9]+ "." [0-9]+"
+    string: """ [^"]* """
+    boolean: "TRUE | FALSE"
+    atom: ":" identifier
+    unit: "("")"
+    
+    identifier: "[a-zA-Z_][a-zA-Z0-9_]*"
+    operator: "[+\-*/%<>=!&|]+"
+
+# ============================================================================
+# 12. MAPPINGS TO OTHER FORMATS
+# ============================================================================
+
+mappings:
+  to_json_ast:
+    description: "Grammar to JSON AST schema mapping"
+    file: "spec/core/ast_schema.json"
+    
+  to_bytecode:
+    description: "Grammar to VM bytecode mapping"
+    file: "spec/vm/bytecode_spec.yaml"
+    
+  to_documentation:
+    description: "Grammar to human-readable docs"
+    file: "generated/language_reference.md"
+    
+  to_lsp:
+    description: "Grammar to LSP protocol messages"
+    file: "generated/lsp_protocol.yaml"
+
+# ============================================================================
+# 13. VERSIONING & EVOLUTION
+# ============================================================================
+
+versioning:
+  strategy: "Semantic versioning for specs"
+  format: "MAJOR.MINOR.PATCH"
+  
+  rules:
+    major: "Breaking changes to syntax/semantics"
+    minor: "New features, backward compatible"
+    patch: "Bug fixes, clarifications"
+    
+  migration:
+    policy: "Automated migration scripts between minor versions"
+    deprecation: "Features deprecated for 2 minor versions before removal"
+
+# ============================================================================
+# 14. CONFORMANCE
+# ============================================================================
+
+conformance:
+  levels:
+    level1_syntax:
+      description: "Parser accepts all valid programs"
+      
+    level2_ast:
+      description: "AST matches canonical schema"
+      
+    level3_semantics:
+      description: "Execution matches spec semantics"
+      
+    level4_gas:
+      description: "Gas metering matches spec costs"
+      
+    level5_effects:
+      description: "Effect tracking matches annotations"
+      
+  test_suite:
+    location: "conformance/"
+    format: ".hlf source files with expected outputs"
+    
+  certification:
+    process: "Run full test suite, verify all levels"
+    badge: "HLF-Conformance-v{version}"

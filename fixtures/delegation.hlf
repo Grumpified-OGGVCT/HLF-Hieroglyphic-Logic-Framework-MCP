@@ -1,0 +1,8 @@
+# HLF v3 — Multi-Agent Task Delegation (Orchestrator Mode)
+# The primary agent delegates a long-running summarization task to a Scribe agent.
+[HLF-v3]
+⌘ [DELEGATE] agent="scribe" goal="fractal_summarize"
+  ∇ [SOURCE] /data/raw_logs/matrix_sync_2026.txt
+  ⩕ [PRIORITY] level="high"
+  Ж [ASSERT] vram_limit="8GB"
+Ω

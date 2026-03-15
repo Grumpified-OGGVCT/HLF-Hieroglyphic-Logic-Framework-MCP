@@ -1,0 +1,765 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hlf-lang.org/schemas/ast-v0.5.0.json",
+  "title": "HLF Abstract Syntax Tree Schema v0.5.0",
+  "description": "Canonical JSON representation of HLF programs",
+  
+  "definitions": {
+    "Position": {
+      "type": "object",
+      "properties": {
+        "line": {"type": "integer", "minimum": 1},
+        "column": {"type": "integer", "minimum": 1},
+        "offset": {"type": "integer", "minimum": 0}
+      },
+      "required": ["line", "column", "offset"]
+    },
+    
+    "Location": {
+      "type": "object",
+      "properties": {
+        "start": {"$ref": "#/definitions/Position"},
+        "end": {"$ref": "#/definitions/Position"},
+        "source": {"type": "string"}
+      },
+      "required": ["start", "end"]
+    },
+    
+    "Node": {
+      "type": "object",
+      "properties": {
+        "type": {"type": "string"},
+        "loc": {"$ref": "#/definitions/Location"}
+      },
+      "required": ["type"]
+    },
+    
+    "Identifier": {
+      "allOf": [
+        {"$ref": "#/definitions/Node"},
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "Identifier"},
+            "name": {"type": "string"}
+          },
+          "required": ["name"]
+        }
+      ]
+    },
+    
+    "Literal": {
+      "allOf": [
+        {"$ref": "#/definitions/Node"},
+        {
+          "type": "object",
+          "properties": {
+            "type": {"const": "Literal"},
+            "literalType": {
+              "enum": ["int", "float", "string", "bool", "atom", "unit"]
+            },
+            "value": {}
+          },
+          "required": ["literalType", "value"]
+        }
+      ]
+    },
+    
+    "Type": {
+      "oneOf": [
+        {
+          "description": "Primitive type",
+          "type": "object",
+          "properties": {
+            "kind": {"const": "primitive"},
+            "name": {
+              "enum": ["int", "float", "bool", "string", "atom", "unit"]
+            }
+          },
+          "required": ["kind", "name"]
+        },
+        {
+          "description": "Named type",
+          "type": "object",
+          "properties": {
+            "kind": {"const": "named"},
+            "name": {"type": "string"},
+            "module": {"type": "string"}
+          },
+          "required": ["kind", "name"]
+        },
+        {
+          "description": "Function type",
+          "type": "object",
+          "properties": {
+            "kind": {"const": "function"},
+            "params": {
+              "type": "array",
+              "items": {"$ref": "#/definitions/Type"}
+            },
+            "return": {"$ref": "#/definitions/Type"}
+          },
+          "required": ["kind", "params", "return"]
+        },
+        {
+          "description": "Generic type",
+          "type": "object",
+          "properties": {
+            "kind": {"const": "generic"},
+            "name": {"type": "string"},
+            "args": {
+              "type": "array",
+              "items": {"$ref": "#/definitions/Type"}
+            }
+          },
+          "required": ["kind", "name", "args"]
+        },
+        {
+          "description": "Record type",
+          "type": "object",
+          "properties": {
+            "kind": {"const": "record"},
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "type": {"$ref": "#/definitions/Type"},
+                  "optional": {"type": "boolean"}
+                },
+                "required": ["name", "type"]
+              }
+            }
+          },
+          "required": ["kind", "fields"]
+        },
+        {
+          "description": "List type",
+          "type": "object",
+          "properties": {
+            "kind": {"const": "list"},
+            "element": {"$ref": "#/definitions/Type"}
+          },
+          "required": ["kind", "element"]
+        },
+        {
+          "description": "Option type",
+          "type": "object",
+          "properties": {
+            "kind": {"const": "option"},
+            "inner": {"$ref": "#/definitions/Type"}
+          },
+          "required": ["kind", "inner"]
+        },
+        {
+          "description": "Result type",
+          "type": "object",
+          "properties": {
+            "kind": {"const": "result"},
+            "ok": {"$ref": "#/definitions/Type"},
+            "err": {"$ref": "#/definitions/Type"}
+          },
+          "required": ["kind", "ok", "err"]
+        }
+      ]
+    },
+    
+    "Effect": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "args": {
+          "type": "array",
+          "items": {}
+        }
+      },
+      "required": ["name"]
+    },
+    
+    "Expression": {
+      "oneOf": [
+        {"$ref": "#/definitions/Literal"},
+        {"$ref": "#/definitions/Identifier"},
+        {
+          "description": "Binary expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "BinaryExpr"},
+                "operator": {"type": "string"},
+                "left": {"$ref": "#/definitions/Expression"},
+                "right": {"$ref": "#/definitions/Expression"}
+              },
+              "required": ["operator", "left", "right"]
+            }
+          ]
+        },
+        {
+          "description": "Unary expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "UnaryExpr"},
+                "operator": {"type": "string"},
+                "operand": {"$ref": "#/definitions/Expression"}
+              },
+              "required": ["operator", "operand"]
+            }
+          ]
+        },
+        {
+          "description": "Call expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "CallExpr"},
+                "callee": {"$ref": "#/definitions/Expression"},
+                "arguments": {
+                  "type": "array",
+                  "items": {"$ref": "#/definitions/Expression"}
+                },
+                "keywordArgs": {
+                  "type": "object",
+                  "additionalProperties": {"$ref": "#/definitions/Expression"}
+                }
+              },
+              "required": ["callee", "arguments"]
+            }
+          ]
+        },
+        {
+          "description": "Field access",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "FieldExpr"},
+                "object": {"$ref": "#/definitions/Expression"},
+                "field": {"$ref": "#/definitions/Identifier"}
+              },
+              "required": ["object", "field"]
+            }
+          ]
+        },
+        {
+          "description": "Index expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "IndexExpr"},
+                "object": {"$ref": "#/definitions/Expression"},
+                "index": {"$ref": "#/definitions/Expression"}
+              },
+              "required": ["object", "index"]
+            }
+          ]
+        },
+        {
+          "description": "If expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "IfExpr"},
+                "condition": {"$ref": "#/definitions/Expression"},
+                "thenBranch": {"$ref": "#/definitions/Expression"},
+                "elseBranch": {"$ref": "#/definitions/Expression"}
+              },
+              "required": ["condition", "thenBranch", "elseBranch"]
+            }
+          ]
+        },
+        {
+          "description": "Match expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "MatchExpr"},
+                "subject": {"$ref": "#/definitions/Expression"},
+                "arms": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "pattern": {"$ref": "#/definitions/Pattern"},
+                      "guard": {"$ref": "#/definitions/Expression"},
+                      "body": {"$ref": "#/definitions/Expression"}
+                    },
+                    "required": ["pattern", "body"]
+                  }
+                }
+              },
+              "required": ["subject", "arms"]
+            }
+          ]
+        },
+        {
+          "description": "Block expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "BlockExpr"},
+                "statements": {
+                  "type": "array",
+                  "items": {"$ref": "#/definitions/Statement"}
+                },
+                "result": {"$ref": "#/definitions/Expression"}
+              },
+              "required": ["statements"]
+            }
+          ]
+        },
+        {
+          "description": "Lambda expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "LambdaExpr"},
+                "params": {
+                  "type": "array",
+                  "items": {"$ref": "#/definitions/Parameter"}
+                },
+                "body": {"$ref": "#/definitions/Expression"},
+                "returnType": {"$ref": "#/definitions/Type"}
+              },
+              "required": ["params", "body"]
+            }
+          ]
+        },
+        {
+          "description": "Record expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "RecordExpr"},
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {"type": "string"},
+                      "value": {"$ref": "#/definitions/Expression"}
+                    },
+                    "required": ["name", "value"]
+                  }
+                }
+              },
+              "required": ["fields"]
+            }
+          ]
+        },
+        {
+          "description": "List expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "ListExpr"},
+                "elements": {
+                  "type": "array",
+                  "items": {"$ref": "#/definitions/Expression"}
+                }
+              },
+              "required": ["elements"]
+            }
+          ]
+        },
+        {
+          "description": "Tuple expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "TupleExpr"},
+                "elements": {
+                  "type": "array",
+                  "items": {"$ref": "#/definitions/Expression"}
+                }
+              },
+              "required": ["elements"]
+            }
+          ]
+        },
+        {
+          "description": "Pipeline expression",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "PipelineExpr"},
+                "left": {"$ref": "#/definitions/Expression"},
+                "right": {"$ref": "#/definitions/Expression"}
+              },
+              "required": ["left", "right"]
+            }
+          ]
+        }
+      ]
+    },
+    
+    "Pattern": {
+      "oneOf": [
+        {
+          "description": "Literal pattern",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "LiteralPattern"},
+                "value": {"$ref": "#/definitions/Literal"}
+              },
+              "required": ["value"]
+            }
+          ]
+        },
+        {
+          "description": "Identifier pattern (variable binding)",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "IdentPattern"},
+                "name": {"type": "string"}
+              },
+              "required": ["name"]
+            }
+          ]
+        },
+        {
+          "description": "Wildcard pattern",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "WildcardPattern"}
+              }
+            }
+          ]
+        },
+        {
+          "description": "Constructor pattern",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "ConstructorPattern"},
+                "constructor": {"$ref": "#/definitions/Identifier"},
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {"type": "string"},
+                      "pattern": {"$ref": "#/definitions/Pattern"}
+                    },
+                    "required": ["name", "pattern"]
+                  }
+                }
+              },
+              "required": ["constructor"]
+            }
+          ]
+        }
+      ]
+    },
+    
+    "Parameter": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "type": {"$ref": "#/definitions/Type"},
+        "default": {"$ref": "#/definitions/Expression"},
+        "optional": {"type": "boolean"}
+      },
+      "required": ["name"]
+    },
+    
+    "Statement": {
+      "oneOf": [
+        {
+          "description": "Let statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "LetStmt"},
+                "name": {"$ref": "#/definitions/Identifier"},
+                "value": {"$ref": "#/definitions/Expression"},
+                "mutable": {"type": "boolean"}
+              },
+              "required": ["name", "value"]
+            }
+          ]
+        },
+        {
+          "description": "Const statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "ConstStmt"},
+                "name": {"$ref": "#/definitions/Identifier"},
+                "value": {"$ref": "#/definitions/Expression"}
+              },
+              "required": ["name", "value"]
+            }
+          ]
+        },
+        {
+          "description": "Expression statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "ExprStmt"},
+                "expression": {"$ref": "#/definitions/Expression"}
+              },
+              "required": ["expression"]
+            }
+          ]
+        },
+        {
+          "description": "Return statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "ReturnStmt"},
+                "value": {"$ref": "#/definitions/Expression"}
+              }
+            }
+          ]
+        },
+        {
+          "description": "If statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "IfStmt"},
+                "condition": {"$ref": "#/definitions/Expression"},
+                "thenBlock": {"$ref": "#/definitions/Block"},
+                "elseBlock": {"$ref": "#/definitions/Block"}
+              },
+              "required": ["condition", "thenBlock"]
+            }
+          ]
+        },
+        {
+          "description": "Match statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "MatchStmt"},
+                "subject": {"$ref": "#/definitions/Expression"},
+                "arms": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "pattern": {"$ref": "#/definitions/Pattern"},
+                      "guard": {"$ref": "#/definitions/Expression"},
+                      "body": {"$ref": "#/definitions/Block"}
+                    },
+                    "required": ["pattern", "body"]
+                  }
+                }
+              },
+              "required": ["subject", "arms"]
+            }
+          ]
+        },
+        {
+          "description": "For statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "ForStmt"},
+                "variable": {"$ref": "#/definitions/Identifier"},
+                "iterable": {"$ref": "#/definitions/Expression"},
+                "body": {"$ref": "#/definitions/Block"}
+              },
+              "required": ["variable", "iterable", "body"]
+            }
+          ]
+        },
+        {
+          "description": "Break statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "BreakStmt"}
+              }
+            }
+          ]
+        },
+        {
+          "description": "Continue statement",
+          "allOf": [
+            {"$ref": "#/definitions/Node"},
+            {
+              "type": "object",
+              "properties": {
+                "type": {"const": "ContinueStmt"}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    
+    "Block": {
+      "type": "object",
+      "properties": {
+        "statements": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/Statement"}
+        }
+      },
+      "required": ["statements"]
+    }
+  },
+  
+  "type": "object",
+  "properties": {
+    "astVersion": {
+      "const": "0.5.0"
+    },
+    "module": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "string"},
+        "doc": {"type": "string"},
+        "imports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {"type": "string"},
+              "alias": {"type": "string"},
+              "items": {
+                "type": "array",
+                "items": {"type": "string"}
+              }
+            },
+            "required": ["path"]
+          }
+        },
+        "declarations": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "description": "Function declaration",
+                "type": "object",
+                "properties": {
+                  "kind": {"const": "function"},
+                  "name": {"$ref": "#/definitions/Identifier"},
+                  "params": {
+                    "type": "array",
+                    "items": {"$ref": "#/definitions/Parameter"}
+                  },
+                  "returnType": {"$ref": "#/definitions/Type"},
+                  "effects": {
+                    "type": "array",
+                    "items": {"$ref": "#/definitions/Effect"}
+                  },
+                  "tiers": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "gas": {"type": "integer"},
+                  "body": {"$ref": "#/definitions/Block"},
+                  "doc": {"type": "string"}
+                },
+                "required": ["kind", "name", "params", "body"]
+              },
+              {
+                "description": "Spec declaration",
+                "type": "object",
+                "properties": {
+                  "kind": {"const": "spec"},
+                  "name": {"$ref": "#/definitions/Identifier"},
+                  "constraints": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {"enum": ["invariant", "ensures", "requires"]},
+                        "expression": {"$ref": "#/definitions/Expression"}
+                      }
+                    }
+                  },
+                  "doc": {"type": "string"}
+                },
+                "required": ["kind", "name"]
+              },
+              {
+                "description": "Type declaration",
+                "type": "object",
+                "properties": {
+                  "kind": {"const": "type"},
+                  "name": {"$ref": "#/definitions/Identifier"},
+                  "definition": {"$ref": "#/definitions/Type"},
+                  "doc": {"type": "string"}
+                },
+                "required": ["kind", "name", "definition"]
+              },
+              {
+                "description": "Constant declaration",
+                "type": "object",
+                "properties": {
+                  "kind": {"const": "const"},
+                  "name": {"$ref": "#/definitions/Identifier"},
+                  "value": {"$ref": "#/definitions/Expression"},
+                  "doc": {"type": "string"}
+                },
+                "required": ["kind", "name", "value"]
+              }
+            ]
+          }
+        }
+      },
+      "required": ["name"]
+    }
+  },
+  "required": ["astVersion", "module"]
+}

@@ -1,0 +1,124 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Weekly Spec Sentinel                                                  ║
+# ║                                                                              ║
+# ║  Model: nemotron-3-super (NVIDIA, primary) → qwen3.5:cloud (fallback)       ║
+# ║  Best-in-class: 120B MoE, Hybrid Mamba+Transformer, agentic multi-file      ║
+# ║  reasoning, long-horizon planning, 256K ctx.                                 ║
+# ║  Why: grammar/opcode drift is a multi-file cross-referencing task —          ║
+# ║        nemotron-3-super's LatentMoE architecture excels at holding multiple  ║
+# ║        file contexts simultaneously and reasoning about consistency.          ║
+# ║                                                                              ║
+# ║  Triggers: Weekly Sunday 02:00 UTC + manual dispatch                        ║
+# ║  On drift: Opens (or updates) a GitHub Issue labeled "spec-drift"            ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Weekly — Spec Sentinel (nemotron-3-super)"
+
+on:
+  schedule:
+    - cron: "0 2 * * 0"   # Every Sunday at 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      force_issue:
+        description: "Force issue creation even if no drift found"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  spec-drift-check:
+    name: "Detect spec/implementation drift"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package (for import checks)
+        run: pip install -e ".[dev]" --quiet
+
+      - name: Run spec drift check
+        id: drift
+        run: |
+          python .github/scripts/spec_drift_check.py > /tmp/drift_report.json 2>&1
+          DRIFT_EXIT=$?
+          echo "drift_detected=$(python -c "import json; d=json.load(open('/tmp/drift_report.json')); print(str(d['drift_detected']).lower())")" >> $GITHUB_OUTPUT
+          echo "Drift exit: $DRIFT_EXIT"
+          cat /tmp/drift_report.json
+        continue-on-error: true
+
+      - name: Run AI analysis with devstral:24b
+        if: steps.drift.outputs.drift_detected == 'true' || github.event.inputs.force_issue == 'true'
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          DRIFT_REPORT=$(cat /tmp/drift_report.json)
+          python .github/scripts/ollama_client.py \
+            --model "nemotron-3-super" \
+            --fallback-model "qwen3.5:cloud" \
+            --system "You are HLF's spec sentinel — a senior engineer ensuring that the governance spec files (bytecode_spec.yaml, host_functions.json) stay in perfect sync with the implementation files (bytecode.py, runtime.py). You reason across multiple files simultaneously and produce precise, actionable findings." \
+            --prompt "The following spec drift report was detected in the HLF repository. For each drift item, explain:\n1. What exactly is out of sync\n2. Which file(s) need to be changed\n3. The exact change needed (code snippet or YAML line)\n4. Risk level if this drift ships to production\n\nDrift Report:\n${DRIFT_REPORT}" \
+            --output /tmp/ai_analysis.json \
+            --temperature 0.1
+          cat /tmp/ai_analysis.json | python -c "import json,sys; d=json.load(sys.stdin); print(d['content'])" > /tmp/ai_summary.md
+
+      - name: Build issue body
+        if: steps.drift.outputs.drift_detected == 'true' || github.event.inputs.force_issue == 'true'
+        run: |
+          DRIFT_REPORT=$(cat /tmp/drift_report.json)
+          AI_SUMMARY=$(cat /tmp/ai_summary.md 2>/dev/null || echo "_AI analysis unavailable (OLLAMA_API_KEY not set or API error)_")
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          cat > /tmp/issue_body.md << 'ISSUE_EOF'
+          ## 🔍 HLF Spec Drift Detected
+
+          The weekly Spec Sentinel (`devstral:24b`) has detected a mismatch between the
+          governance spec files and the implementation.
+
+          **Detected by**: [Weekly Spec Sentinel workflow]($RUN_URL)
+          **Model**: `devstral:24b` (Mistral × AllHands AI, SWE-Bench 46.8%, 128K ctx)
+
+          ---
+
+          ### Drift Report (machine-generated)
+
+          ```json
+          ISSUE_EOF
+          echo "$DRIFT_REPORT" >> /tmp/issue_body.md
+          echo '```' >> /tmp/issue_body.md
+          echo '' >> /tmp/issue_body.md
+          echo '---' >> /tmp/issue_body.md
+          echo '' >> /tmp/issue_body.md
+          echo '### AI Analysis (devstral:24b)' >> /tmp/issue_body.md
+          echo '' >> /tmp/issue_body.md
+          echo "$AI_SUMMARY" >> /tmp/issue_body.md
+          echo '' >> /tmp/issue_body.md
+          echo '---' >> /tmp/issue_body.md
+          echo '_This issue is auto-managed by the Spec Sentinel workflow. It will be updated if drift persists next week._' >> /tmp/issue_body.md
+
+      - name: Create or update GitHub issue
+        if: steps.drift.outputs.drift_detected == 'true' || github.event.inputs.force_issue == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python .github/scripts/create_github_issue.py \
+            --title "🔍 [Spec Sentinel] Spec/implementation drift detected" \
+            --body "@/tmp/issue_body.md" \
+            --labels "spec-drift,automated,priority-high"
+
+      - name: Report clean status
+        if: steps.drift.outputs.drift_detected == 'false' && github.event.inputs.force_issue != 'true'
+        run: |
+          echo "✅ No spec drift detected. All governance files match implementation."
+          cat /tmp/drift_report.json

@@ -1,0 +1,213 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Live Ollama Cloud API Test                                            ║
+# ║                                                                              ║
+# ║  Manual-dispatch only workflow to live-test every Ollama Cloud capability:  ║
+# ║    1. Basic streaming chat                                                   ║
+# ║    2. Tiered fallback chain (force circuit open on primary)                  ║
+# ║    3. Thinking mode (deepseek-r1 chain-of-thought traces)                   ║
+# ║    4. Structured outputs (JSON schema enforcement)                           ║
+# ║    5. Tool calling (function definitions + tool_calls response)              ║
+# ║    6. Web search (POST /api/web_search)                                     ║
+# ║    7. Web search injected into chat context                                  ║
+# ║    8. Connection health report                                               ║
+# ║                                                                              ║
+# ║  This workflow is the live gate before each PR merge.                        ║
+# ║  Also runs weekly (Thursday) as a canary against all cloud models.           ║
+# ║                                                                              ║
+# ║  Required secrets:                                                           ║
+# ║    OLLAMA_API_KEY — Ollama Cloud API key (org-level secret)                 ║
+# ║                                                                              ║
+# ║  Official API docs:                                                          ║
+# ║    https://docs.ollama.com/api/introduction                                 ║
+# ║    https://docs.ollama.com/capabilities/streaming                           ║
+# ║    https://docs.ollama.com/capabilities/thinking                            ║
+# ║    https://docs.ollama.com/capabilities/structured-outputs                  ║
+# ║    https://docs.ollama.com/capabilities/tool-calling                        ║
+# ║    https://docs.ollama.com/capabilities/web-search                          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Live — Ollama Cloud API Test (all capabilities)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_subset:
+        description: "Tests to run (blank = all, or: streaming,fallback,thinking,structured,tools,websearch)"
+        type: string
+        default: ""
+      verbose:
+        description: "Verbose output"
+        type: boolean
+        default: true
+  schedule:
+    - cron: "0 6 * * 4"   # Every Thursday 06:00 UTC — weekly canary
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # ── Pre-flight: verify the API key is reachable ─────────────────────────────
+  preflight:
+    name: "Pre-flight: API key + connectivity check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api_accessible: ${{ steps.check.outputs.accessible }}
+    steps:
+      - name: Check OLLAMA_API_KEY is set
+        id: check
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          if [ -z "$OLLAMA_API_KEY" ]; then
+            echo "::error::OLLAMA_API_KEY secret is not set."
+            echo "::notice::Add it: GitHub Org Settings → Secrets → Actions → New org secret → name: OLLAMA_API_KEY"
+            echo "accessible=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "::notice::OLLAMA_API_KEY is set (${#OLLAMA_API_KEY} chars)"
+
+          # Test connectivity to Ollama Cloud API (lightweight /api/tags call)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
+            -H "Authorization: Bearer $OLLAMA_API_KEY" \
+            "https://ollama.com/api/tags" 2>/dev/null || echo "000")
+
+          echo "Connectivity check HTTP status: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+            # 200 = perfect; 401/403 = server reached but auth issue (still reachable)
+            echo "accessible=true" >> $GITHUB_OUTPUT
+            echo "::notice::Ollama Cloud API is reachable (HTTP $HTTP_CODE)"
+          else
+            echo "accessible=false" >> $GITHUB_OUTPUT
+            echo "::error::Ollama Cloud API not reachable (HTTP $HTTP_CODE). Check network or API status."
+            exit 1
+          fi
+
+  # ── Live test suite ──────────────────────────────────────────────────────────
+  live-test:
+    name: "Live API test suite (8 capabilities)"
+    needs: preflight
+    if: needs.preflight.outputs.api_accessible == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" --quiet
+
+      - name: Print test configuration
+        run: |
+          echo "=== Live API Test Configuration ==="
+          echo "Date:        $(date -u)"
+          echo "Run ID:      ${{ github.run_id }}"
+          echo "Trigger:     ${{ github.event_name }}"
+          echo "Test subset: ${{ github.event.inputs.test_subset || 'ALL' }}"
+          echo ""
+          echo "Ollama API capabilities being tested:"
+          echo "  1. Streaming     (https://docs.ollama.com/capabilities/streaming)"
+          echo "  2. Tiered fallback (circuit breaker + retry)"
+          echo "  3. Thinking      (https://docs.ollama.com/capabilities/thinking)"
+          echo "  4. Structured    (https://docs.ollama.com/capabilities/structured-outputs)"
+          echo "  5. Tool calling  (https://docs.ollama.com/capabilities/tool-calling)"
+          echo "  6. Web search    (https://docs.ollama.com/capabilities/web-search)"
+          echo "  7. Web+chat      (web search injected as tool into chat)"
+          echo "  8. Health report (connection monitor + circuit breaker state)"
+          echo ""
+          echo "Primary model:  nemotron-3-super (NVIDIA 120B LatentMoE+Mamba)"
+          echo "Fallback chain: kimi-k2:1t-cloud -> qwen3.5:cloud -> deepseek-r1:14b"
+
+      - name: Run live API tests
+        id: live_tests
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          PYTHONPATH: .github/scripts
+        run: |
+          echo "Starting live test suite..."
+          python scripts/live_api_test.py
+          EXIT_CODE=$?
+
+          # Always parse results even on failure
+          if [ -f /tmp/live_test_results.json ]; then
+            PASSED=$(python -c "import json; d=json.load(open('/tmp/live_test_results.json')); print(d['passed'])")
+            FAILED=$(python -c "import json; d=json.load(open('/tmp/live_test_results.json')); print(d['failed'])")
+            SKIPPED=$(python -c "import json; d=json.load(open('/tmp/live_test_results.json')); print(d['skipped'])")
+            TOTAL=$(python -c "import json; d=json.load(open('/tmp/live_test_results.json')); print(d['total'])")
+            TIME_S=$(python -c "import json; d=json.load(open('/tmp/live_test_results.json')); print(d['time_s'])")
+
+            echo "LIVE_PASSED=$PASSED"   >> $GITHUB_ENV
+            echo "LIVE_FAILED=$FAILED"   >> $GITHUB_ENV
+            echo "LIVE_SKIPPED=$SKIPPED" >> $GITHUB_ENV
+            echo "LIVE_TOTAL=$TOTAL"     >> $GITHUB_ENV
+            echo "LIVE_TIME=$TIME_S"     >> $GITHUB_ENV
+
+            echo "::notice::Live tests: $PASSED/$TOTAL passed, $FAILED failed, $SKIPPED skipped (${TIME_S}s)"
+          fi
+
+          exit $EXIT_CODE
+
+      - name: Upload live test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: "live-api-test-results-${{ github.run_id }}"
+          path: /tmp/live_test_results.json
+          retention-days: 30
+
+      - name: Print job summary
+        if: always()
+        run: |
+          echo "### Live API Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Passed | ${{ env.LIVE_PASSED }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Failed | ${{ env.LIVE_FAILED }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Skipped | ${{ env.LIVE_SKIPPED }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total | ${{ env.LIVE_TOTAL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Duration | ${{ env.LIVE_TIME }}s |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Primary model:** \`nemotron-3-super\`" >> $GITHUB_STEP_SUMMARY
+          echo "**REASONING_CHAIN:** \`nemotron-3-super → kimi-k2:1t-cloud → qwen3.5:cloud → deepseek-r1:14b\`" >> $GITHUB_STEP_SUMMARY
+          echo "**CODING_CHAIN:** \`devstral:24b → nemotron-3-super → qwen3.5:cloud → deepseek-r1:14b\`" >> $GITHUB_STEP_SUMMARY
+          echo "**UNIVERSAL_CHAIN:** \`nemotron-3-super → qwen3.5:cloud → devstral:24b → deepseek-r1:14b\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Capabilities tested: streaming, tiered fallback, thinking mode, structured outputs, tool calling, web search, web+chat integration, health report" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create issue on test failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date -u +"%Y-%m-%d")
+          gh issue create \
+            --title "🔴 Live Ollama API tests failed — $DATE" \
+            --body "$(cat << 'BODY'
+          ## Live Ollama Cloud API Test Failure
+
+          The weekly live API test failed. Check the [workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+          **Failed:** ${{ env.LIVE_FAILED }}/${{ env.LIVE_TOTAL }} tests
+
+          Common causes:
+          - OLLAMA_API_KEY expired or revoked — rotate and update org secret
+          - Ollama Cloud API outage — check https://ollama.com
+          - Model unavailable — check fallback chain handles it
+          - API contract change — review docs at https://docs.ollama.com
+
+          **Affected capabilities tested:**
+          - Streaming, Thinking, Structured Outputs, Tool Calling, Web Search
+          BODY
+          )" \
+            --label "live-test-failure,priority:high" \
+            --repo "${{ github.repository }}" \
+            || echo "::warning::Issue creation failed — create 'live-test-failure' label first"

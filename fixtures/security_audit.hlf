@@ -1,0 +1,9 @@
+# HLF v3 — Security Baseline Audit (Sentinel Mode)
+# The agent audits a critical system file while enforcing strict RO constraints.
+# All agents must reach strict consensus before proceeding.
+[HLF-v3]
+Δ analyze /security/seccomp.json
+  Ж [CONSTRAINT] mode="ro"
+  Ж [EXPECT] vulnerability_shorthand
+  ⨝ [VOTE] consensus="strict"
+Ω

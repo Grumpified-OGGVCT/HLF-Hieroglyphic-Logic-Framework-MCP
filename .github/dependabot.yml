@@ -1,0 +1,57 @@
+# Dependabot — weekly dependency updates for HLF MCP (Python project)
+#
+# Ecosystems covered:
+#   pip          — Python dependencies declared in pyproject.toml
+#   github-actions — Action versions used in .github/workflows/*.yml
+#
+# Rationale:
+#   Weekly cadence keeps the vulnerability window small while not flooding
+#   maintainers with daily PRs. pip updates cover the core Python stack
+#   (mcp, lark, cryptography, fastapi, uvicorn, pydantic, tiktoken, etc.).
+#   github-actions updates pin Action SHAs to latest safe digests.
+#
+# Docs: https://docs.github.com/en/code-security/supply-chain-security/
+#       keeping-your-dependencies-updated-automatically
+
+version: 2
+updates:
+  # Python dependencies (pyproject.toml / requirements files)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
+    # Group minor + patch updates into a single PR to reduce noise
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Never auto-merge major version bumps — they require human review
+    versioning-strategy: "increase"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions versions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    commit-message:
+      prefix: "chore(actions)"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    open-pull-requests-limit: 5

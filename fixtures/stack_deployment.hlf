@@ -1,0 +1,9 @@
+# HLF v3 — Stack Deployment
+# Deploy application stack with MoMA routing and HITL confirmation.
+[HLF-v3]
+⌘ [ROUTE] strategy="auto" tier="$DEPLOYMENT_TIER"
+  ∇ [PARAM] temperature=0.0
+  ∇ [PARAM] replicas=3
+  Ж [VOTE] confirmation="required"
+  Ж [ASSERT] health_check=true
+Ω

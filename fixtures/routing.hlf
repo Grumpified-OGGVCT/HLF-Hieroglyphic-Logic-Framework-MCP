@@ -1,0 +1,7 @@
+# HLF v3 — Real-Time Resource Mediation (MoMA Router)
+# The router dynamically selects from the tier's model matrix.
+[HLF-v3]
+⌘ [ROUTE] strategy="auto" tier="$DEPLOYMENT_TIER"
+  ∇ [PARAM] temperature=0.0
+  Ж [VOTE] confirmation="required"
+Ω

@@ -1,0 +1,33 @@
+{
+  "version": "1.4.0",
+  "functions": [
+    {"name":"READ",         "args":[{"name":"path","type":"path"}],                              "returns":"string","tier":["hearth","forge","sovereign"],"gas":1, "backend":"dapr_file_read",   "sensitive":false},
+    {"name":"WRITE",        "args":[{"name":"path","type":"path"},{"name":"data","type":"string"}],"returns":"bool",  "tier":["hearth","forge","sovereign"],"gas":2, "backend":"dapr_file_write",  "sensitive":false},
+    {"name":"SPAWN",        "args":[{"name":"image","type":"string"},{"name":"env","type":"map"}], "returns":"string","tier":["forge","sovereign"],         "gas":5, "backend":"docker_orchestrator","sensitive":false},
+    {"name":"SLEEP",        "args":[{"name":"ms","type":"int"}],                                  "returns":"bool",  "tier":["hearth","forge","sovereign"],"gas":0, "backend":"builtin",          "sensitive":false},
+    {"name":"HTTP_GET",     "args":[{"name":"url","type":"string"}],                              "returns":"string","tier":["forge","sovereign"],         "gas":3, "backend":"dapr_http_proxy",  "sensitive":false},
+    {"name":"HTTP_POST",    "args":[{"name":"url","type":"string"},{"name":"body","type":"string"}],"returns":"string","tier":["forge","sovereign"],        "gas":5, "backend":"dapr_http_proxy",  "sensitive":false},
+    {"name":"WEB_SEARCH",   "args":[{"name":"query","type":"string"}],                            "returns":"string","tier":["forge","sovereign"],         "gas":5, "backend":"dapr_http_proxy",  "sensitive":true},
+    {"name":"analyze",      "args":[{"name":"target","type":"string"}],                           "returns":"string","tier":["hearth","forge","sovereign"],"gas":2, "backend":"builtin",          "sensitive":false},
+    {"name":"hash_sha256",  "args":[{"name":"data","type":"string"}],                             "returns":"string","tier":["hearth","forge","sovereign"],"gas":2, "backend":"builtin",          "sensitive":false},
+    {"name":"merkle_chain", "args":[{"name":"entry","type":"string"}],                            "returns":"string","tier":["hearth","forge","sovereign"],"gas":3, "backend":"builtin",          "sensitive":false},
+    {"name":"log_emit",     "args":[{"name":"msg","type":"string"}],                              "returns":"bool",  "tier":["hearth","forge","sovereign"],"gas":1, "backend":"builtin",          "sensitive":false},
+    {"name":"assert_check", "args":[{"name":"expr","type":"bool"}],                               "returns":"bool",  "tier":["hearth","forge","sovereign"],"gas":1, "backend":"builtin",          "sensitive":false},
+    {"name":"get_vram",     "args":[],                                                            "returns":"string","tier":["hearth","forge","sovereign"],"gas":1, "backend":"builtin",          "sensitive":false},
+    {"name":"get_tier",     "args":[],                                                            "returns":"string","tier":["hearth","forge","sovereign"],"gas":1, "backend":"builtin",          "sensitive":false},
+    {"name":"memory_store", "args":[{"name":"key","type":"string"},{"name":"value","type":"any"}],"returns":"bool",  "tier":["hearth","forge","sovereign"],"gas":5, "backend":"rag_bridge",       "sensitive":false},
+    {"name":"memory_recall","args":[{"name":"key","type":"string"}],                              "returns":"any",   "tier":["hearth","forge","sovereign"],"gas":5, "backend":"rag_bridge",       "sensitive":false},
+    {"name":"vote",         "args":[{"name":"config","type":"string"}],                           "returns":"bool",  "tier":["hearth","forge","sovereign"],"gas":1, "backend":"builtin",          "sensitive":false},
+    {"name":"delegate",     "args":[{"name":"agent","type":"string"},{"name":"goal","type":"string"}],"returns":"any","tier":["forge","sovereign"],        "gas":3, "backend":"agent_bridge",     "sensitive":false},
+    {"name":"route",        "args":[{"name":"strategy","type":"string"}],                         "returns":"any",   "tier":["forge","sovereign"],         "gas":2, "backend":"moma_router",      "sensitive":false},
+    {"name":"get_timestamp","args":[],                                                            "returns":"int",   "tier":["hearth","forge","sovereign"],"gas":1, "backend":"builtin",          "sensitive":false},
+    {"name":"generate_ulid","args":[],                                                            "returns":"string","tier":["hearth","forge","sovereign"],"gas":1, "backend":"builtin",          "sensitive":false},
+    {"name":"compress_tokens","args":[{"name":"text","type":"string"}],                           "returns":"string","tier":["hearth","forge","sovereign"],"gas":3, "backend":"hlf_tokenizer",    "sensitive":false},
+    {"name":"summarize",    "args":[{"name":"text","type":"string"}],                             "returns":"string","tier":["forge","sovereign"],         "gas":8, "backend":"zai_client",       "sensitive":false},
+    {"name":"embed_text",   "args":[{"name":"text","type":"string"}],                             "returns":"list",  "tier":["forge","sovereign"],         "gas":5, "backend":"zai_client",       "sensitive":false},
+    {"name":"cosine_similarity","args":[{"name":"a","type":"list"},{"name":"b","type":"list"}],   "returns":"float", "tier":["hearth","forge","sovereign"],"gas":2, "backend":"builtin",          "sensitive":false},
+    {"name":"cove_validate","args":[{"name":"artifact","type":"any"}],                            "returns":"bool",  "tier":["forge","sovereign"],         "gas":6, "backend":"cove_engine",      "sensitive":false},
+    {"name":"align_verify", "args":[{"name":"intent","type":"string"}],                           "returns":"bool",  "tier":["hearth","forge","sovereign"],"gas":4, "backend":"align_ledger",     "sensitive":false},
+    {"name":"z3_verify",    "args":[{"name":"constraints","type":"any"}],                         "returns":"bool",  "tier":["sovereign"],                 "gas":10,"backend":"z3_engine",        "sensitive":false}
+  ]
+}

@@ -1,0 +1,267 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Weekly Test Health + Coverage Analysis                                ║
+# ║                                                                              ║
+# ║  Model: devstral:24b (Mistral × AllHands AI)                                ║
+# ║  Best-in-class: Agentic coding, multi-file codebase comprehension           ║
+# ║  Why: Test gap analysis IS a coding task — devstral understands the code    ║
+# ║        paths that need exercising and writes the actual missing test stubs.  ║
+# ║        It was trained specifically on SWE-Bench (real-world repo tasks),    ║
+# ║        including identifying under-tested code paths.                        ║
+# ║                                                                              ║
+# ║  Stage 1: pytest + coverage (deterministic, no AI)                          ║
+# ║  Stage 2: devstral:24b — analyze gaps, write missing test code              ║
+# ║                                                                              ║
+# ║  Triggers: Weekly Thursday 02:00 UTC                                        ║
+# ║  Output: GitHub Issue with coverage report + generated test starters         ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Weekly — Test Health + Coverage (devstral:24b)"
+
+on:
+  schedule:
+    - cron: "0 2 * * 4"   # Every Thursday at 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  test-health:
+    name: "Test coverage analysis + AI test generation"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package + coverage tool
+        run: |
+          pip install -e ".[dev]" --quiet
+          pip install pytest-cov --quiet
+
+      - name: Run tests with coverage
+        run: |
+          python -m pytest tests/ \
+            --cov=hlf_mcp \
+            --cov-report=term-missing \
+            --cov-report=json:/tmp/coverage.json \
+            --tb=short \
+            -q 2>&1 | tee /tmp/test_output.txt || true
+          echo "EXIT_CODE=$?" >> $GITHUB_ENV
+          cat /tmp/test_output.txt
+
+      - name: Parse coverage report
+        run: |
+          python << 'PYEOF'
+          import json
+          from pathlib import Path
+
+          cov_path = Path("/tmp/coverage.json")
+          if not cov_path.exists():
+              print("No coverage.json found — tests may have failed")
+              Path("/tmp/coverage_summary.txt").write_text("Coverage data unavailable\n")
+              exit(0)
+
+          data = json.loads(cov_path.read_text())
+          files = data.get("files", {})
+          totals = data.get("totals", {})
+
+          lines = [
+              f"OVERALL COVERAGE: {totals.get('percent_covered', 0):.1f}%",
+              f"  Covered lines: {totals.get('covered_lines', 0)}",
+              f"  Missing lines: {totals.get('missing_lines', 0)}",
+              f"  Total lines:   {totals.get('num_statements', 0)}",
+              "",
+              "PER-FILE BREAKDOWN (sorted by coverage %):",
+          ]
+
+          file_stats = []
+          for path, info in files.items():
+              summary = info.get("summary", {})
+              pct = summary.get("percent_covered", 0)
+              missing = summary.get("missing_lines", 0)
+              total = summary.get("num_statements", 0)
+              file_stats.append((pct, path, missing, total))
+
+          file_stats.sort()  # Worst coverage first
+
+          for pct, path, missing, total in file_stats:
+              rel = path.replace(str(Path.cwd()) + "/", "")
+              bar = "▓" * int(pct / 10) + "░" * (10 - int(pct / 10))
+              lines.append(f"  {bar} {pct:5.1f}%  {rel}  (missing: {missing}/{total})")
+
+          # Identify files with 0 coverage
+          zero_cov = [path for pct, path, _, _ in file_stats if pct == 0.0]
+          if zero_cov:
+              lines.append("\nFILES WITH ZERO COVERAGE (highest risk):")
+              for p in zero_cov:
+                  lines.append(f"  ✗ {p.replace(str(Path.cwd()) + '/', '')}")
+
+          # Find missing line numbers for critical files
+          critical = ["compiler.py", "bytecode.py", "runtime.py", "server.py", "lifecycle.py", "memory.py"]
+          lines.append("\nCRITICAL FILE MISSING LINES:")
+          for path, info in files.items():
+              for crit in critical:
+                  if crit in path:
+                      missing_nums = info.get("missing_lines", [])
+                      if missing_nums:
+                          rel = path.replace(str(Path.cwd()) + "/", "")
+                          lines.append(f"  {rel}: lines {missing_nums[:20]}")
+
+          result = "\n".join(lines)
+          print(result)
+          Path("/tmp/coverage_summary.txt").write_text(result)
+          PYEOF
+
+      - name: Gather uncovered source for AI analysis
+        run: |
+          python << 'PYEOF'
+          import json
+          from pathlib import Path
+
+          cov_path = Path("/tmp/coverage.json")
+          if not cov_path.exists():
+              Path("/tmp/uncovered_code.txt").write_text("Coverage data unavailable\n")
+              exit(0)
+
+          data = json.loads(cov_path.read_text())
+          files = data.get("files", {})
+
+          output_lines = []
+          char_budget = 25_000
+
+          for path, info in sorted(files.items(), key=lambda x: x[1].get("summary", {}).get("percent_covered", 100)):
+              pct = info.get("summary", {}).get("percent_covered", 100)
+              if pct > 70:
+                  continue  # Skip well-covered files
+              rel = path.replace(str(Path.cwd()) + "/", "")
+              missing = info.get("missing_lines", [])
+              if not missing:
+                  continue
+              try:
+                  src_lines = Path(path).read_text(encoding="utf-8").splitlines()
+              except Exception:
+                  continue
+              output_lines.append(f"\n### {rel} ({pct:.1f}% coverage, {len(missing)} missing lines)\n")
+              output_lines.append("Missing line numbers: " + str(missing[:30]) + "\n")
+              output_lines.append("Source excerpt around missing lines:\n```python\n")
+              shown = set()
+              for ln in missing[:10]:
+                  for i in range(max(0, ln - 3), min(len(src_lines), ln + 4)):
+                      if i not in shown:
+                          output_lines.append(f"{i+1:4}: {src_lines[i]}\n")
+                          shown.add(i)
+              output_lines.append("```\n")
+
+              if sum(len(l) for l in output_lines) > char_budget:
+                  output_lines.append("\n[TRUNCATED — budget limit reached]\n")
+                  break
+
+          result = "".join(output_lines)
+          Path("/tmp/uncovered_code.txt").write_text(result or "All critical files are well covered.\n")
+          print(f"Uncovered code excerpt: {len(result)} chars")
+          PYEOF
+
+      - name: "devstral:24b — Test gap analysis + test generation"
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          COVERAGE_SUMMARY=$(cat /tmp/coverage_summary.txt)
+          UNCOVERED_CODE=$(cat /tmp/uncovered_code.txt)
+          TEST_OUTPUT=$(tail -30 /tmp/test_output.txt)
+
+          python .github/scripts/ollama_client.py \
+            --model "devstral:24b" \
+            --fallback-model "qwen3.5:cloud" \
+            --system "You are an HLF test engineer. You write complete, non-stubbed pytest tests for the HLF Python codebase. You understand the HLF architecture (compiler, bytecode VM, RAG memory, Instinct lifecycle, MCP server). Your tests are specific, readable, and actually exercise the logic — not just import-check." \
+            --prompt "Analyze the HLF test coverage and write missing tests for the highest-risk uncovered code paths.
+
+          COVERAGE SUMMARY:
+          ${COVERAGE_SUMMARY}
+
+          RECENT TEST OUTPUT:
+          ${TEST_OUTPUT}
+
+          UNCOVERED CODE (excerpts of lines not hit by any test):
+          ${UNCOVERED_CODE}
+
+          Tasks:
+          1. Identify the 3 most DANGEROUS uncovered paths (paths where a bug would cause silent data corruption, security bypass, or incorrect behavior)
+          2. For each, explain why it is dangerous if uncovered
+          3. Write a complete pytest test function (not a stub — the full test with assertions) for each
+          4. Follow these conventions:
+             - Use the existing test patterns from the repo (see fixture-based tests in tests/)
+             - Each test function starts with test_
+             - Use descriptive names like test_set_stmt_emits_store_immut_not_mutable_store
+             - Include edge cases, not just happy paths
+             - Note which file the test belongs in
+
+          Write the actual test code now. Complete functions only." \
+            --output /tmp/test_suggestions.json \
+            --temperature 0.05
+
+          python -c "import json; d=json.load(open('/tmp/test_suggestions.json')); print(d['content'])" > /tmp/test_suggestions.md
+          echo "Test suggestions generated ($(wc -c < /tmp/test_suggestions.md) chars)"
+
+      - name: Build issue body
+        run: |
+          WEEK=$(date +"%Y-W%V")
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          COVERAGE_SUMMARY=$(cat /tmp/coverage_summary.txt)
+          TEST_SUGGESTIONS=$(cat /tmp/test_suggestions.md)
+          TEST_OUTPUT=$(tail -20 /tmp/test_output.txt)
+
+          cat > /tmp/test_issue.md << ISSUE_EOF
+          ## 🧪 HLF Test Health Report — ${WEEK}
+
+          **Coverage analysis**: deterministic (pytest-cov)
+          **Test gap analysis + generation**: \`devstral:24b\` (Mistral × AllHands AI, SWE-Bench 46.8%)
+          **Workflow**: [Weekly Test Health]($RUN_URL)
+
+          ---
+
+          ## Test Run Results
+
+          \`\`\`
+          ${TEST_OUTPUT}
+          \`\`\`
+
+          ---
+
+          ## Coverage Summary
+
+          \`\`\`
+          ${COVERAGE_SUMMARY}
+          \`\`\`
+
+          ---
+
+          ## AI-Generated Test Starters (devstral:24b)
+
+          > These are complete test functions ready to be pasted into the appropriate test file.
+          > Review, adjust for local fixtures, then commit.
+
+          ${TEST_SUGGESTIONS}
+
+          ---
+          _Auto-generated weekly. Close when the generated tests are committed and coverage improves._
+          ISSUE_EOF
+
+      - name: Create GitHub issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          WEEK=$(date +"%Y-W%V")
+          python .github/scripts/create_github_issue.py \
+            --title "🧪 [Test Health] HLF coverage + AI-generated tests — ${WEEK}" \
+            --body "@/tmp/test_issue.md" \
+            --labels "testing,automated,coverage"

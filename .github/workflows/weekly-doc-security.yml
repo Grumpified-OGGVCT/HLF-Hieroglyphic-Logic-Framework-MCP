@@ -1,0 +1,275 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  HLF — Weekly Documentation Accuracy + Security Pattern Review              ║
+# ║                                                                              ║
+# ║  Two parallel jobs using GitHub Actions matrix strategy (mini-swarm):       ║
+# ║                                                                              ║
+# ║  Job 1 — doc-accuracy: qwen3:32b (Alibaba Qwen3)                           ║
+# ║    Best-in-class: Structured reasoning + precise claim verification         ║
+# ║    Why: qwen3 excels at cross-referencing structured data (tables, counts,  ║
+# ║          numbers) — exactly what's needed to verify README opcode counts,   ║
+# ║          tool lists, and stdlib tables against actual code.                 ║
+# ║                                                                              ║
+# ║  Job 2 — security-patterns: deepseek-r1:14b (DeepSeek)                    ║
+# ║    Best-in-class: Chain-of-thought adversarial reasoning                   ║
+# ║    Why: Security review is thinking-intensive. Reasoning through "could     ║
+# ║          an adversary bypass ALIGN rule X by doing Y?" requires explicit    ║
+# ║          chain-of-thought, not just pattern matching.                       ║
+# ║                                                                              ║
+# ║  Triggers: Weekly Wednesday 02:00 UTC                                       ║
+# ║  Output: Separate GitHub Issues per job                                     ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+name: "Weekly — Doc Accuracy + Security Patterns (qwen3.5:cloud ∥ deepseek-r1:14b)"
+
+on:
+  schedule:
+    - cron: "0 2 * * 3"   # Every Wednesday at 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # ── Job 1: Documentation accuracy ─────────────────────────────────────────────
+  doc-accuracy:
+    name: "Doc accuracy check (qwen3.5:cloud)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e ".[dev]" --quiet
+
+      - name: Run machine doc drift check
+        run: |
+          python .github/scripts/spec_drift_check.py > /tmp/doc_drift.json 2>&1 || true
+          cat /tmp/doc_drift.json
+
+      - name: Build doc comparison snapshot
+        run: |
+          # Extract README sections for LLM
+          python << 'PYEOF'
+          import re
+          from pathlib import Path
+          root = Path(".")
+          readme = (root / "README.md").read_text(encoding="utf-8") if (root / "README.md").exists() else ""
+          # Pull opcode table section
+          opcode_m = re.search(r"(?s)(### Opcode Table.*?)(?=\n###|\n##|\Z)", readme)
+          tools_m  = re.search(r"(?s)(## .*?MCP Tools.*?)(?=\n##|\Z)", readme)
+          stdlib_m = re.search(r"(?s)(## .*?Stdlib.*?)(?=\n##|\Z)", readme)
+          # Count actual implementation
+          import os
+          server_text = (root / "hlf_mcp" / "server.py").read_text(encoding="utf-8") if (root / "hlf_mcp" / "server.py").exists() else ""
+          tool_count = len(re.findall(r"@mcp\.tool\b", server_text))
+          stdlib_dir = root / "hlf_mcp" / "hlf" / "stdlib"
+          stdlib_mods = [f.stem for f in stdlib_dir.iterdir() if f.suffix == ".py" and not f.stem.startswith("_")] if stdlib_dir.is_dir() else []
+          bytecode_text = (root / "hlf_mcp" / "hlf" / "bytecode.py").read_text(encoding="utf-8") if (root / "hlf_mcp" / "hlf" / "bytecode.py").exists() else ""
+          enum_vals = re.findall(r"^\s{4}([A-Z_]+)\s*=\s*(0x[0-9a-fA-F]+)", bytecode_text, re.MULTILINE)
+          print(f"ACTUAL_TOOLS={tool_count}")
+          print(f"ACTUAL_STDLIB={len(stdlib_mods)}: {', '.join(sorted(stdlib_mods))}")
+          print(f"ACTUAL_OPCODES={len(enum_vals)}")
+          # Write doc snapshot
+          with open("/tmp/doc_snapshot.txt", "w") as f:
+              f.write(f"ACTUAL COUNTS:\n")
+              f.write(f"  MCP Tools: {tool_count}\n")
+              f.write(f"  Stdlib modules: {len(stdlib_mods)} — {', '.join(sorted(stdlib_mods))}\n")
+              f.write(f"  Opcodes: {len(enum_vals)}\n\n")
+              f.write("README OPCODE SECTION (excerpt):\n")
+              f.write(opcode_m.group(1)[:3000] if opcode_m else "(not found)\n")
+              f.write("\n\nREADME MCP TOOLS SECTION (excerpt):\n")
+              f.write(tools_m.group(1)[:3000] if tools_m else "(not found)\n")
+              f.write("\n\nREADME STDLIB SECTION (excerpt):\n")
+              f.write(stdlib_m.group(1)[:2000] if stdlib_m else "(not found)\n")
+          PYEOF
+          cat /tmp/doc_snapshot.txt
+
+      - name: "qwen3.5:cloud — Documentation accuracy review"
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          DOC_SNAPSHOT=$(cat /tmp/doc_snapshot.txt)
+          DRIFT_REPORT=$(cat /tmp/doc_drift.json)
+
+          python .github/scripts/ollama_client.py \
+            --model "qwen3.5:cloud" \
+            --fallback-model "nemotron-3-super" \
+            --system "You are a precise technical documentation auditor. You cross-reference code reality against documentation claims with high accuracy. You are non-reductive — you report every discrepancy, not just the obvious ones. You never generalize or skip details." \
+            --prompt "Audit the HLF repository documentation for accuracy. Compare the README's claimed counts and tables against the actual code implementation.
+
+          ACTUAL COUNTS FROM CODE:
+          ${DOC_SNAPSHOT}
+
+          SPEC DRIFT REPORT:
+          ${DRIFT_REPORT}
+
+          For each discrepancy found:
+          1. Quote the exact README claim (with section title)
+          2. State the actual value from code
+          3. Rate the impact: MISLEADING / MINOR / COSMETIC
+          4. Provide the exact README edit needed to make it accurate
+
+          Also check:
+          - Are all 22 MCP tools listed in the tools reference table?
+          - Does the opcode table in the README list all 37 opcodes (or the actual count)?
+          - Are all 8 stdlib modules listed?
+          - Are roadmap phase items accurately marked as done/pending?
+
+          Be specific. Quote section names. Give line-for-line corrections." \
+            --output /tmp/doc_review.json \
+            --temperature 0.05
+
+          python -c "import json; d=json.load(open('/tmp/doc_review.json')); print(d['content'])" > /tmp/doc_review.md
+
+      - name: Create doc accuracy issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          WEEK=$(date +"%Y-W%V")
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          DOC_REVIEW=$(cat /tmp/doc_review.md)
+
+          cat > /tmp/doc_issue.md << ISSUE_EOF
+          ## 📖 HLF Documentation Accuracy Review — ${WEEK}
+
+          **Reviewed by**: \`qwen3.5:cloud\` (Alibaba, 397B cloud tier, 256K ctx, Text+Image)
+          **Workflow**: [Weekly Doc + Security Review]($RUN_URL)
+
+          ---
+
+          ## Findings
+
+          ${DOC_REVIEW}
+
+          ---
+          _Auto-generated weekly. Close when all documentation corrections are merged._
+          ISSUE_EOF
+
+          python .github/scripts/create_github_issue.py \
+            --title "📖 [Doc Audit] HLF documentation accuracy — ${WEEK}" \
+            --body "@/tmp/doc_issue.md" \
+            --labels "documentation,automated"
+
+  # ── Job 2: Security pattern review ────────────────────────────────────────────
+  security-patterns:
+    name: "Security pattern review (deepseek-r1:14b)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Gather security-relevant files
+        run: |
+          cat governance/align_rules.json > /tmp/security_context.txt 2>/dev/null || echo "{}" > /tmp/security_context.txt
+          echo -e "\n\n=== COMPILER PASS 0 + PASS 4 ===" >> /tmp/security_context.txt
+          python << 'PYEOF' >> /tmp/security_context.txt
+          from pathlib import Path
+          import re
+          comp = Path("hlf_mcp/hlf/compiler.py")
+          if comp.exists():
+              text = comp.read_text(encoding="utf-8")
+              # Extract pass 0 and pass 4
+              pass0 = re.search(r"(?s)(# Pass 0.*?)(?=# Pass [12]|\Z)", text)
+              pass4 = re.search(r"(?s)(# Pass 4.*?)(?=# Pass [5]|\ndef |\Z)", text)
+              if pass0: print(f"PASS 0 (Homoglyph):\n{pass0.group(1)[:3000]}")
+              if pass4: print(f"\nPASS 4 (ALIGN Ledger):\n{pass4.group(1)[:3000]}")
+          PYEOF
+          echo -e "\n\n=== RUNTIME HOST DISPATCH (HTTP + FILE) ===" >> /tmp/security_context.txt
+          python << 'PYEOF' >> /tmp/security_context.txt
+          from pathlib import Path
+          import re
+          rt = Path("hlf_mcp/hlf/runtime.py")
+          if rt.exists():
+              text = rt.read_text(encoding="utf-8")
+              http_m = re.search(r"(?s)(def.*?http.*?\n(?:.*?\n){0,30})", text, re.IGNORECASE)
+              file_m = re.search(r"(?s)(def.*?file.*?\n(?:.*?\n){0,30})", text, re.IGNORECASE)
+              if http_m: print(f"HTTP DISPATCH:\n{http_m.group(1)}")
+              if file_m: print(f"\nFILE DISPATCH:\n{file_m.group(1)}")
+          PYEOF
+          head -c 15000 /tmp/security_context.txt > /tmp/security_context_trunc.txt
+          echo "Security context: $(wc -c < /tmp/security_context_trunc.txt) chars"
+
+      - name: "deepseek-r1:14b — Adversarial security review"
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          SEC_CONTEXT=$(cat /tmp/security_context_trunc.txt)
+
+          python .github/scripts/ollama_client.py \
+            --model "deepseek-r1:14b" \
+            --fallback-model "nemotron-3-super" \
+            --system "You are an adversarial security researcher (red-hat, authorized). You think like an attacker who has read the full HLF source code. You reason step by step about every bypass, injection, and evasion path. Your findings are non-reductive and specific — never vague." \
+            --prompt "Perform an adversarial security review of the HLF ALIGN Ledger rules and the runtime host function dispatcher.
+
+          Context:
+          ${SEC_CONTEXT}
+
+          For each issue found:
+          1. NAME: Short, descriptive vulnerability name
+          2. ATTACK_PATH: Step-by-step how an adversary exploits it
+          3. BYPASS: How the current ALIGN rule fails to catch it (or is absent)
+          4. IMPACT: What the adversary achieves (PII exfil / SSRF / RCE / etc.)
+          5. FIX: The exact new ALIGN rule pattern OR runtime guard code needed
+
+          Cover these attack classes:
+          - ALIGN rule evasion via Unicode normalization edge cases
+          - SSRF via redirects (rules check the URL string, not the destination)
+          - Path traversal via symlinks or alternate path encodings
+          - Homoglyph injection that Pass 0 might miss
+          - Gas exhaustion via nested loops or recursive host calls
+          - Memory exfiltration via repeated MEMORY_RECALL operations
+          - Tool approval token theft via registry serialization
+
+          Think adversarially. Show your reasoning chain. Report everything." \
+            --output /tmp/security_review.json \
+            --think \
+            --temperature 0.1
+
+          python -c "import json; d=json.load(open('/tmp/security_review.json')); print(d['content'])" > /tmp/security_review.md
+
+      - name: Create security issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          WEEK=$(date +"%Y-W%V")
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SEC_REVIEW=$(cat /tmp/security_review.md)
+
+          cat > /tmp/security_issue.md << ISSUE_EOF
+          ## 🔐 HLF Security Pattern Review — ${WEEK}
+
+          **Reviewed by**: \`deepseek-r1:14b\` (adversarial reasoning, thinking traces enabled)
+          **Workflow**: [Weekly Doc + Security Review]($RUN_URL)
+
+          > _Red-hat authorized review. All findings are for defensive improvement only._
+
+          ---
+
+          ## Adversarial Findings
+
+          ${SEC_REVIEW}
+
+          ---
+          _Auto-generated weekly. Triage each finding. Close when all critical/high items are resolved._
+          ISSUE_EOF
+
+          python .github/scripts/create_github_issue.py \
+            --title "🔐 [Security Review] HLF adversarial pattern analysis — ${WEEK}" \
+            --body "@/tmp/security_issue.md" \
+            --labels "security,adversarial,automated,priority-high"

@@ -73,7 +73,7 @@ Available tools:
 
 Resources:
   hlf://grammar           — LALR(1) Lark grammar specification
-  hlf://opcodes           — Bytecode opcode table (34 opcodes)
+  hlf://opcodes           — Bytecode opcode table (37 opcodes)
   hlf://host_functions    — Available host function registry
   hlf://examples/{name}   — Example HLF programs
 
@@ -380,7 +380,7 @@ def get_grammar() -> str:
 
 @mcp.resource("hlf://opcodes")
 def get_opcodes() -> str:
-    """HLF bytecode opcode table (34 opcodes)."""
+    """HLF bytecode opcode table (37 opcodes)."""
     return json.dumps(OPCODES, indent=2)
 
 

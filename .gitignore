@@ -80,6 +80,9 @@ hlf_source/data/redis/
 !hlf_source/data/quarantine_dumps/.gitkeep
 !hlf_source/data/align_staging/.gitkeep
 
+# HLF MCP runtime hot store (exclude from VCS)
+data/hlf_hot_store.db
+
 # ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
 *.log.*

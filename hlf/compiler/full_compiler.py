@@ -2,11 +2,12 @@
 HLF Complete Compiler
 AST -> Bytecode with optimizations
 """
+from __future__ import annotations
 
 from typing import List, Dict, Any, Optional, Set
 from dataclasses import dataclass, field
 
-from ..ast_nodes import *
+from .ast_nodes import *
 from ..vm.bytecode import BytecodeModule, Function, OpCode
 from ..vm.value import Value
 
@@ -49,6 +50,16 @@ class CompileContext:
         self.label_counter += 1
         return self.label_counter
 
+def _resolve_name(obj) -> str:
+    """Extract string name from an Identifier, string, or dict."""
+    if isinstance(obj, str):
+        return obj
+    if hasattr(obj, 'name'):
+        return _resolve_name(obj.name)
+    if isinstance(obj, dict):
+        return obj.get('name', str(obj))
+    return str(obj)
+
 class Compiler:
     """HLF to Bytecode compiler"""
     
@@ -57,17 +68,19 @@ class Compiler:
         self.ctx: Optional[CompileContext] = None
         self.optimization_level = 1
     
-    def compile(self, ast: Program, optimization_level: int = 1) -> BytecodeModule:
-        """Compile AST to bytecode module"""
+    def compile(self, ast, optimization_level: int = 1) -> BytecodeModule:
+        """Compile AST (Module or Program) to bytecode module"""
         self.optimization_level = optimization_level
-        self.module = BytecodeModule(ast.surface)
+        name = getattr(ast, 'surface', None) or getattr(ast, 'name', 'module')
+        self.module = BytecodeModule(name)
         
         # Compile all declarations
         for decl in ast.declarations:
             self._compile_declaration(decl)
         
-        # Compile main body
-        if ast.body:
+        # Compile main body (root-level statements if present)
+        body = getattr(ast, 'body', None)
+        if body:
             main = Function("main", 0)
             main.local_count = 0
             main.max_stack = 4
@@ -76,7 +89,7 @@ class Compiler:
             ctx = CompileContext(self.module, main)
             self.ctx = ctx
             
-            for stmt in ast.body:
+            for stmt in body:
                 self._compile_statement(stmt)
             
             main.code.append(OpCode.RETURN_UNIT)
@@ -107,49 +120,54 @@ class Compiler:
     
     def _compile_function_decl(self, decl: FunctionDecl) -> int:
         """Compile function declaration, return function index"""
-        func = Function(decl.name, len(decl.params))
+        func = Function(_resolve_name(decl.name), len(decl.params))
         func.local_count = len(decl.params)  # Params become locals
         func.max_stack = 4
         func.gas_limit = 10000
         
         # Convert effects to indices
-        func.effects = [self.module.get_atom_index(eff.name) for eff in decl.effects]
+        func.effects = [self.module.get_atom_index(_resolve_name(eff)) for eff in getattr(decl, 'effects', [])]
         
         ctx = CompileContext(self.module, func)
         self.ctx = ctx
         
         # Add parameters as locals
         for param in decl.params:
-            ctx.add_local(param["name"])
+            pname = _resolve_name(param) if isinstance(param, str) else _resolve_name(getattr(param, 'name', param))
+            ctx.add_local(pname)
         
         # Compile body
         self._compile_block(decl.body)
         
-        # Ensure return
-        if not func.code or func.code[-1] != OpCode.RETURN:
+        # Implicit return: if last instruction is POP (from an ExprStmt),
+        # replace it with RETURN so the expression value is returned.
+        if func.code and self._opcode_of(func.code[-1]) == OpCode.POP:
+            func.code[-1] = OpCode.RETURN
+        elif not func.code or self._opcode_of(func.code[-1]) != OpCode.RETURN:
             func.code.append(OpCode.RETURN_UNIT)
         
-        # Store name in constant pool
-        func.name_idx = self.module.add_string(decl.name)
+        # Update local_count to include locals created during body compilation
+        func.local_count = len(ctx.locals)
+        func.name_idx = self.module.add_string(_resolve_name(decl.name))
         
         return self.module.add_function(func)
     
     def _compile_spec_decl(self, decl: SpecDecl) -> None:
         """Compile spec declaration"""
-        # Specs are metadata, compile to empty function
-        func = Function(f"spec:{decl.name}", 0)
+        func = Function(f"spec:{_resolve_name(decl.name)}", 0)
         func.code = [OpCode.RETURN_UNIT]
         self.module.add_function(func)
     
     def _compile_effect_decl(self, decl: EffectDecl) -> None:
         """Compile effect declaration"""
-        func = Function(f"effect:{decl.name}", len(decl.params))
+        params = getattr(decl, 'params', getattr(decl, 'operations', []))
+        func = Function(f"effect:{_resolve_name(decl.name)}", len(params))
         func.code = [OpCode.RETURN_UNIT]
         self.module.add_function(func)
     
     def _compile_agent_decl(self, decl: AgentDecl) -> None:
         """Compile agent declaration"""
-        func = Function(f"agent:{decl.name}", 0)
+        func = Function(f"agent:{_resolve_name(decl.name)}", 0)
         
         ctx = CompileContext(self.module, func)
         self.ctx = ctx
@@ -180,7 +198,7 @@ class Compiler:
     
     def _compile_proc_decl(self, decl: ProcDecl) -> int:
         """Compile procedure"""
-        func = Function(decl.name, len(decl.params))
+        func = Function(_resolve_name(decl.name), len(decl.params))
         func.local_count = len(decl.params)
         func.max_stack = 4
         func.gas_limit = 10000
@@ -189,7 +207,7 @@ class Compiler:
         self.ctx = ctx
         
         for param in decl.params:
-            ctx.add_local(param.name)
+            ctx.add_local(_resolve_name(param))
         
         self._compile_block(decl.body)
         
@@ -225,7 +243,7 @@ class Compiler:
     def _compile_let(self, stmt: LetStmt) -> None:
         """Compile let statement"""
         self._compile_expression(stmt.value)
-        idx = self.ctx.add_local(stmt.name)
+        idx = self.ctx.add_local(_resolve_name(stmt.name))
         self._emit(OpCode.STORE_LOCAL, idx)
     
     def _compile_if(self, stmt: IfStmt) -> None:
@@ -238,7 +256,8 @@ class Compiler:
         cond_jump_idx = len(self.ctx.function.code) - 1
         
         # Then block
-        self._compile_block(stmt.then_body)
+        then_body = getattr(stmt, 'then_body', None) or getattr(stmt, 'then_block', None)
+        self._compile_block(then_body)
         
         # Jump over else
         end_label = self.ctx.new_label()
@@ -249,8 +268,9 @@ class Compiler:
         else_target = len(self.ctx.function.code)
         self._patch_jump(cond_jump_idx, else_target - cond_jump_idx - 1)
         
-        if stmt.else_body:
-            self._compile_block(stmt.else_body)
+        else_body = getattr(stmt, 'else_body', None) or getattr(stmt, 'else_block', None)
+        if else_body:
+            self._compile_block(else_body)
         
         # End
         end_target = len(self.ctx.function.code)
@@ -434,8 +454,9 @@ class Compiler:
             self._emit(OpCode.POP)
             self._emit(OpCode.LOAD_TRUE)
     
-    def _compile_block(self, statements: List[Statement]) -> None:
-        """Compile block of statements"""
+    def _compile_block(self, block) -> None:
+        """Compile block of statements (accepts Block object or list)"""
+        statements = getattr(block, 'statements', block) if not isinstance(block, list) else block
         for stmt in statements:
             self._compile_statement(stmt)
     
@@ -595,13 +616,16 @@ class Compiler:
     
     def _compile_access(self, expr: AccessExpr) -> None:
         """Compile field access"""
-        self._compile_expression(expr.object)
-        idx = self.module.get_field_index(expr.field)
+        obj = getattr(expr, 'object', None) or getattr(expr, 'obj', expr)
+        self._compile_expression(obj)
+        field_name = _resolve_name(getattr(expr, 'field', ''))
+        idx = self.module.get_field_index(field_name)
         self._emit(OpCode.GET_FIELD, idx)
     
     def _compile_index(self, expr: IndexExpr) -> None:
         """Compile index access"""
-        self._compile_expression(expr.object)
+        obj = getattr(expr, 'object', None) or getattr(expr, 'obj', expr)
+        self._compile_expression(obj)
         self._compile_expression(expr.index)
         self._emit(OpCode.GET_INDEX)
     
@@ -612,14 +636,16 @@ class Compiler:
         self._emit(OpCode.JUMP_IF_FALSE, 0)
         else_jump = len(self.ctx.function.code) - 1
         
-        self._compile_expression(expr.then_expr)
+        then_expr = getattr(expr, 'then_expr', None) or getattr(expr, 'then_branch', None)
+        self._compile_expression(then_expr)
         self._emit(OpCode.JUMP, 0)
         end_jump = len(self.ctx.function.code) - 1
         
         else_target = len(self.ctx.function.code)
         self._patch_jump(else_jump, else_target - else_jump - 1)
         
-        self._compile_expression(expr.else_expr)
+        else_expr = getattr(expr, 'else_expr', None) or getattr(expr, 'else_branch', None)
+        self._compile_expression(else_expr)
         
         end_target = len(self.ctx.function.code)
         self._patch_jump(end_jump, end_target - end_jump - 1)
@@ -636,7 +662,7 @@ class Compiler:
         self.ctx = inner_ctx
         
         for param in expr.params:
-            inner_ctx.add_local(param)
+            inner_ctx.add_local(_resolve_name(param))
         
         self._compile_expression(expr.body)
         inner.code.append(OpCode.RETURN)
@@ -681,7 +707,12 @@ class Compiler:
             self.ctx.function.code.append((opcode, *operands))
         else:
             self.ctx.function.code.append(opcode)
-    
+
+    @staticmethod
+    def _opcode_of(instr) -> int:
+        """Extract opcode from an instruction (plain int or tuple)."""
+        return instr[0] if isinstance(instr, tuple) else instr
+
     def _patch_jump(self, jump_idx: int, offset: int) -> None:
         """Patch jump instruction with target offset"""
         instr = self.ctx.function.code[jump_idx]

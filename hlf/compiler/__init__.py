@@ -3,21 +3,22 @@ HLF Compiler Package
 Converts HLF source code to bytecode
 """
 
-from .lexer import Lexer, Token, TokenType
-from .parser import Parser, ParseError
 from .ast_nodes import *
-from .compiler import Compiler, CompileError
-from .codegen import BytecodeGenerator
+from .parser import Parser, ParseError
+from .full_compiler import Compiler as FullCompiler, Compiler, CompileError
+
+# Re-export the root lexer so parser.parse() convenience function works
+from ..lexer import Lexer, Token, TokenType, tokenize
 
 __all__ = [
     'Lexer',
     'Token',
     'TokenType',
+    'tokenize',
     'Parser',
     'ParseError',
-    'Compiler',
+    'FullCompiler',
     'CompileError',
-    'BytecodeGenerator',
     # AST nodes
     'Module',
     'FunctionDecl',

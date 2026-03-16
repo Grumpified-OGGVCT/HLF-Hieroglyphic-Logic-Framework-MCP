@@ -71,6 +71,23 @@ class Value:
     def function(cls, func) -> "Value":
         return cls(ValueType.FUNCTION, func)
     
+    @classmethod
+    def unit(cls) -> "Value":
+        """Unit value (equivalent to nil/void)"""
+        return cls(ValueType.NIL, None)
+    
+    def head(self) -> "Value":
+        """First element of a list"""
+        if self.is_list() and len(self.data) > 0:
+            return self.data[0]
+        raise TypeError(f"Cannot take head of {self.type}")
+    
+    def tail(self) -> "Value":
+        """All elements except the first"""
+        if self.is_list() and len(self.data) > 0:
+            return Value.list_(self.data[1:])
+        raise TypeError(f"Cannot take tail of {self.type}")
+    
     # Type checking
     def is_nil(self) -> bool:
         return self.type == ValueType.NIL

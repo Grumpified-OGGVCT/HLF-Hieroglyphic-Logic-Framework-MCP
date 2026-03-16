@@ -113,3 +113,9 @@ site/
 
 # ── HLF OCI cache ─────────────────────────────────────────────────────────────
 .hlf/oci_cache/
+
+# ── Local dev toolkit (AI-readable, project-agnostic, never committed) ────────
+_toolkit.py
+_toolkit_report.md
+tk-*.bat
+__redhat_probe.py

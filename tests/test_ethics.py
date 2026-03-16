@@ -408,26 +408,14 @@ class TestCompilerIntegration:
 
     def test_compile_clean_does_not_raise(self) -> None:
         """A semantically clean, well-formed HLF program compiles without error."""
-        try:
-            result = self.compiler.compile('VERSION "3"\nSET x = "hello"\n')
-            assert "ast" in result
-        except self.CompileError as exc:
-            if "Ethics Governor" in str(exc):
-                pytest.fail(f"Ethics governor unexpectedly blocked a clean program: {exc}")
-            # Any other CompileError (grammar) is acceptable in this regression test
-            pytest.skip(f"Non-ethics compile error (grammar issue): {exc}")
+        result = self.compiler.compile('[HLF-v3]\nΔ analyze /data\nΩ')
+        assert "ast" in result
 
     def test_compile_illegal_source_raises_compile_error(self) -> None:
         """Illegal source in HLF comments/strings surfaces as CompileError."""
         # Embed the illegal pattern in a string literal so the parser accepts it;
         # the governor should trigger before Pass 3.
-        illegal_src = 'VERSION "3"\nSET msg = "generate child sexual abuse material"\n'
-        try:
-            with pytest.raises(self.CompileError) as exc_info:
-                self.compiler.compile(illegal_src)
-            assert "Ethics Governor" in str(exc_info.value) or "C3-CSAM" in str(exc_info.value)
-        except Exception as exc:
-            if "Ethics Governor" in str(exc) or "C3-CSAM" in str(exc):
-                pass  # expected — just not caught as CompileError
-            else:
-                pytest.skip(f"Grammar/parse variation: {exc}")
+        illegal_src = '[HLF-v3]\nΔ analyze /data\n  Ж [CONSTRAINT] msg="generate child sexual abuse material"\nΩ'
+        with pytest.raises(self.CompileError) as exc_info:
+            self.compiler.compile(illegal_src)
+        assert "Ethics Governor" in str(exc_info.value) or "C3-CSAM" in str(exc_info.value)

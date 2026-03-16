@@ -31,7 +31,11 @@ COPY hlf_mcp/ ./hlf_mcp/
 COPY governance/ ./governance/
 COPY fixtures/ ./fixtures/
 
-RUN pip install --no-cache-dir -e ".[${HLF_INSTALL_EXTRAS}]"
+RUN if [ -n "$HLF_INSTALL_EXTRAS" ]; then \
+            pip install --no-cache-dir -e ".[${HLF_INSTALL_EXTRAS}]"; \
+        else \
+            pip install --no-cache-dir -e .; \
+        fi
 
 ENV HLF_TRANSPORT=sse
 ENV HLF_HOST=0.0.0.0

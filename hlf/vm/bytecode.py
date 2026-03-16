@@ -230,15 +230,15 @@ class BytecodeModule:
     def serialize(self) -> bytes:
         """Serialize module to .hlb binary format per README spec.
         
-        Layout:
-          0..31   SHA-256 hash of everything after it
-          32..35  Magic: HLB\\x00
-          36..37  Format version (LE uint16)
-          38..41  Code section length (LE uint32)
-          42..45  CRC32 of code section (LE uint32)
-          46..47  Flags (LE uint16)
-          48..n   Constant pool (typed entries)
-          n+1..   Code section (3-byte fixed instructions per function)
+                Layout:
+                    0..31   SHA-256 hash of everything after it
+                    32..35  Magic: HLB\\x00
+                    36..37  Format version (LE uint16)
+                    38..41  Code section length (LE uint32)
+                    42..45  CRC32 of code section (LE uint32)
+                    46..47  Flags (LE uint16)
+                    48..n   Constant pool (typed entries)
+                    n+1..   Code section (variable-width instructions per function)
         """
         body = io.BytesIO()
         
@@ -290,8 +290,7 @@ class BytecodeModule:
             for effect in func.effects:
                 body.write(struct.pack('<H', effect))
             
-            # 3-byte fixed instructions
-            code_bytes = self._serialize_code_fixed(func.code)
+            code_bytes = self._serialize_code(func.code)
             body.write(struct.pack('<I', len(code_bytes)))
             body.write(code_bytes)
         
@@ -389,7 +388,7 @@ class BytecodeModule:
             
             code_len = struct.unpack('<I', r.read(4))[0]
             code_raw = r.read(code_len)
-            func.code = cls._deserialize_code_fixed(code_raw)
+            func.code = cls._deserialize_code(code_raw)
             mod.functions.append(func)
         
         # Verify CRC32 of code section
@@ -399,20 +398,6 @@ class BytecodeModule:
             raise ValueError(f"CRC32 mismatch: expected {crc_expected:#x}, got {crc_actual:#x}")
         
         return mod
-    
-    @staticmethod
-    def _serialize_code_fixed(code: List[Union[int, tuple]]) -> bytes:
-        """Serialize instructions as 3-byte fixed-width: [opcode][operand_lo][operand_hi]"""
-        output = io.BytesIO()
-        for instr in code:
-            if isinstance(instr, int):
-                output.write(bytes([instr, 0, 0]))
-            elif isinstance(instr, tuple):
-                opcode = instr[0]
-                operand = instr[1] if len(instr) > 1 else 0
-                output.write(bytes([opcode]))
-                output.write(struct.pack('<H', operand & 0xFFFF))
-        return output.getvalue()
     
     # Opcodes that take no operand (bare int in internal repr)
     _NO_OPERAND_OPCODES = frozenset({
@@ -434,19 +419,64 @@ class BytecodeModule:
     })
 
     @staticmethod
-    def _deserialize_code_fixed(data: bytes) -> List[Union[int, tuple]]:
-        """Deserialize 3-byte fixed instructions back to internal representation."""
+    def _deserialize_code(data: bytes) -> List[Union[int, tuple]]:
+        """Deserialize variable-width instructions back to internal representation."""
         no_op = BytecodeModule._NO_OPERAND_OPCODES
+        u16_ops = frozenset({
+            OpCode.LOAD_CONST, OpCode.LOAD_ATOM, OpCode.GET_FIELD_BY_NAME,
+            OpCode.CALL_TOOL, OpCode.OPENCLAW_TOOL, OpCode.SPEC_DEFINE,
+        })
+        u8_ops = frozenset({
+            OpCode.LOAD_CONST_FAST, OpCode.LOAD_LOCAL, OpCode.STORE_LOCAL,
+            OpCode.LOAD_ARG, OpCode.LOAD_CLOSURE, OpCode.STORE_CLOSURE,
+            OpCode.GET_FIELD, OpCode.SET_FIELD, OpCode.DUP_N, OpCode.PICK,
+            OpCode.DROP_N, OpCode.MAKE_LIST, OpCode.MAKE_TUPLE,
+            OpCode.MAKE_RECORD, OpCode.MAKE_CLOSURE, OpCode.CALL_LOCAL,
+            OpCode.TAIL_CALL,
+        })
+        jump_ops = frozenset({
+            OpCode.JUMP, OpCode.JUMP_IF_TRUE, OpCode.JUMP_IF_FALSE,
+            OpCode.JUMP_FORWARD, OpCode.PUSH_HANDLER, OpCode.MATCH_JUMP,
+            OpCode.ASSERT,
+        })
+        single_byte_ops = frozenset({
+            OpCode.LOAD_INT_SMALL, OpCode.CHECK_TIER, OpCode.RAISE,
+            OpCode.TRACE, OpCode.HALT,
+        })
+        multi_operand_ops = frozenset({OpCode.CALL, OpCode.CALL_HOST})
+
         code = []
         i = 0
-        while i + 2 < len(data):
+        while i < len(data):
             opcode = data[i]
-            operand = struct.unpack('<H', data[i+1:i+3])[0]
+            i += 1
+
             if opcode in no_op:
                 code.append(opcode)
+            elif opcode in u16_ops:
+                code.append((opcode, struct.unpack('<H', data[i:i+2])[0]))
+                i += 2
+            elif opcode in u8_ops:
+                code.append((opcode, data[i]))
+                i += 1
+            elif opcode in jump_ops:
+                fmt = '<H' if opcode == OpCode.JUMP_FORWARD else '<h'
+                code.append((opcode, struct.unpack(fmt, data[i:i+2])[0]))
+                i += 2
+            elif opcode in single_byte_ops:
+                code.append((opcode, data[i]))
+                i += 1
+            elif opcode in multi_operand_ops:
+                operand = struct.unpack('<H', data[i:i+2])[0]
+                argc = data[i+2]
+                code.append((opcode, operand, argc))
+                i += 3
+            elif opcode == OpCode.GAS_CHECK:
+                code.append((opcode, struct.unpack('<I', data[i:i+4])[0]))
+                i += 4
             else:
                 code.append((opcode, operand))
-            i += 3
+
         return code
     
     def _serialize_code(self, code: List[Union[int, tuple]]) -> bytes:
@@ -461,17 +491,34 @@ class BytecodeModule:
                 output.write(bytes([opcode]))
                 
                 # Serialize operands based on opcode
-                if opcode in (OpCode.LOAD_CONST, OpCode.LOAD_ATOM, OpCode.GET_FIELD_BY_NAME,
-                             OpCode.CALL, OpCode.CALL_TOOL, OpCode.CALL_HOST,
-                             OpCode.OPENCLAW_TOOL, OpCode.SPEC_DEFINE):
+                if opcode in (
+                    OpCode.LOAD_CONST,
+                    OpCode.LOAD_ATOM,
+                    OpCode.GET_FIELD_BY_NAME,
+                    OpCode.CALL_TOOL,
+                    OpCode.OPENCLAW_TOOL,
+                    OpCode.SPEC_DEFINE,
+                ):
                     # u16 operand
                     output.write(struct.pack('<H', instr[1]))
-                elif opcode in (OpCode.LOAD_CONST_FAST, OpCode.LOAD_LOCAL, OpCode.STORE_LOCAL,
-                               OpCode.LOAD_ARG, OpCode.LOAD_CLOSURE, OpCode.STORE_CLOSURE,
-                               OpCode.GET_FIELD, OpCode.SET_FIELD, OpCode.DUP_N, OpCode.PICK,
-                               OpCode.DROP_N, OpCode.MAKE_LIST, OpCode.MAKE_TUPLE,
-                               OpCode.MAKE_RECORD, OpCode.MAKE_CLOSURE, OpCode.CALL_LOCAL,
-                               OpCode.TAIL_CALL):
+                elif opcode in (
+                    OpCode.LOAD_CONST_FAST,
+                    OpCode.LOAD_LOCAL,
+                    OpCode.STORE_LOCAL,
+                    OpCode.LOAD_ARG,
+                    OpCode.LOAD_CLOSURE,
+                    OpCode.STORE_CLOSURE,
+                    OpCode.GET_FIELD,
+                    OpCode.SET_FIELD,
+                    OpCode.DUP_N,
+                    OpCode.PICK,
+                    OpCode.DROP_N,
+                    OpCode.MAKE_LIST,
+                    OpCode.MAKE_TUPLE,
+                    OpCode.MAKE_RECORD,
+                    OpCode.MAKE_CLOSURE,
+                    OpCode.CALL_LOCAL,
+                ):
                     # u8 operand
                     output.write(bytes([instr[1]]))
                 elif opcode in (OpCode.JUMP, OpCode.JUMP_IF_TRUE, OpCode.JUMP_IF_FALSE,

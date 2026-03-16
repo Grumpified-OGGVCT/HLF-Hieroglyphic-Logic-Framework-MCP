@@ -65,6 +65,8 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Root-level smoke scripts like smoke_test_e2e.py and test_all_tools.py are
+# intentionally manual and are not part of default pytest collection.
 testpaths = [
     "tests",
     "test_mcp.py",

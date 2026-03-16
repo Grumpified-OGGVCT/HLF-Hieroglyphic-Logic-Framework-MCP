@@ -193,7 +193,7 @@ flowchart TD
     end
 
     subgraph Server["⚙️ HLF MCP Server  (hlf_mcp/server.py)"]
-        S1[FastMCP  22 tools · 7 resources]
+        S1[FastMCP  26 tools · 9 resources]
     end
 
     subgraph Compiler["📐 Compiler Pipeline"]
@@ -758,7 +758,7 @@ graph LR
         T1["stdio\ntransport"]
         T2["SSE\n/sse + /messages"]
         T3["streamable-HTTP\n/mcp"]
-        Core["22 tools\n7 resources\nHLF_TRANSPORT env"]
+        Core["26 tools\n9 resources\nHLF_TRANSPORT env"]
         T1 --> Core
         T2 --> Core
         T3 --> Core
@@ -802,6 +802,7 @@ HLF_PORT=8000               # port (SSE/HTTP only)
 
 | Tool | Description | Key Parameters |
 |---|---|---|
+| `hlf_do` | Plain-English front door: intent -> governed HLF -> audit | `intent, tier, dry_run, show_hlf` |
 | `hlf_compile` | Parse HLF source → JSON AST + bytecode hex | `source: str` |
 | `hlf_format` | Canonicalize: uppercase tags, trailing `Ω` | `source: str` |
 | `hlf_lint` | Static analysis: token budget, gas, vars, specs | `source, gas_limit, token_limit` |
@@ -1039,13 +1040,21 @@ uv run pytest tests/test_github_scripts.py -v
 | `uv run hlffmt <file.hlf>` | Canonicalize formatting |
 | `uv run hlflint <file.hlf>` | Static linting |
 | `uv run hlfrun <file.hlf>` | Execute in VM |
+| `uv run hlfpm <command>` | Manage packaged HLF modules |
+| `uv run hlflsp` | Start the packaged HLF language server |
+| `uv run hlfsh` | Start interactive HLF shell |
+| `uv run hlftest <path>` | Compile and lint HLF fixtures/snippets |
+| `uv run python scripts/generate_tm_grammar.py` | Generate `syntaxes/hlf.tmLanguage.json` from packaged grammar metadata |
+| `uv run python scripts/gen_docs.py` | Generate packaged tag, stdlib, and host-function reference docs |
+| `uv run python scripts/verify_chain.py <trace.jsonl>` | Verify JSONL trace-chain integrity against computed hashes |
+| `uv run python scripts/hlf_token_lint.py fixtures` | Enforce file and per-line token budgets on HLF sources |
 | `uv run hlf-mcp` | Start MCP server |
 
 ### Project Structure
 
 ```
 hlf_mcp/
-├── server.py               # FastMCP server (22 tools, 7 resources)
+├── server.py               # FastMCP server (26 tools, 9 resources)
 ├── hlf/
 │   ├── grammar.py          # LALR(1) Lark grammar + glyph map + confusables
 │   ├── compiler.py         # 5-pass compiler pipeline
@@ -1058,6 +1067,7 @@ hlf_mcp/
 │   ├── tool_dispatch.py    # ToolRegistry + HITL gate
 │   ├── oci_client.py       # OCI package registry client
 │   ├── hlfpm.py            # Package manager (install/freeze/list)
+│   ├── hlflsp.py           # Language server (diagnostics, completion, hover, definitions)
 │   ├── translator.py       # HLF ↔ English translation (tone-aware)
 │   ├── insaits.py          # InsAIts decompiler (AST/bytecode → English)
 │   ├── memory_node.py      # MemoryNode + MemoryStore
@@ -1074,10 +1084,27 @@ hlf_mcp/
 governance/
 ├── bytecode_spec.yaml      # ← Single source of truth for all opcodes
 ├── host_functions.json     # 28 host functions (tier/gas/backend/sensitive)
-└── align_rules.json        # 5 ALIGN Ledger governance rules
+├── align_rules.json        # 5 ALIGN Ledger governance rules
+├── module_import_rules.yaml# Import policy extracted from Sovereign source
+└── templates/
+    └── dictionary.json     # Tag/glyph dictionary for future tooling
 
-fixtures/                   # 7 example HLF programs
-tests/                      # pytest test suite (42 tests)
+fixtures/                   # 11 example HLF programs
+scripts/
+├── generate_tm_grammar.py  # Build TextMate grammar from packaged HLF metadata
+├── gen_docs.py             # Build packaged tag and stdlib reference docs
+├── hlf_token_lint.py       # Token-budget linting for .hlf corpora
+├── live_api_test.py
+└── monitor_model_drift.py
+syntaxes/
+└── hlf.tmLanguage.json     # Generated HLF syntax grammar
+docs/
+├── HLF_GRAMMAR_REFERENCE.md # Adapted packaged grammar reference
+├── HLF_TAG_REFERENCE.md    # Generated from governance/templates/dictionary.json
+├── HLF_STDLIB_REFERENCE.md # Generated from packaged Python stdlib bindings
+├── stdlib.md               # Adapted packaged stdlib guide
+└── ...
+tests/                      # pytest test suite
 Dockerfile                  # Multi-stage production build
 docker-compose.yml          # Service composition with health check
 ```
@@ -1105,7 +1132,7 @@ uv run ruff format hlf_mcp/
 - [x] 8 stdlib modules (no stubs — AES-256-GCM crypto, PBKDF2, HMAC-SHA256)
 - [x] Infinite RAG memory (SQLite WAL, Merkle chain, cosine dedup)
 - [x] Instinct SDD lifecycle (SPECIFY→PLAN→EXECUTE→VERIFY→MERGE, CoVE gate)
-- [x] FastMCP server: 22 tools, 7 resources, stdio + SSE + streamable-HTTP
+- [x] FastMCP server: 26 tools, 9 resources, stdio + SSE + streamable-HTTP
 - [x] Multi-stage Docker image + docker-compose with health check
 - [x] Ethical Governor: 5-module compile-time gate (constitution · termination · red_hat · rogue_detection · governor)
 - [x] 170 passing tests (44 ethics-specific)
@@ -1119,9 +1146,9 @@ uv run ruff format hlf_mcp/
 - [ ] **SHA-256 dedup cache**: pre-embedding content deduplication layer
 - [ ] **Fractal summarisation**: map-reduce context compression when memory approaches token limit
 - [ ] **Hot/Warm/Cold tiering**: Redis hot → SQLite warm → Parquet cold context transfer
-- [ ] **LSP server** (`hlflsp`): VS Code / Neovim diagnostics, completion, hover, go-to-definition
-- [ ] **hlfsh REPL**: interactive shell with Merkle-chained session log
-- [ ] **hlftest runner**: HLF-native spec + assertion framework with CoVE validation gate
+- [x] **LSP server** (`hlflsp`): packaged diagnostics, completion, hover, document symbols, go-to-definition
+- [x] **hlfsh REPL**: interactive shell on the packaged compiler/linter surface
+- [x] **hlftest runner**: packaged compile + lint harness for snippets, files, and fixture directories
 
 ### Phase 3 — Universal Usability 🌐 (planned)
 
@@ -1161,9 +1188,11 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 
 ## Related Links
 
-- 📖 [HLF & Infinite RAG Definitive Reference](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/HLF_REFERENCE.md)
+- 📖 [Packaged HLF Reference](docs/HLF_REFERENCE.md)
+- 🧾 [CLI Tools Reference](docs/cli-tools.md)
+- 📚 [Host Functions Reference](docs/HLF_HOST_FUNCTIONS_REFERENCE.md)
+- 🔄 [Packaged Instinct Reference](docs/INSTINCT_REFERENCE.md)
 - 📜 [RFC 9000 Series](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/RFC_9000_SERIES.md)
-- 🔄 [Instinct SDD Reference](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/INSTINCT_REFERENCE.md)
 - 🗺️ [Unified Ecosystem Roadmap](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/UNIFIED_ECOSYSTEM_ROADMAP.md)
 - 🏗️ [Walkthrough](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/WALKTHROUGH.md)
 - 🔬 [NotebookLM Research Notebook](https://notebooklm.google.com) — 291 sources, deep research reports, RFC catalog

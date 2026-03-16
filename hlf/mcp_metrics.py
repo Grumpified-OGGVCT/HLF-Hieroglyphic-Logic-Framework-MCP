@@ -439,23 +439,22 @@ def record_friction(failure_type: str, source_snippet: str, context: Dict = None
     """Record a friction event (convenience function)."""
     metrics = get_metrics()
     metrics.record_usage(
-        tool="friction_log",
+        tool_name="friction_log",
         success=True,
-        metadata={
-            "failure_type": failure_type,
-            "source_snippet": source_snippet[:200],  # Truncate for storage
-            "context": context or {}
-        }
+        error=f"{failure_type}: {source_snippet[:100]}",
     )
 
 
-def suggest_improvement(category: str, description: str, priority: int = 1) -> str:
+def suggest_improvement(category: str, description: str, priority: int = 1,
+                        source: str = "toolkit", title: str = "") -> str:
     """Suggest an improvement (convenience function)."""
     metrics = get_metrics()
     return metrics.suggest_improvement(
+        source=source,
         category=category,
+        title=title or description[:60],
         description=description,
-        priority=priority
+        priority=priority,
     )
 
 

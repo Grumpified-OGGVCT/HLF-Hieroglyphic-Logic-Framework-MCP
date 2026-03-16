@@ -60,7 +60,8 @@ def test_imports():
     except Exception as e:
         print(f"  ✗ forge_agent: {e}")
         failed += 1
-    
+
+    assert failed == 0, f"{failed} import(s) failed"
     return passed, failed
 
 
@@ -98,7 +99,8 @@ def test_resource_provider():
         import traceback
         traceback.print_exc()
         failed += 3
-    
+
+    assert failed == 0, f"{failed} ResourceProvider check(s) failed"
     return passed, failed
 
 
@@ -146,7 +148,8 @@ def test_tool_provider():
         import traceback
         traceback.print_exc()
         failed += 2
-    
+
+    assert failed == 0, f"{failed} ToolProvider check(s) failed"
     return passed, failed
 
 
@@ -190,7 +193,8 @@ def test_prompt_provider():
         import traceback
         traceback.print_exc()
         failed += 3
-    
+
+    assert failed == 0, f"{failed} PromptProvider check(s) failed"
     return passed, failed
 
 
@@ -241,7 +245,8 @@ def test_mcp_server():
         import traceback
         traceback.print_exc()
         failed += 3
-    
+
+    assert failed == 0, f"{failed} MCPServer check(s) failed"
     return passed, failed
 
 
@@ -286,7 +291,8 @@ def test_mcp_client():
         import traceback
         traceback.print_exc()
         failed += 2
-    
+
+    assert failed == 0, f"{failed} MCPClient check(s) failed"
     return passed, failed
 
 

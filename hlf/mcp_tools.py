@@ -545,7 +545,22 @@ class HLFToolProvider:
             return {
                 "success": False,
                 "errors": [f"Syntax error: {e}"],
-                "warnings": []
+                "warnings": [],
+                "ast_summary": {"valid": False, "module_count": 0, "function_count": 0, "effect_count": 0}
+            }
+        except Exception as e:
+            # Real parser/lexer raised unexpected error — fall back to text-based validation
+            errors = self._validate_fallback(source)
+            return {
+                "success": len(errors) == 0,
+                "errors": errors + [f"Parser unavailable: {type(e).__name__}"],
+                "warnings": [],
+                "ast_summary": {
+                    "valid": False,
+                    "module_count": source.count("module"),
+                    "function_count": source.count("fn"),
+                    "effect_count": sum(1 for e2 in ["READ_FILE", "WRITE_FILE", "WEB_SEARCH"] if e2 in source)
+                }
             }
     
     def _friction_log(self, args: Dict[str, Any]) -> Dict[str, Any]:

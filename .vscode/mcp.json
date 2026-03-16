@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "hlf-mcp": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "hlf.mcp_server_complete", "--stdio"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}

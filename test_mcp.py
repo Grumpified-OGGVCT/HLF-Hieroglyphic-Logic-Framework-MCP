@@ -52,6 +52,7 @@ def test_resource_provider():
         return True
     except Exception as e:
         print(f"  [FAIL] Version resource: {e}")
+        assert False, f"Version resource failed: {e}"
         return False
 
 
@@ -101,7 +102,8 @@ def test_tool_definitions():
             else:
                 print(f"  [FAIL] {req} missing")
                 all_present = False
-        
+
+        assert all_present, "Some required MCP tools are missing"
         return all_present
 
 
@@ -147,12 +149,14 @@ def test_prompt_definitions():
             else:
                 print(f"  [FAIL] Missing '{check}'")
                 all_present = False
-        
+
+        assert all_present, "Initialization prompt missing required content"
         return all_present
     except Exception as e:
         print(f"  [FAIL] Prompt generation: {e}")
         import traceback
         traceback.print_exc()
+        assert False, f"Prompt generation failed: {e}"
         return False
 
 
@@ -204,6 +208,7 @@ def test_friction_log():
             return True
         else:
             print("  [FAIL] No friction files created")
+            assert False, "Friction logging did not create any .hlf files"
             return False
 
 
@@ -244,7 +249,8 @@ def test_client():
         else:
             print(f"  [FAIL] Missing method '{method}'")
             all_present = False
-    
+
+    assert all_present, "MCP client is missing required methods"
     return all_present
 
 
@@ -297,7 +303,7 @@ def test_forge_agent():
     
     print(f"  GrammarProposal created: {proposal.id}")
     print("  [PASS] Forge agent dataclasses work")
-    
+    assert isinstance(proposal, GrammarProposal)
     return True
 
 
@@ -327,6 +333,7 @@ def test_file_structure():
             print(f"  [FAIL] {file_path} MISSING")
             all_exist = False
     
+    assert all_exist, "Expected MCP implementation files are missing"
     return all_exist
 
 

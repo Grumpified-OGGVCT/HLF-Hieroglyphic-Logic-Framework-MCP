@@ -412,10 +412,9 @@ class MCPServer:
             try:
                 handler = handlers[method]
                 
-                if asyncio.iscoroutinefunction(handler):
-                    result = await handler()
-                else:
-                    result = handler()
+                result = handler()
+                if asyncio.iscoroutine(result):
+                    result = await result
                 
                 if request_id is not None:
                     return {

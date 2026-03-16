@@ -59,4 +59,12 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = [
+    "tests",
+    "test_mcp.py",
+    "test_mcp_minimal.py",
+    "test_mcp_complete.py",
+    "test_mcp_quick.py",
+    "test_mcp_modules.py",
+    "test_metrics_win.py",
+]

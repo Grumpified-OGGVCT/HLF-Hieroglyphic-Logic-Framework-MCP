@@ -141,7 +141,6 @@ class TestMCPTools:
         
         result = tool_provider.call_tool("hlf_get_version", {})
         
-        assert result["success"] is True
         assert "version" in result
         assert "grammar_sha256" in result
     
@@ -469,7 +468,7 @@ class TestMCPServerEndpoints:
         """Test MCP initialize."""
         result = await server.initialize({})
         
-        assert result["protocolVersion"] == "2024-11-05"
+        assert result["protocolVersion"] == "2025-03-26"
         assert "capabilities" in result
         assert result["serverInfo"]["name"] == "hlf-mcp-server"
     

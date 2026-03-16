@@ -58,7 +58,8 @@ def english_to_hlf(english: str, tone: Tone | None = None, version: str = "3") -
 def _extract_actions(text: str) -> list[str]:
     """Heuristically extract HLF statements from English text."""
     actions = []
-    sentences = re.split(r'[.;!?\n]', text)
+    # Split sentence boundaries without breaking dotted file paths like /var/log/app.log.
+    sentences = re.split(r'[;!?\n]|\.(?!\w)', text)
     for sentence in sentences:
         s = sentence.strip()
         if not s:

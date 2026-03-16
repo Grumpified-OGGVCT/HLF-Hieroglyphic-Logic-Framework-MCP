@@ -1,0 +1,14 @@
+# HLF v3 — Decision Matrix
+# Extracted from Sovereign source and adapted to the packaged v3 surface.
+[HLF-v3]
+Δ [INTENT] goal="decision_matrix"
+  ∇ [PARAM] criteria_count=5
+  ∇ [PARAM] threshold=7
+  Ж [CONSTRAINT] min_voters=3
+  Ж [CONSTRAINT] consensus_pct=66
+  ⨝ [VOTE] option="option_a" score=8 verdict="selected"
+  ⨝ [VOTE] option="option_b" score=6 verdict="deferred"
+  ⨝ [VOTE] option="option_c" score=5 verdict="rejected"
+  Ж [ASSERT] winning_option="option_a"
+  ∇ [RESULT] message="Decision: option_a (score=8, threshold=7)"
+Ω

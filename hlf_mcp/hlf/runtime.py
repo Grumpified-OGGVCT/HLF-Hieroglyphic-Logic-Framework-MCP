@@ -980,7 +980,7 @@ def main() -> None:
 
     from hlf_mcp.hlf.compiler import HLFCompiler
 
-    with open(args.file) as f:
+    with open(args.file, encoding="utf-8") as f:
         source = f.read()
 
     compiler    = HLFCompiler()

@@ -20,6 +20,8 @@ dependencies = [
     "httpx>=0.28.0",
     "starlette>=0.46.0",
     "cryptography>=41.0.0",
+    "pygls>=2.0.0",
+    "lsprotocol>=2024.0.0",
 ]
 
 [project.optional-dependencies]
@@ -40,7 +42,11 @@ hlf-mcp  = "hlf_mcp.server:main"
 hlfc     = "hlf_mcp.hlf.compiler:main"
 hlffmt   = "hlf_mcp.hlf.formatter:main"
 hlflint  = "hlf_mcp.hlf.linter:main"
+hlfpm    = "hlf_mcp.hlf.hlfpm:main"
 hlfrun   = "hlf_mcp.hlf.runtime:main"
+hlfsh    = "hlf_mcp.hlf.hlfsh:main"
+hlflsp   = "hlf_mcp.hlf.hlflsp:main"
+hlftest  = "hlf_mcp.hlf.hlftest:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hlf_mcp"]

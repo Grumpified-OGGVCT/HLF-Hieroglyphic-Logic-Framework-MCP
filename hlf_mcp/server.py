@@ -172,6 +172,7 @@ WHEN HLF IS THE WRONG TOOL (be honest about the limits)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Available tools:
+    hlf_do                 - Plain-English front door: English in, governed HLF out
   hlf_compile            — Parse HLF source → JSON AST + bytecode
   hlf_format             — Canonicalize HLF source (uppercase tags, trailing Ω)
   hlf_lint               — Static analysis: token budget, gas, variables, specs
@@ -279,6 +280,145 @@ _instinct = instinct_mgr
 
 
 # ── Tools ──────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def hlf_do(
+    intent: str,
+    tier: str = "forge",
+    dry_run: bool = False,
+    show_hlf: bool = False,
+) -> dict[str, Any]:
+    """Translate plain English intent into governed HLF and optionally execute it.
+
+    This is the human-facing front door for the packaged FastMCP server. It uses
+    the translator to produce HLF source, validates the generated program,
+    applies capsule checks for the requested tier, and returns an English audit.
+
+    Args:
+        intent: Natural-language description of the task to perform
+        tier: Execution tier - hearth | forge | sovereign (default forge)
+        dry_run: When true, stop after translation/validation without running
+        show_hlf: Include the generated HLF source in the response
+    """
+    normalized_intent = intent.strip()
+    normalized_tier = tier.lower().strip()
+    if not normalized_intent:
+        return {
+            "success": False,
+            "error": "intent is required",
+            "example": "Audit /var/log/system.log in read-only mode and summarize the top errors.",
+        }
+    if normalized_tier not in {"hearth", "forge", "sovereign"}:
+        return {
+            "success": False,
+            "error": f"Unsupported tier '{tier}'. Use hearth, forge, or sovereign.",
+        }
+
+    try:
+        source = english_to_hlf(normalized_intent, version="3")
+        validation = compiler.validate(source)
+        if not validation.get("valid"):
+            response = {
+                "success": False,
+                "phase": "translation",
+                "you_said": normalized_intent,
+                "tier": normalized_tier,
+                "governed": False,
+                "error": validation.get("error", "Generated HLF did not validate."),
+            }
+            if show_hlf:
+                response["hlf_source"] = source
+            return response
+
+        compile_result = compiler.compile(source)
+        ast = compile_result["ast"]
+        capsule = capsule_for_tier(normalized_tier)
+        capsule_violations = capsule.validate_ast(ast.get("statements", []))
+        align_violations = compile_result.get("align_violations", [])
+        benchmark = _benchmark.analyze(source, compare_text=normalized_intent)
+        english_audit = hlf_to_english(ast)
+
+        response: dict[str, Any] = {
+            "success": len(capsule_violations) == 0 and len(align_violations) == 0,
+            "you_said": normalized_intent,
+            "what_hlf_did": english_audit,
+            "audit": (
+                f"Validated and compiled for tier '{normalized_tier}'. "
+                f"Estimated gas: {compile_result['gas_estimate']} / {capsule.max_gas}."
+            ),
+            "tier": normalized_tier,
+            "governed": len(capsule_violations) == 0 and len(align_violations) == 0,
+            "dry_run": dry_run,
+            "capsule_violations": capsule_violations,
+            "align_violations": align_violations,
+            "math": {
+                "english_tokens": benchmark["nlp_tokens"],
+                "hlf_tokens": benchmark["hlf_tokens"],
+                "compression_pct": benchmark["compression_pct"],
+                "token_savings": benchmark["savings"],
+                "gas_estimate": compile_result["gas_estimate"],
+                "gas_budget": capsule.max_gas,
+            },
+        }
+        if show_hlf:
+            response["hlf_source"] = source
+
+        if capsule_violations or align_violations or dry_run:
+            if capsule_violations:
+                response["audit"] = (
+                    f"Blocked by capsule validation for tier '{normalized_tier}'. "
+                    f"{len(capsule_violations)} violation(s) detected."
+                )
+            elif align_violations:
+                response["audit"] = (
+                    f"Compiled with ALIGN warnings for tier '{normalized_tier}'. "
+                    f"{len(align_violations)} violation(s) reported."
+                )
+            elif dry_run:
+                response["audit"] = (
+                    f"Dry run only. Generated HLF validated for tier '{normalized_tier}' "
+                    f"with estimated gas {compile_result['gas_estimate']} / {capsule.max_gas}."
+                )
+            return response
+
+        bc = bytecoder.encode(ast)
+        run_result = _runtime.run(
+            bc,
+            gas_limit=capsule.max_gas,
+            variables={"DEPLOYMENT_TIER": normalized_tier},
+        )
+        response["execution"] = run_result
+        response["success"] = run_result.get("status") == "ok"
+        response["audit"] = (
+            f"Executed at tier '{normalized_tier}'. "
+            f"Gas used: {run_result.get('gas_used', 0)} / {capsule.max_gas}."
+        )
+        return response
+    except CompileError as exc:
+        response = {
+            "success": False,
+            "phase": "compile",
+            "you_said": normalized_intent,
+            "tier": normalized_tier,
+            "governed": False,
+            "error": str(exc),
+        }
+        if show_hlf:
+            response["hlf_source"] = source
+        return response
+    except Exception as exc:
+        response = {
+            "success": False,
+            "phase": "internal",
+            "you_said": normalized_intent,
+            "tier": normalized_tier,
+            "governed": False,
+            "error": str(exc),
+        }
+        if show_hlf and "source" in locals():
+            response["hlf_source"] = source
+        return response
 
 
 @mcp.tool()

@@ -1,0 +1,10 @@
+# HLF v3 — System Health Check
+# Extracted from Sovereign source and adapted to the packaged v3 surface.
+[HLF-v3]
+Δ analyze /config/settings.json
+  Ж [CONSTRAINT] tier="hearth"
+  Ж [CONSTRAINT] gas_limit=20
+  Ж [EXPECT] config_valid
+  ∇ [PARAM] summary="all systems operational"
+  ∇ [RESULT] message="System health check passed — all systems operational"
+Ω

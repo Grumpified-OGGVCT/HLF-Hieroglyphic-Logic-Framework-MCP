@@ -1,0 +1,12 @@
+# HLF v3 — Module Workflow
+# Extracted from Sovereign source and adapted to the packaged v3 surface.
+[HLF-v3]
+Δ [INTENT] goal="module_workflow"
+  ∇ [SOURCE] math
+  ∇ [SOURCE] string
+  ∇ [SOURCE] io
+  ∇ [PARAM] input_text="Hello World"
+  Ж [EXPECT] processed_output
+  Ж [CONSTRAINT] output_format="json"
+  ∇ [RESULT] message="Module workflow completed — processed HELLO WORLD, area=31"
+Ω

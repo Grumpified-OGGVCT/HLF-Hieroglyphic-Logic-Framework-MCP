@@ -1,0 +1,52 @@
+{
+  "version": "0.4.0",
+  "token_map": {
+    "->": ["cl100k", "sentencepiece", "qwen"],
+    "Ω": ["cl100k", "sentencepiece", "qwen"],
+    "Δ": ["cl100k", "sentencepiece", "qwen"],
+    "Ж": ["cl100k", "sentencepiece", "qwen"],
+    "⩕": ["cl100k", "sentencepiece", "qwen"],
+    "⌘": ["cl100k", "sentencepiece", "qwen"],
+    "∇": ["cl100k", "sentencepiece", "qwen"],
+    "⨝": ["cl100k", "sentencepiece", "qwen"],
+    "⌂": ["cl100k", "sentencepiece", "qwen"],
+    "Σ": ["cl100k", "sentencepiece", "qwen"],
+    "fallback_terminator": "END"
+  },
+  "glyphs": {
+    "Ω": { "name": "Terminal Conclusion", "enforces": "Final stdout state, immediately terminates recursive loops" },
+    "Δ": { "name": "State Diff", "enforces": "Only output delta changes, never full files" },
+    "Ж": { "name": "Reasoning Blocker", "enforces": "Indicates logical paradox; triggers routing to Arbiter" },
+    "⩕": { "name": "Gas Metric", "enforces": "Maximum allowed recursive steps before OOM timeout" },
+    "⌘": { "name": "Orchestrator Directive", "enforces": "High-level macro command overriding local Swarm queues" },
+    "∇": { "name": "Anchor Drift", "enforces": "Signal that generated truth is violating KYA Provenance bounds" },
+    "⨝": { "name": "Matrix Consensus", "enforces": "Forces multi-agent verification sync before proceeding" },
+    "⌂": { "name": "Memory Anchor", "enforces": "HLF-anchored memory store/recall via Infinite RAG" }
+  },
+  "tags": [
+    { "name": "INTENT", "args": [{"name":"action","type":"string"}, {"name":"target","type":"path"}] },
+    { "name": "THOUGHT", "args": [{"name":"reasoning","type":"string"}], "pure": true },
+    { "name": "OBSERVATION", "args": [{"name":"data","type":"any"}], "pure": true },
+    { "name": "PLAN", "args": [{"name":"steps","type":"any","repeat":true}] },
+    { "name": "CONSTRAINT", "args": [{"name":"key","type":"string"}, {"name":"value","type":"any"}] },
+    { "name": "EXPECT", "args": [{"name":"outcome","type":"string"}] },
+    { "name": "ACTION", "args": [{"name":"verb","type":"string"}, {"name":"args","type":"any","repeat":true}] },
+    { "name": "SET", "args": [{"name":"name","type":"identifier"}, {"name":"value","type":"any"}], "immutable": true },
+    { "name": "FUNCTION", "args": [{"name":"name","type":"identifier"}, {"name":"args","type":"any","repeat":true}], "pure": true },
+    { "name": "DELEGATE", "args": [{"name":"role","type":"identifier"}, {"name":"intent","type":"string"}] },
+    { "name": "VOTE", "args": [{"name":"decision","type":"bool"}, {"name":"rationale","type":"string"}] },
+    { "name": "ASSERT", "args": [{"name":"condition","type":"bool"}, {"name":"error","type":"string"}] },
+    { "name": "RESULT", "args": [{"name":"code","type":"int"}, {"name":"message","type":"string"}], "terminator": true },
+    { "name": "MODULE", "args": [{"name":"name","type":"identifier"}] },
+    { "name": "IMPORT", "args": [{"name":"name","type":"identifier"}] },
+    { "name": "DATA", "args": [{"name":"id","type":"string"}] },
+    { "name": "MEMORY", "args": [{"name":"entity","type":"string"}, {"name":"content","type":"any"}, {"name":"confidence","type":"any"}] },
+    { "name": "RECALL", "args": [{"name":"entity","type":"string"}, {"name":"top_k","type":"int"}] },
+    { "name": "DEFINE", "args": [{"name":"name","type":"string"}, {"name":"body","type":"any"}], "macro": true },
+    { "name": "CALL", "args": [{"name":"name","type":"string"}, {"name":"args","type":"any","repeat":true}] },
+    { "name": "WHILE", "args": [{"name":"condition","type":"string"}, {"name":"body","type":"any","repeat":true}] },
+    { "name": "TRY", "args": [{"name":"body","type":"any","repeat":true}] },
+    { "name": "CATCH", "args": [{"name":"handler","type":"any","repeat":true}] },
+    { "name": "RETURN", "args": [{"name":"value","type":"any"}] }
+  ]
+}

@@ -825,7 +825,7 @@ def main() -> None:
         print("Usage: hlfc <file.hlf>", file=sys.stderr)
         sys.exit(1)
 
-    with open(sys.argv[1]) as f:
+    with open(sys.argv[1], encoding="utf-8") as f:
         source = f.read()
 
     compiler = HLFCompiler()

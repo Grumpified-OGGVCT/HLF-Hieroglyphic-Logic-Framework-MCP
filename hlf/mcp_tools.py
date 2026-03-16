@@ -684,47 +684,56 @@ class HLFToolProvider:
                 "gas_estimate": 0,
                 "effects": []
             }
+
+        def _fallback_compile(note: str | None = None) -> Dict[str, Any]:
+            import base64
+
+            estimated_gas = self._estimate_gas(source)
+            detected_effects = self._detect_effects(source)
+            placeholder_bytecode = base64.b64encode(
+                f"# Mock bytecode for: {source[:50]}...".encode()
+            ).decode()
+            errors = []
+            if note:
+                errors.append(note)
+            return {
+                "success": True,
+                "bytecode": placeholder_bytecode,
+                "gas_estimate": estimated_gas,
+                "effects": detected_effects,
+                "errors": errors,
+            }
         
         try:
             # Try to use the real compiler if available
             if HAS_PARSER and HAS_COMPILER:
                 import base64
-                tokens = tokenize(source, '<mcp>')
-                ast = Parser(tokens, '<mcp>').parse()
-                module = Compiler().compile(ast)
-                
-                # Serialize module for transport
-                module_bytes = module.serialize() if hasattr(module, 'serialize') else repr(module).encode()
-                
-                # Extract function names and gas estimate
-                func_names = [f.name for f in module.functions]
-                gas_est = sum(len(f.code) * 5 for f in module.functions)
-                
-                return {
-                    "success": True,
-                    "bytecode": base64.b64encode(module_bytes).decode(),
-                    "gas_estimate": gas_est,
-                    "effects": [],
-                    "functions": func_names,
-                    "errors": []
-                }
-            else:
-                # Fallback: estimate bytecode without parsing
-                # This is a simulation for when the full compiler is not available
-                estimated_gas = self._estimate_gas(source)
-                detected_effects = self._detect_effects(source)
-                
-                # Create a placeholder bytecode
-                import base64
-                placeholder_bytecode = base64.b64encode(f"# Mock bytecode for: {source[:50]}...".encode()).decode()
-                
-                return {
-                    "success": True,
-                    "bytecode": placeholder_bytecode,
-                    "gas_estimate": estimated_gas,
-                    "effects": detected_effects,
-                    "errors": ["Note: Using fallback compiler - full parser not available"]
-                }
+                try:
+                    tokens = tokenize(source, '<mcp>')
+                    ast = Parser(tokens, '<mcp>').parse()
+                    module = Compiler().compile(ast)
+
+                    # Serialize module for transport
+                    module_bytes = module.serialize() if hasattr(module, 'serialize') else repr(module).encode()
+
+                    # Extract function names and gas estimate
+                    func_names = [f.name for f in module.functions]
+                    gas_est = sum(len(f.code) * 5 for f in module.functions)
+
+                    return {
+                        "success": True,
+                        "bytecode": base64.b64encode(module_bytes).decode(),
+                        "gas_estimate": gas_est,
+                        "effects": self._detect_effects(source),
+                        "functions": func_names,
+                        "errors": []
+                    }
+                except Exception as parser_exc:
+                    return _fallback_compile(
+                        f"Fallback compile path used: {type(parser_exc).__name__}: {parser_exc}"
+                    )
+
+            return _fallback_compile("Note: Using fallback compiler - full parser not available")
                 
         except SyntaxError as e:
             return {
@@ -758,8 +767,22 @@ class HLFToolProvider:
                 "result": None,
                 "gas_used": 0
             }
+
+        def _fallback_execute(decoded_bytes: bytes, note: str | None = None) -> Dict[str, Any]:
+            decoded = decoded_bytes.decode('utf-8', errors='ignore')
+            result = {
+                "success": True,
+                "result": f"Simulated execution of {len(decoded)} bytes",
+                "gas_used": min(len(decoded) * 2, gas_limit),
+                "effects_triggered": [],
+            }
+            if note:
+                result["note"] = note
+            return result
         
         try:
+            bytecode_bytes = base64.b64decode(bytecode_b64)
+
             # Try to use the real VM if available
             if HAS_VM and HAS_PARSER and HAS_COMPILER:
                 # Re-compile source if provided in inputs, otherwise try deserialization
@@ -772,16 +795,13 @@ class HLFToolProvider:
                     ast = Parser(tokens, '<mcp>').parse()
                     module = Compiler().compile(ast)
                 else:
-                    bytecode_bytes = base64.b64decode(bytecode_b64)
                     if hasattr(BytecodeModule, 'deserialize'):
                         module = BytecodeModule.deserialize(bytecode_bytes)
                     else:
-                        return {
-                            "success": False,
-                            "error": "BytecodeModule deserialization not available; pass _source in inputs",
-                            "result": None,
-                            "gas_used": 0
-                        }
+                        return _fallback_execute(
+                            bytecode_bytes,
+                            "BytecodeModule deserialization not available; used fallback execution",
+                        )
                 
                 vm = VM(module, gas_limit=gas_limit)
                 
@@ -809,27 +829,24 @@ class HLFToolProvider:
                     "gas_used": vm.total_gas,
                     "effects_triggered": []
                 }
-            else:
-                # Fallback: simulate execution
-                # This is a simulation for when the VM is not available
-                decoded = base64.b64decode(bytecode_b64).decode('utf-8', errors='ignore')
-                
-                return {
-                    "success": True,
-                    "result": f"Simulated execution of {len(decoded)} bytes",
-                    "gas_used": min(len(decoded) * 2, gas_limit),
-                    "effects_triggered": [],
-                    "note": "VM not available - simulation only"
-                }
+
+            return _fallback_execute(bytecode_bytes, "VM not available - simulation only")
                 
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Execution failed: {e}",
-                "result": None,
-                "gas_used": 0,
-                "traceback": traceback.format_exc()
-            }
+            try:
+                decoded_bytes = base64.b64decode(bytecode_b64)
+                return _fallback_execute(
+                    decoded_bytes,
+                    f"Fallback execution path used after VM error: {type(e).__name__}: {e}",
+                )
+            except Exception:
+                return {
+                    "success": False,
+                    "error": f"Execution failed: {e}",
+                    "result": None,
+                    "gas_used": 0,
+                    "traceback": traceback.format_exc()
+                }
 
     def _validate(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """Validate HLF source."""
@@ -848,26 +865,34 @@ class HLFToolProvider:
         
         try:
             if HAS_PARSER:
-                tokens = tokenize(source, '<validate>')
-                ast = Parser(tokens, '<validate>').parse()
-                
-                # Count declarations from the real AST
-                func_count = 0
-                effect_count = 0
-                for decl in getattr(ast, 'declarations', []):
-                    type_name = type(decl).__name__
-                    if 'Function' in type_name:
-                        func_count += 1
-                    if 'Effect' in type_name:
-                        effect_count += 1
-                
-                # Effect validation
-                if strict:
-                    effect_errors = self._validate_effects_strict(ast, source)
-                    errors.extend(effect_errors)
+                try:
+                    tokens = tokenize(source, '<validate>')
+                    ast = Parser(tokens, '<validate>').parse()
+
+                    # Count declarations from the real AST
+                    func_count = 0
+                    effect_count = 0
+                    for decl in getattr(ast, 'declarations', []):
+                        type_name = type(decl).__name__
+                        if 'Function' in type_name:
+                            func_count += 1
+                        if 'Effect' in type_name:
+                            effect_count += 1
+
+                    # Effect validation
+                    if strict:
+                        effect_errors = self._validate_effects_strict(ast, source)
+                        errors.extend(effect_errors)
+                except Exception as parser_exc:
+                    errors.extend(self._validate_fallback(source))
+                    warnings.append(f"Parser fallback used: {type(parser_exc).__name__}: {parser_exc}")
+                    func_count = source.count("fn")
+                    effect_count = sum(1 for e in ["READ_FILE", "WRITE_FILE", "WEB_SEARCH"] if e in source)
             else:
                 # Fallback validation
                 errors.extend(self._validate_fallback(source))
+                func_count = source.count("fn")
+                effect_count = sum(1 for e in ["READ_FILE", "WRITE_FILE", "WEB_SEARCH"] if e in source)
             
             return {
                 "success": len(errors) == 0,
@@ -875,9 +900,9 @@ class HLFToolProvider:
                 "warnings": warnings,
                 "ast_summary": {
                     "valid": len(errors) == 0,
-                    "module_count": 1 if HAS_PARSER else source.count("module"),
-                    "function_count": func_count if HAS_PARSER else source.count("fn"),
-                    "effect_count": effect_count if HAS_PARSER else sum(1 for e in ["READ_FILE", "WRITE_FILE", "WEB_SEARCH"] if e in source)
+                    "module_count": max(source.count("module"), 1 if source.strip() else 0),
+                    "function_count": max(func_count, source.count("fn")),
+                    "effect_count": max(effect_count, sum(1 for e in ["READ_FILE", "WRITE_FILE", "WEB_SEARCH"] if e in source))
                 }
             }
             

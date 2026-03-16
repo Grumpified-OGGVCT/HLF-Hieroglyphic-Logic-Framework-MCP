@@ -34,6 +34,19 @@ from hlf_mcp.hlf.bytecode import (
 
 # ── Host function registry ────────────────────────────────────────────────────
 
+# Environment variables that HLF programs must never be allowed to read.
+# SYS_ENV will raise PermissionError for any name in this set.
+_ENV_BLOCKLIST: frozenset[str] = frozenset({
+    "HLF_STRICT",
+    "VALKEY_URL", "REDIS_URL",
+    "OLLAMA_API_KEY",
+    "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
+    "GITHUB_TOKEN", "GITHUB_API_KEY",
+    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+    "AZURE_CLIENT_SECRET", "AZURE_STORAGE_KEY",
+    "DATABASE_URL", "POSTGRES_PASSWORD", "MYSQL_PASSWORD",
+})
+
 HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
     "analyze":            {"tier": "all",       "gas": 2,  "effects": ["read_fs"],      "desc": "Analyze a file or resource"},
     "enforce_constraint": {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Enforce a typed constraint"},
@@ -541,7 +554,12 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         if name == "SYS_CWD":
             return _os.getcwd()
         if name == "SYS_ENV":
-            return _os.environ.get(str(args[0]) if args else "", "")
+            var = str(args[0]) if args else ""
+            if var in _ENV_BLOCKLIST:
+                raise PermissionError(
+                    f"SYS_ENV: read of sensitive variable '{var}' is not permitted"
+                )
+            return _os.environ.get(var, "")
         if name in ("SYS_SLEEP", "SLEEP"):
             ms = int(args[0]) if args else 0
             if ms > 0:
@@ -654,6 +672,8 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
             "note": f"No native implementation for builtin '{name}'; register via HostFunctionRegistry",
         }
 
+    except PermissionError:
+        raise  # Security errors must never be swallowed
     except Exception as exc:  # noqa: BLE001
         return {
             "builtin": name,

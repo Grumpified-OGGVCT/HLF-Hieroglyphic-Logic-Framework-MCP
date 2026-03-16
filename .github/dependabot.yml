@@ -54,4 +54,9 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
-    open-pull-requests-limit: 5
+    # Group all action bumps into a single PR to reduce noise
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 10

@@ -190,7 +190,7 @@ jobs:
         if: >
           (env.DRIFT_STATUS == 'WARN' || env.DRIFT_STATUS == 'ALERT') &&
           github.event.inputs.dry_run != 'true'
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: 1

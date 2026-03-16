@@ -75,7 +75,7 @@ def test_resource_provider():
     except Exception as e:
         print(f"[FAIL] Could not read AST schema: {e}")
     
-    return True
+    assert len(resources) > 0
 
 def test_tool_provider():
     """Test the MCP tool provider."""
@@ -137,7 +137,7 @@ def test_tool_provider():
         })
         print(f"[OK] Result: {len(result.get('composed_source', ''))} chars")
     
-    return True
+    assert len(tools) > 0
 
 def test_prompt_provider():
     """Test the MCP prompt provider."""
@@ -173,7 +173,7 @@ def test_prompt_provider():
     print(f"[OK] Prompt: {len(prompt)} chars")
     print(f"  Contains intent: {'Read a file' in prompt}")
     
-    return True
+    assert len(prompts) > 0
 
 def test_mcp_client():
     """Test the MCP client (without server)."""
@@ -194,7 +194,7 @@ def test_mcp_client():
     # The client would need a running server for full tests
     print("\n[INFO] Full client tests require running server")
     
-    return True
+    assert client.base_url == "http://localhost:8000"
 
 def test_forge_agent():
     """Test the Forge agent structure."""
@@ -239,7 +239,7 @@ def test_forge_agent():
     print(f"  Additive: {proposal.additive_only}")
     print(f"  Breaking: {proposal.breaking}")
     
-    return True
+    assert proposal.additive_only is True
 
 def test_metrics():
     """Test the metrics tracking."""
@@ -268,10 +268,10 @@ def test_metrics():
         print(f"  Failed: {summary['failed']}")
         print(f"  Pass rate: {summary['pass_rate']:.2%}")
         
-        return True
+        assert summary["total_runs"] >= 3
     except ImportError as e:
         print(f"[WARN] Metrics module not available: {e}")
-        return True  # Not critical
+        assert True  # Not critical
 
 def run_all_tests():
     """Run all tests and report results."""
@@ -282,37 +282,43 @@ def run_all_tests():
     results = []
     
     try:
-        results.append(("Resource Provider", test_resource_provider()))
+        test_resource_provider()
+        results.append(("Resource Provider", True))
     except Exception as e:
         print(f"\n[FAIL] Resource Provider test failed: {e}")
         results.append(("Resource Provider", False))
     
     try:
-        results.append(("Tool Provider", test_tool_provider()))
+        test_tool_provider()
+        results.append(("Tool Provider", True))
     except Exception as e:
         print(f"\n[FAIL] Tool Provider test failed: {e}")
         results.append(("Tool Provider", False))
     
     try:
-        results.append(("Prompt Provider", test_prompt_provider()))
+        test_prompt_provider()
+        results.append(("Prompt Provider", True))
     except Exception as e:
         print(f"\n[FAIL] Prompt Provider test failed: {e}")
         results.append(("Prompt Provider", False))
     
     try:
-        results.append(("MCP Client", test_mcp_client()))
+        test_mcp_client()
+        results.append(("MCP Client", True))
     except Exception as e:
         print(f"\n[FAIL] MCP Client test failed: {e}")
         results.append(("MCP Client", False))
     
     try:
-        results.append(("Forge Agent", test_forge_agent()))
+        test_forge_agent()
+        results.append(("Forge Agent", True))
     except Exception as e:
         print(f"\n[FAIL] Forge Agent test failed: {e}")
         results.append(("Forge Agent", False))
     
     try:
-        results.append(("Metrics", test_metrics()))
+        test_metrics()
+        results.append(("Metrics", True))
     except Exception as e:
         print(f"\n[FAIL] Metrics test failed: {e}")
         results.append(("Metrics", False))

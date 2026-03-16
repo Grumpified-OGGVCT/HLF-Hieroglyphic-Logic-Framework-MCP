@@ -39,7 +39,7 @@ def test_imports():
         print(f"  forge_agent: ERROR - {e}")
         return False
     
-    return True
+    assert True
 
 def test_resource_provider():
     print("\nTesting HLFResourceProvider...")
@@ -60,7 +60,7 @@ def test_resource_provider():
     print(f"  Version: {version['version']}")
     print(f"  SHA256: {version['grammar_sha256'][:16]}...")
     
-    return True
+    assert True
 
 def test_tool_provider():
     print("\nTesting HLFToolProvider...")
@@ -81,7 +81,7 @@ def test_tool_provider():
     for t in tools[:3]:
         print(f"    - {t.name}")
     
-    return True
+    assert True
 
 def test_client():
     print("\nTesting HLFMCPClient...")
@@ -91,7 +91,16 @@ def test_client():
     print(f"  Base URL: {client.base_url}")
     print(f"  Cache TTL: {client.cache_ttl}")
     
-    return True
+    assert True
+
+
+def _run_test(name, func):
+    try:
+        func()
+        return name, True
+    except Exception as exc:
+        print(f"  ERROR [{name}]: {exc}")
+        return name, False
 
 def main():
     print("=" * 60)
@@ -101,25 +110,25 @@ def main():
     results = []
     
     # Test imports
-    results.append(("Imports", test_imports()))
+    results.append(_run_test("Imports", test_imports))
     
     # Test resource provider
     try:
-        results.append(("ResourceProvider", test_resource_provider()))
+        results.append(_run_test("ResourceProvider", test_resource_provider))
     except Exception as e:
         print(f"  ERROR: {e}")
         results.append(("ResourceProvider", False))
     
     # Test tool provider
     try:
-        results.append(("ToolProvider", test_tool_provider()))
+        results.append(_run_test("ToolProvider", test_tool_provider))
     except Exception as e:
         print(f"  ERROR: {e}")
         results.append(("ToolProvider", False))
     
     # Test client
     try:
-        results.append(("Client", test_client()))
+        results.append(_run_test("Client", test_client))
     except Exception as e:
         print(f"  ERROR: {e}")
         results.append(("Client", False))

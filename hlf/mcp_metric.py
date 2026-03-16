@@ -109,8 +109,10 @@ class HLFTestMetrics:
         
         # Tools test
         try:
+            from hlf.mcp_resources import HLFResourceProvider
             from hlf.mcp_tools import HLFToolProvider
-            tools = HLFToolProvider()
+            resource_provider = HLFResourceProvider(self.repo_root)
+            tools = HLFToolProvider(resource_provider=resource_provider)
             tool_list = tools.list_tools()
             names = [t.name for t in tool_list]
             if "hlf_compile" in names and "hlf_execute" in names:

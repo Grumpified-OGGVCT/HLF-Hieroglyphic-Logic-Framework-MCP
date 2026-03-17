@@ -336,10 +336,14 @@ class UpdateGovernor:
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"{target}: {exc}")
 
-        ticket.status = UpdateStatus.DISTRIBUTED
+        event = "distributed"
+        if distributed or not targets:
+            ticket.status = UpdateStatus.DISTRIBUTED
+        else:
+            event = "distribution_failed"
         ticket.audit_trail.append(
             _audit_entry(
-                "distributed",
+                event,
                 ticket.approved_by,
                 {"targets": distributed, "errors": errors},
             )

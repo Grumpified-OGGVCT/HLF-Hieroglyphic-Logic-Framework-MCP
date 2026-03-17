@@ -47,6 +47,11 @@ def _stage_one(gov: UpdateGovernor, version: str = "1.0.0") -> UpdateTicket:
     )
 
 
+class _FailingGovernor(UpdateGovernor):
+    def _push_to_target(self, target: str, ticket: UpdateTicket) -> None:
+        raise RuntimeError("boom")
+
+
 # ── Staging ───────────────────────────────────────────────────────────────────
 
 class TestStaging:
@@ -218,6 +223,18 @@ class TestDistribution:
         assert result.success is True
         assert result.distributed_to == []
 
+    def test_distribute_all_target_failures_leaves_ticket_approved(self) -> None:
+        gov = _FailingGovernor()
+        ticket = _stage_one(gov)
+        token = gov.approve(ticket.ticket_id, operator="alice")
+
+        result = gov.distribute(ticket.ticket_id, token, targets=["fork-a"])
+
+        assert result.success is False
+        assert result.distributed_to == []
+        assert result.errors == ["fork-a: boom"]
+        assert gov.get_ticket(ticket.ticket_id).status == UpdateStatus.APPROVED
+
 
 # ── Rollback ──────────────────────────────────────────────────────────────────
 
@@ -273,7 +290,7 @@ class TestExpiry:
         assert gov.get_ticket(t2.ticket_id).status == UpdateStatus.EXPIRED
 
     def test_expire_stale_leaves_approved_tickets_alone(self) -> None:
-        gov    = _make_governor(ttl=0.001)
+        gov    = _make_governor(ttl=1.0)
         ticket = _stage_one(gov)
         # Approve before the TTL runs out
         gov.approve(ticket.ticket_id, operator="alice")

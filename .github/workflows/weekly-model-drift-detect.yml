@@ -49,10 +49,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: "pip"
@@ -122,7 +122,7 @@ jobs:
           "
 
       - name: Upload drift report artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: "drift-report-${{ github.run_id }}"
@@ -190,7 +190,7 @@ jobs:
         if: >
           (env.DRIFT_STATUS == 'WARN' || env.DRIFT_STATUS == 'ALERT') &&
           github.event.inputs.dry_run != 'true'
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: 1

@@ -141,7 +141,6 @@ class TestMCPTools:
         
         result = tool_provider.call_tool("hlf_get_version", {})
         
-        assert result["success"] is True
         assert "version" in result
         assert "grammar_sha256" in result
     

@@ -11,6 +11,7 @@ Executes .hlb bytecode with:
 
 from __future__ import annotations
 
+import logging
 import struct
 import sys
 from dataclasses import dataclass, field
@@ -30,6 +31,12 @@ from hlf_mcp.hlf.bytecode import (
     _decode_pool,
     HLFBytecode,
 )
+from hlf_mcp.hlf.pii_guard import PIIGuard
+
+logger = logging.getLogger(__name__)
+
+# Module-level PII guard singleton — reuses precompiled regex patterns
+_PII_GUARD = PIIGuard()
 
 
 # ── Host function registry ────────────────────────────────────────────────────
@@ -730,6 +737,22 @@ def _dispatch_host(
         elif fn_name == "memory_store":
             key = str(args[0]) if args else "unknown"
             val = args[1] if len(args) >= 2 else None
+            # ── PII Guard: scan value before writing to RAG memory ────────────
+            _val_text = str(val) if val is not None else ""
+            _scan = _PII_GUARD.scan(_val_text)
+            if _scan.has_pii:
+                logger.warning(
+                    "PII detected in memory_store for key '%s'; "
+                    "storing redacted value. categories=%s",
+                    key,
+                    [c.name for c in _scan.categories_found],
+                )
+                side_effects.append({
+                    "type": "pii_redacted",
+                    "key": key,
+                    "categories": [c.name for c in _scan.categories_found],
+                })
+                val = _scan.redacted_text
             mem_key = f"_mem_{key}"
             existing = scope.get(mem_key, [])
             if not isinstance(existing, list):

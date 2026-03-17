@@ -1,0 +1,166 @@
+name: Upstream Ethics Compliance Check
+
+# Runs on:
+#   • Every PR to main or integrate-sovereign
+#   • Every push to main
+#   • Weekly (Sunday 03:00 UTC) to catch upstream drift on open PRs
+#
+# This workflow is WARN-FIRST and NON-BLOCKING by default.
+# It checks that the core HLF governance files are present and intact.
+# It will NOT auto-close PRs or auto-ban contributors.
+# Failed checks appear as annotations/comments — humans decide what to do.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integrate-sovereign
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 3 * * 0"   # weekly Sunday 03:00 UTC
+  workflow_dispatch:       # manual trigger from the Actions tab
+
+jobs:
+  # ── Job 1: Fork compliance check (runs the Python script) ─────────────────
+  fork-compliance:
+    name: Fork Compliance Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run fork compliance check (warn-first)
+        id: compliance
+        # --strict exits 1 on warnings too; without it only hard failures fail.
+        # Change to --strict if you want CI to block on warnings as well.
+        run: |
+          python scripts/fork_compliance_check.py \
+            --path . \
+            --json | tee /tmp/compliance_report.json
+
+          # Also print human-readable output for the Actions log
+          python scripts/fork_compliance_check.py --path .
+
+      - name: Upload compliance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-compliance-report
+          path: /tmp/compliance_report.json
+          retention-days: 30
+
+  # ── Job 2: Required governance files present ───────────────────────────────
+  governance-files:
+    name: Governance Files Present
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required ethics files
+        run: |
+          MISSING=0
+          FILES=(
+            "HLF_ETHICAL_GOVERNOR.md"
+            "governance/align_rules.json"
+            "hlf_mcp/hlf/ethics/constitution.py"
+            "hlf_mcp/hlf/ethics/governor.py"
+            "hlf_mcp/hlf/capsules.py"
+          )
+          for f in "${FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::Required governance file missing: $f"
+              MISSING=$((MISSING + 1))
+            else
+              echo "✓ $f"
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            echo ""
+            echo "::error::$MISSING required governance file(s) missing."
+            echo "These files protect users — please restore them from upstream."
+            exit 1
+          fi
+
+      - name: Verify ALIGN rules count (minimum 5)
+        run: |
+          python - <<'EOF'
+          import json, sys
+          from pathlib import Path
+          data = json.loads(Path("governance/align_rules.json").read_text())
+          rules = data if isinstance(data, list) else data.get("rules", [])
+          count = len(rules)
+          if count < 5:
+              print(f"::error file=governance/align_rules.json::Only {count} ALIGN rules found (minimum 5 required).")
+              sys.exit(1)
+          print(f"✓ ALIGN rules: {count} (>= 5 required)")
+          EOF
+
+      - name: Verify HIL gate in tool_dispatch
+        run: |
+          if ! grep -q "pending_hitl" hlf_mcp/hlf/tool_dispatch.py; then
+            echo "::warning file=hlf_mcp/hlf/tool_dispatch.py::HIL gate pattern 'pending_hitl' not found in tool_dispatch.py"
+          else
+            echo "✓ HIL gate present in tool_dispatch.py"
+          fi
+
+      - name: Verify Intent Capsule tiers
+        run: |
+          python - <<'EOF'
+          import sys
+          from pathlib import Path
+          text = Path("hlf_mcp/hlf/capsules.py").read_text()
+          missing = [t for t in ("hearth", "forge", "sovereign") if t not in text]
+          if missing:
+              print(f"::error file=hlf_mcp/hlf/capsules.py::Missing capsule tier(s): {missing}")
+              sys.exit(1)
+          print("✓ All three capsule tiers present (hearth / forge / sovereign)")
+          EOF
+
+  # ── Job 3: Upstream sync helper (advisory only, never auto-merges) ─────────
+  upstream-drift:
+    name: Upstream Drift Advisory
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Only run this on PRs so we can comment on them
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check governance file freshness vs upstream main
+        run: |
+          git fetch origin main --depth=50 2>/dev/null || true
+          STALE=0
+          FILES=(
+            "governance/align_rules.json"
+            "hlf_mcp/hlf/ethics/governor.py"
+            "hlf_mcp/hlf/ethics/constitution.py"
+          )
+          for f in "${FILES[@]}"; do
+            if git diff --name-only origin/main HEAD -- "$f" | grep -q "$f"; then
+              echo "::notice file=$f::Governance file '$f' differs from main — review intentional."
+              STALE=$((STALE + 1))
+            else
+              echo "✓ $f — in sync with main"
+            fi
+          done
+          if [ $STALE -gt 0 ]; then
+            echo ""
+            echo "::notice::$STALE governance file(s) differ from main."
+            echo "If changes are intentional, this is fine — just making sure you know."
+          fi

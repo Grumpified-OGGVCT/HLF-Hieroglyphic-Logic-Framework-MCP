@@ -1,0 +1,51 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.grumpified-oggvct/hlf-mcp",
+  "version": "0.5.0",
+  "description": "HLF Hieroglyphic Logic Framework — MCP server with hierarchical logic validation and ethical governance.",
+  "repository": "https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP",
+  "license": "MIT",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "hlf-mcp",
+      "version": "0.5.0",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "docker",
+      "identifier": "ghcr.io/grumpified-oggvct/hlf-mcp",
+      "version": "0.5.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
+  "capabilities": {
+    "tools": {
+      "listChanged": true
+    },
+    "resources": {}
+  },
+  "_meta": {
+    "com.grumpified.hlf/ethics": {
+      "governor_version": "1.0",
+      "constitutional_articles": ["C-1", "C-2", "C-3", "C-4", "C-5"],
+      "align_rules_minimum": 5,
+      "capsule_tiers": ["hearth", "forge", "sovereign"],
+      "hil_required": true,
+      "governance_docs": "HLF_ETHICAL_GOVERNOR.md",
+      "design_principles": [
+        "WARN-FIRST: advisories surface before hard blocks",
+        "TRANSPARENT: every block cites its rule",
+        "HUMAN-FIRST: blocks are narrow; ambiguous cases pass with a warning",
+        "NON-REDUCTIVE: no checks silently removed",
+        "NON-INVASIVE: no telemetry, no auto-banning, no silent refusals"
+      ],
+      "fork_compliance_check": "scripts/fork_compliance_check.py",
+      "update_approval_required": true
+    }
+  }
+}

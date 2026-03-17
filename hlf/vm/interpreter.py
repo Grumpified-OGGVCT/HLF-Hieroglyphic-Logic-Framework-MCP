@@ -132,8 +132,17 @@ class VM:
         
         return Value.nil()
     
-    def execute(self, function_index: Optional[int] = None) -> Value:
-        """Execute bytecode"""
+    def find_function(self, name: str) -> int:
+        """Find function index by name. Raises VMError if not found."""
+        if not self.module:
+            raise VMError("No module loaded")
+        for i, fn in enumerate(self.module.functions):
+            if fn.name == name:
+                return i
+        raise VMError(f"Function not found: {name}")
+
+    def execute(self, function_index: Optional[int] = None, args: Optional[List[Value]] = None) -> Value:
+        """Execute bytecode. Args (if given) are placed into the first N locals."""
         if not self.module:
             raise VMError("No module loaded")
         
@@ -146,8 +155,15 @@ class VM:
         
         func = self.module.functions[function_index]
         
+        # Validate arity if args supplied
+        if args is not None and len(args) != func.arity:
+            raise VMError(f"Arity mismatch for '{func.name}': expected {func.arity}, got {len(args)}")
+        
         # Create initial frame
         locals_list = [Value.nil()] * func.local_count
+        if args:
+            for i, arg in enumerate(args):
+                locals_list[i] = arg
         frame = CallFrame(func, 0, locals_list)
         self.frames.append(frame)
         self.frame_count = 1

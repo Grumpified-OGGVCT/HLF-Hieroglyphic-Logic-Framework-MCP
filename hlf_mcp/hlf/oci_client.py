@@ -26,23 +26,40 @@ class OCIModuleRef:
 
     @classmethod
     def parse(cls, ref: str) -> OCIModuleRef:
-        """Parse reference: [registry/]namespace/module[:tag]"""
-        parts = ref.split("/")
-        if len(parts) == 3:
-            registry, namespace, module_tag = parts
-        elif len(parts) == 2:
-            registry = DEFAULT_REGISTRY
-            namespace, module_tag = parts
-        elif len(parts) == 1:
-            registry = DEFAULT_REGISTRY
-            namespace = "library"
-            module_tag = parts[0]
-        else:
+        """Parse reference forms like `module`, `module@v1`, `ns/module[:tag]`, or `registry/ns/module[:tag]`."""
+        normalized = ref.strip()
+        if not normalized:
             raise OCIError(f"Invalid module reference: {ref!r}")
-        if ":" in module_tag:
+        if normalized.startswith("oci://"):
+            normalized = normalized[len("oci://") :]
+
+        parts = [part for part in normalized.split("/") if part]
+        if not parts:
+            raise OCIError(f"Invalid module reference: {ref!r}")
+
+        registry = DEFAULT_REGISTRY
+        if len(parts) >= 3 and ("." in parts[0] or ":" in parts[0] or parts[0] == "localhost"):
+            registry = parts[0]
+            remainder = parts[1:]
+        else:
+            remainder = parts
+
+        if len(remainder) == 1:
+            namespace = "library"
+            module_tag = remainder[0]
+        else:
+            namespace = "/".join(remainder[:-1])
+            module_tag = remainder[-1]
+
+        if "@" in module_tag:
+            module, tag = module_tag.rsplit("@", 1)
+        elif ":" in module_tag:
             module, tag = module_tag.rsplit(":", 1)
         else:
             module, tag = module_tag, "latest"
+
+        if not module or not namespace:
+            raise OCIError(f"Invalid module reference: {ref!r}")
         return cls(registry=registry, namespace=namespace, module=module, tag=tag)
 
     def __str__(self) -> str:
@@ -108,7 +125,10 @@ class OCIClient:
                         member_path = (target / member.name).resolve()
                         if not str(member_path).startswith(str(target.resolve())):
                             raise OCIError(f"Path traversal detected in layer: {member.name}")
-                    tar.extractall(target)
+                    try:
+                        tar.extractall(target, filter="data")
+                    except TypeError:  # pragma: no cover - older Python fallback
+                        tar.extractall(target)
             except tarfile.TarError as exc:
                 raise OCIError(f"Layer extraction failed: {exc}") from exc
 

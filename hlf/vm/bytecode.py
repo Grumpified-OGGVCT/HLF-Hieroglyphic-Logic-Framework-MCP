@@ -6,7 +6,9 @@ Binary format for compiled HLF programs
 from typing import List, Dict, Any, Optional, BinaryIO, Union
 from enum import IntEnum
 import struct
+import hashlib
 import io
+import zlib
 
 class OpCode(IntEnum):
     """Bytecode opcodes"""
@@ -171,7 +173,8 @@ class Function:
 class BytecodeModule:
     """Compiled HLF module"""
     
-    MAGIC = b'HLFB'
+    MAGIC = b'HLB\x00'
+    FORMAT_VERSION = 0x0005  # v0.5
     VERSION = (0, 5, 0)
     
     def __init__(self, name: str = "main"):
@@ -225,76 +228,259 @@ class BytecodeModule:
             return len(self.field_names) - 1
     
     def serialize(self) -> bytes:
-        """Serialize module to bytecode"""
-        output = io.BytesIO()
+        """Serialize module to .hlb binary format per README spec.
         
-        # Header
-        output.write(self.MAGIC)
-        output.write(struct.pack('<BB', *self.VERSION[:2]))
-        output.write(struct.pack('<H', self.flags))
+                Layout:
+                    0..31   SHA-256 hash of everything after it
+                    32..35  Magic: HLB\\x00
+                    36..37  Format version (LE uint16)
+                    38..41  Code section length (LE uint32)
+                    42..45  CRC32 of code section (LE uint32)
+                    46..47  Flags (LE uint16)
+                    48..n   Constant pool (typed entries)
+                    n+1..   Code section (variable-width instructions per function)
+        """
+        body = io.BytesIO()
         
-        # Calculate section offsets
-        header_size = 16
+        # Magic + version + placeholders for code_len/crc/flags
+        body.write(self.MAGIC)                            # 4 bytes  (offset 0 in body)
+        body.write(struct.pack('<H', self.FORMAT_VERSION)) # 2 bytes
+        code_len_pos = body.tell()
+        body.write(struct.pack('<I', 0))                  # code section length placeholder
+        crc_pos = body.tell()
+        body.write(struct.pack('<I', 0))                  # CRC32 placeholder
+        body.write(struct.pack('<H', self.flags))         # 2 bytes flags
+        # body offset 16 = start of constant pool
         
         # Constant pool
-        const_pool_offset = output.tell()
-        output.write(struct.pack('<I', len(self.constants)))
+        body.write(struct.pack('<I', len(self.constants)))
         for entry in self.constants:
-            output.write(entry.serialize())
+            body.write(entry.serialize())
         
         # Atom table
-        atom_offset = output.tell()
-        output.write(struct.pack('<I', len(self.atoms)))
+        body.write(struct.pack('<I', len(self.atoms)))
         for atom in self.atoms:
             encoded = atom.encode('utf-8')
-            output.write(struct.pack('<I', len(encoded)))
-            output.write(encoded)
+            body.write(struct.pack('<I', len(encoded)))
+            body.write(encoded)
         
         # Field name table
-        field_offset = output.tell()
-        output.write(struct.pack('<I', len(self.field_names)))
+        body.write(struct.pack('<I', len(self.field_names)))
         for field in self.field_names:
             encoded = field.encode('utf-8')
-            output.write(struct.pack('<I', len(encoded)))
-            output.write(encoded)
+            body.write(struct.pack('<I', len(encoded)))
+            body.write(encoded)
+        
+        # Functions metadata + code
+        code_section_start = body.tell()
+        body.write(struct.pack('<I', len(self.functions)))
+        body.write(struct.pack('<I', self.entry_point))
+        
+        for func in self.functions:
+            # Function header
+            name_encoded = func.name.encode('utf-8')
+            body.write(struct.pack('<I', len(name_encoded)))
+            body.write(name_encoded)
+            body.write(struct.pack('<B', func.flags))
+            body.write(struct.pack('<B', func.arity))
+            body.write(struct.pack('<H', func.local_count))
+            body.write(struct.pack('<H', func.max_stack))
+            body.write(struct.pack('<I', func.gas_limit))
+            body.write(struct.pack('<B', len(func.effects)))
+            for effect in func.effects:
+                body.write(struct.pack('<H', effect))
+            
+            code_bytes = self._serialize_code(func.code)
+            body.write(struct.pack('<I', len(code_bytes)))
+            body.write(code_bytes)
+        
+        # Patch code section length and CRC32
+        code_section_bytes = body.getvalue()[code_section_start:]
+        code_len = len(code_section_bytes)
+        crc = zlib.crc32(code_section_bytes) & 0xFFFFFFFF
+        
+        body.seek(code_len_pos)
+        body.write(struct.pack('<I', code_len))
+        body.seek(crc_pos)
+        body.write(struct.pack('<I', crc))
+        
+        # Prepend SHA-256 of the body
+        body_bytes = body.getvalue()
+        sha = hashlib.sha256(body_bytes).digest()
+        return sha + body_bytes
+    
+    @classmethod
+    def deserialize(cls, data: bytes) -> "BytecodeModule":
+        """Deserialize .hlb binary back into a BytecodeModule."""
+        if len(data) < 48:
+            raise ValueError("Data too short for .hlb format")
+        
+        # Verify SHA-256
+        sha_expected = data[:32]
+        body = data[32:]
+        sha_actual = hashlib.sha256(body).digest()
+        if sha_expected != sha_actual:
+            raise ValueError("SHA-256 integrity check failed")
+        
+        r = io.BytesIO(body)
+        
+        # Magic
+        magic = r.read(4)
+        if magic != cls.MAGIC:
+            raise ValueError(f"Bad magic: {magic!r}, expected {cls.MAGIC!r}")
+        
+        fmt_version = struct.unpack('<H', r.read(2))[0]
+        code_section_len = struct.unpack('<I', r.read(4))[0]
+        crc_expected = struct.unpack('<I', r.read(4))[0]
+        flags = struct.unpack('<H', r.read(2))[0]
+        
+        mod = cls()
+        mod.flags = flags
+        
+        # Constant pool
+        const_count = struct.unpack('<I', r.read(4))[0]
+        for _ in range(const_count):
+            tag = r.read(1)[0]
+            if tag == 0x01:  # INT
+                val = struct.unpack('<q', r.read(8))[0]
+            elif tag == 0x02:  # FLOAT
+                val = struct.unpack('<d', r.read(8))[0]
+            elif tag == 0x03:  # STRING
+                slen = struct.unpack('<I', r.read(4))[0]
+                val = r.read(slen).decode('utf-8')
+                padding = (4 - slen % 4) % 4
+                r.read(padding)
+            elif tag == 0x04:  # ATOM
+                slen = struct.unpack('<I', r.read(4))[0]
+                val = r.read(slen).decode('utf-8')
+            else:
+                raise ValueError(f"Unknown constant tag: {tag:#x}")
+            mod.constants.append(ConstantPoolEntry(tag, val))
+        
+        # Atom table
+        atom_count = struct.unpack('<I', r.read(4))[0]
+        for _ in range(atom_count):
+            slen = struct.unpack('<I', r.read(4))[0]
+            mod.atoms.append(r.read(slen).decode('utf-8'))
+        
+        # Field name table
+        field_count = struct.unpack('<I', r.read(4))[0]
+        for _ in range(field_count):
+            slen = struct.unpack('<I', r.read(4))[0]
+            mod.field_names.append(r.read(slen).decode('utf-8'))
         
         # Functions
-        code_offset = output.tell()
-        output.write(struct.pack('<I', len(self.functions)))
-        for func in self.functions:
-            output.write(struct.pack('<B', func.flags))
-            output.write(struct.pack('<B', func.arity))
-            output.write(struct.pack('<H', func.local_count))
-            output.write(struct.pack('<H', func.max_stack))
-            output.write(struct.pack('<I', func.gas_limit))
-            output.write(struct.pack('<B', len(func.effects)))
-            for effect in func.effects:
-                output.write(struct.pack('<H', effect))
-            output.write(struct.pack('<H', func.name_idx))
-            output.write(struct.pack('<H', func.doc_idx if func.doc_idx is not None else 0xFFFF))
+        code_section_start = r.tell()
+        func_count = struct.unpack('<I', r.read(4))[0]
+        mod.entry_point = struct.unpack('<I', r.read(4))[0]
+        
+        for _ in range(func_count):
+            name_len = struct.unpack('<I', r.read(4))[0]
+            name = r.read(name_len).decode('utf-8')
+            func = Function(name)
+            func.flags = r.read(1)[0]
+            func.arity = r.read(1)[0]
+            func.local_count = struct.unpack('<H', r.read(2))[0]
+            func.max_stack = struct.unpack('<H', r.read(2))[0]
+            func.gas_limit = struct.unpack('<I', r.read(4))[0]
+            effect_count = r.read(1)[0]
+            func.effects = [struct.unpack('<H', r.read(2))[0] for _ in range(effect_count)]
             
-            # Serialize code
-            code_bytes = self._serialize_code(func.code)
-            output.write(struct.pack('<I', len(code_bytes)))
-            output.write(code_bytes)
+            code_len = struct.unpack('<I', r.read(4))[0]
+            code_raw = r.read(code_len)
+            func.code = cls._deserialize_code(code_raw)
+            mod.functions.append(func)
         
-        # Entry point
-        entry_offset = output.tell()
-        output.write(struct.pack('<I', self.entry_point))
+        # Verify CRC32 of code section
+        code_section_bytes = body[code_section_start:]
+        crc_actual = zlib.crc32(code_section_bytes) & 0xFFFFFFFF
+        if crc_actual != crc_expected:
+            raise ValueError(f"CRC32 mismatch: expected {crc_expected:#x}, got {crc_actual:#x}")
         
-        # Update header with offsets (go back and patch)
-        current_pos = output.tell()
-        output.seek(6)
-        output.write(struct.pack('<I', const_pool_offset))
-        output.write(struct.pack('<I', code_offset))
-        output.write(struct.pack('<I', 0))  # debug_info_offset (optional)
-        output.write(struct.pack('<I', entry_offset))
-        output.seek(current_pos)
-        
-        return output.getvalue()
+        return mod
+    
+    # Opcodes that take no operand (bare int in internal repr)
+    _NO_OPERAND_OPCODES = frozenset({
+        OpCode.NOP, OpCode.POP, OpCode.DUP, OpCode.SWAP, OpCode.ROT,
+        OpCode.LOAD_TRUE, OpCode.LOAD_FALSE, OpCode.LOAD_UNIT,
+        OpCode.ADD_INT, OpCode.SUB_INT, OpCode.MUL_INT, OpCode.DIV_INT,
+        OpCode.MOD_INT, OpCode.NEG_INT,
+        OpCode.ADD_FLOAT, OpCode.SUB_FLOAT, OpCode.MUL_FLOAT, OpCode.DIV_FLOAT,
+        OpCode.NEG_FLOAT, OpCode.POW_FLOAT,
+        OpCode.EQ, OpCode.NE, OpCode.LT_INT, OpCode.LE_INT, OpCode.GT_INT,
+        OpCode.GE_INT, OpCode.LT_FLOAT, OpCode.LE_FLOAT, OpCode.GT_FLOAT,
+        OpCode.GE_FLOAT, OpCode.NOT, OpCode.AND, OpCode.OR, OpCode.IS_NIL,
+        OpCode.RETURN, OpCode.RETURN_UNIT,
+        OpCode.MAKE_LIST_EMPTY,
+        OpCode.GET_INDEX, OpCode.SET_INDEX, OpCode.LIST_LEN,
+        OpCode.LIST_APPEND, OpCode.LIST_CONS, OpCode.LIST_HEAD, OpCode.LIST_TAIL,
+        OpCode.POP_HANDLER, OpCode.RAISE,
+        OpCode.BREAKPOINT, OpCode.HALT,
+    })
+
+    @staticmethod
+    def _deserialize_code(data: bytes) -> List[Union[int, tuple]]:
+        """Deserialize variable-width instructions back to internal representation."""
+        no_op = BytecodeModule._NO_OPERAND_OPCODES
+        u16_ops = frozenset({
+            OpCode.LOAD_CONST, OpCode.LOAD_ATOM, OpCode.GET_FIELD_BY_NAME,
+            OpCode.CALL_TOOL, OpCode.OPENCLAW_TOOL, OpCode.SPEC_DEFINE,
+        })
+        u8_ops = frozenset({
+            OpCode.LOAD_CONST_FAST, OpCode.LOAD_LOCAL, OpCode.STORE_LOCAL,
+            OpCode.LOAD_ARG, OpCode.LOAD_CLOSURE, OpCode.STORE_CLOSURE,
+            OpCode.GET_FIELD, OpCode.SET_FIELD, OpCode.DUP_N, OpCode.PICK,
+            OpCode.DROP_N, OpCode.MAKE_LIST, OpCode.MAKE_TUPLE,
+            OpCode.MAKE_RECORD, OpCode.MAKE_CLOSURE, OpCode.CALL_LOCAL,
+            OpCode.TAIL_CALL,
+        })
+        jump_ops = frozenset({
+            OpCode.JUMP, OpCode.JUMP_IF_TRUE, OpCode.JUMP_IF_FALSE,
+            OpCode.JUMP_FORWARD, OpCode.PUSH_HANDLER, OpCode.MATCH_JUMP,
+            OpCode.ASSERT,
+        })
+        single_byte_ops = frozenset({
+            OpCode.LOAD_INT_SMALL, OpCode.CHECK_TIER, OpCode.RAISE,
+            OpCode.TRACE, OpCode.HALT,
+        })
+        multi_operand_ops = frozenset({OpCode.CALL, OpCode.CALL_HOST})
+
+        code = []
+        i = 0
+        while i < len(data):
+            opcode = data[i]
+            i += 1
+
+            if opcode in no_op:
+                code.append(opcode)
+            elif opcode in u16_ops:
+                code.append((opcode, struct.unpack('<H', data[i:i+2])[0]))
+                i += 2
+            elif opcode in u8_ops:
+                code.append((opcode, data[i]))
+                i += 1
+            elif opcode in jump_ops:
+                fmt = '<H' if opcode == OpCode.JUMP_FORWARD else '<h'
+                code.append((opcode, struct.unpack(fmt, data[i:i+2])[0]))
+                i += 2
+            elif opcode in single_byte_ops:
+                code.append((opcode, data[i]))
+                i += 1
+            elif opcode in multi_operand_ops:
+                operand = struct.unpack('<H', data[i:i+2])[0]
+                argc = data[i+2]
+                code.append((opcode, operand, argc))
+                i += 3
+            elif opcode == OpCode.GAS_CHECK:
+                code.append((opcode, struct.unpack('<I', data[i:i+4])[0]))
+                i += 4
+            else:
+                code.append((opcode, operand))
+
+        return code
     
     def _serialize_code(self, code: List[Union[int, tuple]]) -> bytes:
-        """Serialize instruction stream to bytes"""
+        """Serialize instruction stream to variable-width bytes (internal use)."""
         output = io.BytesIO()
         
         for instr in code:
@@ -305,17 +491,34 @@ class BytecodeModule:
                 output.write(bytes([opcode]))
                 
                 # Serialize operands based on opcode
-                if opcode in (OpCode.LOAD_CONST, OpCode.LOAD_ATOM, OpCode.GET_FIELD_BY_NAME,
-                             OpCode.CALL, OpCode.CALL_TOOL, OpCode.CALL_HOST,
-                             OpCode.OPENCLAW_TOOL, OpCode.SPEC_DEFINE):
+                if opcode in (
+                    OpCode.LOAD_CONST,
+                    OpCode.LOAD_ATOM,
+                    OpCode.GET_FIELD_BY_NAME,
+                    OpCode.CALL_TOOL,
+                    OpCode.OPENCLAW_TOOL,
+                    OpCode.SPEC_DEFINE,
+                ):
                     # u16 operand
                     output.write(struct.pack('<H', instr[1]))
-                elif opcode in (OpCode.LOAD_CONST_FAST, OpCode.LOAD_LOCAL, OpCode.STORE_LOCAL,
-                               OpCode.LOAD_ARG, OpCode.LOAD_CLOSURE, OpCode.STORE_CLOSURE,
-                               OpCode.GET_FIELD, OpCode.SET_FIELD, OpCode.DUP_N, OpCode.PICK,
-                               OpCode.DROP_N, OpCode.MAKE_LIST, OpCode.MAKE_TUPLE,
-                               OpCode.MAKE_RECORD, OpCode.MAKE_CLOSURE, OpCode.CALL_LOCAL,
-                               OpCode.TAIL_CALL):
+                elif opcode in (
+                    OpCode.LOAD_CONST_FAST,
+                    OpCode.LOAD_LOCAL,
+                    OpCode.STORE_LOCAL,
+                    OpCode.LOAD_ARG,
+                    OpCode.LOAD_CLOSURE,
+                    OpCode.STORE_CLOSURE,
+                    OpCode.GET_FIELD,
+                    OpCode.SET_FIELD,
+                    OpCode.DUP_N,
+                    OpCode.PICK,
+                    OpCode.DROP_N,
+                    OpCode.MAKE_LIST,
+                    OpCode.MAKE_TUPLE,
+                    OpCode.MAKE_RECORD,
+                    OpCode.MAKE_CLOSURE,
+                    OpCode.CALL_LOCAL,
+                ):
                     # u8 operand
                     output.write(bytes([instr[1]]))
                 elif opcode in (OpCode.JUMP, OpCode.JUMP_IF_TRUE, OpCode.JUMP_IF_FALSE,
@@ -384,9 +587,8 @@ class BytecodeModule:
 
 # Convenience functions
 def load_bytecode(data: bytes) -> BytecodeModule:
-    """Load bytecode from bytes"""
-    # TODO: Implement bytecode loading
-    raise NotImplementedError("Bytecode loading not yet implemented")
+    """Load bytecode from .hlb bytes"""
+    return BytecodeModule.deserialize(data)
 
 # Example/test
 def create_hello_world() -> BytecodeModule:

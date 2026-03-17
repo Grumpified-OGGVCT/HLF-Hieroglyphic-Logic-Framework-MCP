@@ -30,12 +30,12 @@ def test_metrics():
     print(f'4. suggest_improvement() = {suggestion_id}')
     
     # Get usage summary
-    summary = metrics.get_usage_summary()
-    print(f'5. get_usage_summary() = tool_calls={summary.get("total_calls", 0)}')
-    
+    summary = metrics.get_stats()
+    print(f'5. get_stats() = total_uses={summary.get("total_uses", 0)}')
+
     # Get all suggestions
-    suggestions = metrics.get_suggestions()
-    print(f'6. get_suggestions() = {len(suggestions)} suggestions')
+    suggestions = metrics.get_open_suggestions()
+    print(f'6. get_open_suggestions() = {len(suggestions)} suggestions')
     
     print('')
     print('ALL METRICS TESTS PASSED')

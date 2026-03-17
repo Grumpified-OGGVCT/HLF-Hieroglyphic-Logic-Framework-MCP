@@ -104,7 +104,7 @@ jobs:
             --cov-report=html:/tmp/coverage-html \
             --tb=short \
             -q
-        # All 42+ tests must pass. Coverage XML is used by both Codecov and SonarCloud.
+        # All 160+ tests must pass. Coverage XML is used by both Codecov and SonarCloud.
 
       # ── Step 4: Codecov upload ────────────────────────────────────────────
       - name: Upload coverage to Codecov

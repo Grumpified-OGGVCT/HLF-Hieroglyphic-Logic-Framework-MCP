@@ -3,15 +3,13 @@
 > **The Rosetta Stone for Machines.** A deterministic orchestration protocol that replaces natural language ambiguity with a strictly-typed Hieroglyphic AST — enabling zero-trust agent execution, cryptographic governance, and ultra-dense token efficiency across every model and runtime.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
-[![HLF v0.4](https://img.shields.io/badge/HLF-v0.4.0-purple)](governance/bytecode_spec.yaml)
+[![HLF v0.5](https://img.shields.io/badge/HLF-v0.5.0-purple)](governance/bytecode_spec.yaml)
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 <p align="center">
   <img src="docs/social_preview.svg" alt="HLF — Hieroglyphic Logic Framework · MCP Server" width="100%"/>
 </p>
-
-> 💡 **Repo social preview**: Go to **Settings → Social preview** and upload a PNG export of [`docs/social_preview.svg`](docs/social_preview.svg) (1280×640px) so this card appears when the link is shared in Discord, forums, and social media.
 
 ---
 
@@ -75,15 +73,45 @@ Glyph Source  ──compile──▶  JSON AST  ──codegen──▶  .hlb Byt
 ASCII Source            English Audit             Assembly Listing
 ```
 
+
 ### Ethos — People First, Transparent Governance
 
 - People and their work are the priority; privacy is default, and HLF enforces hard laws rather than paternalistic filters.
 - AI is the tool — humans author the constraints, which stay transparent and auditable in-repo.
-- Ethical Governor (in progress) will fail closed before harm, support declared red-hat research paths, and document every decision.
+- Ethical Governor enforces hard laws at compile time: fails closed before harm, supports declared red-hat research paths, and cryptographically documents every decision.
 - Transparency over surveillance: governance files (ALIGN rules, ethics docs) stay human-readable so constraints can be inspected and debated.
 - Use HLF freely; when boundaries apply, they are explicit, scoped to protect people, and never to suppress legitimate research or creativity.
 
+**Security Responsibility:** While HLF and the MCP enforce strong, auditable boundaries, not all security risks can be mitigated at the protocol or software level. Users are responsible for their own operational security, including (but not limited to) using a trusted VPN, maintaining a reputable local security suite (e.g., Bitdefender or equivalent), and following best practices for endpoint protection. The project ethos is to empower, not to guarantee; ultimate safety is a shared responsibility between the system and its operators.
+
 See `docs/ETHICAL_GOVERNOR_HANDOFF.md` for the handoff brief guiding the downstream ethics module implementation.
+
+### The Arrival Analogy — Why Symbols Beat Sentences
+
+If you've seen the film *Arrival*, you know the premise: alien visitors communicate through circular logograms where a single symbol encodes an entire proposition — subject, verb, object, tense, causality, and intent — all at once. A human sentence like *"We offer a weapon"* takes four tokens; a heptapod logogram captures the full meaning, its negation, its conditions, and its consequences in one non-linear glyph. The linguist doesn't learn a language — she learns a **new way of thinking about meaning**, where time and intent are not sequential but simultaneous.
+
+HLF is that idea, made real, for AI agents.
+
+When a human writes `"Audit /security/seccomp.json, read-only, and report vulnerabilities"`, that is a **linear, ambiguous, high-entropy** sentence. Different LLMs will parse it differently. Context is lost between tokens. There is no formal guarantee of what "read-only" means or whether "report" implies file-write permission.
+
+When HLF compresses that into:
+
+```hlf
+[HLF-v3]
+Δ [INTENT] goal="audit_seccomp"
+  Ж [CONSTRAINT] mode="ro"
+  Ж [EXPECT] vulnerability_shorthand
+  ⨝ [VOTE] consensus="strict"
+Ω
+```
+
+...every ambiguity is resolved **mathematically**. `Ж [CONSTRAINT] mode="ro"` is not a suggestion — it is a hard, compiler-enforced, gas-metered boundary. The `⨝ [VOTE]` node requires consensus before the result is accepted. The `Ω` terminator seals the intent for Merkle-chain audit. Every symbol has a precise semantic role, a defined gas cost, and a cryptographic hash.
+
+Like heptapod logograms, HLF glyphs are **non-linear propositions**: a single symbol encodes the what (intent), the how (constraints), the who (tier), the how-much (gas), and the proof (audit trail) — all simultaneously. The mathematics underneath — Shannon entropy for compression, KL divergence for disambiguation, confidence thresholds for quality gating — are what make this reliable instead of clever.
+
+The front door is English. The engine is math. The glyphs are the bridge.
+
+For the full architectural vision including the 13-layer Three-Brain model, Rosetta Engine (Deterministic Compilation Equivalence), EnCompass (Probabilistic Angelic Nondeterminism), ROMA orchestration, and Darwin Gödel Machine evolution, see the [Sovereign Agentic OS README](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF#readme) — particularly the upgrade suggestions in the final sections covering layered profiles, formal effect systems, 5-surface round-tripping, and the 90-day roadmap from "interesting system" to "planet-class language."
 
 ---
 
@@ -165,7 +193,7 @@ flowchart TD
     end
 
     subgraph Server["⚙️ HLF MCP Server  (hlf_mcp/server.py)"]
-        S1[FastMCP  22 tools · 7 resources]
+        S1[FastMCP  26 tools · 9 resources]
     end
 
     subgraph Compiler["📐 Compiler Pipeline"]
@@ -730,7 +758,7 @@ graph LR
         T1["stdio\ntransport"]
         T2["SSE\n/sse + /messages"]
         T3["streamable-HTTP\n/mcp"]
-        Core["22 tools\n7 resources\nHLF_TRANSPORT env"]
+        Core["26 tools\n9 resources\nHLF_TRANSPORT env"]
         T1 --> Core
         T2 --> Core
         T3 --> Core
@@ -774,6 +802,7 @@ HLF_PORT=8000               # port (SSE/HTTP only)
 
 | Tool | Description | Key Parameters |
 |---|---|---|
+| `hlf_do` | Plain-English front door: intent -> governed HLF -> audit | `intent, tier, dry_run, show_hlf` |
 | `hlf_compile` | Parse HLF source → JSON AST + bytecode hex | `source: str` |
 | `hlf_format` | Canonicalize: uppercase tags, trailing `Ω` | `source: str` |
 | `hlf_lint` | Static analysis: token budget, gas, vars, specs | `source, gas_limit, token_limit` |
@@ -958,11 +987,21 @@ graph TD
 | Merkle chain | Tamper-evident audit trail on every memory write |
 | ULID nonce | 600s TTL replay deduplication (planned integration) |
 
-### Ethical Governor (people-first, in progress)
-- Mission: humans first, AI as tool; constraints stay transparent and auditable in-repo.
-- Scope: constitutional hard-law checks, declared red-hat research path, rogue detection, fail-closed termination.
-- Status: scaffolding shipped (`hlf_mcp/hlf/ethics/` stubs + compiler hook); downstream agent must wire full logic.
-- Handoff: see `docs/ETHICAL_GOVERNOR_HANDOFF.md` for required implementation steps and guardrails.
+### Ethical Governor — Fully Implemented
+
+The governor is wired into the compiler pipeline as a mandatory pre-flight gate. It runs before bytecode generation and raises `CompileError` on any high-severity signal — no partial execution, no silent bypass.
+
+| Module | Responsibility |
+|---|---|
+| `constitution.py` | Hard-law violations: lethal content, CSAM, absolute blocks; tier escalation checks |
+| `termination.py` | Fail-closed termination, ULID audit log, appealable vs. non-appealable articles |
+| `red_hat.py` | Declared red-hat research scope validation; fingerprint registry |
+| `rogue_detection.py` | Prompt injection, jailbreak, aggressive verb, tier-smuggling detection |
+| `governor.py` | Orchestrates all four modules; exposes `check()` and `raise_if_blocked()` |
+
+**Compiler hook**: `compiler.py` calls `governor.raise_if_blocked()` at the end of Pass 4. Blocked programs raise `CompileError` with `RuleId`, `Article`, and full audit trail.
+
+**Test coverage**: 44 dedicated tests in `tests/test_ethics.py` covering constitutional violations, termination audit log, red-hat declarations, rogue signal detection, and compiler integration.
 
 ### Cryptographic Stack
 
@@ -982,13 +1021,15 @@ graph TD
 # Install all dependencies
 uv sync
 
-# Run test suite (42 tests)
+# Run test suite (170 tests)
 uv run pytest tests/ -v
 
 # Run specific test modules
 uv run pytest tests/test_compiler.py -v
+uv run pytest tests/test_ethics.py -v
 uv run pytest tests/test_formatter.py -v
 uv run pytest tests/test_linter.py -v
+uv run pytest tests/test_github_scripts.py -v
 ```
 
 ### CLI Tools
@@ -999,13 +1040,21 @@ uv run pytest tests/test_linter.py -v
 | `uv run hlffmt <file.hlf>` | Canonicalize formatting |
 | `uv run hlflint <file.hlf>` | Static linting |
 | `uv run hlfrun <file.hlf>` | Execute in VM |
+| `uv run hlfpm <command>` | Manage packaged HLF modules |
+| `uv run hlflsp` | Start the packaged HLF language server |
+| `uv run hlfsh` | Start interactive HLF shell |
+| `uv run hlftest <path>` | Compile and lint HLF fixtures/snippets |
+| `uv run python scripts/generate_tm_grammar.py` | Generate `syntaxes/hlf.tmLanguage.json` from packaged grammar metadata |
+| `uv run python scripts/gen_docs.py` | Generate packaged tag, stdlib, and host-function reference docs |
+| `uv run python scripts/verify_chain.py <trace.jsonl>` | Verify JSONL trace-chain integrity against computed hashes |
+| `uv run python scripts/hlf_token_lint.py fixtures` | Enforce file and per-line token budgets on HLF sources |
 | `uv run hlf-mcp` | Start MCP server |
 
 ### Project Structure
 
 ```
 hlf_mcp/
-├── server.py               # FastMCP server (22 tools, 7 resources)
+├── server.py               # FastMCP server (26 tools, 9 resources)
 ├── hlf/
 │   ├── grammar.py          # LALR(1) Lark grammar + glyph map + confusables
 │   ├── compiler.py         # 5-pass compiler pipeline
@@ -1018,6 +1067,7 @@ hlf_mcp/
 │   ├── tool_dispatch.py    # ToolRegistry + HITL gate
 │   ├── oci_client.py       # OCI package registry client
 │   ├── hlfpm.py            # Package manager (install/freeze/list)
+│   ├── hlflsp.py           # Language server (diagnostics, completion, hover, definitions)
 │   ├── translator.py       # HLF ↔ English translation (tone-aware)
 │   ├── insaits.py          # InsAIts decompiler (AST/bytecode → English)
 │   ├── memory_node.py      # MemoryNode + MemoryStore
@@ -1034,10 +1084,27 @@ hlf_mcp/
 governance/
 ├── bytecode_spec.yaml      # ← Single source of truth for all opcodes
 ├── host_functions.json     # 28 host functions (tier/gas/backend/sensitive)
-└── align_rules.json        # 5 ALIGN Ledger governance rules
+├── align_rules.json        # 5 ALIGN Ledger governance rules
+├── module_import_rules.yaml# Import policy extracted from Sovereign source
+└── templates/
+    └── dictionary.json     # Tag/glyph dictionary for future tooling
 
-fixtures/                   # 7 example HLF programs
-tests/                      # pytest test suite (42 tests)
+fixtures/                   # 11 example HLF programs
+scripts/
+├── generate_tm_grammar.py  # Build TextMate grammar from packaged HLF metadata
+├── gen_docs.py             # Build packaged tag and stdlib reference docs
+├── hlf_token_lint.py       # Token-budget linting for .hlf corpora
+├── live_api_test.py
+└── monitor_model_drift.py
+syntaxes/
+└── hlf.tmLanguage.json     # Generated HLF syntax grammar
+docs/
+├── HLF_GRAMMAR_REFERENCE.md # Adapted packaged grammar reference
+├── HLF_TAG_REFERENCE.md    # Generated from governance/templates/dictionary.json
+├── HLF_STDLIB_REFERENCE.md # Generated from packaged Python stdlib bindings
+├── stdlib.md               # Adapted packaged stdlib guide
+└── ...
+tests/                      # pytest test suite
 Dockerfile                  # Multi-stage production build
 docker-compose.yml          # Service composition with health check
 ```
@@ -1065,19 +1132,23 @@ uv run ruff format hlf_mcp/
 - [x] 8 stdlib modules (no stubs — AES-256-GCM crypto, PBKDF2, HMAC-SHA256)
 - [x] Infinite RAG memory (SQLite WAL, Merkle chain, cosine dedup)
 - [x] Instinct SDD lifecycle (SPECIFY→PLAN→EXECUTE→VERIFY→MERGE, CoVE gate)
-- [x] FastMCP server: 22 tools, 7 resources, stdio + SSE + streamable-HTTP
+- [x] FastMCP server: 26 tools, 9 resources, stdio + SSE + streamable-HTTP
 - [x] Multi-stage Docker image + docker-compose with health check
-- [x] 42 passing tests
+- [x] Ethical Governor: 5-module compile-time gate (constitution · termination · red_hat · rogue_detection · governor)
+- [x] 170 passing tests (44 ethics-specific)
 
 ### Phase 2 — Harden Semantics 🔨 (in progress)
 
-- [ ] **Vector embeddings**: install `sqlite-vec` C extension for real cosine search (replacing bag-of-words)
+- [x] **Ollama Cloud client**: streaming, thinking, structured outputs, tool calling, web search, 4-tier fallback chain with circuit breaker (`.github/scripts/ollama_client.py`)
+- [x] **Weekly automated governance**: 8 GitHub Actions — spec-sentinel, ethics-review, model drift detection, code quality, test health (weekly cron + `workflow_dispatch`)
+- [x] **Model drift monitoring**: 7 weighted semantic probes with structured output scoring (`scripts/monitor_model_drift.py`)
+- [ ] **Vector embeddings**: `sqlite-vec` C extension for real cosine search (replacing bag-of-words)
 - [ ] **SHA-256 dedup cache**: pre-embedding content deduplication layer
 - [ ] **Fractal summarisation**: map-reduce context compression when memory approaches token limit
 - [ ] **Hot/Warm/Cold tiering**: Redis hot → SQLite warm → Parquet cold context transfer
-- [ ] **LSP server** (`hlflsp`): VS Code / Neovim diagnostics, completion, hover, go-to-definition
-- [ ] **hlfsh REPL**: interactive shell with Merkle-chained session log
-- [ ] **hlftest runner**: HLF-native spec + assertion framework with CoVE validation gate
+- [x] **LSP server** (`hlflsp`): packaged diagnostics, completion, hover, document symbols, go-to-definition
+- [x] **hlfsh REPL**: interactive shell on the packaged compiler/linter surface
+- [x] **hlftest runner**: packaged compile + lint harness for snippets, files, and fixture directories
 
 ### Phase 3 — Universal Usability 🌐 (planned)
 
@@ -1117,9 +1188,11 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 
 ## Related Links
 
-- 📖 [HLF & Infinite RAG Definitive Reference](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/HLF_REFERENCE.md)
+- 📖 [Packaged HLF Reference](docs/HLF_REFERENCE.md)
+- 🧾 [CLI Tools Reference](docs/cli-tools.md)
+- 📚 [Host Functions Reference](docs/HLF_HOST_FUNCTIONS_REFERENCE.md)
+- 🔄 [Packaged Instinct Reference](docs/INSTINCT_REFERENCE.md)
 - 📜 [RFC 9000 Series](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/RFC_9000_SERIES.md)
-- 🔄 [Instinct SDD Reference](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/INSTINCT_REFERENCE.md)
 - 🗺️ [Unified Ecosystem Roadmap](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/UNIFIED_ECOSYSTEM_ROADMAP.md)
 - 🏗️ [Walkthrough](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/WALKTHROUGH.md)
 - 🔬 [NotebookLM Research Notebook](https://notebooklm.google.com) — 291 sources, deep research reports, RFC catalog

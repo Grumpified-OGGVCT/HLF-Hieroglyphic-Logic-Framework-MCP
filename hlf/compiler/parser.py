@@ -57,7 +57,11 @@ class Parser:
     def skip_newlines(self) -> None:
         while self.match(TokenType.NEWLINE):
             self.advance()
-    
+
+    def _skip_separators(self) -> None:
+        while self.match(TokenType.NEWLINE, TokenType.SEMICOLON):
+            self.advance()
+
     def parse(self) -> Module:
         """Parse module"""
         self.skip_newlines()
@@ -70,9 +74,11 @@ class Parser:
         declarations = []
         
         while not self.match(TokenType.EOF):
-            self.skip_newlines()
+            self._skip_separators()
             
-            if self.match(TokenType.IMPORT):
+            if self.match(TokenType.EOF):
+                break
+            elif self.match(TokenType.IMPORT):
                 imports.append(self.parse_import())
             elif self.match(TokenType.FN):
                 declarations.append(self.parse_function())
@@ -85,7 +91,7 @@ class Parser:
             else:
                 raise self.error(f"Unexpected token: {self.current().type.name}")
             
-            self.skip_newlines()
+            self._skip_separators()
         
         loc = Location(
             Position(1, 1, 0),
@@ -284,13 +290,13 @@ class Parser:
         """Parse block { stmts }"""
         start = self.current()
         self.consume(TokenType.LBRACE)
-        self.skip_newlines()
+        self._skip_separators()
         
         statements = []
         while not self.match(TokenType.RBRACE):
             stmt = self.parse_statement()
             statements.append(stmt)
-            self.skip_newlines()
+            self._skip_separators()
         
         end = self.current()
         self.consume(TokenType.RBRACE)
@@ -488,7 +494,35 @@ class Parser:
     
     def parse_type(self) -> Type:
         """Parse type expression"""
-        # TODO: implement full type parsing
+        if self.match(TokenType.CAPITAL_IDENT):
+            name = self.advance().value
+            # Generic type: Name[T, U]
+            if self.match(TokenType.LBRACKET):
+                self.advance()
+                params = [self.parse_type()]
+                while self.match(TokenType.COMMA):
+                    self.advance()
+                    params.append(self.parse_type())
+                self.consume(TokenType.RBRACKET)
+                return GenericType(name=name, params=params)
+            return NamedType(name=name)
+        elif self.match(TokenType.IDENT):
+            name = self.advance().value
+            return PrimitiveType(name=name)
+        elif self.match(TokenType.LPAREN):
+            # Function type: (A, B) -> C
+            self.advance()
+            params = []
+            while not self.match(TokenType.RPAREN):
+                params.append(self.parse_type())
+                if self.match(TokenType.COMMA):
+                    self.advance()
+            self.consume(TokenType.RPAREN)
+            if self.match(TokenType.ARROW):
+                self.advance()
+                ret = self.parse_type()
+                return FunctionType(params=params, return_type=ret)
+            return PrimitiveType(name="unit")
         return PrimitiveType(name="unit")
     
     def parse_expression(self) -> Expression:

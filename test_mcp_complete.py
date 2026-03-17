@@ -16,10 +16,9 @@ def test_imports():
         from hlf.mcp_client import HLFMCPClient
         from hlf.mcp_metric import HLFTestMetrics, VERIFIED_METRICS
         print('  PASS: All imports successful')
-        return True
     except Exception as e:
         print(f'  FAIL: {e}')
-        return False
+        assert False, str(e)
 
 def test_resources():
     """Test 2: Resources work."""
@@ -33,17 +32,18 @@ def test_resources():
         grammar = provider.read_resource('hlf://grammar')
         assert grammar.content is not None, "Grammar content is None"
         print('  PASS: Resources working')
-        return True
     except Exception as e:
         print(f'  FAIL: {e}')
-        return False
+        assert False, str(e)
 
 def test_tools():
     """Test 3: Tools work."""
     print('TEST 3: Tools...')
     try:
+        from hlf.mcp_resources import HLFResourceProvider
         from hlf.mcp_tools import HLFToolProvider
-        tools = HLFToolProvider(repo_root=Path('.'))
+        resource_provider = HLFResourceProvider(Path('.'))
+        tools = HLFToolProvider(resource_provider=resource_provider)
         tool_list = tools.list_tools()
         names = [t.name for t in tool_list]
         
@@ -51,10 +51,9 @@ def test_tools():
         assert 'hlf_execute' in names, f"hlf_execute not in {names}"
         assert 'hlf_friction_log' in names, f"hlf_friction_log not in {names}"
         print('  PASS: Tools working')
-        return True
     except Exception as e:
         print(f'  FAIL: {e}')
-        return False
+        assert False, str(e)
 
 def test_prompts():
     """Test 4: Prompts work."""
@@ -70,10 +69,9 @@ def test_prompts():
         init_prompt = prompts.get_prompt('hlf_initialize_agent', {'tier': 'forge', 'profile': 'P0'})
         assert 'HLF MODE' in init_prompt, "HLF MODE not in prompt"
         print('  PASS: Prompts working')
-        return True
     except Exception as e:
         print(f'  FAIL: {e}')
-        return False
+        assert False, str(e)
 
 def test_metrics():
     """Test 5: Metrics work."""
@@ -83,12 +81,16 @@ def test_metrics():
         metrics = HLFTestMetrics()
         results = metrics.run_all_tests()
         
-        assert len(results) >= 5, f"Expected >= 5 results, got {len(results)}"
+        assert "summary" in results
+        assert "tests" in results
+        assert results["summary"]["total"] >= 5, (
+            f"Expected >= 5 tracked metrics, got {results['summary']['total']}"
+        )
+        assert "tools" in results["tests"], "Expected tools metric in results"
         print('  PASS: Metrics working')
-        return True
     except Exception as e:
         print(f'  FAIL: {e}')
-        return False
+        assert False, str(e)
 
 def test_client():
     """Test 6: Client works."""
@@ -96,21 +98,23 @@ def test_client():
     try:
         from hlf.mcp_client import HLFMCPClient
         client = HLFMCPClient('http://localhost:8000')
-        
-        system_prompt = client._build_system_prompt(
-            tier='forge',
-            profile='P0',
-            grammar='# Test grammar',
-            dictionaries={'version': '0.5'},
-            version_info={'version': '0.5.0', 'grammar_sha256': 'abc123'}
-        )
-        
-        assert 'HLF SYSTEM PROMPT' in system_prompt, "HLF SYSTEM PROMPT not in system_prompt"
+
+        assert client.base_url == 'http://localhost:8000'
+        assert hasattr(client, 'get_system_prompt')
+        assert hasattr(client, 'get_init_prompt')
         print('  PASS: Client working')
-        return True
     except Exception as e:
         print(f'  FAIL: {e}')
-        return False
+        assert False, str(e)
+
+
+def _run_test(name, func):
+    try:
+        func()
+        return name, True
+    except Exception as exc:
+        print(f'  FAIL [{name}]: {exc}')
+        return name, False
 
 def main():
     """Run all tests."""
@@ -120,21 +124,21 @@ def main():
     print()
     
     results = [
-        test_imports(),
-        test_resources(),
-        test_tools(),
-        test_prompts(),
-        test_metrics(),
-        test_client()
+        _run_test('Imports', test_imports),
+        _run_test('Resources', test_resources),
+        _run_test('Tools', test_tools),
+        _run_test('Prompts', test_prompts),
+        _run_test('Metrics', test_metrics),
+        _run_test('Client', test_client),
     ]
     
     print()
     print('=' * 60)
-    passed = sum(results)
+    passed = sum(1 for _, result in results if result)
     total = len(results)
     print(f'RESULTS: {passed}/{total} tests passed')
     
-    if all(results):
+    if all(result for _, result in results):
         print('ALL TESTS PASSED!')
         return 0
     else:

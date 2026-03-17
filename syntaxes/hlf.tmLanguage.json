@@ -1,0 +1,89 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "HLF",
+  "scopeName": "source.hlf",
+  "fileTypes": [
+    "hlf"
+  ],
+  "patterns": [
+    {
+      "include": "#version_header"
+    },
+    {
+      "include": "#glyph"
+    },
+    {
+      "include": "#ascii_alias"
+    },
+    {
+      "include": "#canonical_tag"
+    },
+    {
+      "include": "#generic_tag"
+    },
+    {
+      "include": "#terminator"
+    },
+    {
+      "include": "#variable"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#keyword"
+    },
+    {
+      "include": "#comment"
+    }
+  ],
+  "repository": {
+    "version_header": {
+      "match": "\\[HLF-v\\d+(?:\\.\\d+)*\\]",
+      "name": "keyword.control.hlf"
+    },
+    "glyph": {
+      "match": "(?:\u0394|\u0416|\u2a1d|\u2318|\u2207|\u2a55|\u228e)",
+      "name": "keyword.operator.glyph.hlf"
+    },
+    "ascii_alias": {
+      "match": "\\b(?:CONSTRAIN|CONSENSUS|ANALYSER|ANALIZAR|PRIORITY|ANALYZE|ANALYSE|ENFORCE|COMMAND|SOURCE|BRANCH|UNION|OMEGA|JOIN|CMD|END)\\b",
+      "name": "support.constant.alias.hlf"
+    },
+    "canonical_tag": {
+      "match": "\\[(?:ALIGN|ASSERT|CONSTRAINT|DEFINE|DELEGATE|EXPECT|GATE|INTENT|MEMORY|MIGRATION|MIGRATION_SPEC|PARAM|PRIORITY|RECALL|RESULT|ROUTE|SOURCE|VOTE)\\]",
+      "name": "entity.name.tag.hlf"
+    },
+    "generic_tag": {
+      "match": "\\[[A-Z][A-Z0-9_]*\\]",
+      "name": "entity.name.tag.unregistered.hlf"
+    },
+    "terminator": {
+      "match": "\u03a9|\\bOmega\\b|\\bEND\\b",
+      "name": "keyword.operator.terminator.hlf"
+    },
+    "variable": {
+      "match": "\\$[A-Z_][A-Z0-9_]*|\\$\\{[A-Z_][A-Z0-9_]*\\}",
+      "name": "variable.other.hlf"
+    },
+    "string": {
+      "match": "\"([^\"\\\\]|\\\\.)*\"",
+      "name": "string.quoted.double.hlf"
+    },
+    "number": {
+      "match": "-?\\d+(?:\\.\\d+)?",
+      "name": "constant.numeric.hlf"
+    },
+    "keyword": {
+      "match": "\\b(?:true|false|AND|OR|NOT|SET|ASSIGN|IF|ELIF|ELSE|FOR|IN|CALL|TOOL|IMPORT|LOG|RETURN|MEMORY|RECALL|FUNCTION|INTENT|SPEC_DEFINE|SPEC_GATE|SPEC_UPDATE|SPEC_SEAL|PARALLEL|RESULT)\\b",
+      "name": "keyword.control.flow.hlf"
+    },
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.hlf"
+    }
+  }
+}

@@ -44,7 +44,7 @@ class Location:
 @dataclass
 class ASTNode:
     """Base class for all AST nodes"""
-    loc: Optional[Location] = None
+    loc: Optional[Location] = field(default=None, kw_only=True)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to JSON-serializable dict per ast_schema.json"""
@@ -579,6 +579,42 @@ class Block(ASTNode):
         return {"statements": [s.to_dict() for s in self.statements]}
 
 @dataclass
+class GuardStmt(Statement):
+    """Guard statement (compatibility)"""
+    condition: Expression = None
+    otherwise_body: Optional[List[Statement]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"type": "GuardStmt"}
+
+@dataclass
+class LoopStmt(Statement):
+    """Loop statement (compatibility)"""
+    condition: Optional[Expression] = None
+    body: List[Statement] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"type": "LoopStmt"}
+
+@dataclass
+class BlockStmt(Statement):
+    """Block statement (compatibility)"""
+    statements: List[Statement] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"type": "BlockStmt"}
+
+@dataclass
+class AgentClause(ASTNode):
+    """Agent clause (compatibility)"""
+    when: Optional[Expression] = None
+    on: Optional[Expression] = None
+    do: List[Statement] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"type": "AgentClause"}
+
+@dataclass
 class IfStmt(Statement):
     """If statement"""
     condition: Expression
@@ -692,11 +728,11 @@ class FunctionDecl(Declaration):
     """Function declaration"""
     name: Identifier
     params: List[Parameter]
+    body: Block
     return_type: Optional[Type] = None
     effects: List[Effect] = field(default_factory=list)
     tiers: List[str] = field(default_factory=list)
     gas: Optional[int] = None
-    body: Block
     doc: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
@@ -801,3 +837,69 @@ class Module(ASTNode):
         """Serialize to JSON string"""
         import json
         return json.dumps(self.to_dict(), indent=2)
+
+# ============================================================================
+# Compatibility aliases for the old root ast_nodes names
+# ============================================================================
+
+Program = Module
+
+@dataclass
+class DictExpr(Expression):
+    """Dictionary expression (alias for record construction)"""
+    pairs: List[tuple] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"type": "DictExpr", "pairs": len(self.pairs)}
+
+@dataclass
+class HostCallExpr(Expression):
+    """Host function call"""
+    function: str = ""
+    args: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"type": "HostCallExpr", "function": self.function}
+
+@dataclass
+class EffectDecl(Declaration):
+    """Effect declaration (compatibility)"""
+    name: Identifier = None
+    operations: List[Any] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"kind": "effect", "name": self.name.to_dict() if self.name else ""}
+
+@dataclass
+class AgentDecl(Declaration):
+    """Agent declaration (compatibility)"""
+    name: Identifier = None
+    clauses: List[Any] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"kind": "agent", "name": self.name.to_dict() if self.name else ""}
+
+@dataclass
+class ProcDecl(Declaration):
+    """Procedure declaration (compatibility)"""
+    name: Identifier = None
+    params: List[Parameter] = field(default_factory=list)
+    body: Optional[Block] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"kind": "proc", "name": self.name.to_dict() if self.name else ""}
+
+@dataclass
+class Binding(ASTNode):
+    """Variable binding (compatibility)"""
+    name: str = ""
+    value: Optional[Expression] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"type": "Binding", "name": self.name}
+
+# Expression type aliases (old names -> new names)
+LiteralExpr = Literal
+IdentifierExpr = Identifier
+ConditionalExpr = IfExpr
+AccessExpr = FieldExpr

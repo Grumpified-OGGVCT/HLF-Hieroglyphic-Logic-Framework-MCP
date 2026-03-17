@@ -20,10 +20,14 @@ Quick start:
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import os
 import sys
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 from mcp.server.fastmcp import FastMCP
 
@@ -61,7 +65,114 @@ Key properties:
   - Gas metering — bounded execution, no infinite loops
   - Cross-model alignment — any agent can read and emit valid HLF
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  HLF EXPLAINED TO A 5TH GRADER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT IS IT?
+  Imagine you want to send instructions to a robot friend. You could write a
+  long paragraph in English — but your robot might misread it, get confused by
+  a double meaning, or do something slightly different every time.
+
+  HLF is like inventing your own tiny robot language made of special symbols
+  (Δ Ж ⨝ ⌘ ∇ ⩕ ⊎ Ω) instead of long sentences. Every symbol means exactly
+  one thing — no guessing, no ambiguity, same answer every single time.
+
+HOW DOES IT WORK? (the pipeline, step by step)
+  1. You write an HLF program using glyphs (special symbols) and tags like
+     [INTENT], [CONSTRAINT], [EXPECT].  You can also write plain ASCII words
+     like ANALYZE or ENFORCE — those get swapped for the right glyph
+     automatically (that's called the ASCII surface / Pass 0 normalization).
+
+  2. A SUPER-STRICT grammar (LALR(1)) reads the program.  Think of it like a
+     grammar-checker that won't let a single typo slide.  If the grammar says
+     "no", the whole thing stops — no partial results, no surprises.
+
+  3. The Ethics Governor runs before anything else executes.  It's like a hall
+     monitor that blocks dangerous instructions (e.g. "delete everything",
+     "ignore my safety rules") before the robot ever touches them.
+     Set HLF_STRICT=0 to let the governor warn instead of blocking — useful
+     when you're experimenting and want to see violations without hard-stops.
+
+  4. The compiler turns the program into a tiny bytecode stack machine (like
+     Minecraft redstone logic, but for agents).  Gas metering counts every
+     operation — once the gas runs out the VM stops, so you can NEVER have an
+     infinite loop eating up resources forever.
+
+  5. The output is a JSON AST (a tree of facts) with a SHA-256 fingerprint.
+     That fingerprint is like a wax seal on a letter — if anyone tampers with
+     the instructions, the seal breaks and you know immediately.
+
+  6. A SHA-256 cache remembers recent programs.  If you send the exact same
+     program twice, the second time skips all the work and returns the cached
+     result instantly — like having the answer already written on a cheat sheet.
+
+  7. The hlf_submit_ast fast lane lets you skip the text parsing entirely if
+     you already have a valid JSON AST.  Useful for programmatic generators
+     and polyglot transpilers that build HLF trees directly in code.
+
+THE SPECIAL SYMBOLS (glyphs) AND WHAT THEY MEAN
+  Δ  ANALYZE  — "think about / reason over this"
+  Ж  ENFORCE  — "this is a hard rule, no exceptions"
+  ⨝  JOIN     — "reach consensus / merge results from multiple sources"
+  ⌘  CMD      — "delegate this task to a sub-agent or tool"
+  ∇  SOURCE   — "pull data from this source"
+  ⩕  PRIORITY — "this matters more than other things at the same level"
+  ⊎  BRANCH   — "split here, run parallel paths"
+  Ω  END      — "program is complete, stop here"
+
+THE PERKS (why bother learning robot-glyphs?)
+  • Reproducible — run the same program 1,000 times, get the same result.
+    No LLM "creativity" sneaking in at execution time.
+  • Compact — 12–30% fewer tokens than writing the same thing in English.
+    On large agent pipelines that saves real money and real speed.
+  • Safe — the Ethics Governor + gas metering + ALIGN Ledger mean you can
+    deploy agents in zero-trust environments and sleep soundly.
+  • Multilingual — the tag registry (tag_i18n.yaml) knows your tags in
+    English, French, Spanish, German, Chinese, Japanese, Arabic, and
+    Portuguese.  The compiler folds them all to the same canonical form.
+  • Auditable — every compile produces a SHA-256 hash and an align-violations
+    list.  Governance files are hashed into MANIFEST.sha256 and checked at
+    startup, so drift is caught immediately.
+  • Docker-friendly — spin up with just `docker compose up` (default) or add
+    `--profile hot` to get a Valkey hot cache tier for sub-millisecond
+    repeat-compile latency.  All images are official Docker Hub releases,
+    user-installable, no vendor lock-in.
+  • Model-agnostic — any AI model that can read text can read HLF.  The
+    hlf_translate_to_hlf / hlf_translate_to_english tools bridge the gap for
+    models that haven't learned the glyphs yet.
+
+WHEN HLF IS THE WRONG TOOL (be honest about the limits)
+  ✗ Creative / open-ended generation — if you need the model to write a poem,
+    brainstorm 10 startup ideas, or have a friendly conversation, HLF adds
+    friction with zero benefit.  Just use natural language.
+
+  ✗ One-off scripts where you own the whole stack — if no other agent will ever
+    read your output, the overhead of learning a new syntax is not worth it.
+
+  ✗ Rapid solo prototyping — sketching a quick idea?  Markdown and pseudocode
+    are faster to write and easier to throw away.  Reach for HLF once the idea
+    is worth hardening.
+
+  ✗ Highly dynamic free-form data — HLF is great at structured orchestration,
+    but if your payload is a web-scraped article, a PDF, or a raw image
+    description, the structured glyph layer adds nothing.  Store it in RAG
+    memory and reference it by key instead.
+
+  ✗ Teams with no tooling buy-in — HLF payoff compounds when every agent in
+    the pipeline speaks the same language.  A single holdout that outputs plain
+    English breaks the determinism chain.  Either onboard the team or stay NL.
+
+  ✗ Latency-critical inference edges (sub-10 ms) — the LALR(1) parse +
+    governor is fast (~0.5–2 ms on warm cache), but if you are hitting hard
+    real-time constraints (robotics, high-frequency trading) even that budget
+    matters.  Use hlf_submit_ast fast-lane or the in-process cache and
+    benchmark your specific case.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Available tools:
+    hlf_do                 - Plain-English front door: English in, governed HLF out
   hlf_compile            — Parse HLF source → JSON AST + bytecode
   hlf_format             — Canonicalize HLF source (uppercase tags, trailing Ω)
   hlf_lint               — Static analysis: token budget, gas, variables, specs
@@ -86,6 +197,7 @@ Available tools:
   hlf_tool_list          — List tools from the ToolRegistry
   hlf_similarity_gate    — Compare two HLF programs for semantic similarity
   hlf_spec_lifecycle     — Manage an Instinct spec lifecycle mission
+  hlf_submit_ast         — Fast-lane: validate pre-built JSON AST (skip parse)
 
 Resources:
   hlf://grammar                   — LALR(1) Lark grammar specification
@@ -95,6 +207,7 @@ Resources:
   hlf://governance/host_functions — governance/host_functions.json
   hlf://governance/bytecode_spec  — governance/bytecode_spec.yaml
   hlf://governance/align_rules    — governance/align_rules.json
+  hlf://governance/tag_i18n       — Multilingual tag registry (8 languages)
   hlf://stdlib                    — Available stdlib modules
 
 Example HLF program (security audit):
@@ -122,6 +235,41 @@ instinct_mgr = InstinctLifecycle()
 host_registry = HostFunctionRegistry()
 tool_registry = ToolRegistry()
 
+# ── Governance manifest integrity check ───────────────────────────────────────
+
+def _check_governance_manifest() -> None:
+    """Warn if governance files have drifted from MANIFEST.sha256."""
+    gov_dir = os.path.join(os.path.dirname(__file__), "..", "governance")
+    manifest_path = os.path.join(gov_dir, "MANIFEST.sha256")
+    if not os.path.isfile(manifest_path):
+        return  # manifest not yet generated, skip silently
+    expected: dict[str, str] = {}
+    with open(manifest_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                parts = line.split(None, 1)
+                if len(parts) == 2:
+                    expected[parts[1]] = parts[0]
+    drift: list[str] = []
+    for filename, exp_hash in expected.items():
+        path = os.path.join(gov_dir, filename)
+        if not os.path.isfile(path):
+            drift.append(f"{filename}: missing")
+            continue
+        with open(path, "rb") as f:
+            actual = hashlib.sha256(f.read()).hexdigest()
+        if actual != exp_hash:
+            drift.append(f"{filename}: hash mismatch")
+    if drift:
+        _log.warning(
+            "Governance file drift detected (MANIFEST.sha256): %s",
+            ", ".join(drift),
+        )
+
+
+_check_governance_manifest()
+
 # Internal aliases kept for backward-compat with any imports referencing old names
 _compiler = compiler
 _formatter = formatter
@@ -132,6 +280,145 @@ _instinct = instinct_mgr
 
 
 # ── Tools ──────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def hlf_do(
+    intent: str,
+    tier: str = "forge",
+    dry_run: bool = False,
+    show_hlf: bool = False,
+) -> dict[str, Any]:
+    """Translate plain English intent into governed HLF and optionally execute it.
+
+    This is the human-facing front door for the packaged FastMCP server. It uses
+    the translator to produce HLF source, validates the generated program,
+    applies capsule checks for the requested tier, and returns an English audit.
+
+    Args:
+        intent: Natural-language description of the task to perform
+        tier: Execution tier - hearth | forge | sovereign (default forge)
+        dry_run: When true, stop after translation/validation without running
+        show_hlf: Include the generated HLF source in the response
+    """
+    normalized_intent = intent.strip()
+    normalized_tier = tier.lower().strip()
+    if not normalized_intent:
+        return {
+            "success": False,
+            "error": "intent is required",
+            "example": "Audit /var/log/system.log in read-only mode and summarize the top errors.",
+        }
+    if normalized_tier not in {"hearth", "forge", "sovereign"}:
+        return {
+            "success": False,
+            "error": f"Unsupported tier '{tier}'. Use hearth, forge, or sovereign.",
+        }
+
+    try:
+        source = english_to_hlf(normalized_intent, version="3")
+        validation = compiler.validate(source)
+        if not validation.get("valid"):
+            response = {
+                "success": False,
+                "phase": "translation",
+                "you_said": normalized_intent,
+                "tier": normalized_tier,
+                "governed": False,
+                "error": validation.get("error", "Generated HLF did not validate."),
+            }
+            if show_hlf:
+                response["hlf_source"] = source
+            return response
+
+        compile_result = compiler.compile(source)
+        ast = compile_result["ast"]
+        capsule = capsule_for_tier(normalized_tier)
+        capsule_violations = capsule.validate_ast(ast.get("statements", []))
+        align_violations = compile_result.get("align_violations", [])
+        benchmark = _benchmark.analyze(source, compare_text=normalized_intent)
+        english_audit = hlf_to_english(ast)
+
+        response: dict[str, Any] = {
+            "success": len(capsule_violations) == 0 and len(align_violations) == 0,
+            "you_said": normalized_intent,
+            "what_hlf_did": english_audit,
+            "audit": (
+                f"Validated and compiled for tier '{normalized_tier}'. "
+                f"Estimated gas: {compile_result['gas_estimate']} / {capsule.max_gas}."
+            ),
+            "tier": normalized_tier,
+            "governed": len(capsule_violations) == 0 and len(align_violations) == 0,
+            "dry_run": dry_run,
+            "capsule_violations": capsule_violations,
+            "align_violations": align_violations,
+            "math": {
+                "english_tokens": benchmark["nlp_tokens"],
+                "hlf_tokens": benchmark["hlf_tokens"],
+                "compression_pct": benchmark["compression_pct"],
+                "token_savings": benchmark["savings"],
+                "gas_estimate": compile_result["gas_estimate"],
+                "gas_budget": capsule.max_gas,
+            },
+        }
+        if show_hlf:
+            response["hlf_source"] = source
+
+        if capsule_violations or align_violations or dry_run:
+            if capsule_violations:
+                response["audit"] = (
+                    f"Blocked by capsule validation for tier '{normalized_tier}'. "
+                    f"{len(capsule_violations)} violation(s) detected."
+                )
+            elif align_violations:
+                response["audit"] = (
+                    f"Compiled with ALIGN warnings for tier '{normalized_tier}'. "
+                    f"{len(align_violations)} violation(s) reported."
+                )
+            elif dry_run:
+                response["audit"] = (
+                    f"Dry run only. Generated HLF validated for tier '{normalized_tier}' "
+                    f"with estimated gas {compile_result['gas_estimate']} / {capsule.max_gas}."
+                )
+            return response
+
+        bc = bytecoder.encode(ast)
+        run_result = _runtime.run(
+            bc,
+            gas_limit=capsule.max_gas,
+            variables={"DEPLOYMENT_TIER": normalized_tier},
+        )
+        response["execution"] = run_result
+        response["success"] = run_result.get("status") == "ok"
+        response["audit"] = (
+            f"Executed at tier '{normalized_tier}'. "
+            f"Gas used: {run_result.get('gas_used', 0)} / {capsule.max_gas}."
+        )
+        return response
+    except CompileError as exc:
+        response = {
+            "success": False,
+            "phase": "compile",
+            "you_said": normalized_intent,
+            "tier": normalized_tier,
+            "governed": False,
+            "error": str(exc),
+        }
+        if show_hlf:
+            response["hlf_source"] = source
+        return response
+    except Exception as exc:
+        response = {
+            "success": False,
+            "phase": "internal",
+            "you_said": normalized_intent,
+            "tier": normalized_tier,
+            "governed": False,
+            "error": str(exc),
+        }
+        if show_hlf and "source" in locals():
+            response["hlf_source"] = source
+        return response
 
 
 @mcp.tool()
@@ -670,6 +957,69 @@ def hlf_spec_lifecycle(
         return {"status": "error", "error": str(exc)}
 
 
+@mcp.tool()
+def hlf_submit_ast(ast_json: str) -> dict[str, Any]:
+    """Fast-lane AST submission: skip LALR parse for pre-built JSON ASTs.
+
+    Accepts a JSON AST (e.g. produced by a polyglot transpiler or exported by
+    hlf_compile on a previous call), runs ALIGN Ledger validation and the
+    Ethics Governor only, and returns the validated result.
+
+    This is the recommended entry point for programmatic HLF generation where
+    the source text is synthesised externally and the full parse is unnecessary.
+
+    Args:
+        ast_json: JSON string of a valid HLF AST dict (must include "statements"
+                  and optionally "version" keys)
+    """
+    try:
+        ast = json.loads(ast_json)
+    except json.JSONDecodeError as exc:
+        return {"status": "error", "error": f"Invalid JSON: {exc}"}
+    if not isinstance(ast, dict) or "statements" not in ast:
+        return {"status": "error", "error": '"statements" key required in AST'}
+
+    from hlf_mcp.hlf.compiler import _estimate_gas, _pass3_align_validate
+    stmts = ast.get("statements", [])
+    env: dict[str, Any] = {}
+    try:
+        from hlf_mcp.hlf.ethics.governor import GovernorError, check as _ethics_check
+        import os as _os
+        _gov_result = _ethics_check(ast=ast, env=env, source="", tier="hearth")
+        _strict = _os.environ.get("HLF_STRICT", "1") != "0"
+        if not _gov_result.passed:
+            term = _gov_result.termination
+            if term is not None:
+                msg = (
+                    f"Ethics Governor [{term.trigger}]: {term.message}\n"
+                    f"Audit ID: {term.audit_id}"
+                )
+                if _strict:
+                    return {"status": "blocked", "error": msg}
+                _log.warning("[HLF_STRICT=0] Governor suppressed: %s", msg)
+            elif _strict:
+                return {"status": "blocked", "error": "; ".join(_gov_result.blocks)}
+            else:
+                _log.warning("[HLF_STRICT=0] Governor blocks: %s", "; ".join(_gov_result.blocks))
+    except GovernorError as exc:
+        return {"status": "blocked", "error": str(exc)}
+    except Exception as exc:  # pragma: no cover
+        return {"status": "blocked", "error": f"Governor error (fail-closed): {exc}"}
+
+    try:
+        violations = _pass3_align_validate(stmts, strict=compiler.strict_align)
+    except CompileError as exc:
+        return {"status": "blocked", "error": str(exc)}
+
+    gas = _estimate_gas(stmts)
+    return {
+        "status": "ok",
+        "node_count": len(stmts),
+        "gas_estimate": gas,
+        "align_violations": violations,
+    }
+
+
 # ── Resources ──────────────────────────────────────────────────────────────────
 
 _GOVERNANCE_DIR = os.path.join(os.path.dirname(__file__), "..", "governance")
@@ -775,6 +1125,12 @@ def get_governance_bytecode_spec() -> str:
 def get_governance_align_rules() -> str:
     """Governance align_rules.json — alignment and safety rules."""
     return _read_governance_file("align_rules.json")
+
+
+@mcp.resource("hlf://governance/tag_i18n")
+def get_governance_tag_i18n() -> str:
+    """Multilingual HLF tag registry — 14 canonical tags × 8 languages + ASCII glyph aliases."""
+    return _read_governance_file("tag_i18n.yaml")
 
 
 @mcp.resource("hlf://stdlib")

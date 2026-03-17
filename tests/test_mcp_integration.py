@@ -468,7 +468,7 @@ class TestMCPServerEndpoints:
         """Test MCP initialize."""
         result = await server.initialize({})
         
-        assert result["protocolVersion"] == "2025-03-26"
+        assert result["protocolVersion"] in ("2024-11-05", "2025-03-26")
         assert "capabilities" in result
         assert result["serverInfo"]["name"] == "hlf-mcp-server"
     

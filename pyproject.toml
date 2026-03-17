@@ -20,9 +20,17 @@ dependencies = [
     "httpx>=0.28.0",
     "starlette>=0.46.0",
     "cryptography>=41.0.0",
+    "pygls>=2.0.0",
+    "lsprotocol>=2024.0.0",
 ]
 
 [project.optional-dependencies]
+# Hot cache tier — Valkey/Redis-compatible client (BSL-free Valkey official driver)
+# Install:  uv sync --extra hot   |   pip install "hlf-mcp[hot]"
+hot  = ["valkey>=6.0.0"]
+# Full tier — hot + beartype for strict host-function type enforcement at runtime
+# Install:  uv sync --extra full  |   pip install "hlf-mcp[full]"
+full = ["valkey>=6.0.0", "beartype>=0.18.0"]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.25.0",
@@ -34,7 +42,11 @@ hlf-mcp  = "hlf_mcp.server:main"
 hlfc     = "hlf_mcp.hlf.compiler:main"
 hlffmt   = "hlf_mcp.hlf.formatter:main"
 hlflint  = "hlf_mcp.hlf.linter:main"
+hlfpm    = "hlf_mcp.hlf.hlfpm:main"
 hlfrun   = "hlf_mcp.hlf.runtime:main"
+hlfsh    = "hlf_mcp.hlf.hlfsh:main"
+hlflsp   = "hlf_mcp.hlf.hlflsp:main"
+hlftest  = "hlf_mcp.hlf.hlftest:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hlf_mcp"]
@@ -53,4 +65,14 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+# Root-level smoke scripts like smoke_test_e2e.py and test_all_tools.py are
+# intentionally manual and are not part of default pytest collection.
+testpaths = [
+    "tests",
+    "test_mcp.py",
+    "test_mcp_minimal.py",
+    "test_mcp_complete.py",
+    "test_mcp_quick.py",
+    "test_mcp_modules.py",
+    "test_metrics_win.py",
+]

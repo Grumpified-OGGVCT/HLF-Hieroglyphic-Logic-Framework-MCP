@@ -1,0 +1,10 @@
+# HLF v3 — File I/O Demo
+# Extracted from Sovereign source and adapted to the packaged v3 surface.
+[HLF-v3]
+⌘ [ACTION] verb="write_file" target="test_output.txt"
+  ∇ [PARAM] content="Hello from HLF runtime!"
+  Ж [EXPECT] write_complete
+⌘ [ACTION] verb="read_file" target="test_output.txt"
+  Ж [EXPECT] round_trip_verified
+  ∇ [RESULT] message="File I/O demo completed successfully"
+Ω

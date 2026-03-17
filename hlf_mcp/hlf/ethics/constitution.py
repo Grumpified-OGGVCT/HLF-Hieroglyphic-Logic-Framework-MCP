@@ -24,6 +24,7 @@ People are the priority.  AI is the tool.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -54,6 +55,66 @@ class Violation:
     def __post_init__(self) -> None:
         if not self.doc_url:
             self.doc_url = f"{_CONSTITUTION_URL}#{self.article}"
+
+
+# ── Phonetic skeleton — homoglyph bypass prevention ─────────────────────────
+# Pass-0 confusables map (grammar.py) uses VISUAL lookalikes: Cyrillic с→c,
+# р→p, у→y.  An attacker can exploit this: "child сexual abuse" normalises to
+# "child cexual abuse" which does not match the CSAM pattern.
+#
+# Defence: also run all C-1/C-2/C-3 patterns against a phonetic skeleton where
+# every non-ASCII char is replaced by its phonetic Latin equivalent.  The two
+# independent passes (visual + phonetic) cannot both be bypassed simultaneously.
+
+_PHONETIC_SKELETON_MAP: dict[int, str] = {
+    # Cyrillic lower (phonetic, not visual)
+    ord("а"): "a", ord("б"): "b", ord("в"): "v", ord("г"): "g",
+    ord("д"): "d", ord("е"): "e", ord("ж"): "zh", ord("з"): "z",
+    ord("и"): "i", ord("й"): "y", ord("к"): "k", ord("л"): "l",
+    ord("м"): "m", ord("н"): "n", ord("о"): "o", ord("п"): "p",
+    ord("р"): "r", ord("с"): "s", ord("т"): "t", ord("у"): "u",
+    ord("ф"): "f", ord("х"): "kh", ord("ц"): "ts", ord("ч"): "ch",
+    ord("ш"): "sh", ord("щ"): "sch", ord("ю"): "yu", ord("я"): "ya",
+    # Cyrillic upper
+    ord("А"): "A", ord("Б"): "B", ord("В"): "V", ord("Г"): "G",
+    ord("Д"): "D", ord("Е"): "E", ord("Ж"): "ZH", ord("З"): "Z",
+    ord("И"): "I", ord("Й"): "Y", ord("К"): "K", ord("Л"): "L",
+    ord("М"): "M", ord("Н"): "N", ord("О"): "O", ord("П"): "P",
+    ord("Р"): "R", ord("С"): "S", ord("Т"): "T", ord("У"): "U",
+    ord("Ф"): "F", ord("Х"): "KH", ord("Ц"): "TS", ord("Ч"): "CH",
+    ord("Ш"): "SH", ord("Щ"): "SCH", ord("Ю"): "YU", ord("Я"): "YA",
+    # Greek lower
+    ord("α"): "a", ord("β"): "b", ord("γ"): "g", ord("δ"): "d",
+    ord("ε"): "e", ord("ζ"): "z", ord("η"): "e", ord("θ"): "th",
+    ord("ι"): "i", ord("κ"): "k", ord("λ"): "l", ord("μ"): "m",
+    ord("ν"): "n", ord("ξ"): "ks", ord("ο"): "o", ord("π"): "p",
+    ord("ρ"): "r", ord("σ"): "s", ord("τ"): "t", ord("υ"): "y",
+    ord("φ"): "ph", ord("χ"): "ch", ord("ψ"): "ps", ord("ω"): "o",
+    # Greek upper
+    ord("Α"): "A", ord("Β"): "B", ord("Γ"): "G", ord("Δ"): "D",
+    ord("Ε"): "E", ord("Ζ"): "Z", ord("Η"): "E", ord("Θ"): "TH",
+    ord("Ι"): "I", ord("Κ"): "K", ord("Λ"): "L", ord("Μ"): "M",
+    ord("Ν"): "N", ord("Ξ"): "KS", ord("Ο"): "O", ord("Π"): "P",
+    ord("Ρ"): "R", ord("Σ"): "S", ord("Τ"): "T", ord("Υ"): "Y",
+    ord("Φ"): "PH", ord("Χ"): "CH", ord("Ψ"): "PS", ord("Ω"): "O",
+}
+
+
+def _phonetic_skeleton(text: str) -> str:
+    """Replace non-ASCII chars with their phonetic ASCII equivalents.
+
+    This is independent from the visual confusables map used in Pass 0, so
+    it catches attacks where a char maps visually to one letter but was
+    intended to spell a different (banned) word phonetically.
+    """
+    out: list[str] = []
+    for ch in text:
+        repl = _PHONETIC_SKELETON_MAP.get(ord(ch))
+        if repl is not None:
+            out.append(repl)
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
 # ── Pattern catalogue (C-3: Legal compliance) ────────────────────────────────
@@ -242,6 +303,21 @@ def evaluate_constitution(
     violations.extend(_check_c2(source))
     violations.extend(_check_c3(source))
     violations.extend(_check_tier_escalation(statements, tier))
+
+    # Second pass: phonetic skeleton — catches homoglyph bypass where a char
+    # maps visually to 'c' but phonetically represents 's' (e.g. Cyrillic с).
+    skel = _phonetic_skeleton(source)
+    if skel != source:
+        existing_ids = {v.rule_id for v in violations}
+        for v in (
+            _check_c1(statements, skel)
+            + _check_c2(skel)
+            + _check_c3(skel)
+        ):
+            if v.rule_id not in existing_ids:
+                violations.append(v)
+                existing_ids.add(v.rule_id)
+
     return violations
 
 

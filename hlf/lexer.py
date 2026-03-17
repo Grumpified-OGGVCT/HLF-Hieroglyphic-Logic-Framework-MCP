@@ -408,8 +408,8 @@ class Lexer:
         if char.isdigit() or (char == '-' and self.peek(1).isdigit()):
             return self.read_number()
         
-        # Atom
-        if char == ':':
+        # Atom (: followed by letter/underscore)
+        if char == ':' and (self.peek(1).isalpha() or self.peek(1) == '_'):
             return self.read_atom()
         
         # Identifier or keyword

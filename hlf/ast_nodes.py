@@ -40,6 +40,7 @@ class Position:
     """Source code position"""
     line: int = 1
     column: int = 1
+    offset: int = 0
     
     def advance(self, char: str = None):
         """Advance position by one character"""
@@ -58,6 +59,7 @@ class Location:
     """Source code location (start and end positions)"""
     start: Position = field(default_factory=Position)
     end: Position = field(default_factory=Position)
+    source: Optional[str] = None
     
     def clone(self) -> 'Location':
         """Create a copy of this location"""

@@ -93,7 +93,10 @@ def sovereign_capsule() -> IntentCapsule:
 def forge_capsule() -> IntentCapsule:
     """Moderate permissions for forge tier agents."""
     return IntentCapsule(
-        allowed_tags={"SET", "ASSIGN", "IF", "FOR", "RESULT", "TOOL", "CALL", "MEMORY", "RECALL", "IMPORT", "LOG"},
+        allowed_tags={
+            "SET", "ASSIGN", "IF", "FOR", "RESULT", "TOOL", "CALL", "MEMORY", "RECALL", "IMPORT", "LOG",
+            "INTENT", "CONSTRAINT", "EXPECT", "ASSERT", "PARAM", "ROUTE", "DELEGATE", "VOTE", "PRIORITY", "SOURCE", "ACTION",
+        },
         denied_tags={"SPAWN", "SHELL_EXEC"},
         allowed_tools={"READ", "WRITE", "HTTP_GET", "hash_sha256", "log_emit", "memory_store", "memory_recall"},
         denied_tools={"WEB_SEARCH", "spawn_agent", "z3_verify"},
@@ -103,7 +106,7 @@ def forge_capsule() -> IntentCapsule:
 def hearth_capsule() -> IntentCapsule:
     """Highly restricted capsule for hearth tier agents."""
     return IntentCapsule(
-        allowed_tags={"SET", "IF", "RESULT", "LOG"},
+        allowed_tags={"SET", "IF", "RESULT", "LOG", "INTENT", "CONSTRAINT", "ASSERT", "PARAM", "SOURCE"},
         denied_tags={"SPAWN", "SHELL_EXEC", "TOOL", "HOST", "MEMORY", "RECALL"},
         allowed_tools=set(), denied_tools=set(),
         max_gas=100, tier="hearth", read_only_vars={"SYS_INFO", "NOW"},

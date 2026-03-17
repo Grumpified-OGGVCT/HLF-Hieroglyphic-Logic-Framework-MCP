@@ -9,7 +9,7 @@ import os
 # Add project to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def test_imports():
+def _run_imports():
     """Test that all modules can be imported."""
     print("Testing imports...")
     
@@ -60,11 +60,16 @@ def test_imports():
     except Exception as e:
         print(f"  ✗ forge_agent: {e}")
         failed += 1
-    
+
+    assert failed == 0, f"{failed} import(s) failed"
     return passed, failed
 
 
-def test_resource_provider():
+def test_imports():
+    _run_imports()
+
+
+def _run_resource_provider():
     """Test the resource provider functionality."""
     print("\nTesting ResourceProvider...")
     
@@ -98,11 +103,16 @@ def test_resource_provider():
         import traceback
         traceback.print_exc()
         failed += 3
-    
+
+    assert failed == 0, f"{failed} ResourceProvider check(s) failed"
     return passed, failed
 
 
-def test_tool_provider():
+def test_resource_provider():
+    _run_resource_provider()
+
+
+def _run_tool_provider():
     """Test the tool provider functionality."""
     print("\nTesting ToolProvider...")
     
@@ -146,11 +156,16 @@ def test_tool_provider():
         import traceback
         traceback.print_exc()
         failed += 2
-    
+
+    assert failed == 0, f"{failed} ToolProvider check(s) failed"
     return passed, failed
 
 
-def test_prompt_provider():
+def test_tool_provider():
+    _run_tool_provider()
+
+
+def _run_prompt_provider():
     """Test the prompt provider functionality."""
     print("\nTesting PromptProvider...")
     
@@ -190,11 +205,16 @@ def test_prompt_provider():
         import traceback
         traceback.print_exc()
         failed += 3
-    
+
+    assert failed == 0, f"{failed} PromptProvider check(s) failed"
     return passed, failed
 
 
-def test_mcp_server():
+def test_prompt_provider():
+    _run_prompt_provider()
+
+
+def _run_mcp_server():
     """Test the MCP server initialization."""
     print("\nTesting MCPServer...")
     
@@ -241,11 +261,16 @@ def test_mcp_server():
         import traceback
         traceback.print_exc()
         failed += 3
-    
+
+    assert failed == 0, f"{failed} MCPServer check(s) failed"
     return passed, failed
 
 
-def test_mcp_client():
+def test_mcp_server():
+    _run_mcp_server()
+
+
+def _run_mcp_client():
     """Test the MCP client (without server)."""
     print("\nTesting MCPClient...")
     
@@ -286,8 +311,13 @@ def test_mcp_client():
         import traceback
         traceback.print_exc()
         failed += 2
-    
+
+    assert failed == 0, f"{failed} MCPClient check(s) failed"
     return passed, failed
+
+
+def test_mcp_client():
+    _run_mcp_client()
 
 
 def main():
@@ -300,27 +330,27 @@ def main():
     total_failed = 0
     
     # Run tests
-    p, f = test_imports()
+    p, f = _run_imports()
     total_passed += p
     total_failed += f
     
-    p, f = test_resource_provider()
+    p, f = _run_resource_provider()
     total_passed += p
     total_failed += f
     
-    p, f = test_tool_provider()
+    p, f = _run_tool_provider()
     total_passed += p
     total_failed += f
     
-    p, f = test_prompt_provider()
+    p, f = _run_prompt_provider()
     total_passed += p
     total_failed += f
     
-    p, f = test_mcp_server()
+    p, f = _run_mcp_server()
     total_passed += p
     total_failed += f
     
-    p, f = test_mcp_client()
+    p, f = _run_mcp_client()
     total_passed += p
     total_failed += f
     

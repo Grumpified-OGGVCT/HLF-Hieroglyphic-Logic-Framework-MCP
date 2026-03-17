@@ -49,10 +49,9 @@ def test_resource_provider():
         print(f"  Version: {version_data.get('version', 'unknown')}")
         print(f"  SHA256: {version_data.get('grammar_sha256', 'unknown')[:16]}...")
         print("  [PASS] Version resource works")
-        return True
     except Exception as e:
         print(f"  [FAIL] Version resource: {e}")
-        return False
+        assert False, f"Version resource failed: {e}"
 
 
 def test_tool_definitions():
@@ -101,8 +100,8 @@ def test_tool_definitions():
             else:
                 print(f"  [FAIL] {req} missing")
                 all_present = False
-        
-        return all_present
+
+        assert all_present, "Some required MCP tools are missing"
 
 
 def test_prompt_definitions():
@@ -147,13 +146,13 @@ def test_prompt_definitions():
             else:
                 print(f"  [FAIL] Missing '{check}'")
                 all_present = False
-        
-        return all_present
+
+        assert all_present, "Initialization prompt missing required content"
     except Exception as e:
         print(f"  [FAIL] Prompt generation: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        assert False, f"Prompt generation failed: {e}"
 
 
 def test_friction_log():
@@ -201,10 +200,9 @@ def test_friction_log():
             content = json.loads(friction_files[0].read_text())
             print(f"  File keys: {list(content.keys())}")
             print("  [PASS] Friction logging works")
-            return True
         else:
             print("  [FAIL] No friction files created")
-            return False
+            assert False, "Friction logging did not create any .hlf files"
 
 
 def test_client():
@@ -244,8 +242,8 @@ def test_client():
         else:
             print(f"  [FAIL] Missing method '{method}'")
             all_present = False
-    
-    return all_present
+
+    assert all_present, "MCP client is missing required methods"
 
 
 def test_forge_agent():
@@ -297,8 +295,7 @@ def test_forge_agent():
     
     print(f"  GrammarProposal created: {proposal.id}")
     print("  [PASS] Forge agent dataclasses work")
-    
-    return True
+    assert isinstance(proposal, GrammarProposal)
 
 
 def test_file_structure():
@@ -327,7 +324,16 @@ def test_file_structure():
             print(f"  [FAIL] {file_path} MISSING")
             all_exist = False
     
-    return all_exist
+    assert all_exist, "Expected MCP implementation files are missing"
+
+
+def _run_test(name, func):
+    try:
+        func()
+        return name, True
+    except Exception as exc:
+        print(f"  [FAIL] {name}: {exc}")
+        return name, False
 
 
 def main():
@@ -339,13 +345,13 @@ def main():
     results = []
     
     # Run tests
-    results.append(("File Structure", test_file_structure()))
-    results.append(("Resource Provider", test_resource_provider()))
-    results.append(("Tool Definitions", test_tool_definitions()))
-    results.append(("Prompt Definitions", test_prompt_definitions()))
-    results.append(("Friction Logging", test_friction_log()))
-    results.append(("MCP Client", test_client()))
-    results.append(("Forge Agent", test_forge_agent()))
+    results.append(_run_test("File Structure", test_file_structure))
+    results.append(_run_test("Resource Provider", test_resource_provider))
+    results.append(_run_test("Tool Definitions", test_tool_definitions))
+    results.append(_run_test("Prompt Definitions", test_prompt_definitions))
+    results.append(_run_test("Friction Logging", test_friction_log))
+    results.append(_run_test("MCP Client", test_client))
+    results.append(_run_test("Forge Agent", test_forge_agent))
     
     # Summary
     print("\n" + "=" * 60)

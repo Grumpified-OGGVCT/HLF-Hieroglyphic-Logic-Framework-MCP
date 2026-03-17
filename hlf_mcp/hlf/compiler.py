@@ -13,6 +13,8 @@ Compilation pipeline:
 from __future__ import annotations
 
 import hashlib
+import logging
+import os
 import re
 import sys
 import unicodedata
@@ -21,7 +23,20 @@ from typing import Any
 from lark import Lark, Token, Transformer, UnexpectedInput, v_args
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 
-from hlf_mcp.hlf.grammar import CONFUSABLES, GLYPHS, HLF_GRAMMAR
+from hlf_mcp.hlf.grammar import ASCII_ALIASES, CONFUSABLES, GLYPHS, HLF_GRAMMAR
+
+_log = logging.getLogger(__name__)
+
+# Module-level SHA-256 → result cache.  Bounded to 256 entries (LRU-like eviction).
+_AST_CACHE: dict[str, dict] = {}
+_AST_CACHE_MAX = 256
+
+# Build a compiled regex for ASCII glyph aliases once at import time.
+# Pattern matches any ASCII alias at the start of a logical line (after optional
+# whitespace), so aliases inside quoted string values are NOT replaced.
+_ALIAS_PATTERN = re.compile(
+    r"(?m)^([ \t]*)" + "(" + "|".join(re.escape(k) for k in sorted(ASCII_ALIASES, key=len, reverse=True)) + r")\b"
+)
 
 
 class CompileError(Exception):
@@ -455,13 +470,27 @@ _VAR_RE = re.compile(r"\$\{(\w+)\}")  # ${VAR} expansion
 
 
 def _pass0_normalize(source: str) -> tuple[str, list[tuple[int, str, str]]]:
-    """NFKC normalization + confusable character substitution.
+    """NFKC normalization + ASCII glyph alias substitution + confusable chars.
+
+    Order:
+      0a. NFKC canonical decomposition
+      0b. ASCII glyph aliases (word-boundary, line-start only)
+      0c. Char-level homoglyph CONFUSABLES substitution
 
     Returns (normalized_source, replacements_list)
     """
     normalized = unicodedata.normalize("NFKC", source)
     replacements: list[tuple[int, str, str]] = []
 
+    # Step 0b: collapse ASCII glyph aliases at line-start positions only.
+    def _sub_alias(m: re.Match) -> str:
+        glyph = ASCII_ALIASES[m.group(2)]
+        replacements.append((m.start(2), m.group(2), glyph))
+        return m.group(1) + glyph
+
+    normalized = _ALIAS_PATTERN.sub(_sub_alias, normalized)
+
+    # Step 0c: char-level homoglyph substitution.
     result = []
     for i, char in enumerate(normalized):
         if char in CONFUSABLES:
@@ -607,6 +636,11 @@ class HLFCompiler:
         if not source or not source.strip():
             raise CompileError("Empty source")
 
+        # Cache check: skip all passes for identical source.
+        _src_key = hashlib.sha256(source.strip().encode()).hexdigest()
+        if _src_key in _AST_CACHE:
+            return _AST_CACHE[_src_key]
+
         # Pass 0: Normalize
         normalized, norm_changes = _pass0_normalize(source.strip())
         if not normalized.endswith("\n"):
@@ -630,22 +664,32 @@ class HLFCompiler:
 
         # Pass 2.5: Ethics Governor — hard-law enforcement before any expansion.
         # Runs constitutional, rogue-detection, and self-termination layers.
-        # Blocks are non-recoverable; the compile() caller must handle CompileError.
+        # When HLF_STRICT=0, violations are logged as warnings instead of raising.
+        _strict = os.environ.get("HLF_STRICT", "1") != "0"
         try:
             from hlf_mcp.hlf.ethics.governor import GovernorError, check as _ethics_check
             _gov_result = _ethics_check(ast=ast, env=env, source=normalized, tier="hearth")
             if not _gov_result.passed:
                 term = _gov_result.termination
                 if term is not None:
-                    raise CompileError(
+                    _msg = (
                         f"Ethics Governor [{term.trigger}]: {term.message}\n"
                         f"Documentation: {term.documentation}\n"
                         f"Audit ID: {term.audit_id}"
                     )
-                raise CompileError(
-                    "Ethics Governor blocked compilation: "
-                    + "; ".join(_gov_result.blocks)
-                )
+                    if _strict:
+                        raise CompileError(_msg)
+                    _log.warning("[HLF_STRICT=0] Governor termination suppressed: %s", _msg)
+                elif _strict:
+                    raise CompileError(
+                        "Ethics Governor blocked compilation: "
+                        + "; ".join(_gov_result.blocks)
+                    )
+                else:
+                    _log.warning(
+                        "[HLF_STRICT=0] Governor blocks suppressed: %s",
+                        "; ".join(_gov_result.blocks),
+                    )
         except CompileError:
             raise
         except GovernorError as _ge:
@@ -662,7 +706,7 @@ class HLFCompiler:
         align_violations = _pass3_align_validate(expanded_stmts, strict=self.strict_align)
 
         gas = _estimate_gas(expanded_stmts)
-        return {
+        result = {
             "ast": ast,
             "version": ast.get("version", "3"),
             "node_count": len(expanded_stmts),
@@ -671,6 +715,12 @@ class HLFCompiler:
             "normalization_changes": norm_changes,
             "align_violations": align_violations,
         }
+
+        # Store in cache (evict oldest entry if over limit).
+        if len(_AST_CACHE) >= _AST_CACHE_MAX:
+            _AST_CACHE.pop(next(iter(_AST_CACHE)))
+        _AST_CACHE[_src_key] = result
+        return result
 
     def validate(self, source: str) -> dict[str, Any]:
         """Quick syntax validation without full pipeline."""
@@ -775,7 +825,7 @@ def main() -> None:
         print("Usage: hlfc <file.hlf>", file=sys.stderr)
         sys.exit(1)
 
-    with open(sys.argv[1]) as f:
+    with open(sys.argv[1], encoding="utf-8") as f:
         source = f.read()
 
     compiler = HLFCompiler()

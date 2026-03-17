@@ -230,6 +230,20 @@ The following can be treated as serious design direction, but not as default pre
 - stronger multimodal, research, swarm, and planet-scale coordination claims
 - any statement that presumes the full ethics governor, all strategic doctrine, and all surrounding platform layers are production-complete today
 
+### Quality target clarification
+
+The repo now also carries an explicit quality-target track in `HLF_QUALITY_TARGETS.md`.
+
+That document should be interpreted as:
+
+- a serious implementation-governing target surface
+- not proof that those targets are already fully achieved
+
+Truthful present-tense claim:
+
+- the repo now defines a measurable path toward "cleaner than NLP-only swarms" outcomes
+- it does not yet claim universal or perfect execution quality
+
 These ideas are not invalid. They just belong in the roadmap / doctrine category unless tied to working code in this repo.
 
 ## Validation Run on 2026-03-16

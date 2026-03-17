@@ -1,10 +1,13 @@
 """
-MCP 2024-2025 Resources implementation for HLF.
+Legacy MCP 2024-2025 resources implementation for HLF.
 
-Resources are static content that can be read by clients.
-They support optional subscriptions for change notifications.
+This module is preserved as a compatibility and migration surface.
 
-This module is standalone and does not depend on the pre-existing HLF package.
+Canonical product-facing resources now belong to the packaged `hlf_mcp` line,
+especially `hlf_mcp/server.py` and `hlf_mcp/hlf/mcp_resources.py`.
+
+Use this module when you need the older resource provider stack for regression
+coverage, comparison, or forward-port analysis.
 """
 
 from dataclasses import dataclass
@@ -20,7 +23,6 @@ try:
     YAML_AVAILABLE = True
 except ImportError:
     yaml = None
-    YAML_AVAILABLE = False
 
 
 @dataclass
@@ -45,7 +47,10 @@ class ResourceTemplate:
 
 
 class HLFResourceProvider:
-    """Provides HLF grammar, dictionaries, and programs as MCP Resources."""
+    """Provides legacy HLF grammar, dictionaries, and programs as MCP resources.
+
+    This provider is not the packaged product authority.
+    """
     
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
@@ -68,6 +73,7 @@ class HLFResourceProvider:
                 description="Canonical HLF v0.5 grammar with lexical rules, surface mappings, type system, effect system, gas model, and tier constraints",
                 mime_type="application/yaml"
             ),
+
             Resource(
                 uri="hlf://bytecode",
                 name="HLF Bytecode Specification",

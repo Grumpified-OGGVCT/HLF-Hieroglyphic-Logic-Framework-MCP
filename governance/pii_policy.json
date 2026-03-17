@@ -1,0 +1,23 @@
+{
+  "strict_mode": false,
+  "min_confidence": 0.7,
+  "enabled_categories": [
+    "EMAIL",
+    "PHONE",
+    "SSN",
+    "CREDIT_CARD",
+    "IP_ADDRESS",
+    "DATE_OF_BIRTH",
+    "ADDRESS",
+    "NAME",
+    "URL"
+  ],
+  "context_indicators": {
+    "EMAIL": ["email", "contact", "reach"],
+    "PHONE": ["phone", "call", "tel", "mobile"],
+    "SSN": ["ssn", "social", "security"],
+    "CREDIT_CARD": ["card", "payment", "cc", "visa"]
+  },
+  "title_indicators": ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Captain", "President"],
+  "common_non_name_words": ["The", "A", "An", "In", "On", "At", "For", "With"]
+}

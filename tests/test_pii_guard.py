@@ -12,6 +12,8 @@ Covers:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from hlf_mcp.hlf.pii_guard import (
@@ -19,6 +21,7 @@ from hlf_mcp.hlf.pii_guard import (
     PIIDetection,
     PIIGuard,
     PIIScanResult,
+    load_pii_policy,
     redact_pii,
     scan_for_pii,
 )
@@ -198,6 +201,28 @@ class TestConvenienceFunctions:
         assert "pattern_count" in stats
         assert stats["pattern_count"] >= 7
         assert "EMAIL" in stats["categories"]
+        assert stats["policy_source"].endswith("governance\\pii_policy.json") or stats["policy_source"].endswith("governance/pii_policy.json")
+
+
+class TestGovernedPIIPolicy:
+    def test_default_policy_loads_from_governance(self):
+        policy = load_pii_policy()
+        assert policy["strict_mode"] is False
+        assert policy["min_confidence"] == 0.7
+        assert "EMAIL" in policy["enabled_categories"]
+
+    def test_custom_policy_can_disable_category(self, tmp_path: Path):
+        policy_path = tmp_path / "pii_policy.json"
+        policy_path.write_text(
+            '{"enabled_categories": ["EMAIL"], "strict_mode": false, "min_confidence": 0.7}',
+            encoding="utf-8",
+        )
+
+        guard = PIIGuard(policy_path=policy_path)
+        result = guard.scan("Call us at 555-867-5309 or email alice@example.com")
+
+        assert PIICategory.EMAIL in result.categories_found
+        assert PIICategory.PHONE not in result.categories_found
 
 
 # ── Runtime integration: memory_store PII guard ───────────────────────────────

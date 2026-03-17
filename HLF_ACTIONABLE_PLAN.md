@@ -7,17 +7,112 @@
 
 **HLF's intelligence lives in its specs, grammar, and governance mechanisms—not in raw parameter count.**
 
+## Consolidation Baseline
+
+Use `HLF_CANONICALIZATION_MATRIX.md` as the current preserve/wrap/archive boundary across `hlf_mcp`, `hlf`, and `hlf_source`.
+
+That document now defines:
+
+- what HLF-NEW materially contributed versus what is already preserved here
+- which surfaces are canonical product authority versus wrappers
+- the first runtime/bytecode ownership boundary for non-theoretical consolidation work
+
 The smallest local organism that can express full HLF intelligence requires:
 - **Deterministic coordination** (spec-first grammar, ALIGN Ledger seals)
 - **Structural compression** (glyph/ASCII surfaces reducing token footprint)
 - **Governed tool use** (host-function tiers, intent capsules)
 - **Swarm-aware self-improvement** (SIA agent, pro/con board)
 
+## Knowledge Substrate Refactor Baseline
+
+Use `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` as the active external research brief for the weekly knowledge substrate work.
+
+This implementation stream must include refactoring, not just additive features.
+
+Refactoring rules for this track:
+
+- active docs, plans, workflows, and tool contracts must use HLF-native naming aligned with `hlf_mcp/`, `hlf/`, and `hlf_source/`
+- comparison-driven language may inform design, but it must not remain embedded in current implementation surfaces
+- new knowledge-substrate code should land under a coherent package boundary instead of scattering ingest, schema, provenance, and retrieval logic across unrelated modules
+- naming, schema, workflow, and MCP contract refactors must be planned alongside implementation so the final surface is cohesive
+
+**Immediate refactoring items**:
+
+1. rename active research and planning surfaces to HLF-native knowledge-substrate terminology
+2. define the canonical package boundary for chunking, ingestion, provenance, retrieval, and exemplar memory
+3. normalize memory and retrieval tool naming around a single runtime contract
+4. update tests, docs, and workflow labels in lockstep with the implementation changes
+
+## Quality Envelope Baseline
+
+Use `HLF_QUALITY_TARGETS.md` as the measurable definition of "how close to perfect we can realistically get."
+
+That document defines the active quality dimensions for this repo:
+
+- multilingual intent capture accuracy
+- compression with fidelity, not compression alone
+- execution cleanliness and replayability
+- tool-contract reliability
+- swarm coordination quality
+- safety/governance quality
+
+Implementation work should prefer improvements that move one or more of those measurable dimensions, not just aesthetic refactors.
+
 **None of these require local GPU inference.**
 
 ---
 
 ## 📋 ACTIONABLE REFINEMENTS (Prioritized)
+
+### ✅ REFINEMENT 0: Quality Track Instead of Hand-Wavy Perfection
+**Status**: HIGH PRIORITY - Governs how all other refinements are judged
+
+**Problem**: The repo has strong vision language, but the question "how close to perfect are we getting?" was not yet expressed as repository-maintained quality criteria.
+
+**Solution**: Track HLF quality as measurable improvement over NLP-only orchestration, not as an impossible absolute.
+
+**Implementation Direction**:
+
+- benchmark multilingual intent compression and fidelity together
+- measure fallback rates, not just success cases
+- score swarm coordination cleanliness, not just single-run output
+- externalize policy and typed tool contracts so governance quality is inspectable
+
+**Immediate next implementation items**:
+
+1. extend multilingual benchmark matrix with fidelity and fallback metrics
+2. expose localized reverse summaries in packaged MCP tools
+3. externalize PII policy to governance config
+4. expand action-coverage vocabulary across supported languages
+
+**Success condition**:
+
+HLF can be shown, with tracked metrics, to produce more reproducible and governable outcomes than equivalent NLP-only orchestration.
+
+### ✅ REFINEMENT 0A: Knowledge Substrate Refactor Track
+**Status**: HIGH PRIORITY - Required for cohesion before the weekly knowledge system scales out
+
+**Problem**: Knowledge-system design notes are strong, but the implementation path still risks landing as a mix of comparison artifacts, scattered module ownership, and inconsistent runtime contracts.
+
+**Solution**: Pair the weekly knowledge-substrate implementation with an explicit HLF-native refactor track.
+
+**Implementation Direction**:
+
+- rename active handoff, planning, and workflow surfaces into repo-cohesive HLF knowledge-substrate terminology
+- decide and document the package boundary for chunking, embedding, ingest, provenance, freshness, retrieval, and exemplar memory
+- unify MCP retrieval outputs into one structured runtime contract
+- add migration notes wherever compatibility shims are temporarily required
+
+**Immediate next implementation items**:
+
+1. publish the HLF-native research handoff and retire comparison-branded planning surfaces
+2. define target module ownership for weekly ingest, chunking, embedding, provenance, and trust-tier schema
+3. add a refactor checklist to the implementation backlog before landing weekly ingest automation
+4. require workflow, doc, and test updates as part of each knowledge-substrate implementation slice
+
+**Success condition**:
+
+The weekly knowledge-substrate program lands as a coherent HLF surface with consistent naming, package boundaries, and runtime contracts rather than as a stack of loosely attached features.
 
 ### ✅ REFINEMENT 1: SQLite WAL for Hot Tier (P0/P1)
 **Status**: HIGH PRIORITY - Zero correctness loss

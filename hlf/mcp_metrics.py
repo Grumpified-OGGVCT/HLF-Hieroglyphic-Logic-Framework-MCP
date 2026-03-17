@@ -1,8 +1,11 @@
 """
-MCP Metrics for HLF.
+Legacy MCP metrics for HLF.
 
-Tracks usage statistics, test results, and improvement suggestions.
-Serves metrics to both users and agents via MCP tools.
+Tracks usage statistics, test results, and improvement suggestions for the
+older MCP/provider stack.
+
+Keep this module for compatibility and historical reporting, but prefer the
+packaged `hlf_mcp` line when defining current product metrics behavior.
 """
 
 import json
@@ -51,7 +54,7 @@ class ImprovementSuggestion:
 
 class HLFMetrics:
     """
-    Metrics collection and reporting for HLF MCP.
+    Metrics collection and reporting for the legacy HLF MCP stack.
     
     Usage:
         metrics = HLFMetrics(metrics_dir=Path.home() / '.sovereign' / 'metrics')

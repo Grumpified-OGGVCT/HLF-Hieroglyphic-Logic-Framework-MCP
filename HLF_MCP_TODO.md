@@ -4,6 +4,31 @@ Complete blueprint for the full MCP 2024-2025 integration with self-evolving gra
 
 ---
 
+## Phase 0: Knowledge Substrate Refactor
+
+**Priority: CRITICAL - Weekly knowledge work should not proceed without a cohesive surface**
+
+### Naming and authority
+- [ ] Adopt `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` as the active external research brief
+- [ ] Normalize active planning and workflow language to HLF-native knowledge-substrate terminology
+- [ ] Preserve `hlf_source/` as archive/reference context without letting archive terminology leak into active implementation surfaces
+
+### Package and module boundaries
+- [ ] Define the canonical ownership boundary for chunking, ingest, provenance, freshness, retrieval, and exemplar memory
+- [ ] Decide which surfaces belong under `hlf_mcp/` versus `hlf/` before new weekly knowledge modules are added
+- [ ] Document the target package map for the knowledge substrate
+
+### Runtime contracts
+- [ ] Standardize the MCP retrieval contract for chunk text, provenance, confidence, freshness, trust tier, and rationale
+- [ ] Standardize naming for memory search, memory store, exemplar recall, and weekly ingest tools
+- [ ] Add migration notes for any compatibility shims required during refactor
+
+### Workflow alignment
+- [ ] Add the knowledge-substrate refactor checklist to the weekly automation planning work
+- [ ] Ensure workflow labels, docs, and tests are updated in lockstep with naming and schema changes
+
+---
+
 ## Phase 1: Core MCP Layer
 
 **Priority: CRITICAL - Everything else depends on this**

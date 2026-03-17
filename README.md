@@ -13,6 +13,25 @@
 
 ---
 
+## Start Here
+
+If you are new to this repo, read these in order before making architectural assumptions:
+
+1. `docs/HLF_AGENT_ONBOARDING.md`
+2. `SSOT_HLF_MCP.md`
+3. `HLF_CANONICALIZATION_MATRIX.md`
+4. `HLF_QUALITY_TARGETS.md`
+
+Current authority rule:
+
+- `hlf_mcp/` is the packaged product surface and present-tense implementation truth.
+- `hlf/` is an active compatibility and support layer.
+- `hlf_source/` is preserved upstream context and extraction reference, not default product authority.
+
+Current quality rule:
+
+- `HLF_QUALITY_TARGETS.md` defines how this repo measures progress toward cleaner, safer, more reproducible results than NLP-only orchestration.
+
 ## Table of Contents
 
 1. [What is HLF?](#1-what-is-hlf)
@@ -151,6 +170,8 @@ uv run hlfrun fixtures/hello_world.hlf
 # 3. Start MCP server on SSE port 8000
 HLF_TRANSPORT=sse uv run hlf-mcp
 ```
+
+For unfamiliar agents or operators, use `docs/HLF_AGENT_ONBOARDING.md` before working from `hlf/` or `hlf_source/` directly.
 
 ### Option C — Docker Compose (full stack)
 

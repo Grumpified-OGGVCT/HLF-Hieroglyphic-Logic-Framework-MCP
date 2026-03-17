@@ -1,7 +1,15 @@
 """
-Complete MCP 2024-2025 Server for HLF.
+Legacy MCP 2024-2025 Server for HLF.
 
-This is the main server that implements the full MCP specification:
+This module is preserved as a compatibility and reference surface.
+
+Canonical product authority now lives in `hlf_mcp/server.py` and the packaged
+`hlf_mcp.hlf.*` implementation line.
+
+Use this module when you explicitly need the older provider stack or legacy test
+coverage, not as the default source of present-tense product truth.
+
+This server implements the full MCP specification on the legacy stack:
 - Resources (grammar, dictionaries, programs)
 - Tools (compile, execute, validate, friction)
 - Prompts (initialization, intent compression, troubleshooting)
@@ -31,7 +39,6 @@ try:
     METRICS_AVAILABLE = True
 except ImportError:
     METRICS_AVAILABLE = False
-    VERIFIED_METRICS = []
 
 # ========================================
 # MCP Protocol Constants
@@ -46,18 +53,20 @@ MCP_COMPATIBLE_VERSIONS = ["2024-11-05", "2025-03-26"]
 
 class MCPServer:
     """
-    MCP 2024-2025 compliant server for HLF.
-    
+    MCP 2024-2025 compliant server for the legacy HLF stack.
+
+    Prefer `hlf_mcp.server` for current packaged behavior.
+
     This server provides:
     - Resources: grammar, dictionaries, programs, versions
     - Tools: compile, execute, validate, friction_log, etc.
     - Prompts: initialize_agent, express_intent, troubleshoot, etc.
     - Logging: structured log messages
     - Roots: accessible directories
-    
+
     Usage:
         server = MCPServer(repo_root, friction_drop)
-        
+
         # Handle a message
         response = await server.handle_message(message)
     """
@@ -72,6 +81,7 @@ class MCPServer:
         """
         self.repo_root = Path(repo_root)
         self.friction_drop = friction_drop or (Path.home() / ".sovereign" / "friction")
+
         self.friction_drop.mkdir(parents=True, exist_ok=True)
         
         # Import providers
@@ -619,7 +629,7 @@ def create_http_app(repo_root: Path = None):
 # ========================================
 
 def main():
-    """Main entry point."""
+    """Legacy entry point for the pre-packaged MCP server."""
     import argparse
     
     parser = argparse.ArgumentParser(description="HLF MCP Server")

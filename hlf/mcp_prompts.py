@@ -1,8 +1,10 @@
 """
-MCP 2024-2025 Prompts implementation for HLF.
+Legacy MCP 2024-2025 prompts implementation for HLF.
 
-Prompts are templated messages that clients can use.
-Each prompt has defined arguments and generates structured text.
+This module is preserved as a compatibility and migration surface.
+
+Canonical product-facing prompt and instruction behavior now belongs to the
+packaged `hlf_mcp` line.
 """
 
 from dataclasses import dataclass
@@ -29,7 +31,10 @@ class PromptDefinition:
 
 class HLFPromptProvider:
     """
-    Provides HLF prompt templates for MCP clients.
+    Provides legacy HLF prompt templates for MCP clients.
+
+    Use this provider for compatibility and comparison work, not as the default
+    source of packaged product truth.
     
     Prompts available:
     - hlf_initialize_agent: Full grammar injection for agent initialization

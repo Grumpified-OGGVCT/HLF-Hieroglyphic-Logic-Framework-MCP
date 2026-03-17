@@ -10,10 +10,12 @@ Philosophy: People-first, privacy-first, AI as tool, transparent governance.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from pathlib import Path
 from typing import Any, Optional
 from collections.abc import Sequence
 
@@ -71,6 +73,41 @@ class PIIScanResult:
             "redacted": self.redacted_text,
             "safe_to_store": not self.has_pii,
         }
+
+
+def _default_policy() -> dict[str, Any]:
+    return {
+        "strict_mode": False,
+        "min_confidence": 0.7,
+        "enabled_categories": [category.name for category in PIICategory if category is not PIICategory.CUSTOM],
+        "context_indicators": {
+            "EMAIL": ["email", "contact", "reach"],
+            "PHONE": ["phone", "call", "tel", "mobile"],
+            "SSN": ["ssn", "social", "security"],
+            "CREDIT_CARD": ["card", "payment", "cc", "visa"],
+        },
+        "title_indicators": ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Captain", "President"],
+        "common_non_name_words": ["The", "A", "An", "In", "On", "At", "For", "With"],
+    }
+
+
+def _governance_policy_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "governance" / "pii_policy.json"
+
+
+def load_pii_policy(policy_path: str | Path | None = None) -> dict[str, Any]:
+    policy = _default_policy()
+    resolved_path = Path(policy_path) if policy_path is not None else _governance_policy_path()
+    if not resolved_path.exists():
+        return policy
+    try:
+        loaded = json.loads(resolved_path.read_text(encoding="utf-8"))
+    except Exception:
+        return policy
+    if not isinstance(loaded, dict):
+        return policy
+    policy.update(loaded)
+    return policy
 
 
 class PIIGuard:
@@ -133,9 +170,11 @@ class PIIGuard:
 
     def __init__(
         self,
-        strict_mode: bool = False,
+        strict_mode: bool | None = None,
         custom_patterns: Optional[dict[PIICategory, re.Pattern[str]]] = None,
-        min_confidence: float = 0.7,
+        min_confidence: float | None = None,
+        policy: dict[str, Any] | None = None,
+        policy_path: str | Path | None = None,
     ) -> None:
         """
         Initialize PII Guard.
@@ -145,13 +184,32 @@ class PIIGuard:
             custom_patterns: Additional regex patterns for custom PII types.
             min_confidence: Minimum confidence score to flag as PII (0.0–1.0).
         """
-        self.strict_mode = strict_mode
+        effective_policy = load_pii_policy(policy_path=policy_path)
+        if policy:
+            effective_policy.update(policy)
+
+        self.policy = effective_policy
+        self.strict_mode = effective_policy["strict_mode"] if strict_mode is None else strict_mode
         self.custom_patterns = custom_patterns or {}
-        self.min_confidence = min_confidence
-        self._patterns: dict[PIICategory, re.Pattern[str]] = {
-            **self.PATTERNS,
-            **self.custom_patterns,
+        self.min_confidence = float(effective_policy["min_confidence"] if min_confidence is None else min_confidence)
+
+        enabled_names = {
+            str(name).upper()
+            for name in effective_policy.get("enabled_categories", [])
         }
+        enabled_categories = {category for category in PIICategory if category.name in enabled_names}
+        self._patterns: dict[PIICategory, re.Pattern[str]] = {
+            category: pattern
+            for category, pattern in {**self.PATTERNS, **self.custom_patterns}.items()
+            if category in enabled_categories or category in self.custom_patterns
+        }
+        self._context_indicators: dict[PIICategory, list[str]] = {
+            PIICategory[key]: list(values)
+            for key, values in effective_policy.get("context_indicators", {}).items()
+            if key in PIICategory.__members__ and isinstance(values, list)
+        }
+        self._title_indicators = [str(value) for value in effective_policy.get("title_indicators", [])]
+        self._common_non_name_words = {str(value) for value in effective_policy.get("common_non_name_words", [])}
 
     def scan(self, text: str) -> PIIScanResult:
         """
@@ -254,16 +312,10 @@ class PIIGuard:
             base_confidence = 0.80
 
         # Boost confidence when contextual keywords appear nearby
-        context_indicators: dict[PIICategory, list[str]] = {
-            PIICategory.EMAIL: ["email", "contact", "reach"],
-            PIICategory.PHONE: ["phone", "call", "tel", "mobile"],
-            PIICategory.SSN: ["ssn", "social", "security"],
-            PIICategory.CREDIT_CARD: ["card", "payment", "cc", "visa"],
-        }
-        if category in context_indicators:
+        if category in self._context_indicators:
             idx = full_text.find(value)
             context_text = full_text[max(0, idx - 50): idx + 50].lower()
-            for indicator in context_indicators[category]:
+            for indicator in self._context_indicators[category]:
                 if indicator in context_text:
                     base_confidence = min(1.0, base_confidence + 0.05)
                     break
@@ -290,8 +342,7 @@ class PIIGuard:
         base_confidence = 0.65
 
         preceding_text = full_text[max(0, position - 20): position]
-        title_indicators = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Captain", "President"]
-        for title in title_indicators:
+        for title in self._title_indicators:
             if title in preceding_text:
                 base_confidence = 0.85
                 break
@@ -300,8 +351,7 @@ class PIIGuard:
             base_confidence = min(1.0, base_confidence + 0.10)
 
         # Reduce false positives for common non-name word pairs
-        common_words = {"The", "A", "An", "In", "On", "At", "For", "With"}
-        if name.split()[0] in common_words:
+        if name.split()[0] in self._common_non_name_words:
             base_confidence = 0.40
 
         return base_confidence
@@ -362,6 +412,7 @@ class PIIGuard:
             "categories": [cat.name for cat in self._patterns],
             "strict_mode": self.strict_mode,
             "min_confidence": self.min_confidence,
+            "policy_source": str(_governance_policy_path()),
         }
 
 

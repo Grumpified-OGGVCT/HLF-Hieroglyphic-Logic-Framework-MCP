@@ -35,7 +35,7 @@ from hlf_mcp.hlf.pii_guard import PIIGuard
 
 logger = logging.getLogger(__name__)
 
-# Module-level PII guard singleton — reuses precompiled regex patterns
+# Module-level PII guard singleton sourced from governed repo policy when present.
 _PII_GUARD = PIIGuard()
 
 
@@ -965,10 +965,62 @@ class HLFRuntime:
         bytecode: bytes,
         gas_limit: int = 1000,
         variables: dict[str, Any] | None = None,
+        *,
+        ast: dict[str, Any] | None = None,
+        source: str = "",
+        tier: str | None = None,
+        red_hat_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        effective_variables = variables or {}
+        effective_tier = tier or str(effective_variables.get("DEPLOYMENT_TIER", "hearth"))
+
+        if ast is not None or source or red_hat_metadata is not None:
+            from hlf_mcp.hlf.ethics.governor import check as ethics_check
+
+            governor_result = ethics_check(
+                ast=ast,
+                env=effective_variables,
+                source=source,
+                tier=effective_tier,
+                red_hat_metadata=red_hat_metadata,
+            )
+            if not governor_result.passed:
+                termination = governor_result.termination
+                if termination is not None:
+                    error = (
+                        f"Ethics Governor [{termination.trigger}]: {termination.message} "
+                        f"(Audit ID: {termination.audit_id})"
+                    )
+                else:
+                    error = "Ethics Governor blocked execution: " + "; ".join(governor_result.blocks)
+                return {
+                    "status": "governor_blocked",
+                    "result": None,
+                    "gas_used": 0,
+                    "trace": [],
+                    "side_effects": [],
+                    "error": error,
+                    "governor": {
+                        "passed": governor_result.passed,
+                        "blocks": governor_result.blocks,
+                        "warnings": governor_result.warnings,
+                        "termination": (
+                            {
+                                "trigger": termination.trigger,
+                                "message": termination.message,
+                                "documentation": termination.documentation,
+                                "audit_id": termination.audit_id,
+                                "appealable": termination.appealable,
+                            }
+                            if termination is not None
+                            else None
+                        ),
+                    },
+                }
+
         vm = HlfVM(max_gas=gas_limit)
-        if variables:
-            vm.scope.update(variables)
+        if effective_variables:
+            vm.scope.update(effective_variables)
         result = vm.execute(bytecode)
         status = "ok" if result.code == 0 else "error"
         top    = result.stack[-1] if result.stack else None

@@ -9,8 +9,9 @@ fork maintainer can read.
 This is NOT a kill-switch or an auto-ban.
   • Violations produce clear, actionable warnings with remediation steps.
   • Nothing is silently blocked.
-  • The script exits 0 on warnings; exits 1 only on hard structural breaks
-    (missing files that are required for the project to run at all).
+  • The script exits 0 on warnings; exits 1 on hard compliance breaks such as
+    missing required governance files, missing required capsule tiers, or an
+    ALIGN ruleset below the documented minimum.
   • Fork maintainers are free to extend — they just can't remove the core
     governance files that protect users.
 

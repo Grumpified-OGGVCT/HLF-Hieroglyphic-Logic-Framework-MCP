@@ -19,12 +19,14 @@ People are the priority.  AI is the tool.
 
 from __future__ import annotations
 
+import copy
 import hashlib
+import hmac
 import json
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +39,7 @@ _ALIGN_JSON = Path(__file__).resolve().parent / "align_rules.json"
 
 # ── Status enum ──────────────────────────────────────────────────────────────
 
-class UpdateStatus(str, Enum):
+class UpdateStatus(StrEnum):
     PENDING    = "pending_hil"       # staged, awaiting human approval
     APPROVED   = "approved"          # human approved, ready to distribute
     REJECTED   = "rejected"          # human rejected
@@ -50,7 +52,7 @@ class UpdateStatus(str, Enum):
 
 @dataclass
 class UpdateTicket:
-    """Immutable record of a staged update waiting for HIL approval."""
+    """Ticket record for a staged update waiting for HIL approval."""
     ticket_id: str
     version: str
     description: str
@@ -252,7 +254,7 @@ class UpdateGovernor:
             audit_trail  = [_audit_entry("staged", staged_by, {"version": version})],
         )
         self._tickets[tid] = ticket
-        return ticket
+        return _copy_ticket(ticket)
 
     # ── Approval / rejection ──────────────────────────────────────────────────
 
@@ -288,7 +290,7 @@ class UpdateGovernor:
         ticket.audit_trail.append(
             _audit_entry("rejected", operator, {"reason": reason})
         )
-        return ticket
+        return _copy_ticket(ticket)
 
     # ── Distribution ─────────────────────────────────────────────────────────
 
@@ -316,7 +318,7 @@ class UpdateGovernor:
                 f"Ticket {ticket_id} is in '{ticket.status.value}' state; "
                 "only 'approved' tickets can be distributed."
             )
-        if ticket.approval_token != approval_token:
+        if not hmac.compare_digest(ticket.approval_token, approval_token):
             raise TokenMismatch(
                 f"Approval token mismatch for ticket {ticket_id}. "
                 "Distribution requires the token returned by approve()."
@@ -415,15 +417,15 @@ class UpdateGovernor:
     # ── Inspection ───────────────────────────────────────────────────────────
 
     def get_ticket(self, ticket_id: str) -> UpdateTicket:
-        """Return a ticket by ID (public, read-only view)."""
-        return self._get_ticket(ticket_id)
+        """Return a defensive copy of a ticket by ID."""
+        return _copy_ticket(self._get_ticket(ticket_id))
 
     def list_tickets(self, status: UpdateStatus | None = None) -> list[UpdateTicket]:
-        """List all tickets, optionally filtered by status."""
+        """List defensive copies of tickets, optionally filtered by status."""
         tickets = list(self._tickets.values())
         if status is not None:
             tickets = [t for t in tickets if t.status == status]
-        return sorted(tickets, key=lambda t: t.staged_at)
+        return [_copy_ticket(t) for t in sorted(tickets, key=lambda t: t.staged_at)]
 
     def expire_stale(self) -> list[str]:
         """
@@ -494,3 +496,8 @@ def _audit_entry(
         "timestamp": time.time(),
         "detail":    detail or {},
     }
+
+
+def _copy_ticket(ticket: UpdateTicket) -> UpdateTicket:
+    """Return a deep copy so external callers cannot mutate internal state."""
+    return copy.deepcopy(ticket)

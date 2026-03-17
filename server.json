@@ -44,6 +44,10 @@
         "NON-REDUCTIVE: no checks silently removed",
         "NON-INVASIVE: no telemetry, no auto-banning, no silent refusals"
       ],
+      "operator_responsibilities": [
+        "Users and operators remain responsible for baseline host, network, credential, and system security.",
+        "Deployments must apply local and regional legal-policy guidance beyond what HLF can responsibly encode in-process."
+      ],
       "fork_compliance_check": "scripts/fork_compliance_check.py",
       "update_approval_required": true
     }

@@ -49,7 +49,7 @@ hlflsp   = "hlf_mcp.hlf.hlflsp:main"
 hlftest  = "hlf_mcp.hlf.hlftest:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["hlf_mcp"]
+packages = ["hlf_mcp", "governance"]
 
 [tool.hatch.build.targets.wheel.shared-data]
 "fixtures" = "hlf_mcp/fixtures"

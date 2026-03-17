@@ -27,27 +27,19 @@ license_revocation.py:
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
-# Make governance/ and scripts/ importable
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT))
-
-from scripts.fork_compliance_check import (
-    ComplianceReport,
-    run_compliance_check,
-)
 from governance.license_revocation import (
     ClauseUnknown,
     EntityNotWarned,
     EntryType,
-    LedgerError,
     RevocationLedger,
 )
+from scripts.fork_compliance_check import run_compliance_check
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fork Compliance Check Tests
@@ -304,6 +296,29 @@ class TestRevocationLedger:
         assert ok is False
         assert len(errors) > 0
 
+    def test_verify_chain_detects_tampered_prev_hash(self) -> None:
+        self.ledger.warn(entity="fork-a", clause_id="HLF-ETHICS-001")
+        self.ledger.warn(entity="fork-b", clause_id="HLF-ETHICS-002")
+
+        self.ledger._entries[1].prev_hash = "f" * 64
+
+        ok, errors = self.ledger.verify_chain()
+        assert ok is False
+        assert any("prev_hash mismatch" in error for error in errors)
+
+    def test_verify_chain_detects_tampered_evidence_hash(self) -> None:
+        self.ledger.warn(
+            entity="fork-a",
+            clause_id="HLF-ETHICS-001",
+            evidence={"removed_file": "HLF_ETHICAL_GOVERNOR.md"},
+        )
+
+        self.ledger._entries[0].evidence["removed_file"] = "OTHER.md"
+
+        ok, errors = self.ledger.verify_chain()
+        assert ok is False
+        assert any("evidence_hash mismatch" in error for error in errors)
+
     def test_verify_chain_empty_ledger_passes(self) -> None:
         ok, errors = self.ledger.verify_chain()
         assert ok is True
@@ -352,7 +367,7 @@ class TestRevocationLedger:
         self.ledger.warn(entity="fork-a", clause_id="HLF-ETHICS-001")
         out = tmp_path / "ledger.jsonl"
         self.ledger.export_jsonl(out)
-        lines = [l for l in out.read_text().splitlines() if l.strip()]
+        lines = [line for line in out.read_text().splitlines() if line.strip()]
         assert len(lines) == 1
         parsed = json.loads(lines[0])
         assert parsed["entity"] == "fork-a"
@@ -362,5 +377,5 @@ class TestRevocationLedger:
             self.ledger.audit(entity=f"fork-{i}", operator="monitor")
         out = tmp_path / "ledger.jsonl"
         self.ledger.export_jsonl(out)
-        lines = [l for l in out.read_text().splitlines() if l.strip()]
+        lines = [line for line in out.read_text().splitlines() if line.strip()]
         assert len(lines) == 3

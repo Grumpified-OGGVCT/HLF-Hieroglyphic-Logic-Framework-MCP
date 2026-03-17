@@ -25,13 +25,13 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 # ── Entry types ───────────────────────────────────────────────────────────────
 
-class EntryType(str, Enum):
+class EntryType(StrEnum):
     WARNING    = "warning"     # first notice — entity informed, no action yet
     REVOCATION = "revocation"  # human-approved revocation of license rights
     REINSTATE  = "reinstate"   # human-approved restoration after appeal/remedy
@@ -264,6 +264,17 @@ class RevocationLedger:
         errors: list[str] = []
         prev_hash = ZERO_HASH
         for i, entry in enumerate(self._entries):
+            if entry.prev_hash != prev_hash:
+                errors.append(
+                    f"Entry {i} ('{entry.entry_id}'): prev_hash mismatch. "
+                    f"Expected {prev_hash[:16]}..., got {entry.prev_hash[:16]}..."
+                )
+            expected_evidence_hash = _compute_evidence_hash(entry.evidence)
+            if entry.evidence_hash != expected_evidence_hash:
+                errors.append(
+                    f"Entry {i} ('{entry.entry_id}'): evidence_hash mismatch. "
+                    f"Expected {expected_evidence_hash[:16]}..., got {entry.evidence_hash[:16]}..."
+                )
             expected = _compute_trace_id(prev_hash, entry)
             if entry.trace_id != expected:
                 errors.append(
@@ -329,9 +340,7 @@ class RevocationLedger:
     ) -> LedgerEntry:
         import uuid
         prev_hash     = self._entries[-1].trace_id if self._entries else ZERO_HASH
-        evidence_hash = hashlib.sha256(
-            json.dumps(evidence, sort_keys=True).encode()
-        ).hexdigest()
+        evidence_hash = _compute_evidence_hash(evidence)
         entry_id = str(uuid.uuid4())
 
         entry = LedgerEntry(
@@ -375,12 +384,23 @@ def _compute_trace_id(prev_hash: str, entry: LedgerEntry) -> str:
         {
             "event": entry.entry_type.value,
             "data": {
-                "entry_id":  entry.entry_id,
-                "entity":    entry.entity,
+                "entry_id": entry.entry_id,
+                "entity": entry.entity,
                 "clause_id": entry.clause_id,
+                "description": entry.description,
+                "evidence_hash": entry.evidence_hash,
+                "operator": entry.operator,
                 "timestamp": entry.timestamp,
+                "appealable": entry.appealable,
+                "appeal_url": entry.appeal_url,
+                "notes": entry.notes,
             },
         },
         sort_keys=True,
     )
     return hashlib.sha256(f"{prev_hash}{payload}".encode()).hexdigest()
+
+
+def _compute_evidence_hash(evidence: dict[str, Any]) -> str:
+    """Compute a stable hash for entry evidence."""
+    return hashlib.sha256(json.dumps(evidence, sort_keys=True).encode()).hexdigest()

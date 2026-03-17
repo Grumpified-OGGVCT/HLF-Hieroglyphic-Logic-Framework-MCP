@@ -3,7 +3,7 @@
 HLF Fork Monitor — scan GitHub forks for ethics compliance and open advisory issues.
 
 This script uses the GitHub REST API to find forks of the HLF repository,
-runs the fork compliance checker against each one's file manifest, and
+spot-checks the presence of core governance files via the Contents API, and
 optionally creates a GitHub issue on non-compliant forks to notify maintainers.
 
 Design principles (same as the rest of HLF):
@@ -45,7 +45,6 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 # ── Constants ────────────────────────────────────────────────────────────────

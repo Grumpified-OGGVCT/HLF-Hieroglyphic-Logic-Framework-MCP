@@ -20,12 +20,6 @@ import time
 
 import pytest
 
-# Add repo root to path so governance/ is importable without installation
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from governance.update_governor import (
     DistributionResult,
     InvalidTransition,
@@ -37,7 +31,6 @@ from governance.update_governor import (
     UpdateStatus,
     UpdateTicket,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -106,6 +99,14 @@ class TestStaging:
         t2 = _stage_one(gov, version="1.0.1")
 
         assert t1.ticket_id != t2.ticket_id
+
+    def test_stage_returns_defensive_copy(self) -> None:
+        gov = _make_governor()
+        ticket = _stage_one(gov)
+
+        ticket.status = UpdateStatus.REJECTED
+
+        assert gov.get_ticket(ticket.ticket_id).status == UpdateStatus.PENDING
 
 
 # ── Approval ──────────────────────────────────────────────────────────────────
@@ -312,3 +313,24 @@ class TestListing:
         gov = _make_governor()
         with pytest.raises(TicketNotFound):
             gov.get_ticket("does-not-exist")
+
+    def test_get_ticket_returns_defensive_copy(self) -> None:
+        gov = _make_governor()
+        ticket = _stage_one(gov)
+
+        snapshot = gov.get_ticket(ticket.ticket_id)
+        snapshot.audit_trail.append({"event": "tamper"})
+        snapshot.status = UpdateStatus.REJECTED
+
+        stored = gov.get_ticket(ticket.ticket_id)
+        assert stored.status == UpdateStatus.PENDING
+        assert all(entry["event"] != "tamper" for entry in stored.audit_trail)
+
+    def test_list_tickets_returns_defensive_copies(self) -> None:
+        gov = _make_governor()
+        _stage_one(gov, "1.0.0")
+
+        listed = gov.list_tickets()
+        listed[0].description = "changed externally"
+
+        assert gov.list_tickets()[0].description == "Test update"

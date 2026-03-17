@@ -608,6 +608,7 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
     """Heuristically extract HLF statements from supported language text."""
     profile = _LANGUAGE_PROFILES[language]
     actions = []
+    # Split sentence boundaries without breaking dotted file paths like /var/log/app.log.
     sentences = re.split(r'[;!?\n]|\.(?!\w)', text)
     for sentence in sentences:
         s = sentence.strip()

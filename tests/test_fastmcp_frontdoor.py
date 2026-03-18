@@ -1,4 +1,5 @@
 from hlf_mcp import server
+import json
 
 
 def test_hlf_do_dry_run_generates_governed_audit() -> None:
@@ -186,3 +187,269 @@ def test_hlf_translation_memory_query_returns_known_good_contracts() -> None:
 
     assert result["count"] >= 1
     assert any("hlf_translation_contract" in row["content"] for row in result["results"])
+
+
+def test_hlf_recommend_embedding_profile_for_cpu_only_translation_memory() -> None:
+    result = server.hlf_recommend_embedding_profile(
+        workload="translation_memory",
+        cpu_only=True,
+        multilingual_required=True,
+        agent_id="cpu-reviewer",
+    )
+
+    assert result["agent_id"] == "cpu-reviewer"
+    assert result["hardware_summary"]["cpu_only"] is True
+    assert result["embedding_recommendation"]["model"] == "embeddinggemma"
+    assert result["fallback_recommendation"]["model"] == "all-minilm"
+    assert result["allowed_modes"]["deterministic_only"] is True
+
+
+def test_hlf_recommend_embedding_profile_prefers_multilingual_gpu_model() -> None:
+    result = server.hlf_recommend_embedding_profile(
+        workload="translation_memory",
+        gpu_vram_gb=12,
+        multilingual_required=True,
+        agent_id="gpu-agent",
+    )
+
+    assert result["embedding_recommendation"]["model"] == "nomic-embed-text-v2-moe"
+    assert result["fallback_recommendation"]["model"] == "embeddinggemma"
+    assert result["embedding_recommendation"]["endpoint"] == "http://localhost:11434"
+    assert result["embedding_recommendation"]["vector_db_config"]["metric"] == "cosine"
+
+
+def test_hlf_recommend_embedding_profile_handles_long_form_ingestion_on_cpu() -> None:
+    result = server.hlf_recommend_embedding_profile(
+        workload="long_form_standards_ingestion",
+        cpu_only=True,
+        long_context_required=True,
+    )
+
+    assert result["embedding_recommendation"]["model"] == "embeddinggemma"
+    assert result["fallback_recommendation"]["model"] == "all-minilm"
+    assert any("Long-form standards ingestion" in item for item in result["policy_constraints"])
+
+
+def test_hlf_test_suite_summary_reads_latest_metrics_file(tmp_path) -> None:
+    summary_path = tmp_path / "pytest_last_run.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "command": ["python", "-m", "pytest", "tests", "-q"],
+                "exit_code": 0,
+                "passed": True,
+                "duration_ms": 123.4,
+                "counts": {"passed": 10, "failed": 0, "errors": 0, "skipped": 0, "xfailed": 0, "xpassed": 0},
+                "stdout": "10 passed",
+                "stderr": "",
+                "metrics_dir": str(tmp_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = server.hlf_test_suite_summary(metrics_dir=str(tmp_path))
+
+    assert result["status"] == "ok"
+    assert result["summary"]["passed"] is True
+    assert result["summary"]["counts"]["passed"] == 10
+    assert "stdout" not in result["summary"]
+
+
+def test_hlf_test_suite_summary_can_include_output(tmp_path) -> None:
+    summary_path = tmp_path / "pytest_last_run.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "command": ["python", "-m", "pytest", "tests", "-q"],
+                "exit_code": 1,
+                "passed": False,
+                "duration_ms": 55.0,
+                "counts": {"passed": 2, "failed": 1, "errors": 0, "skipped": 0, "xfailed": 0, "xpassed": 0},
+                "stdout": "2 passed, 1 failed",
+                "stderr": "AssertionError",
+                "metrics_dir": str(tmp_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = server.hlf_test_suite_summary(metrics_dir=str(tmp_path), include_output=True)
+
+    assert result["status"] == "ok"
+    assert result["summary"]["stdout"] == "2 passed, 1 failed"
+    assert result["summary"]["stderr"] == "AssertionError"
+
+
+def test_server_instruction_summary_tracks_registered_surface() -> None:
+    assert len(server.REGISTERED_TOOLS) == 49
+    assert len(server.REGISTERED_RESOURCES) == 15
+
+    exported_tools = {
+        name for name in dir(server) if name.startswith("hlf_") and callable(getattr(server, name))
+    }
+
+    assert set(server.REGISTERED_TOOLS) == exported_tools
+    for name in server.REGISTERED_TOOLS:
+        assert name in server.mcp.instructions
+    for uri in server.REGISTERED_RESOURCES:
+        assert uri in server.mcp.instructions
+
+
+def test_server_registers_model_catalog_tools() -> None:
+    assert "hlf_sync_model_catalog" in server.REGISTERED_TOOLS
+    assert "hlf_get_model_catalog" in server.REGISTERED_TOOLS
+    assert "hlf_get_model_catalog_status" in server.REGISTERED_TOOLS
+    assert "hlf_verify_formal_ast" in server.REGISTERED_TOOLS
+    assert "hlf_verify_gas_budget" in server.REGISTERED_TOOLS
+    assert "hlf_instinct_realign" in server.REGISTERED_TOOLS
+    assert "hlf_instinct_list" in server.REGISTERED_TOOLS
+    assert "hlf://status/model_catalog" in server.REGISTERED_RESOURCES
+    assert "hlf://status/model_catalog/{agent_id}" in server.REGISTERED_RESOURCES
+    assert "hlf://status/align" in server.REGISTERED_RESOURCES
+    assert "hlf://status/formal_verifier" in server.REGISTERED_RESOURCES
+    assert "hlf://status/instinct" in server.REGISTERED_RESOURCES
+    assert "hlf://status/instinct/{mission_id}" in server.REGISTERED_RESOURCES
+
+
+def test_align_status_surfaces_normalized_action_semantics() -> None:
+    result = server.hlf_align_check(
+        payload="This route should be blocked because it contains malware.",
+        agent_id="align-agent",
+        workload="agent_routing_context",
+    )
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/align"]())
+
+    assert result["status"] == "ok"
+    assert resource["status"] == "ok"
+    assert "normalized_actions" in resource["align_status"]
+    assert "DROP" in resource["align_status"]["normalized_actions"]
+    assert result["verdict"]["action"] in set(resource["align_status"]["normalized_actions"])
+
+
+def test_formal_verifier_tools_and_resource_surface_proven_constraints() -> None:
+    tool_result = server.hlf_verify_gas_budget(task_costs=[100, 200, 300], budget=700)
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/formal_verifier"]())
+
+    assert tool_result["status"] == "ok"
+    assert tool_result["result"]["status"] in {"proven", "failed"}
+    assert resource["status"] == "ok"
+    assert resource["formal_verifier_status"]["solver_name"]
+
+
+def test_instinct_realign_persists_mission_status_in_resource() -> None:
+    mission_id = "resource-mission"
+
+    created = server.hlf_instinct_step(
+        mission_id=mission_id,
+        phase="specify",
+        payload={"topic": "restore pillar"},
+    )
+    realigned = server.hlf_instinct_realign(
+        mission_id=mission_id,
+        change_type="scope_change",
+        change_description="Recovered missing verification edge",
+        affected_nodes=["verify"],
+    )
+    listing = json.loads(server.REGISTERED_RESOURCES["hlf://status/instinct"]())
+    mission_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/instinct/{mission_id}"](mission_id))
+
+    assert created["status"] == "ok"
+    assert realigned["status"] == "ok"
+    assert listing["status"] == "ok"
+    assert any(mission["mission_id"] == mission_id for mission in listing["missions"])
+    assert mission_resource["status"] == "ok"
+    assert mission_resource["mission"]["mission_id"] == mission_id
+    assert len(mission_resource["mission"]["realignment_events"]) == 1
+
+
+def test_model_catalog_status_surfaces_lane_summary_for_tool_and_resource(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "HLF_REMOTE_MODEL_ENDPOINTS",
+        json.dumps(
+            [
+                {
+                    "name": "remote-coder",
+                    "endpoint": "https://remote.example.test/v1",
+                    "lanes": ["code-generation", "explainer"],
+                    "capabilities": ["reasoning", "remote-direct"],
+                    "reachable": True,
+                }
+            ]
+        ),
+    )
+
+    server.hlf_sync_model_catalog(
+        agent_id="status-agent",
+        agent_role="coder",
+        runtime_status={
+            "ollama_available": False,
+            "installed_models": [],
+            "recommended_model_runnable": False,
+            "fallback_model_runnable": False,
+        },
+        hardware_summary={"cpu_only": False, "gpu_vram_gb": 16.0},
+    )
+
+    tool_status = server.hlf_get_model_catalog_status(agent_id="status-agent")
+    latest_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/model_catalog"]())
+    agent_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/model_catalog/{agent_id}"]("status-agent"))
+
+    assert tool_status["status"] == "ok"
+    assert tool_status["catalog_status"]["agent_id"] == "status-agent"
+    assert tool_status["catalog_status"]["summary"]["configured_remote_direct_count"] == 1
+    assert tool_status["catalog_status"]["agent_lane_summary"]["code-generation"]["best_remote_direct"]["name"] == "remote-coder"
+
+    assert latest_resource["status"] == "ok"
+    assert latest_resource["catalog_status"]["agent_id"] == "status-agent"
+    assert agent_resource["catalog_status"]["preferred_lanes"] == ["code-generation", "verifier", "explainer"]
+
+
+def test_route_governed_request_can_use_remote_direct_catalog_path(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "HLF_REMOTE_MODEL_ENDPOINTS",
+        json.dumps(
+            [
+                {
+                    "name": "remote-coder",
+                    "endpoint": "https://remote.example.test/v1",
+                    "lanes": ["code-generation", "explainer"],
+                    "capabilities": ["reasoning", "remote-direct"],
+                    "reachable": True,
+                }
+            ]
+        ),
+    )
+
+    catalog = server.hlf_sync_model_catalog(
+        agent_id="coder-1",
+        agent_role="coder",
+        runtime_status={
+            "ollama_available": False,
+            "installed_models": [],
+            "recommended_model_runnable": False,
+            "fallback_model_runnable": False,
+        },
+        hardware_summary={"cpu_only": False, "gpu_vram_gb": 16.0},
+    )
+    route = server.hlf_route_governed_request(
+        payload="Explain the failing integration behavior and suggest a fix.",
+        workload="code_pattern_retrieval",
+        agent_id="coder-1",
+        agent_role="coder",
+        trust_state="trusted",
+        runtime_status={
+            "ollama_available": False,
+            "installed_models": [],
+            "recommended_model_runnable": False,
+            "fallback_model_runnable": False,
+        },
+        hardware_summary={"cpu_only": False, "gpu_vram_gb": 16.0},
+    )
+
+    assert catalog["catalog"]["summary"]["configured_remote_direct_count"] == 1
+    assert route["routing_verdict"]["primary_access_mode"] == "remote-direct"
+    assert route["routing_verdict"]["selected_lane"] == "code-generation"
+
+
+

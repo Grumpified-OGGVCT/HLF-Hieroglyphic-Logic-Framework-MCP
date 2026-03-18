@@ -1,8 +1,8 @@
 # Single Source of Truth - HLF-Hieroglyphic-Logic-Framework-MCP
 
-**Generated on:** 2026-03-16
+**Generated on:** 2026-03-17
 **Branch:** integrate-sovereign
-**Purpose:** Authoritative current-state document for this local checkout, grounded in code and validation run on 2026-03-16, with explicit notes on extraction completeness relative to the Sovereign source repo.
+**Purpose:** Authoritative current-state document for this local checkout, grounded in code and validation run on 2026-03-17, with explicit notes on extraction completeness relative to the Sovereign source repo.
 
 ## Truth Boundary
 
@@ -12,12 +12,25 @@ This document separates three classes of truth:
 2. **Partial now**: present as code or scaffolding, but not complete enough to claim as finished.
 3. **Roadmap / vision**: valuable design direction, but not default present-tense product truth.
 
-If a claim is not backed by files in this repo or a command run in this workspace on 2026-03-16, it does not belong in the "implemented now" section.
+If a claim is not backed by files in this repo or a command run in this workspace on 2026-03-17, it does not belong in the "implemented now" section.
 
 This document also now distinguishes between:
 
 - **local checkout truth**: what is actually present and working in `HLF_MCP`
 - **source extraction completeness**: how much of the HLF-related surface from `Sovereign_Agentic_OS_with_HLF` has or has not been carried over
+- **semantic/refit authority**: doctrine, RFC, correction, and local-corpora evidence that does not automatically become present-tense product truth, but still defines what constitutive HLF pillars must eventually be restored, bridged, or explicitly scoped
+
+Short boundary note:
+
+- `README.md` contains north-star framing and aspirational product language.
+- `TODO.md`, `HLF_MCP_TODO.md`, and `HLF_QUALITY_TARGETS.md` define the implementation and validation path required to earn those claims.
+- `SSOT_HLF_MCP.md` is the present-tense truth surface and should not treat README ambition as already shipped reality.
+
+Additional boundary rule:
+
+- this file remains the authority for executable current truth
+- it must not erase constitutive HLF pillars simply because they are only partially packaged today
+- when external doctrine or local corpora preserve math, symbol, bytecode, trust-chain, evolution, verifier, or dual-surface HLF semantics, those belong in bridge and recovery planning rather than being silently treated as optional
 
 ## Repo Identity
 
@@ -33,6 +46,26 @@ This document also now distinguishes between:
 The previous empty placeholder SSOT was trying to become a full extraction-and-refactor ledger. The current SSOT started as a **local truth document**, which means it correctly described what exists here, but it did **not** fully describe how much HLF-related work exists in the Sovereign source repo.
 
 That distinction matters.
+
+It matters even more after the three local external corpora were added to reconstruction work.
+
+Those corpora do not override local executable truth, but they do prove that some HLF pillars are broader than the packaged runtime/compiler surface alone.
+
+In particular, they preserve additional evidence for:
+
+- mathematical-symbolic compression as a constitutive HLF foundation
+- a dual-surface language model rather than one flattened syntax story
+- bytecode, decompilation, and VM round-trip discipline as first-class HLF concerns
+- cryptographic trust-chain semantics for packets, pointers, tools, registries, and traces
+- governed language evolution, dialect control, and anti-de-evolution rules
+
+Those areas therefore belong to the repo's semantic/refit authority even where the packaged code has not yet fully absorbed them.
+
+Version rule:
+
+- there is no separately authoritative `HLF 4.0` release established by the evidence set currently under reconstruction
+- however, SAFE v4 and correction materials still preserve HLF-relevant bytecode, cryptographic, verifier, and compliance mechanics by substance
+- those mechanics should be mined as HLF bridge obligations rather than discarded because of the label they appeared under
 
 ### What the Sovereign source repo contains
 
@@ -95,7 +128,7 @@ It was incomplete for source-to-extracted migration truth.
 
 ## Canonical Build Surface
 
-The repo currently contains **two real implementation surfaces**.
+The repo currently contains **one packaged/default implementation surface and one retained compatibility surface**.
 
 ### 1. Packaged FastMCP surface
 
@@ -105,11 +138,11 @@ This is the default build/install surface and the one exposed by `pyproject.toml
 - Entry point: `hlf-mcp`
 - Server file: `hlf_mcp/server.py`
 - Core compiler/runtime path: `hlf_mcp/hlf/*`
-- Current decorator count after this pass: **26 tools, 9 resources, 0 prompts**
+- Current packaged MCP registration count after this pass: **34 tools, 9 resources, 0 prompts**
 
-### 2. Legacy MCP / support surface
+### 2. Legacy MCP compatibility surface
 
-This line is still real and testable, but it is not the package entry point.
+This line is still real and testable, but it is not the package entry point, the default implementation surface, or the right basis for present-tense product claims.
 
 - Package path: `hlf/*`
 - Server file: `hlf/mcp_server_complete.py`
@@ -123,7 +156,7 @@ The right way to describe the repo is **not** "only one server exists" and **not
 The truthful statement is:
 
 - the packaged production-facing surface is `hlf_mcp`
-- the legacy `hlf/` line still contains useful, working components
+- the legacy `hlf/` line still contains useful, working compatibility components
 - this pass merged one high-value capability (`hlf_do`) forward into the packaged FastMCP surface instead of pretending the split does not exist
 
 ## Implemented Now
@@ -147,6 +180,7 @@ The following claims are grounded in code present in this checkout.
 ### FastMCP server
 
 - `hlf_mcp/server.py` is the packaged FastMCP server.
+- The human-facing FastMCP instruction payload is now built through `hlf_mcp/server_instructions.py`, using the actual registered tool and resource surface instead of a hand-maintained inline block in `server.py`.
 - Implemented transports: `stdio`, `sse`, and `streamable-http`.
 - Implemented health endpoint wrapper: `/health` for HTTP transports.
 - Implemented resources: grammar, opcodes, host functions, examples, governance files, stdlib listing.
@@ -219,7 +253,14 @@ These areas are real, but should not be overstated.
 
 - Before this pass, core docs still repeated stale counts like `22 tools, 7 resources`.
 - Quick start material mixed the legacy entry path with the packaged story.
+- The main packaged server assembly is now cleaner because the large inline instruction payload was extracted out of `server.py`, and the human-facing server summary is now generated from the registered MCP surface.
 - This pass corrected the most visible drift, but the entire repo has not yet been exhaustively normalized.
+
+### Language evolution and bytecode trust bridge
+
+- The repo now has real packaged compiler, runtime, bytecode, manifest, integrity, and InsAIts surfaces.
+- The repo does not yet earn a full present-tense claim that governed language evolution, constitution-hash compatibility, signed registry/tool trust, pointer provenance, verifier-gated execution, and richer round-trip proof surfaces are complete in packaged authority.
+- Truthful claim: packaged executable bytecode/runtime authority exists now; the broader evolution-and-trust contract remains an active bridge/reconstruction area rather than a finished subsystem.
 
 ## Roadmap and Vision
 
@@ -246,7 +287,7 @@ Truthful present-tense claim:
 
 These ideas are not invalid. They just belong in the roadmap / doctrine category unless tied to working code in this repo.
 
-## Validation Run on 2026-03-16
+## Validation Run on 2026-03-17
 
 The following validations were run in this workspace during this pass.
 
@@ -273,8 +314,10 @@ The following validations were run in this workspace during this pass.
 | `uv run python docs/gen_from_spec.py` | Passed |
 | `uv run python scripts/hlf_token_lint.py fixtures` | Passed |
 | `uv run pytest tests/test_extracted_support_tools.py tests/test_gen_from_spec.py -q --tb=short` | Passed (`6 passed`) |
+| `uv run python -c "import hlf_mcp.server as s; print('imports-ok'); print('registered_tools', len(s.REGISTERED_TOOLS)); print('registered_resources', len(s.REGISTERED_RESOURCES)); print('exported_hlf_callables', len([name for name in dir(s) if name.startswith('hlf_') and callable(getattr(s, name))]))"` | Passed (`imports-ok`, `34` registered tools, `9` registered resources, `34` exported callable `hlf_*` names) |
+| `uv run pytest tests/test_fastmcp_frontdoor.py -q --tb=short` | Passed (`20 passed`) |
 | `uv run pytest -q --tb=short` | Passed (`513 passed`) |
-| FastMCP decorator count in `hlf_mcp/server.py` | 26 tool decorators, 9 resource decorators |
+| Generated packaged MCP surface in `hlf_mcp.server` | `34` registered tools, `9` registered resources, `34` exported callable `hlf_*` names |
 
 ## This Pass Changed
 
@@ -305,6 +348,7 @@ The branch is currently in a good cleanup posture for PR preparation.
 
 - `integrate-sovereign` is **7 commits ahead, 0 behind** `main`.
 - The broad configured regression run is green: `uv run pytest -q --tb=short` passed with `513 passed`.
+- The focused packaged-server regression run is also green after the generated-instructions refactor: `uv run pytest tests/test_fastmcp_frontdoor.py -q --tb=short` passed with `20 passed`.
 - The latest cleanup pass removed legacy pytest return-value noise and fixed the stale legacy assumptions that cleanup exposed in `test_mcp_complete.py` and `hlf/mcp_metric.py`.
 - The remaining work before commit/PR polish is editorial and organizational rather than functional: keep docs truthful, decide the intentional omissions, and optionally split the current working tree into a small number of coherent commits.
 
@@ -340,6 +384,7 @@ These are the most concrete remaining gaps after this pass.
 3. Continue hardening the ethics governor from integrated scaffold to clearly complete subsystem.
 4. Audit secondary docs for stale counts and legacy-path references beyond the core files updated here.
 5. Keep the broader test surface green as consolidation continues.
+6. Turn language-evolution, bytecode-trust, and semantic/refit obligations into explicit packaged bridge specs rather than leaving them distributed across source notes and recovery docs.
 
 ## Critical Product Gap
 
@@ -388,6 +433,10 @@ The central truth problem was not lack of work. It was narrative drift between:
 - what is implemented now
 - what is partially implemented now
 - what is still architectural vision
+
+It also must now resist a fourth drift mode:
+
+- treating constitutive HLF pillars preserved in source RFCs, correction notes, and local corpora as if they were non-HLF just because they are not yet fully packaged
 
 And beneath that, the central product problem is still unresolved: there is not yet one sharply defined usefulness claim that the repo can defend without reaching for the larger vision.
 

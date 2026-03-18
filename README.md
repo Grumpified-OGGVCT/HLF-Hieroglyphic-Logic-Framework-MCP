@@ -1,6 +1,6 @@
 # 📜 HLF — Hieroglyphic Logic Framework · MCP Server
 
-> **The Rosetta Stone for Machines.** A deterministic orchestration protocol that replaces natural language ambiguity with a strictly-typed Hieroglyphic AST — enabling zero-trust agent execution, cryptographic governance, and ultra-dense token efficiency across every model and runtime.
+> **HLF is meant to become a governed language for turning intent into auditable machine action.** The MCP server is the easiest way into that system, but the vision is bigger than the server: language, governance, runtime, memory, coordination, explanation, and real-code output.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![HLF v0.5](https://img.shields.io/badge/HLF-v0.5.0-purple)](governance/bytecode_spec.yaml)
@@ -15,23 +15,50 @@
 
 ## Start Here
 
-If you are new to this repo, read these in order before making architectural assumptions:
+HLF should not be read as “just the current packaged build.”
 
-1. `docs/HLF_AGENT_ONBOARDING.md`
-2. `SSOT_HLF_MCP.md`
-3. `HLF_CANONICALIZATION_MATRIX.md`
-4. `HLF_QUALITY_TARGETS.md`
+This repo carries three things at once:
 
-Current authority rule:
+- the vision of what HLF is trying to become
+- the code that already exists now
+- the bridge work needed to recover the larger system without flattening it
 
-- `hlf_mcp/` is the packaged product surface and present-tense implementation truth.
-- `hlf/` is an active compatibility and support layer.
-- `hlf_source/` is preserved upstream context and extraction reference, not default product authority.
+If you want the vision first, read these:
 
-Current quality rule:
+1. `docs/HLF_VISION_PLAIN_LANGUAGE.md`
+2. `docs/HLF_VISION_MAP.md`
+3. `docs/HLF_MISSING_PILLARS.md`
+4. `docs/HLF_DESIGN_NORTH_STAR.md`
+5. `HLF_VISION_DOCTRINE.md`
 
-- `HLF_QUALITY_TARGETS.md` defines how this repo measures progress toward cleaner, safer, more reproducible results than NLP-only orchestration.
+If you want the strict current build truth, read these:
 
+1. `SSOT_HLF_MCP.md`
+2. `HLF_QUALITY_TARGETS.md`
+3. `BUILD_GUIDE.md`
+
+If you want the bridge from current repo to full HLF, read these:
+
+1. `HLF_ACTIONABLE_PLAN.md`
+2. `HLF_CANONICALIZATION_MATRIX.md`
+3. `HLF_IMPLEMENTATION_INDEX.md`
+4. `HLF_SOURCE_EXTRACTION_LEDGER.md`
+5. `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`
+
+Repository boundary:
+
+- `hlf_mcp/` is the packaged product surface and the main implementation line.
+- `hlf/` is a retained compatibility and support layer with useful legacy and bridge assets.
+- `hlf_source/` is preserved source context and reconstruction evidence from the broader Sovereign system.
+
+Short version:
+
+HLF is not supposed to stay a neat MCP wrapper.
+
+It is supposed to become a governed language and coordination substrate that connects intent, tools, memory, policy, execution, and human-readable trust.
+
+This repo already contains real parts of that system.
+The rest has to be recovered and built, not explained away.
 ## Table of Contents
 
 1. [What is HLF?](#1-what-is-hlf)
@@ -58,7 +85,12 @@ Current quality rule:
 
 ## 1. What is HLF?
 
-HLF is **not** another DSL. It is a **deterministic orchestration protocol** designed as a formal coordination layer between AI agents, replacing natural-language prose with a strictly-typed Hieroglyphic Abstract Syntax Tree.
+HLF is not just another DSL and it is not just the current MCP server.
+
+HLF is the attempt to build a governed meaning layer between human intent and machine action: a language that lets agents coordinate, tools execute, memory persist, policy constrain, and humans inspect what is happening in plain terms.
+
+The current MCP server matters because it is the easiest adoption path.
+But the larger target is a real language and runtime for governed agent work.
 
 ```
 [HLF-v3]
@@ -214,7 +246,7 @@ flowchart TD
     end
 
     subgraph Server["⚙️ HLF MCP Server  (hlf_mcp/server.py)"]
-        S1[FastMCP  26 tools · 9 resources]
+        S1[FastMCP  34 tools · 9 resources]
     end
 
     subgraph Compiler["📐 Compiler Pipeline"]
@@ -779,7 +811,7 @@ graph LR
         T1["stdio\ntransport"]
         T2["SSE\n/sse + /messages"]
         T3["streamable-HTTP\n/mcp"]
-        Core["26 tools\n9 resources\nHLF_TRANSPORT env"]
+        Core["34 tools\n9 resources\nHLF_TRANSPORT env"]
         T1 --> Core
         T2 --> Core
         T3 --> Core
@@ -1042,8 +1074,15 @@ The governor is wired into the compiler pipeline as a mandatory pre-flight gate.
 # Install all dependencies
 uv sync
 
-# Run test suite (170 tests)
-uv run pytest tests/ -v
+# Run the canonical automated suite
+python run_tests.py
+python -m hlf_mcp.test_runner
+
+# Or call pytest directly
+uv run pytest tests/ -q --tb=short
+
+# Record a local weekly evidence snapshot
+python scripts/run_pipeline_scheduled.py
 
 # Run specific test modules
 uv run pytest tests/test_compiler.py -v
@@ -1075,7 +1114,7 @@ uv run pytest tests/test_github_scripts.py -v
 
 ```
 hlf_mcp/
-├── server.py               # FastMCP server (26 tools, 9 resources)
+├── server.py               # FastMCP server (34 tools, 9 resources)
 ├── hlf/
 │   ├── grammar.py          # LALR(1) Lark grammar + glyph map + confusables
 │   ├── compiler.py         # 5-pass compiler pipeline
@@ -1153,15 +1192,15 @@ uv run ruff format hlf_mcp/
 - [x] 8 stdlib modules (no stubs — AES-256-GCM crypto, PBKDF2, HMAC-SHA256)
 - [x] Infinite RAG memory (SQLite WAL, Merkle chain, cosine dedup)
 - [x] Instinct SDD lifecycle (SPECIFY→PLAN→EXECUTE→VERIFY→MERGE, CoVE gate)
-- [x] FastMCP server: 26 tools, 9 resources, stdio + SSE + streamable-HTTP
+- [x] FastMCP server: 34 tools, 9 resources, stdio + SSE + streamable-HTTP
 - [x] Multi-stage Docker image + docker-compose with health check
 - [x] Ethical Governor: 5-module compile-time gate (constitution · termination · red_hat · rogue_detection · governor)
-- [x] 170 passing tests (44 ethics-specific)
+- [x] Packaged default pytest suite is green in this branch; use `python run_tests.py` or `hlf_test_suite_summary` for current counts
 
 ### Phase 2 — Harden Semantics 🔨 (in progress)
 
 - [x] **Ollama Cloud client**: streaming, thinking, structured outputs, tool calling, web search, 4-tier fallback chain with circuit breaker (`.github/scripts/ollama_client.py`)
-- [x] **Weekly automated governance**: 8 GitHub Actions — spec-sentinel, ethics-review, model drift detection, code quality, test health (weekly cron + `workflow_dispatch`)
+- [x] **Weekly automation baseline**: 7 scheduled GitHub workflows — code quality, spec sentinel, model drift detection, ethics review, doc/security review, test health, and evolution planner — now being normalized onto a shared weekly artifact schema
 - [x] **Model drift monitoring**: 7 weighted semantic probes with structured output scoring (`scripts/monitor_model_drift.py`)
 - [ ] **Vector embeddings**: `sqlite-vec` C extension for real cosine search (replacing bag-of-words)
 - [ ] **SHA-256 dedup cache**: pre-embedding content deduplication layer

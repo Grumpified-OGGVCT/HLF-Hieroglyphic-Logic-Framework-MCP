@@ -187,6 +187,24 @@ jobs:
           echo "---" >> /tmp/evolution_issue.md
           echo "_This issue is auto-generated weekly. Close when the top-priority item is merged._" >> /tmp/evolution_issue.md
 
+      - name: Emit normalized weekly artifact
+        if: always()
+        run: |
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-evolution-planner" \
+            --output /tmp/weekly-evolution-planner-artifact.json \
+            --extra-json "/tmp/ethics_report.json:ethics_report" \
+            --extra-json "/tmp/evolution_plan.json:evolution_plan" \
+            --extra-json "/tmp/code_starter.json:code_starter"
+
+      - name: Upload normalized weekly artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "weekly-evolution-planner-${{ github.run_id }}"
+          path: /tmp/weekly-evolution-planner-artifact.json
+          retention-days: 90
+
       - name: Create GitHub issue
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -196,4 +214,6 @@ jobs:
           python .github/scripts/create_github_issue.py \
             --title "🧬 [Evolution Planner] HLF weekly evolution plan — ${WEEK}" \
             --body "@/tmp/evolution_issue.md" \
-            --labels "evolution,automated,roadmap"
+            --labels "evolution,automated,roadmap" \
+            --conflict-labels "evolution,roadmap" \
+            --conflict-title-substrings "evolution planner,weekly evolution plan"

@@ -105,6 +105,13 @@
 
 ## 📋 PENDING TASKS
 
+### Phase R: Reconstruction Discipline
+- [ ] Recover every omitted or downgraded HLF pillar from the Sovereign repo and planning docs before approving any more forward simplification
+- [ ] Produce a rejection audit for every source surface previously treated as optional, OS-bound, process-only, superseded, or non-core when it may actually carry doctrine, routing, governance, persona, verification, or ecosystem logic
+- [ ] Classify each damaged area as one of: strong but misaligned, strong but not yet packaged, wrongly replaced, wrongly deleted
+- [ ] Ban pseudo-equivalents, fake stand-ins, and simplified replacements during reconstruction
+- [ ] Rebuild from original intent outward, not from simplified MVP inward
+
 ### Phase 7: Integration Documentation
 - [ ] Update `BUILD_GUIDE.md` with Ethics integration
 - [ ] Document constitutional constraint syntax
@@ -124,6 +131,25 @@
 - [ ] Add tests for red-hat declarations
 - [ ] Add tests for rogue agent detection
 - [ ] Add integration tests with MCP server
+
+### Phase 10: README North-Star Claims
+- [ ] Preserve strong README positioning as target-state language instead of deleting it
+- [ ] Convert "deterministic orchestration substrate" language into measured replay and drift benchmarks
+- [ ] Convert "policy-first / compliance-oriented" language into a control matrix and deployment profile
+- [ ] Convert "safe external integration" language into explicit host-function contract tests and capsule-boundary tests
+- [ ] Convert "memory-augmented deterministic reasoning" language into a packaged retrieval contract with provenance and freshness fields
+- [ ] Convert "deploy-anywhere tiny service" language into measured footprint/startup/runtime benchmarks before claiming it as fact
+- [ ] Cross-link README claims to `HLF_QUALITY_TARGETS.md`, `SSOT_HLF_MCP.md`, and active implementation work so ambition and truth stay separated
+
+### Phase 11: Scheduled Runs And Knowledge Accuracy
+- [ ] Inventory all active GitHub Actions triggers, especially weekly automation: model drift, spec sentinel, upstream sync/compliance, code quality, evolution planner, ethics review, doc/security review, test health, and live Ollama canary
+- [ ] For each scheduled workflow, document the exact cron, branch scope, required secrets, emitted artifacts, and issue labels so automation does not rely on YAML comments alone
+- [ ] Add a local scheduled-run plan for `run_tests.py`, `hlf_mcp.test_runner`, `scripts/run_pipeline_scheduled.py`, and `_toolkit.py` launchers, including which runs are ad hoc versus actually scheduled on a workstation
+- [ ] Store weekly knowledge artifacts with reproducible provenance: branch, commit SHA, workflow run URL, tool version, script path, manifest hash, collected timestamp, and confidence
+- [ ] Split raw evidence from AI interpretation so counts, hashes, test summaries, and coverage numbers are machine-extracted first and summarized second
+- [ ] Add deterministic verification for stored weekly findings before they update docs, issues, or longer-lived research notes
+- [ ] Add supersession and expiry rules so stale weekly knowledge is retired or explicitly revalidated instead of silently accumulating
+- [ ] Define PR/branch conflict rules so open PR automation cannot overwrite or contaminate the weekly truth stream for another branch
 
 ---
 

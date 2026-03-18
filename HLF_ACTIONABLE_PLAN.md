@@ -7,6 +7,13 @@
 
 **HLF's intelligence lives in its specs, grammar, and governance mechanisms—not in raw parameter count.**
 
+## Master Reconstruction Planning Authority
+
+Use `plan/architecture-hlf-reconstruction-2.md` as the authoritative reconstruction sequencing artifact.
+
+Use this file for broader implementation direction and domain-specific work streams.
+Use the plan file for full recovery order, source-archaeology phases, recovery specs, batch definition, acceptance gates, and backlog normalization.
+
 ## Consolidation Baseline
 
 Use `HLF_CANONICALIZATION_MATRIX.md` as the current preserve/wrap/archive boundary across `hlf_mcp`, `hlf`, and `hlf_source`.
@@ -16,6 +23,24 @@ That document now defines:
 - what HLF-NEW materially contributed versus what is already preserved here
 - which surfaces are canonical product authority versus wrappers
 - the first runtime/bytecode ownership boundary for non-theoretical consolidation work
+
+## Reconstruction Discipline Baseline
+
+Before any further simplification, cleanup, or forward design, the repo must follow a reconstruction discipline anchored in original HLF intent.
+
+Required rules:
+
+- recover omitted or downgraded HLF pillars from `Sovereign_Agentic_OS_with_HLF`, surviving doctrine docs, and planning materials before treating current packaged surfaces as sufficient
+- classify every damaged area as: strong but misaligned, strong but not yet packaged, wrongly replaced, or wrongly deleted
+- ban pseudo-equivalents, fake stand-ins, and simplified substitutes during reconstruction
+- do not let "standalone packaged core" decide omissions when the omitted surface carries doctrine, routing, personas, governance workflow, verification, or ecosystem logic
+- rebuild from original intent outward, not from MVP inward
+
+Immediate reconstruction outputs required:
+
+1. a rejected-extraction audit against the Sovereign repo
+2. a pillar map of original HLF versus current damaged fragment
+3. a sprint stack ordered by real HLF pillars instead of packaging neatness
 
 The smallest local organism that can express full HLF intelligence requires:
 - **Deterministic coordination** (spec-first grammar, ALIGN Ledger seals)

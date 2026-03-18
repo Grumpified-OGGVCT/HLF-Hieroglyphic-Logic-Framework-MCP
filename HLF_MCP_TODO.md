@@ -4,19 +4,52 @@ Complete blueprint for the full MCP 2024-2025 integration with self-evolving gra
 
 ---
 
+## Phase R: Reconstruction Discipline
+
+**Priority: ABSOLUTE - No more simplified stand-ins, pseudo-equivalents, or MVP-first substitutions**
+
+### Source-of-truth recovery
+- [ ] Recover every omitted or downgraded HLF pillar from `Sovereign_Agentic_OS_with_HLF`, NotebookLM planning exports, and surviving repo doctrine docs before approving further simplification
+- [ ] Build a rejection audit for every source surface previously marked `missing`, `optional`, `process-only`, `OS-bound`, or `superseded` that may actually carry constitutive HLF doctrine, routing, verification, governance, persona, or ecosystem logic
+- [ ] Reclassify every damaged area as exactly one of: strong but misaligned, strong but not yet packaged, wrongly replaced, wrongly deleted
+
+### Reconstruction rules
+- [ ] Ban pseudo-equivalents during reconstruction: no fake stand-ins, no simplified replacements, no "good enough" packaged-core substitute for stronger original architecture
+- [ ] Ban "standalone packaged core" as the deciding heuristic when doctrine, routing, personas, verification, governance workflow, or ecosystem coordination are architecturally constitutive
+- [ ] Require every forward design move to show lineage back to original HLF intent rather than just local MVP convenience
+
+### Sprint tracking for the real end zone
+- [ ] Define the final reconstruction sprint stack around original HLF pillars instead of server/package neatness
+- [ ] Track which pillars are already present in damaged or partial form versus which require true recovery from source
+- [ ] Refuse any new cleanup, consolidation, or rewrite that reduces architectural scope unless the reduction is explicitly proven faithful to original intent
+
+---
+
 ## Phase 0: Knowledge Substrate Refactor
 
 **Priority: CRITICAL - Weekly knowledge work should not proceed without a cohesive surface**
 
 ### Naming and authority
-- [ ] Adopt `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` as the active external research brief
-- [ ] Normalize active planning and workflow language to HLF-native knowledge-substrate terminology
-- [ ] Preserve `hlf_source/` as archive/reference context without letting archive terminology leak into active implementation surfaces
 
 ### Package and module boundaries
-- [ ] Define the canonical ownership boundary for chunking, ingest, provenance, freshness, retrieval, and exemplar memory
-- [ ] Decide which surfaces belong under `hlf_mcp/` versus `hlf/` before new weekly knowledge modules are added
-- [ ] Document the target package map for the knowledge substrate
+...existing code...
+### Normalization and Recovery Tasks
+- [ ] Consolidate canonical front-door files:
+	- hlf/infinite_rag_hlf.py
+	- hlf_mcp/rag/memory.py
+	- scripts/run_pipeline_scheduled.py
+	- hlf_mcp/weekly_artifacts.py
+	- governance/host_functions.json
+	- governance/bytecode_spec.yaml
+- [ ] Create and maintain `docs/HLF_MEMORY_GOVERNANCE_RECOVERY_SPEC.md` for normalization, explicit ownership boundary, and recovery plan
+- [ ] Map subsystem boundaries and contracts
+- [ ] Identify fragmentation, gaps, and normalization targets
+- [ ] Define governance, provenance, and audit requirements
+- [ ] Track progress in `docs/HLF_MISSING_PILLARS.md` and `docs/HLF_STITCHED_SYSTEM_VIEW.md`
+- [ ] Validate subsystem exceeds AgentKB/AgentSKB capabilities (unbranded)
+- [ ] Ensure anti-reductionist doctrine: no simplification by omission
+- [ ] Update actionable plan and bridge implementation steps
+---
 
 ### Runtime contracts
 - [ ] Standardize the MCP retrieval contract for chunk text, provenance, confidence, freshness, trust tier, and rationale
@@ -26,6 +59,51 @@ Complete blueprint for the full MCP 2024-2025 integration with self-evolving gra
 ### Workflow alignment
 - [ ] Add the knowledge-substrate refactor checklist to the weekly automation planning work
 - [ ] Ensure workflow labels, docs, and tests are updated in lockstep with naming and schema changes
+- [ ] Add an explicit weekly automation inventory to the active backlog covering: model drift (Sunday 00:00 UTC), spec sentinel (Sunday 02:00 UTC), upstream sync/compliance (Sunday 03:00 UTC), code quality (Monday 00:00 UTC), evolution planner (Monday 03:00 UTC), ethics review (Tuesday 02:00 UTC), doc/security review (Wednesday 02:00 UTC), test health (Thursday 02:00 UTC), and live Ollama canary (Thursday 06:00 UTC)
+- [ ] Record for each weekly workflow its trigger, required secrets, output artifact, issue labels, and source-of-truth script so weekly knowledge gathering is auditable instead of inferred from YAML comments
+- [ ] Add a local scheduled-run inventory covering `python run_tests.py`, `python -m hlf_mcp.test_runner`, `python scripts/run_pipeline_scheduled.py`, and `_toolkit.py` launcher flows, with clear guidance on what is manual versus actually scheduled
+- [ ] Define branch/PR isolation rules so weekly stored knowledge never mixes `main`, `integrate-sovereign`, local-only, and archived `hlf_source/` observations into one truth stream
+- [ ] Add freshness/expiry policy for stored weekly coding knowledge so stale benchmark, drift, and ethics findings decay or require explicit reconfirmation
+- [ ] Require weekly jobs to persist raw evidence alongside summaries: commit SHA, workflow run URL, script version, test counts, coverage summary, governance manifest hash, and generated tool/resource counts
+- [ ] Add a second-pass deterministic verifier for weekly knowledge artifacts so machine-extracted counts and hashes are rechecked before any issue or summary is stored
+
+---
+
+## Phase 0.5: README North-Star Claims To Operationalize
+
+**Priority: CRITICAL - Keep ambitious README positioning, but convert each strong claim into measurable implementation work**
+
+### Product thesis and framing
+- [ ] Define one sharply scoped usefulness thesis that justifies HLF beyond general architectural elegance
+- [ ] Document the boundary between README north-star language, SSOT truth, and quality-target claims
+- [ ] Add a stable cross-reference so README claims map to tracked implementation or validation work
+
+### Deterministic orchestration evidence
+- [ ] Add explicit replay-determinism validation for representative single-agent and multi-step workflows
+- [ ] Add measurable execution-audit outputs for bytecode hash, gas usage, and side-effect trace completeness
+- [ ] Add a benchmark/reporting surface that compares governed HLF execution against NLP-only baselines on repeatability and drift
+
+### Policy-first and compliance-oriented deployment
+- [ ] Define a compliance-oriented deployment profile instead of implying present-tense compliance readiness
+- [ ] Produce a governance control matrix mapping manifest assets, align rules, and audit outputs to concrete operational controls
+- [ ] Add validation tasks for policy trace completeness, PII handling coverage, and fail-closed enforcement behavior
+
+### Capsule and privilege model hardening
+- [ ] Define a more explicit capsule privilege-escalation and host-function mediation story for hearth, forge, and sovereign tiers
+- [ ] Add tests for capsule boundary enforcement and privileged-host-function denial paths
+- [ ] Document what capsule isolation means today versus what stronger sandbox guarantees remain target-state work
+
+### Memory and retrieval claims
+- [ ] Promote advisory memory hooks into a first-class measured retrieval surface with stable contracts for provenance, confidence, and freshness
+- [ ] Evaluate external vector-store integration targets only after the packaged advisory memory contract is finalized
+- [ ] Add tests and docs for deterministic use of retrieved context as governed execution inputs
+
+### Tool contract and agent substrate quality
+- [ ] Define typed host-function contract gates for inputs, outputs, effects, and structured failures
+- [ ] Add a proof surface for "auditable agent substrate" claims using packaged test-suite summaries, runtime traces, and governance checks
+- [ ] Add a docs-sync task so tool/resource counts and high-level server claims can be regenerated or checked automatically
+- [ ] Add a knowledge-sync task so weekly issue bodies and stored research summaries are generated from machine-readable artifacts first and LLM interpretation second
+- [ ] Add a provenance schema for weekly knowledge entries: source class, source path, line or artifact ID, branch, commit SHA, collected_at, collector version, confidence, and supersedes pointer
 
 ---
 

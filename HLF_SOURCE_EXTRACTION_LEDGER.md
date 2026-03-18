@@ -219,7 +219,7 @@ These files are important because they prove the HLF surface extends well beyond
 | `scripts/review.py` | missing | upstream review wrapper | no |
 | `scripts/run_audit.py` | missing | upstream audit wrapper | no |
 | `scripts/run_hlf_gallery.py` | missing | useful for example fixture gallery | maybe |
-| `scripts/run_pipeline_scheduled.py` | missing | OS scheduler hook | no |
+| `scripts/run_pipeline_scheduled.py` | extracted | adapted as local scheduled evidence pipeline writing weekly metrics, server-surface counts, governance state, and optional toolkit output | yes |
 | `scripts/sovereign_tray.py` | missing | OS tray integration | no |
 | `scripts/verify_chain.py` | extracted | adapted as packaged JSONL trace-chain verifier with optional final-hash check | yes |
 | `scripts/verify_gui.py` | missing | GUI verifier, not standalone MVP | no |

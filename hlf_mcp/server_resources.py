@@ -56,7 +56,53 @@ def _read_fixture_file(name: str) -> str:
     )
 
 
-def register_resources(mcp: FastMCP) -> None:
+def _render_model_catalog_status(ctx: object | None, *, agent_id: str | None = None) -> str:
+    if ctx is None or not hasattr(ctx, "get_model_catalog_status"):
+        return json.dumps(
+            {
+                "status": "error",
+                "error": "server_context_unavailable",
+                "agent_id": agent_id,
+            },
+            indent=2,
+        )
+
+    status = ctx.get_model_catalog_status(agent_id=agent_id)
+    if status is None:
+        return json.dumps(
+            {
+                "status": "not_found",
+                "agent_id": agent_id,
+            },
+            indent=2,
+        )
+    return json.dumps({"status": "ok", "catalog_status": status}, indent=2)
+
+
+def _render_align_status(ctx: object | None) -> str:
+    if ctx is None or not hasattr(ctx, "align_governor"):
+        return json.dumps({"status": "error", "error": "align_governor_unavailable"}, indent=2)
+    return json.dumps({"status": "ok", "align_status": ctx.align_governor.status_snapshot()}, indent=2)
+
+
+def _render_formal_verifier_status(ctx: object | None) -> str:
+    if ctx is None or not hasattr(ctx, "formal_verifier"):
+        return json.dumps({"status": "error", "error": "formal_verifier_unavailable"}, indent=2)
+    return json.dumps({"status": "ok", "formal_verifier_status": ctx.formal_verifier.status_snapshot()}, indent=2)
+
+
+def _render_instinct_status(ctx: object | None, *, mission_id: str | None = None) -> str:
+    if ctx is None or not hasattr(ctx, "instinct_mgr"):
+        return json.dumps({"status": "error", "error": "instinct_manager_unavailable", "mission_id": mission_id}, indent=2)
+    if mission_id:
+        mission = ctx.instinct_mgr.get_mission(mission_id)
+        if mission is None:
+            return json.dumps({"status": "not_found", "mission_id": mission_id}, indent=2)
+        return json.dumps({"status": "ok", "mission": mission}, indent=2)
+    return json.dumps({"status": "ok", "missions": ctx.instinct_mgr.list_missions()}, indent=2)
+
+
+def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, object]:
     @mcp.resource("hlf://grammar")
     def get_grammar() -> str:
         """HLF grammar specification (LALR(1) Lark format)."""
@@ -113,3 +159,51 @@ def register_resources(mcp: FastMCP) -> None:
             if name.endswith(".py") and not name.startswith("_")
         )
         return json.dumps({"modules": modules}, indent=2)
+
+    @mcp.resource("hlf://status/model_catalog")
+    def get_model_catalog_status_latest() -> str:
+        """Latest operator-facing status summary for the synced governed model catalog."""
+        return _render_model_catalog_status(ctx)
+
+    @mcp.resource("hlf://status/model_catalog/{agent_id}")
+    def get_model_catalog_status_for_agent(agent_id: str) -> str:
+        """Operator-facing status summary for a specific agent's synced governed model catalog."""
+        return _render_model_catalog_status(ctx, agent_id=agent_id)
+
+    @mcp.resource("hlf://status/align")
+    def get_align_status() -> str:
+        """Operator-facing ALIGN governor status including normalized action semantics."""
+        return _render_align_status(ctx)
+
+    @mcp.resource("hlf://status/formal_verifier")
+    def get_formal_verifier_status() -> str:
+        """Operator-facing formal verifier status including solver and capability snapshot."""
+        return _render_formal_verifier_status(ctx)
+
+    @mcp.resource("hlf://status/instinct")
+    def get_instinct_status() -> str:
+        """Operator-facing Instinct lifecycle mission list with current phase and realignment counts."""
+        return _render_instinct_status(ctx)
+
+    @mcp.resource("hlf://status/instinct/{mission_id}")
+    def get_instinct_status_for_mission(mission_id: str) -> str:
+        """Operator-facing Instinct lifecycle status for a specific mission."""
+        return _render_instinct_status(ctx, mission_id=mission_id)
+
+    return {
+        "hlf://grammar": get_grammar,
+        "hlf://opcodes": get_opcodes,
+        "hlf://host_functions": get_host_functions,
+        "hlf://examples/{name}": get_example,
+        "hlf://governance/host_functions": get_governance_host_functions,
+        "hlf://governance/bytecode_spec": get_governance_bytecode_spec,
+        "hlf://governance/align_rules": get_governance_align_rules,
+        "hlf://governance/tag_i18n": get_governance_tag_i18n,
+        "hlf://stdlib": get_stdlib,
+        "hlf://status/model_catalog": get_model_catalog_status_latest,
+        "hlf://status/model_catalog/{agent_id}": get_model_catalog_status_for_agent,
+        "hlf://status/align": get_align_status,
+        "hlf://status/formal_verifier": get_formal_verifier_status,
+        "hlf://status/instinct": get_instinct_status,
+        "hlf://status/instinct/{mission_id}": get_instinct_status_for_mission,
+    }

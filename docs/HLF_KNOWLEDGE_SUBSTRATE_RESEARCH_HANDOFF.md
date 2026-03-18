@@ -25,6 +25,11 @@ Do not infer that absence from public GitHub means absence from the real working
 
 Help design a superior, weekly-updated knowledge substrate for HLFMCP.
 
+Local HLF-native name for this subsystem:
+
+- canonical name: `HLF Knowledge Substrate`
+- preferred shorthand: `HKS`
+
 The target is not a generic vector store.
 
 The target is a governed, code-aware, standards-aware, HLF-native, Infinite-RAG-backed knowledge layer that gives HLF-powered systems immediate access to trusted, fresh, queryable known knowledge.
@@ -35,17 +40,28 @@ This knowledge layer should support:
 - latest industry standards and innovations
 - software engineering best practices
 - AI and swarm-orchestration operational knowledge
+- ongoing coding and programming technique improvements across the general software stack
+- weekly discovery of AI engineering, agentic design, evaluation, safety, and tooling best practices
 - known-good prompts
 - known-good HLF contracts
 - known-good code patterns
 - validated repair patterns
+- practical upgrade opportunities whenever new methods, tools, or standards materially improve HLF quality, usefulness, or real-world applicability
+
+Weekly mission for HKS:
+
+- improve the whole of coding and programming knowledge available to HLF operators and agents
+- keep pace with relevant AI, software engineering, and standards evolution
+- adapt external best practices into HLF-native forms instead of copying them blindly
+- feed more productive, accurate, and useful real-world HLF usage, repair, translation, orchestration, and governance
+- surface upgrade candidates across runtime, memory, tooling, verification, docs, and workflows whenever a credible improvement window appears
 
 ## Canonical Repo Authority Rules
 
 Treat these as the current repo authority model:
 
 1. Canonical product surface: `hlf_mcp/`
-2. Compatibility and support layer: `hlf/`
+2. Compatibility-only line for migration, adapters, metrics glue, and manual legacy probes: `hlf/`
 3. Preserved upstream and reference context: `hlf_source/`
 
 Primary authority docs in the local workspace:
@@ -404,3 +420,4 @@ Provide the source list:
 ## Short Version
 
 Research continuous, code-aware, governance-first knowledge-system best practices to help design a weekly-refreshed, trust-tiered, Infinite-RAG-backed knowledge substrate for HLFMCP. Public GitHub will not show all local branch work. Treat the local branch facts in this document as real. The resulting design should deliver immediate, trusted, fresh, queryable, HLF-native known knowledge for translation, repair, orchestration, and swarm use.
+

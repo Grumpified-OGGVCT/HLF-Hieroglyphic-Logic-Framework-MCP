@@ -106,6 +106,23 @@ jobs:
           echo '---' >> /tmp/issue_body.md
           echo '_This issue is auto-managed by the Spec Sentinel workflow. It will be updated if drift persists next week._' >> /tmp/issue_body.md
 
+      - name: Emit normalized weekly artifact
+        if: always()
+        run: |
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-spec-sentinel" \
+            --output /tmp/weekly-spec-sentinel-artifact.json \
+            --extra-json "/tmp/drift_report.json:drift_report" \
+            --extra-json "/tmp/ai_analysis.json:ai_analysis"
+
+      - name: Upload normalized weekly artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "weekly-spec-sentinel-${{ github.run_id }}"
+          path: /tmp/weekly-spec-sentinel-artifact.json
+          retention-days: 90
+
       - name: Create or update GitHub issue
         if: steps.drift.outputs.drift_detected == 'true' || github.event.inputs.force_issue == 'true'
         env:
@@ -115,7 +132,9 @@ jobs:
           python .github/scripts/create_github_issue.py \
             --title "🔍 [Spec Sentinel] Spec/implementation drift detected" \
             --body "@/tmp/issue_body.md" \
-            --labels "spec-drift,automated,priority-high"
+            --labels "spec-drift,automated,priority-high" \
+            --conflict-labels "spec-drift" \
+            --conflict-title-substrings "spec sentinel,spec drift"
 
       - name: Report clean status
         if: steps.drift.outputs.drift_detected == 'false' && github.event.inputs.force_issue != 'true'

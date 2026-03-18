@@ -2,6 +2,28 @@
 
 This document tracks all HLF enhancements implemented from the monolithic HLF discussion.
 
+## Active 2026 Bridge Additions
+
+### Transcript-backed bridge artifacts
+- **Status**: Active bridge lane
+- **Files**:
+  - `docs/HLF_TRANSCRIPT_TARGET_STATE_BRIDGE_2026-03-18.md`
+  - `docs/HLF_TRANSCRIPT_MECHANISM_MAP_2026-03-18.md`
+  - `plan/feature-entropy-anchors-1.md`
+  - `plan/feature-witness-governance-1.md`
+- **Purpose**: Preserve transcript-derived design-intent evidence without overstating packaged truth, then turn the most implementation-ready mechanisms into ordered bridge plans
+
+### Entropy-anchor drift checks
+- **Status**: Partially implemented in packaged truth
+- **Files**:
+  - `hlf_mcp/hlf/entropy_anchor.py`
+  - `hlf_mcp/server.py`
+  - `hlf_mcp/hlf/insaits.py`
+  - `hlf_mcp/hlf/audit_chain.py`
+  - `tests/test_entropy_anchor.py`
+- **Purpose**: Add an MCP-facing anti-drift check that compares packaged HLF meaning against an operator-readable baseline and emits structured audit events
+- **Build boundary**: This is a bounded HLF MCP build surface, not the full InsAIts daemon or full witness-governance network
+
 ## ✅ Completed Implementations
 
 ### Refinement 1: SQLite WAL for P0/P1 Hot Tier

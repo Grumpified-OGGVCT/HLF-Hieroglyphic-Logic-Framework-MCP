@@ -125,7 +125,47 @@ Its value is now primarily:
 Preservation decision:
 
 - keep mining it for forward-port candidates
-- stop treating it as a co-equal product surface
+- stop treating it as any kind of default or product-facing surface
+
+## Substance-Over-Version Recovery Rule
+
+Canonicalization in this repo cannot be driven by version labels alone.
+
+The current reconstruction evidence does not establish a separately authoritative `HLF 4.0` release line.
+
+What it does establish is:
+
+- HLF v3.0 plus RFC 9006/9007/9008 remain the operative language-evolution line
+- SAFE v4 and correction materials preserve real bytecode, cryptographic, verifier, provenance, and compliance semantics that still materially govern HLF execution
+
+Preservation decision:
+
+- do not relabel SAFE as canonical HLF product truth
+- do not discard SAFE/correction bytecode and trust material because of the banner it appeared under
+- mine those materials by substance whenever they govern grammar compatibility, bytecode integrity, decompilation trust, pointer provenance, registry/tool trust, or execution verification
+
+## Semantic Mines Are Obligations, Not Discard Piles
+
+This matrix already uses the phrase `semantic mines` for legacy and upstream surfaces.
+
+That phrase must not be interpreted as a polite synonym for dead code.
+
+In this repo, a semantic mine means:
+
+- not current packaged executable authority
+- still carrying semantics, contracts, proofs, upgrade rules, or operator trust behavior that may need to be restored or bridged
+
+Examples include:
+
+- richer bytecode/disassembly and proof semantics in legacy VM files
+- language-evolution and anti-dialect rules preserved in RFC/correction notes
+- memory-node provenance, Merkle lineage, and trust-bearing pointer semantics
+- operator-legible audit surfaces that connect symbolic execution back to human-readable proof
+
+Preservation decision:
+
+- semantic mines stay subordinate to packaged authority
+- they remain active recovery inputs until their semantics are either ported, intentionally scoped out, or superseded by a stronger packaged equivalent
 
 ## Non-HLF Context Worth Preserving
 
@@ -198,6 +238,11 @@ These files define the runtime and `.hlb` contract that the packaged MCP server 
 
 Everything else is subordinate to that boundary.
 
+Subordinate does not mean semantically irrelevant.
+
+The ownership boundary answers who may define executable truth now.
+It does not answer which older semantics still impose recovery or bridge obligations.
+
 ### What Moves Into The Canonical Boundary
 
 These are not yet blanket file moves. They are the first extraction targets that should be reviewed and ported into the packaged boundary if their semantics are still needed.
@@ -219,6 +264,13 @@ From `hlf_source/hlf/runtime.py`:
 - module import / namespace merge semantics only if they still belong to the language/runtime product
 - host registry dispatch patterns only where they improve the packaged runtime rather than reintroduce source-repo sprawl
 - sensitive-output hashing or tier enforcement behaviors not already covered in `hlf_mcp/hlf/runtime.py`
+
+From local corpora and correction material:
+
+- constitution-hash compatibility rules that bind syntax/runtime trust to explicit semantic versions
+- signed registry, signed tool, and signed identity assumptions that materially change what execution is trusted
+- Merkle or chained trace-verification semantics that strengthen runtime auditability
+- exact syntax-diff evidence when it proves a construct was parser/compiler reality rather than only doctrinal aspiration
 
 ### What Wraps The Canonical Boundary
 
@@ -258,6 +310,14 @@ These files are preserved for archaeology, drift detection, and selective semant
 - `hlf_source/hlf/hlffmt.py`
 - `hlf_source/hlf/hlflsp.py`
 - `hlf_source/hlf/hlfpm.py`
+
+Reference-only does not mean never used again.
+
+It means:
+
+- they do not outrank packaged truth
+- they may still justify future packaged bridge work
+- they remain valid evidence when proving that a constitutive HLF pillar was once stronger than the currently packaged surface
 - `hlf_source/hlf/hlfsh.py`
 - `hlf_source/hlf/hlftest.py`
 - `hlf_source/hlf/stdlib/*.hlf`
@@ -286,3 +346,4 @@ When implementation begins, start here:
 3. Explicit integration or scoping decision for profile/store/gateway support modules in `hlf/`.
 4. French-first i18n trust gates against `governance/tag_i18n.yaml` and packaged translation/compiler paths.
 5. Externalization of PII/security policy so it is not trapped as ad hoc runtime code.
+

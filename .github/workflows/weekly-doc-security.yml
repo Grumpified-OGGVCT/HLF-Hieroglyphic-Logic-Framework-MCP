@@ -153,10 +153,26 @@ jobs:
           _Auto-generated weekly. Close when all documentation corrections are merged._
           ISSUE_EOF
 
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-doc-accuracy" \
+            --output /tmp/weekly-doc-accuracy-artifact.json \
+            --extra-json "/tmp/doc_drift.json:doc_drift" \
+            --extra-json "/tmp/doc_review.json:doc_review"
+
           python .github/scripts/create_github_issue.py \
             --title "📖 [Doc Audit] HLF documentation accuracy — ${WEEK}" \
             --body "@/tmp/doc_issue.md" \
-            --labels "documentation,automated"
+            --labels "documentation,automated" \
+            --conflict-labels "documentation" \
+            --conflict-title-substrings "doc audit,documentation accuracy"
+
+      - name: Upload doc accuracy artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "weekly-doc-accuracy-${{ github.run_id }}"
+          path: /tmp/weekly-doc-accuracy-artifact.json
+          retention-days: 90
 
   # ── Job 2: Security pattern review ────────────────────────────────────────────
   security-patterns:
@@ -269,7 +285,22 @@ jobs:
           _Auto-generated weekly. Triage each finding. Close when all critical/high items are resolved._
           ISSUE_EOF
 
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-security-patterns" \
+            --output /tmp/weekly-security-patterns-artifact.json \
+            --extra-json "/tmp/security_review.json:security_review"
+
           python .github/scripts/create_github_issue.py \
             --title "🔐 [Security Review] HLF adversarial pattern analysis — ${WEEK}" \
             --body "@/tmp/security_issue.md" \
-            --labels "security,adversarial,automated,priority-high"
+            --labels "security,adversarial,automated,priority-high" \
+            --conflict-labels "security,adversarial" \
+            --conflict-title-substrings "security review,adversarial pattern analysis"
+
+      - name: Upload security patterns artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "weekly-security-patterns-${{ github.run_id }}"
+          path: /tmp/weekly-security-patterns-artifact.json
+          retention-days: 90

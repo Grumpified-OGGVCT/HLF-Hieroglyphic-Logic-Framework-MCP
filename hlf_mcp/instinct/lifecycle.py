@@ -15,6 +15,7 @@ Rules:
 from __future__ import annotations
 
 import copy
+from dataclasses import dataclass, field
 import hashlib
 import json
 import time
@@ -65,6 +66,15 @@ _ALLOWED_NEXT: dict[str, list[str]] = {
     "verify":  ["merge"],
     "merge":   [],
 }
+
+
+@dataclass(slots=True)
+class SDDRealignmentEvent:
+    triggered_by: str
+    change_type: str
+    change_description: str
+    affected_nodes: list[str] = field(default_factory=list)
+    timestamp: float = field(default_factory=time.time)
 
 
 class InstinctLifecycle:
@@ -163,6 +173,17 @@ class InstinctLifecycle:
                     json.dumps(payload, sort_keys=True, default=str).encode()
                 ).hexdigest(),
             }
+            if phase == "specify":
+                mission["topic"] = str(payload.get("topic") or mission.get("topic") or mission_id)
+                if payload:
+                    mission["spec"] = copy.deepcopy(payload)
+            elif phase == "plan":
+                if payload:
+                    mission["spec"] = copy.deepcopy(payload)
+            elif phase == "execute" and isinstance(payload.get("task_dag"), list):
+                mission["task_dag"] = copy.deepcopy(payload.get("task_dag", []))
+            elif phase == "verify" and payload:
+                mission["verification_report"] = copy.deepcopy(payload)
 
             # Seal on merge
             if phase == "merge":
@@ -179,14 +200,53 @@ class InstinctLifecycle:
             m = self._missions.get(mission_id)
             return copy.deepcopy(m) if m else None
 
+    def realign(self, mission_id: str, event: SDDRealignmentEvent) -> dict[str, Any]:
+        with self._lock:
+            mission = self._missions.get(mission_id)
+            if mission is None:
+                return _err(mission_id, f"Mission '{mission_id}' not found")
+            if mission.get("sealed", False):
+                return _err(mission_id, "Cannot realign a sealed mission")
+
+            realignment_payload = {
+                "triggered_by": event.triggered_by,
+                "change_type": event.change_type,
+                "change_description": event.change_description,
+                "affected_nodes": list(event.affected_nodes),
+                "timestamp": event.timestamp,
+            }
+            mission.setdefault("realignment_events", []).append(realignment_payload)
+            mission.setdefault("spec", {})
+            if isinstance(mission["spec"], dict):
+                mission["spec"].setdefault("_realignments", []).append(
+                    {
+                        "by": event.triggered_by,
+                        "type": event.change_type,
+                        "desc": event.change_description,
+                        "ts": event.timestamp,
+                    }
+                )
+            mission["phase_history"].append(
+                {
+                    "phase": mission["current_phase"],
+                    "timestamp": event.timestamp,
+                    "payload_keys": [],
+                    "notes": f"REALIGNMENT: {event.change_type} - {event.change_description}",
+                }
+            )
+            self._log_ledger(mission_id, "realignment", mission["current_phase"], realignment_payload)
+            return _ok_state(mission)
+
     def list_missions(self) -> list[dict[str, Any]]:
         with self._lock:
             return [
                 {
                     "mission_id": m["mission_id"],
+                    "topic": m.get("topic", ""),
                     "current_phase": m["current_phase"],
                     "sealed": m.get("sealed", False),
                     "created_at": m["created_at"],
+                    "realignment_count": len(m.get("realignment_events", [])),
                 }
                 for m in self._missions.values()
             ]
@@ -219,6 +279,7 @@ class InstinctLifecycle:
 def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "mission_id": mission_id,
+        "topic": str(payload.get("topic") or mission_id),
         "current_phase": "specify",
         "phase_history": [{"phase": "specify", "timestamp": time.time(), "payload_keys": list(payload.keys())}],
         "artifacts": {"specify": {
@@ -226,6 +287,10 @@ def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             "timestamp": time.time(),
             "sha256": hashlib.sha256(str(payload).encode()).hexdigest(),
         }},
+        "spec": copy.deepcopy(payload),
+        "task_dag": list(payload.get("task_dag", [])) if isinstance(payload.get("task_dag"), list) else [],
+        "verification_report": None,
+        "realignment_events": [],
         "created_at": time.time(),
         "sealed": False,
         "seal_hash": None,
@@ -238,6 +303,7 @@ def _ok_state(mission: dict[str, Any], note: str | None = None) -> dict[str, Any
     phase = mission["current_phase"]
     result = {
         "mission_id": mission["mission_id"],
+        "topic": mission.get("topic", ""),
         "status": "ok",
         "current_phase": phase,
         "allowed_next": _ALLOWED_NEXT.get(phase, []),
@@ -248,6 +314,10 @@ def _ok_state(mission: dict[str, Any], note: str | None = None) -> dict[str, Any
             "failures": mission.get("cove_failures", 0),
         },
         "phase_history": mission.get("phase_history", []),
+        "spec": copy.deepcopy(mission.get("spec")),
+        "task_dag": copy.deepcopy(mission.get("task_dag", [])),
+        "verification_report": copy.deepcopy(mission.get("verification_report")),
+        "realignment_events": copy.deepcopy(mission.get("realignment_events", [])),
         "gate_info": _GATES.get(phase, {}),
         "error": None,
     }

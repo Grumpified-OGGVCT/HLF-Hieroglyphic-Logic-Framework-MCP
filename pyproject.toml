@@ -47,6 +47,7 @@ hlfrun   = "hlf_mcp.hlf.runtime:main"
 hlfsh    = "hlf_mcp.hlf.hlfsh:main"
 hlflsp   = "hlf_mcp.hlf.hlflsp:main"
 hlftest  = "hlf_mcp.hlf.hlftest:main"
+hlf-test-runner = "hlf_mcp.test_runner:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hlf_mcp", "governance"]
@@ -65,14 +66,8 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-# Root-level smoke scripts like smoke_test_e2e.py and test_all_tools.py are
-# intentionally manual and are not part of default pytest collection.
+# Default automated collection lives under tests/. Root-level legacy probes and
+# smoke scripts remain manual until fully migrated or retired.
 testpaths = [
     "tests",
-    "test_mcp.py",
-    "test_mcp_minimal.py",
-    "test_mcp_complete.py",
-    "test_mcp_quick.py",
-    "test_mcp_modules.py",
-    "test_metrics_win.py",
 ]

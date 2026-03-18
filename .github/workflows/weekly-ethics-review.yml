@@ -163,6 +163,23 @@ jobs:
           echo "---" >> /tmp/ethics_issue.md
           echo "_This issue is auto-generated weekly. Close when the top ethics finding is resolved._" >> /tmp/ethics_issue.md
 
+      - name: Emit normalized weekly artifact
+        if: always()
+        run: |
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-ethics-review" \
+            --output /tmp/weekly-ethics-review-artifact.json \
+            --extra-json "/tmp/ethics_report.json:ethics_report" \
+            --extra-json "/tmp/ethics_review.json:ethics_review"
+
+      - name: Upload normalized weekly artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "weekly-ethics-review-${{ github.run_id }}"
+          path: /tmp/weekly-ethics-review-artifact.json
+          retention-days: 90
+
       - name: Create GitHub issue
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -172,4 +189,6 @@ jobs:
           python .github/scripts/create_github_issue.py \
             --title "⚖️ [Ethics Review] HLF ethics alignment — ${WEEK}" \
             --body "@/tmp/ethics_issue.md" \
-            --labels "ethics,governance,automated"
+            --labels "ethics,governance,automated" \
+            --conflict-labels "ethics" \
+            --conflict-title-substrings "ethics review,ethics alignment"

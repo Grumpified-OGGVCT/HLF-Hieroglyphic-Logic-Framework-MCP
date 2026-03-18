@@ -32,9 +32,12 @@ Rule:
 
 - if you are implementing or documenting current HLF behavior, start here
 
-### 2. Active support and bridge layer
+### 2. Compatibility and bridge layer
 
-These files still matter, but they are not the product authority.
+These files are retained for compatibility, migration, adapters, metrics glue,
+and manual legacy validation. They are not the product authority and should not
+be your default starting point unless the task explicitly requires legacy
+behavior.
 
 - `hlf/mcp_server_complete.py`
 - `hlf/mcp_tools.py`
@@ -53,7 +56,7 @@ These files still matter, but they are not the product authority.
 
 Rule:
 
-- mine these for semantics, adapters, or migration targets
+- use these only when the task needs compatibility semantics, adapters, migration targets, or legacy probes
 - do not let them outrank `hlf_mcp` when deciding current truth
 
 ### 3. Preserved upstream context layer
@@ -131,7 +134,7 @@ In concrete repo terms:
 
 ### Do not confuse wrappers with authorities
 
-The legacy `hlf/` MCP stack can still be useful, but it is not the packaged product authority.
+The legacy `hlf/` MCP stack is compatibility-only unless the task explicitly requires migration, probes, or adapter behavior.
 
 ### Do not confuse context-only files with mandatory integration targets
 
@@ -168,7 +171,7 @@ Use these by default unless the task clearly requires archaeology.
 - Current behavior: trust `hlf_mcp`.
 - Current runtime and `.hlb` contract: trust `hlf_mcp/hlf/runtime.py` and `hlf_mcp/hlf/bytecode.py`.
 - Governance truth: trust `governance/` in the current repo.
-- Profile/store/gateway support logic: preserve and evaluate, but do not silently elevate over the packaged surface.
+- Profile/store/gateway support logic: preserve and evaluate as compatibility helpers, but do not silently elevate over the packaged surface.
 - Upstream/source ecosystem behavior: treat as context until explicitly ported.
 
 ## Fast Onboarding Checklist

@@ -255,6 +255,23 @@ jobs:
           _Auto-generated weekly. Close when the generated tests are committed and coverage improves._
           ISSUE_EOF
 
+      - name: Emit normalized weekly artifact
+        if: always()
+        run: |
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-test-health" \
+            --output /tmp/weekly-test-health-artifact.json \
+            --extra-json "/tmp/coverage.json:coverage" \
+            --extra-json "/tmp/test_suggestions.json:test_suggestions"
+
+      - name: Upload normalized weekly artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "weekly-test-health-${{ github.run_id }}"
+          path: /tmp/weekly-test-health-artifact.json
+          retention-days: 90
+
       - name: Create GitHub issue
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -264,4 +281,6 @@ jobs:
           python .github/scripts/create_github_issue.py \
             --title "🧪 [Test Health] HLF coverage + AI-generated tests — ${WEEK}" \
             --body "@/tmp/test_issue.md" \
-            --labels "testing,automated,coverage"
+            --labels "testing,automated,coverage" \
+            --conflict-title-substrings "test health,coverage + ai-generated tests" \
+            --conflict-labels "coverage"

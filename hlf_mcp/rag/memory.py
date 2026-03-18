@@ -15,6 +15,7 @@ Features:
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass, field
 import hashlib
 import json
 import math
@@ -97,6 +98,59 @@ PRAGMA synchronous = NORMAL;
 
 _DECAY_DAYS = 30
 _DEDUP_THRESHOLD = 0.98
+HKS_DOMAINS = {"general-coding", "ai-engineering", "hlf-specific"}
+
+
+@dataclass(slots=True)
+class HKSTestEvidence:
+    name: str
+    passed: bool
+    exit_code: int | None = None
+    counts: dict[str, int] | None = None
+    details: dict[str, Any] | None = None
+
+
+@dataclass(slots=True)
+class HKSProvenance:
+    source_type: str
+    source: str
+    collector: str
+    collected_at: str
+    workflow_run_url: str | None = None
+    branch: str | None = None
+    commit_sha: str | None = None
+    artifact_path: str | None = None
+    confidence: float | None = None
+
+
+@dataclass(slots=True)
+class HKSValidatedExemplar:
+    problem: str
+    validated_solution: str
+    domain: str
+    solution_kind: str
+    provenance: HKSProvenance
+    tests: list[HKSTestEvidence] = field(default_factory=list)
+    supersedes: str | None = None
+    topic: str = "hlf_validated_exemplars"
+    tags: list[str] = field(default_factory=list)
+    summary: str = ""
+    confidence: float = 1.0
+    schema_version: str = "1.0"
+    status: str = "validated"
+
+    def __post_init__(self) -> None:
+        if self.domain not in HKS_DOMAINS:
+            raise ValueError(f"Unsupported HKS domain: {self.domain}")
+
+    def to_content(self) -> str:
+        parts = [self.problem, self.validated_solution, self.summary, self.domain, self.solution_kind]
+        if self.tags:
+            parts.append(" ".join(self.tags))
+        return "\n".join(part for part in parts if part)
+
+    def to_metadata(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class RAGMemory:
@@ -119,6 +173,19 @@ class RAGMemory:
 
     def _init_db(self) -> None:
         self._conn.executescript(_SCHEMA)
+        self._ensure_column("fact_store", "entry_kind", "TEXT NOT NULL DEFAULT 'fact'")
+        self._ensure_column("fact_store", "domain", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("fact_store", "solution_kind", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("fact_store", "supersedes_sha256", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("fact_store", "metadata_json", "TEXT NOT NULL DEFAULT '{}' ")
+
+    def _ensure_column(self, table: str, column: str, ddl: str) -> None:
+        existing = {
+            row["name"]
+            for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column not in existing:
+            self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def _connect(self) -> sqlite3.Connection:
         return self._conn
@@ -132,12 +199,20 @@ class RAGMemory:
         confidence: float = 1.0,
         provenance: str = "agent",
         tags: list[str] | None = None,
+        *,
+        entry_kind: str = "fact",
+        domain: str | None = None,
+        solution_kind: str | None = None,
+        supersedes_sha256: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Store a fact. Returns {id, sha256, stored, duplicate_reason}."""
+        normalized_domain = self._normalize_domain(domain)
         sha256 = hashlib.sha256(content.encode()).hexdigest()
         tags_json = json.dumps(tags or [])
         vec = _bow_vector(content)
         vec_json = json.dumps(vec)
+        metadata_json = json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True)
         now = time.time()
 
         with self._lock, self._connect() as conn:
@@ -174,10 +249,29 @@ class RAGMemory:
             cursor = conn.execute(
                 """
                 INSERT INTO fact_store
-                    (sha256, content, topic, confidence, provenance, tags, vector_json, created_at, accessed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (
+                        sha256, content, topic, confidence, provenance, tags, vector_json,
+                        created_at, accessed_at, entry_kind, domain, solution_kind,
+                        supersedes_sha256, metadata_json
+                    )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (sha256, content, topic, confidence, provenance, tags_json, vec_json, now, now),
+                (
+                    sha256,
+                    content,
+                    topic,
+                    confidence,
+                    provenance,
+                    tags_json,
+                    vec_json,
+                    now,
+                    now,
+                    entry_kind,
+                    normalized_domain,
+                    solution_kind or "",
+                    supersedes_sha256 or "",
+                    metadata_json,
+                ),
             )
             row_id = cursor.lastrowid
 
@@ -192,7 +286,33 @@ class RAGMemory:
                 "confidence": confidence, "vector": vec,
             })
 
-        return {"id": row_id, "sha256": sha256, "stored": True, "duplicate_reason": None}
+        return {
+            "id": row_id,
+            "sha256": sha256,
+            "stored": True,
+            "duplicate_reason": None,
+            "entry_kind": entry_kind,
+            "domain": normalized_domain,
+            "solution_kind": solution_kind or "",
+            "supersedes_sha256": supersedes_sha256 or "",
+            "metadata": metadata or {},
+        }
+
+    def store_exemplar(self, exemplar: HKSValidatedExemplar) -> dict[str, Any]:
+        metadata = exemplar.to_metadata()
+        tags = sorted(set([*exemplar.tags, "hks", exemplar.domain, exemplar.solution_kind]))
+        return self.store(
+            exemplar.to_content(),
+            topic=exemplar.topic,
+            confidence=exemplar.confidence,
+            provenance=exemplar.provenance.collector,
+            tags=tags,
+            entry_kind="hks_exemplar",
+            domain=exemplar.domain,
+            solution_kind=exemplar.solution_kind,
+            supersedes_sha256=exemplar.supersedes,
+            metadata=metadata,
+        )
 
     # ── Query ─────────────────────────────────────────────────────────────────
 
@@ -202,16 +322,22 @@ class RAGMemory:
         top_k: int = 5,
         topic: str | None = None,
         min_confidence: float = 0.0,
+        *,
+        entry_kind: str | None = None,
+        domain: str | None = None,
+        solution_kind: str | None = None,
     ) -> dict[str, Any]:
         """Query memory by semantic similarity."""
         query_vec = _bow_vector(query_text)
         now = time.time()
         decay_cutoff = now - (_DECAY_DAYS * 86400)
+        normalized_domain = self._normalize_domain(domain)
 
         with self._connect() as conn:
             sql = """
                 SELECT id, content, topic, confidence, provenance, tags,
-                       vector_json, created_at, accessed_at
+                       vector_json, created_at, accessed_at, entry_kind,
+                       domain, solution_kind, supersedes_sha256, metadata_json
                 FROM fact_store
                 WHERE confidence >= ?
                   AND created_at >= ?
@@ -220,6 +346,15 @@ class RAGMemory:
             if topic:
                 sql += " AND topic = ?"
                 params.append(topic)
+            if entry_kind:
+                sql += " AND entry_kind = ?"
+                params.append(entry_kind)
+            if normalized_domain:
+                sql += " AND domain = ?"
+                params.append(normalized_domain)
+            if solution_kind:
+                sql += " AND solution_kind = ?"
+                params.append(solution_kind)
             sql += " ORDER BY confidence DESC, accessed_at DESC LIMIT 500"
 
             rows = conn.execute(sql, params).fetchall()
@@ -229,6 +364,7 @@ class RAGMemory:
         for row in rows:
             vec = json.loads(row["vector_json"] or "{}")
             sim = _cosine(query_vec, vec)
+            metadata = json.loads(row["metadata_json"] or "{}")
             scored.append({
                 "id": row["id"],
                 "content": row["content"],
@@ -238,6 +374,11 @@ class RAGMemory:
                 "tags": json.loads(row["tags"] or "[]"),
                 "similarity": round(sim, 4),
                 "created_at": row["created_at"],
+                "entry_kind": row["entry_kind"],
+                "domain": row["domain"],
+                "solution_kind": row["solution_kind"],
+                "supersedes_sha256": row["supersedes_sha256"],
+                "metadata": metadata,
             })
 
         scored.sort(key=lambda x: x["similarity"], reverse=True)
@@ -252,7 +393,14 @@ class RAGMemory:
                     [(now, rid) for rid in ids],
                 )
 
-        return {"results": results, "count": len(results), "query": query_text}
+        return {
+            "results": results,
+            "count": len(results),
+            "query": query_text,
+            "entry_kind": entry_kind,
+            "domain": normalized_domain,
+            "solution_kind": solution_kind,
+        }
 
     # ── Merkle chain ──────────────────────────────────────────────────────────
 
@@ -274,15 +422,23 @@ class RAGMemory:
         """Return memory store statistics."""
         with self._connect() as conn:
             total = conn.execute("SELECT COUNT(*) AS n FROM fact_store").fetchone()["n"]
+            exemplar_count = conn.execute(
+                "SELECT COUNT(*) AS n FROM fact_store WHERE entry_kind = 'hks_exemplar'"
+            ).fetchone()["n"]
             topics = conn.execute(
                 "SELECT topic, COUNT(*) AS n FROM fact_store GROUP BY topic ORDER BY n DESC LIMIT 10"
+            ).fetchall()
+            domains = conn.execute(
+                "SELECT domain, COUNT(*) AS n FROM fact_store WHERE domain != '' GROUP BY domain ORDER BY n DESC"
             ).fetchall()
             chain_depth = conn.execute("SELECT COUNT(*) AS n FROM merkle_chain").fetchone()["n"]
         return {
             "total_facts": total,
+            "hks_exemplars": exemplar_count,
             "merkle_chain_depth": chain_depth,
             "hot_tier_topics": len(self._hot),
             "top_topics": [{"topic": r["topic"], "count": r["n"]} for r in topics],
+            "domains": [{"domain": r["domain"], "count": r["n"]} for r in domains],
             "db_path": self._db_path,
         }
 
@@ -297,3 +453,10 @@ class RAGMemory:
                 (cutoff,),
             )
             return result.rowcount
+
+    def _normalize_domain(self, domain: str | None) -> str:
+        if domain is None:
+            return ""
+        if domain not in HKS_DOMAINS:
+            raise ValueError(f"Unsupported HKS domain: {domain}")
+        return domain

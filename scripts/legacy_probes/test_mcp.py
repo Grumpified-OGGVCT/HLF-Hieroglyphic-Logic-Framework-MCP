@@ -10,7 +10,7 @@ import json
 import time
 
 # Add repo to path
-REPO_ROOT = Path(__file__).parent.resolve()
+REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 # Import MCP components DIRECTLY, not through hlf package

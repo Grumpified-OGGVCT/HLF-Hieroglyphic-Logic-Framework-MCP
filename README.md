@@ -72,6 +72,15 @@ If you want the bridge from current repo to full HLF, read these:
 6. `plan/architecture-hlf-reconstruction-2.md`
 7. `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`
 
+Quick reading guide for first-time readers:
+
+| If you want... | Read this first | Then read |
+|---|---|---|
+| the big idea | `docs/HLF_VISION_PLAIN_LANGUAGE.md` | `HLF_VISION_DOCTRINE.md` |
+| the strict current truth | `SSOT_HLF_MCP.md` | `BUILD_GUIDE.md` |
+| the recovery path | `plan/architecture-hlf-reconstruction-2.md` | `HLF_ACTIONABLE_PLAN.md` |
+| the wording discipline | `docs/HLF_CLAIM_LANES.md` | `docs/HLF_MCP_POSITIONING.md` |
+
 Repository boundary:
 
 - `hlf_mcp/` is the packaged product surface and the main implementation line.
@@ -1254,6 +1263,35 @@ graph TD
 
     A --> B --> C --> D --> E --> F --> G --> H
 ```
+
+### Operator Trust Chain
+
+```mermaid
+flowchart LR
+    Intent[Intent input<br/>plain language or HLF] --> Policy[Policy and governance<br/>ALIGN and ethical governor]
+    Policy --> Capsule[Capsule and admission<br/>tier, tool, gas, verifier gates]
+    Capsule --> Exec[Execution and runtime<br/>bytecode, tools, host effects]
+    Exec --> Evidence[Evidence surfaces<br/>memory, witness, traces, Merkle chain]
+    Evidence --> Operator[Operator-readable output<br/>audit summary, rationale, export]
+
+    classDef intent fill:#dce9f9,stroke:#285a8f,color:#12263f
+    classDef policy fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+    classDef exec fill:#e8f2e1,stroke:#4c7a4c,color:#173117
+    classDef evidence fill:#efe3f8,stroke:#6f3f8f,color:#2a1736
+    classDef operator fill:#f4f1ea,stroke:#705f49,color:#2b241a
+
+    class Intent intent
+    class Policy,Capsule policy
+    class Exec exec
+    class Evidence evidence
+    class Operator operator
+```
+
+Reading rule:
+
+- the trust chain is what the repo is trying to keep continuous from intent to operator review
+- if any middle step becomes opaque, the public claims get weaker even if the runtime still executes
+- this is why governance, admission, evidence, and human-readable output are treated as core surfaces rather than extras
 
 | Layer | What it prevents |
 |---|---|

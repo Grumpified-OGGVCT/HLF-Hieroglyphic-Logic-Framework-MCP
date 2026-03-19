@@ -22,6 +22,8 @@ import time
 import threading
 from typing import Any
 
+from hlf_mcp.instinct.orchestration import execution_ready_for_verification, normalize_execution_trace, normalize_task_dag, summarize_execution_trace
+
 
 # ── Phase definitions ──────────────────────────────────────────────────────────
 
@@ -159,6 +161,23 @@ class InstinctLifecycle:
                     }
                 mission["cove_gate_passed"] = True
 
+            if phase == "verify" and mission.get("task_dag"):
+                if not execution_ready_for_verification(
+                    mission.get("task_dag", []),
+                    mission.get("execution_trace", []),
+                ) and not override:
+                    return {
+                        "mission_id": mission_id,
+                        "status": "blocked",
+                        "current_phase": current,
+                        "allowed_next": _ALLOWED_NEXT.get(current, []),
+                        "error": "Execution trace is incomplete or contains failed nodes. Mission halted before verify.",
+                        "execution_summary": summarize_execution_trace(
+                            mission.get("execution_trace", []),
+                            task_dag=mission.get("task_dag", []),
+                        ),
+                    }
+
             # Advance phase
             mission["current_phase"] = phase
             mission["phase_history"].append({
@@ -180,8 +199,20 @@ class InstinctLifecycle:
             elif phase == "plan":
                 if payload:
                     mission["spec"] = copy.deepcopy(payload)
-            elif phase == "execute" and isinstance(payload.get("task_dag"), list):
-                mission["task_dag"] = copy.deepcopy(payload.get("task_dag", []))
+                if isinstance(payload.get("task_dag"), list):
+                    mission["task_dag"] = normalize_task_dag(payload.get("task_dag", []))
+            elif phase == "execute":
+                if isinstance(payload.get("task_dag"), list):
+                    mission["task_dag"] = normalize_task_dag(payload.get("task_dag", []))
+                if isinstance(payload.get("execution_trace"), list):
+                    mission["execution_trace"] = normalize_execution_trace(
+                        payload.get("execution_trace", []),
+                        task_dag=mission.get("task_dag", []),
+                    )
+                    mission["execution_summary"] = summarize_execution_trace(
+                        mission["execution_trace"],
+                        task_dag=mission.get("task_dag", []),
+                    )
             elif phase == "verify" and payload:
                 mission["verification_report"] = copy.deepcopy(payload)
 
@@ -247,6 +278,8 @@ class InstinctLifecycle:
                     "sealed": m.get("sealed", False),
                     "created_at": m["created_at"],
                     "realignment_count": len(m.get("realignment_events", [])),
+                    "plan_nodes": len(m.get("task_dag", [])),
+                    "execution_summary": copy.deepcopy(m.get("execution_summary", {})),
                 }
                 for m in self._missions.values()
             ]
@@ -289,6 +322,17 @@ def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         }},
         "spec": copy.deepcopy(payload),
         "task_dag": list(payload.get("task_dag", [])) if isinstance(payload.get("task_dag"), list) else [],
+        "execution_trace": [],
+        "execution_summary": {
+            "total_nodes": len(payload.get("task_dag", [])) if isinstance(payload.get("task_dag"), list) else 0,
+            "recorded_nodes": 0,
+            "completed_nodes": 0,
+            "failed_nodes": 0,
+            "delegated_nodes": 0,
+            "escalated_nodes": 0,
+            "all_nodes_recorded": False,
+            "all_nodes_succeeded": False,
+        },
         "verification_report": None,
         "realignment_events": [],
         "created_at": time.time(),
@@ -316,6 +360,8 @@ def _ok_state(mission: dict[str, Any], note: str | None = None) -> dict[str, Any
         "phase_history": mission.get("phase_history", []),
         "spec": copy.deepcopy(mission.get("spec")),
         "task_dag": copy.deepcopy(mission.get("task_dag", [])),
+        "execution_trace": copy.deepcopy(mission.get("execution_trace", [])),
+        "execution_summary": copy.deepcopy(mission.get("execution_summary", {})),
         "verification_report": copy.deepcopy(mission.get("verification_report")),
         "realignment_events": copy.deepcopy(mission.get("realignment_events", [])),
         "gate_info": _GATES.get(phase, {}),
@@ -348,7 +394,17 @@ def _run_cove_gate(mission: dict[str, Any], cove_result: dict[str, Any] | None) 
     if cove_result is not None:
         return bool(cove_result.get("passed", False))
 
-    # Heuristic: verify artifact must exist and have a non-empty payload
+    verification_report = mission.get("verification_report")
+    if isinstance(verification_report, dict):
+        if "all_proven" in verification_report:
+            return bool(verification_report.get("all_proven", False))
+        if verification_report.get("verdict"):
+            return str(verification_report.get("verdict", "")).upper() in {"APPROVED", "PASSED", "PROVEN"}
+        results = verification_report.get("results")
+        if isinstance(results, list) and results:
+            failing_statuses = {"counterexample", "error", "failed", "blocked"}
+            return not any(str(item.get("status", "")).lower() in failing_statuses for item in results if isinstance(item, dict))
+
     verify_artifact = mission.get("artifacts", {}).get("verify", {})
     if not verify_artifact:
         return False

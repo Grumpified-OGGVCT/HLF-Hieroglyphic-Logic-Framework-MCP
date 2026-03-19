@@ -221,6 +221,48 @@ Reading rule:
 - the packaged repo already has real pieces in each area, but not every pillar is equally restored
 - the bridge work exists to prevent any one pillar from pretending to be the whole system
 
+Compact status legend:
+
+- `present` = real packaged current-truth surface exists now
+- `partial` = packaged surface exists, but bridge recovery or proof work is still required
+- `source-only` = constitutive upstream authority exists, but the packaged repo does not yet honestly claim full restoration
+
+Quick read of the pillars map under current repo conditions:
+
+- semantic core: `present`
+- governance spine: `present` to `partial`, depending on which control surface you mean
+- knowledge substrate and memory governance: `partial`
+- execution surface: `present` to `partial`
+- coordination layer: `partial`
+- human legibility: `partial`
+- real-world bridge: `present`
+
+Visual guide:
+the recursive-build story is strongest when read as a proof ladder rather than a slogan.
+
+```mermaid
+flowchart TB
+    A[Operator intent] --> B[Packaged MCP front door<br/>hlf_do and related surfaces]
+    B --> C[Bounded local workflow<br/>stdio first]
+    C --> D[Build observation<br/>_toolkit.py status<br/>hlf_test_suite_summary<br/>artifact freshness]
+    D --> E[Governed evidence<br/>capsules<br/>verifier admission<br/>memory and witness traces]
+    E --> F[Operator review<br/>exportable audit and evidence]
+    F --> G[Stronger remote recursive-build claims]
+
+    classDef current fill:#d9f0e3,stroke:#1d6b43,color:#113222
+    classDef bridge fill:#dce9f9,stroke:#285a8f,color:#12263f
+    classDef gated fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+
+    class A,B,C,D,E,F current
+    class G gated
+```
+
+Reading rule:
+
+- the lower rungs are already meaningful current-truth or bridge-backed workflow surfaces
+- the ladder does not mean the repo is basic; it means stronger claims are earned in sequence
+- the top rung remains gated until remote MCP initialization and the intended smoke path are proven repeatably in the packaged workflow
+
 ## Table of Contents
 
 1. [What is HLF?](#1-what-is-hlf)

@@ -4,6 +4,98 @@ Complete blueprint for the full MCP 2024-2025 integration with self-evolving gra
 
 ---
 
+## 2026-03-19 Normalized Reconstruction Backlog
+
+This section is the active constitutive-pillar backlog.
+
+Working stance:
+
+- doctrine, source archaeology, and bridge plans define the target shape
+- packaged truth does not define the target shape; it only defines what can be claimed as already built
+- if a constitutive pillar is missing, damaged, or source-only, the task is to recover it without simplification
+
+Use these files as the planning authorities before editing code:
+
+- `plan/architecture-hlf-reconstruction-2.md`
+- `docs/HLF_PILLAR_MAP.md`
+- `docs/HLF_OPERATOR_BUILD_NOTES_2026-03-19.md`
+- `docs/HLF_MISSING_PILLARS.md`
+
+### Batch 1: Operator Trust and Routing Proof
+
+#### Recursive build-assist bridge lane (`bridge_contract`)
+- [ ] Document the first packaged recursive build workflow around `stdio`, `hlf_do`, `hlf_test_suite_summary`, and `_toolkit.py status`
+- [ ] Fix the current `streamable-http` initialize fault so the smoke harness can complete beyond `/health`
+- [ ] Rerun the live HTTP smoke harness after the dependency/runtime repair and store the result as build evidence
+- [ ] Keep remote self-build claims out of current-truth docs until the repaired initialize path is proven end to end
+
+#### Routing fabric (`faithful_port`)
+- [ ] Create `docs/HLF_ROUTING_RECOVERY_SPEC.md` from `hlf_source/agents/gateway/bus.py`, `hlf_source/agents/gateway/router.py`, and `hlf_source/agents/gateway/sentinel_gate.py`
+- [ ] Define packaged ownership for routing traces, route rationale, and policy-backed fallback decisions across `hlf_mcp/server_profiles.py`, `hlf_mcp/hlf/model_catalog.py`, `hlf_mcp/server_resources.py`, and any new routing helper module
+- [ ] Add deterministic tests for lane-family route selection, evidence-backed fallback, and fail-closed behavior when route evidence is insufficient
+- [ ] Document which parts of current routing are packaged truth versus bridge scaffolding
+
+#### Formal verification (`faithful_port`)
+- [ ] Create `docs/HLF_FORMAL_VERIFICATION_RECOVERY_SPEC.md` from `hlf_source/agents/core/formal_verifier.py`
+- [ ] Define packaged verifier ownership in `hlf_mcp/hlf/` and MCP exposure requirements before implementation starts
+- [ ] Specify proof artifact formats for admitted and denied executions
+- [ ] Add targeted regression plans for verifier-backed capability and side-effect admission
+
+#### Governance control and typed effects (`bridge_contract` + `faithful_port`)
+- [ ] Create `docs/HLF_GOVERNANCE_CONTROL_MATRIX.md` linking capsules, host-function registry entries, route evidence, and audit outputs to concrete controls
+- [ ] Define typed host-function contract fields for input schema, output schema, effect class, structured failure type, and audit requirement
+- [ ] Add tests for missing-contract denial and policy trace completeness
+- [ ] Update `docs/HLF_HOST_FUNCTIONS_REFERENCE.md` to reflect contract-gate status
+
+#### HLF knowledge substrate, governed memory, and evidence contracts (`faithful_port`)
+- [ ] Extend `docs/HLF_MEMORY_GOVERNANCE_RECOVERY_SPEC.md` with provenance, confidence, freshness, trust-tier, supersession, and expiry contracts
+- [ ] Keep `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` and `docs/HLF_MEMORY_GOVERNANCE_RECOVERY_SPEC.md` synchronized so the HLF-native knowledge-substrate line remains a named constitutive pillar
+- [ ] Normalize `hlf_mcp/server_memory.py` and `hlf_mcp/rag/memory.py` outputs so benchmark artifacts, exemplars, and weekly knowledge use one evidence schema
+- [ ] Add deterministic verification for stored artifact histories before they influence route or promotion decisions
+- [ ] Add tests for stale artifact handling, supersession, and provenance-required retrieval
+
+#### Operator trust surfaces (`bridge_contract`)
+- [ ] Add operator-readable summaries for route evidence, promotion rationale, verifier results, and memory provenance
+- [ ] Ensure every human-facing summary maps back to a packaged machine authority
+- [ ] Add regression tests that fail if operator summaries drift from structured evidence objects
+- [ ] Update operator docs to state the limits of each trust surface clearly
+
+### Batch 2: Multi-Agent Execution and Proof
+
+#### Orchestration lifecycle (`faithful_port`)
+- [ ] Create `docs/HLF_ORCHESTRATION_RECOVERY_SPEC.md` from `hlf_source/agents/core/plan_executor.py`, `hlf_source/agents/core/crew_orchestrator.py`, and `hlf_source/agents/core/task_classifier.py`
+- [ ] Define ownership boundaries between `hlf_mcp/instinct/lifecycle.py`, packaged MCP surfaces, and restored DAG or handoff modules
+- [ ] Add packaged contracts for delegation, dissent, escalation, and handoff lineage
+- [ ] Add tests for deterministic plan ordering and role-boundary enforcement
+
+#### Multi-agent audit and verifier-backed admission
+- [ ] Define how verifier output, route evidence, and orchestration state join into one execution-admission story
+- [ ] Add trace artifacts that explain why an orchestration step was allowed, denied, or escalated
+- [ ] Add batch-level acceptance gates covering route proof, verifier proof, and orchestration trace completeness
+
+### Batch 3: Operator Doctrine, Legibility, and Ecosystem Visibility
+
+#### Persona and operator doctrine (`bridge_contract`)
+- [ ] Create `docs/HLF_PERSONA_AND_OPERATOR_RECOVERY_SPEC.md` from `hlf_source/config/personas/*.md` and `hlf_source/AGENTS.md`
+- [ ] Define operator workflow notes for steward, sentinel, strategist, and reviewer roles
+- [ ] Keep persona doctrine out of runtime authority until a bounded packaged contract exists
+
+#### Gallery and operator-legibility surfaces (`bridge_contract`)
+- [ ] Create `docs/HLF_GALLERY_AND_OPERATOR_SURFACES_SPEC.md` from `hlf_source/scripts/run_hlf_gallery.py` and `hlf_source/docs/hlf_explainer.html`
+- [ ] Define which outputs become static docs, generated reports, or MCP resources
+- [ ] Add smoke validation once generated operator artifacts exist
+
+#### Real-code bridge and ecosystem surfaces (`bridge_contract` + `source_only_for_now`)
+- [ ] Add a proof matrix for `hlf_mcp/hlf/codegen.py` outputs using fixture-based equivalence checks
+- [ ] Document ecosystem surfaces as constitutive source evidence in planning docs without overstating packaged truth
+- [ ] Re-evaluate ecosystem recovery only after Batch 1 and Batch 2 proof surfaces are in place
+
+### Working Rule
+
+- [ ] Do not start a recovery implementation slice unless the corresponding recovery spec exists
+- [ ] Do not mark a pillar complete until code, tests, docs, and operator proof surfaces are all updated together
+- [ ] Do not reduce scope by replacing a constitutive source surface with a thinner packaged substitute without recording the justification in bridge docs
+
 ## Phase R: Reconstruction Discipline
 
 **Priority: ABSOLUTE - No more simplified stand-ins, pseudo-equivalents, or MVP-first substitutions**
@@ -25,7 +117,7 @@ Complete blueprint for the full MCP 2024-2025 integration with self-evolving gra
 
 ---
 
-## Phase 0: Knowledge Substrate Refactor
+## Phase 0: HLF Knowledge Substrate Refactor
 
 **Priority: CRITICAL - Weekly knowledge work should not proceed without a cohesive surface**
 
@@ -34,6 +126,7 @@ Complete blueprint for the full MCP 2024-2025 integration with self-evolving gra
 ### Package and module boundaries
 ...existing code...
 ### Normalization and Recovery Tasks
+- [ ] Preserve the HLF-native knowledge-substrate / Infinite-RAG / governed-memory line as a named constitutive recovery surface in pillar, batch, and backlog docs
 - [ ] Consolidate canonical front-door files:
 	- hlf/infinite_rag_hlf.py
 	- hlf_mcp/rag/memory.py

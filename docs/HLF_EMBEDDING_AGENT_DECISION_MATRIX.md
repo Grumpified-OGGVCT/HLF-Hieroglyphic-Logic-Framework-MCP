@@ -536,7 +536,7 @@ If another agent joins this discussion, it should assume the following baseline:
 
 ### Current implemented anchors
 
-- `hlf_mcp/rag/memory.py` is the active memory substrate.
+- `hlf_mcp/rag/memory.py` is the active HLF knowledge-substrate storage layer.
 - `hlf_mcp/server_memory.py` exposes packaged memory tools.
 - `hlf_mcp/server_translation.py` already exposes translation-memory recall and deterministic repair flows.
 - `hlf_mcp/hlf/runtime.py` now supports optional memory-aware delegation and routing context.

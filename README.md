@@ -26,16 +26,20 @@ This repo carries three things at once:
 If you want the vision first, read these:
 
 1. `docs/HLF_VISION_PLAIN_LANGUAGE.md`
-2. `docs/HLF_VISION_MAP.md`
-3. `docs/HLF_MISSING_PILLARS.md`
-4. `docs/HLF_DESIGN_NORTH_STAR.md`
-5. `HLF_VISION_DOCTRINE.md`
+2. `docs/HLF_MCP_POSITIONING.md`
+3. `docs/HLF_CLAIM_LANES.md`
+4. `docs/HLF_RECURSIVE_BUILD_STORY.md`
+5. `docs/HLF_VISION_MAP.md`
+6. `docs/HLF_MISSING_PILLARS.md`
+7. `docs/HLF_DESIGN_NORTH_STAR.md`
+8. `HLF_VISION_DOCTRINE.md`
 
 If you want the strict current build truth, read these:
 
 1. `SSOT_HLF_MCP.md`
 2. `HLF_QUALITY_TARGETS.md`
 3. `BUILD_GUIDE.md`
+4. `CHANGELOG.md`
 
 If you want the bridge from current repo to full HLF, read these:
 
@@ -44,6 +48,8 @@ If you want the bridge from current repo to full HLF, read these:
 3. `HLF_IMPLEMENTATION_INDEX.md`
 4. `HLF_SOURCE_EXTRACTION_LEDGER.md`
 5. `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`
+6. `plan/architecture-hlf-reconstruction-2.md`
+7. `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`
 
 Repository boundary:
 
@@ -59,6 +65,60 @@ It is supposed to become a governed language and coordination substrate that con
 
 This repo already contains real parts of that system.
 The rest has to be recovered and built, not explained away.
+
+Bridge execution note:
+
+- `plan/architecture-hlf-reconstruction-2.md` is the master reconstruction sequencing artifact.
+- `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md` is the current bridge artifact for mapping doctrine pillars to actual regression proof.
+- `docs/HLF_RECURSIVE_BUILD_STORY.md` is the canonical explanation of why the recursive-build lane matters and how it should be interpreted.
+- `docs/HLF_MESSAGING_LADDER.md` is the audience-specific phrasing guide derived from that canonical explanation.
+- the first credible recursive build story is local and bounded: packaged HLF assisting packaged HLF through `stdio`, `hlf_do`, `hlf_test_suite_summary`, and build-observation surfaces; remote `streamable-http` self-hosting stays gated until MCP initialize succeeds end to end.
+
+## Why This Repo Stands Out
+
+HLF is not only meant to be useful after the system is finished.
+It is being shaped into a governed language and coordination layer that can already help inspect state, summarize regressions, explain intended actions, and preserve evidence during parts of its own build and recovery process.
+
+That does not mean full self-hosting is complete.
+It means the repo already contains a bounded, inspectable proof that construction, operation, and audit can begin to converge inside the same governed system.
+
+The current honest milestone is local and bounded build assistance first.
+
+- `stdio` and local workflows matter because they are the first credible proof lane
+- `hlf_do`, `_toolkit.py status`, `hlf_test_suite_summary`, and audit surfaces matter because they already support that loop
+- transport gating still matters because stronger claims should only follow stronger proof
+
+That is why this repo's build story is part of its product evidence, not just background process.
+
+For the full version of that claim, read `docs/HLF_RECURSIVE_BUILD_STORY.md`.
+For the audience-specific phrasing rules, read `docs/HLF_MESSAGING_LADDER.md`.
+For the latest changelog-style release summary, read `CHANGELOG.md`.
+
+## For Agents And Builders
+
+If you are evaluating this repo as an agent user, builder, or operator, the right mental model is:
+
+- HLF is the governed meaning and coordination substrate
+- the packaged MCP server is the main present-tense product surface
+- MCP is the front door to HLF, not the full definition of HLF
+
+What that means in practice:
+
+- today, the packaged MCP surface is already a real governed interface for compile, validate, execute, translate, explain, inspect, and memory-facing work
+- for builders, that same surface is the first stable lane for bounded recursive build assistance
+- for agents, the target is not just better tool access, but a governed environment where intent, effect boundaries, memory, coordination, and explanation stay linked
+
+What it does **not** mean:
+
+- MCP by itself is not the full meaning layer
+- transport availability is not the same thing as architectural completion
+- the current packaged surface does not yet restore every constitutive HLF pillar
+
+So the clean position is:
+
+**the MCP server is the right front door, the right current product lane, and the right bootstrap surface for HLF now, while the larger HLF vision remains bigger than MCP in semantics, governance, memory, coordination, trust, and execution.**
+
+For the full doctrinal version of that distinction, read `docs/HLF_MCP_POSITIONING.md`.
 ## Table of Contents
 
 1. [What is HLF?](#1-what-is-hlf)
@@ -172,14 +232,19 @@ For the full architectural vision including the 13-layer Three-Brain model, Rose
 
 ```bash
 # SSE transport (remote agents, web clients)
-docker run -e HLF_TRANSPORT=sse -p 8000:8000 ghcr.io/grumpified-oggvct/hlf-mcp:latest
+docker run -e HLF_TRANSPORT=sse -e HLF_PORT=<explicit-port> -p <explicit-port>:<explicit-port> ghcr.io/grumpified-oggvct/hlf-mcp:latest
 
 # Streamable-HTTP transport (modern MCP clients)
-docker run -e HLF_TRANSPORT=streamable-http -p 8000:8000 ghcr.io/grumpified-oggvct/hlf-mcp:latest
+docker run -e HLF_TRANSPORT=streamable-http -e HLF_PORT=<explicit-port> -p <explicit-port>:<explicit-port> ghcr.io/grumpified-oggvct/hlf-mcp:latest
 
 # stdio transport (Claude Desktop, local agents)
 docker run -i -e HLF_TRANSPORT=stdio ghcr.io/grumpified-oggvct/hlf-mcp:latest
 ```
+
+For HTTP transports, choose and set the port explicitly. The packaged server no longer treats `8000` as an implied default for `sse` or `streamable-http`.
+
+These transport examples show packaged runtime availability.
+They do not by themselves promote recursive-build maturity claims.
 
 **Endpoints when SSE is active:**
 
@@ -199,8 +264,8 @@ uv sync
 uv run hlfc fixtures/security_audit.hlf
 uv run hlfrun fixtures/hello_world.hlf
 
-# 3. Start MCP server on SSE port 8000
-HLF_TRANSPORT=sse uv run hlf-mcp
+# 3. Start MCP server on an explicit chosen SSE port
+HLF_TRANSPORT=sse HLF_PORT=<explicit-port> uv run hlf-mcp
 ```
 
 For unfamiliar agents or operators, use `docs/HLF_AGENT_ONBOARDING.md` before working from `hlf/` or `hlf_source/` directly.
@@ -208,10 +273,16 @@ For unfamiliar agents or operators, use `docs/HLF_AGENT_ONBOARDING.md` before wo
 ### Option C — Docker Compose (full stack)
 
 ```bash
-docker compose up -d
-# MCP SSE server → http://localhost:8000/sse
-# Health check  → http://localhost:8000/health
+HLF_PORT=<explicit-port> docker compose up -d
+# MCP SSE server → http://localhost:$HLF_PORT/sse
+# Health check  → http://localhost:$HLF_PORT/health
 ```
+
+Current proof boundary for recursive-build claims:
+
+- `stdio` is still the first credible build-assist lane
+- SSE and `streamable-http` remain useful transport surfaces and bring-up targets
+- do not treat remote `streamable-http` as the center of the recursive-build story until end-to-end MCP initialization is proven in the packaged workflow
 
 ### Claude Desktop (`claude_desktop_config.json`)
 
@@ -231,6 +302,9 @@ docker compose up -d
 
 ## 3. Architecture Overview
 
+This architecture view shows the packaged transport and server surface.
+It should not be read as promoting `streamable-http` into recursive-build proof by transport presence alone.
+
 ```mermaid
 flowchart TD
     subgraph Agents["🤖 Agent Layer"]
@@ -241,8 +315,8 @@ flowchart TD
 
     subgraph Transports["🌐 MCP Transports"]
         T1[stdio]
-        T2[SSE :8000/sse]
-        T3[Streamable-HTTP :8000/mcp]
+        T2[SSE :$HLF_PORT/sse]
+        T3[Streamable-HTTP :$HLF_PORT/mcp]
     end
 
     subgraph Server["⚙️ HLF MCP Server  (hlf_mcp/server.py)"]
@@ -838,13 +912,18 @@ graph LR
 |---|---|---|
 | `stdio` (default) | stdin/stdout | Claude Desktop, local agents |
 | `sse` | `GET /sse` + `POST /messages/` | Remote agents, Docker, web clients |
-| `streamable-http` | `POST /mcp` | Modern MCP 1.26+ clients |
+| `streamable-http` | `POST /mcp` | Modern MCP 1.26+ clients; packaged transport availability, not recursive-build proof by itself |
+
+Current proof boundary:
+
+- `stdio` remains the primary current-truth transport for the bounded recursive-build lane
+- HTTP transports are real packaged surfaces, but stronger self-hosting claims should remain gated by end-to-end MCP proof rather than transport availability alone
 
 ```bash
 # Environment variables
 HLF_TRANSPORT=sse           # transport type
 HLF_HOST=0.0.0.0            # bind address (SSE/HTTP only)
-HLF_PORT=8000               # port (SSE/HTTP only)
+HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 ```
 
 ---
@@ -932,9 +1011,8 @@ RUN uv sync --frozen --no-dev
 FROM python:3.12-slim
 COPY --from=builder /app /app
 WORKDIR /app
-EXPOSE 8000
-HEALTHCHECK --interval=30s CMD curl -f http://localhost:8000/health || exit 1
-ENV HLF_TRANSPORT=sse HLF_HOST=0.0.0.0 HLF_PORT=8000
+HEALTHCHECK --interval=30s CMD python -c "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ['HLF_PORT'] + '/health')" || exit 1
+ENV HLF_TRANSPORT=sse HLF_HOST=0.0.0.0
 CMD ["/app/.venv/bin/python", "-m", "hlf_mcp.server"]
 ```
 
@@ -945,13 +1023,13 @@ services:
   hlf-mcp:
     build: .
     ports:
-      - "8000:8000"
+            - "${HLF_PORT:?Set HLF_PORT}:${HLF_PORT:?Set HLF_PORT}"
     environment:
       HLF_TRANSPORT: sse
       HLF_HOST: 0.0.0.0
-      HLF_PORT: "8000"
+            HLF_PORT: "${HLF_PORT:?Set HLF_PORT}"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+            test: ["CMD-SHELL", "python -c \"import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ['HLF_PORT'] + '/health')\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -964,7 +1042,7 @@ services:
 |---|---|---|
 | `HLF_TRANSPORT` | `stdio` | Transport type: `stdio` / `sse` / `streamable-http` |
 | `HLF_HOST` | `0.0.0.0` | Bind address for HTTP transports |
-| `HLF_PORT` | `8000` | Port for HTTP transports |
+| `HLF_PORT` | none | Required port for HTTP transports |
 
 ---
 

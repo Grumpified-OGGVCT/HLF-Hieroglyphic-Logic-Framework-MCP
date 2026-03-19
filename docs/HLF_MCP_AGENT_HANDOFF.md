@@ -149,9 +149,9 @@ These files define the current HLF language and execution truth:
 
 ## What HLF Means Here
 
-HLF is a deterministic orchestration language.
+In current packaged truth, this MCP handoff exposes HLF as a deterministic governed execution surface for agent work.
 
-In this repo it means:
+In this repo that currently means:
 
 - strict parsing
 - compiled AST and bytecode
@@ -164,6 +164,8 @@ In this repo it means:
 The most important execution rule is simple:
 
 Natural language is the front door. HLF is the execution contract.
+
+Do not use this handoff file by itself to make larger ontology claims about all of HLF. For that, read `docs/HLF_MCP_POSITIONING.md` and classify stronger statements with `docs/HLF_CLAIM_LANES.md`.
 
 ## Current MCP Capability Areas
 

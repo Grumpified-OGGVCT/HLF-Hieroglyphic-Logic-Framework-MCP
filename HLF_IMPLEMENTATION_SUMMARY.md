@@ -227,11 +227,11 @@ export HLF_GAS_TOLERANCE_MS=50     # P0 tolerance
 ### Model Registry
 ```python
 DEFAULT_MODELS = {
-    'coding': 'minimax-m2.5:cloud',
-    'agents': 'nemotron-3-super:cloud',
+    'coding': 'devstral-2:123b-cloud',
+    'agents': 'nemotron-3-super',
     'vision': 'kimi-k2.5:cloud',
     'fast_chat': 'gemini-3-flash-preview:cloud',
-    'reasoning': 'deepseek-v3.1:cloud',
+    'reasoning': 'glm-5:cloud',
     'multimodal': 'mistral-large-3:cloud',
 }
 ```

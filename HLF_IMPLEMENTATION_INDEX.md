@@ -4,6 +4,16 @@ This document tracks all HLF enhancements implemented from the monolithic HLF di
 
 ## Active 2026 Bridge Additions
 
+### Pillar-mapped reconstruction backlog and operator handoff
+- **Status**: Active bridge lane
+- **Files**:
+  - `docs/HLF_PILLAR_MAP.md`
+  - `docs/HLF_OPERATOR_BUILD_NOTES_2026-03-19.md`
+  - `plan/architecture-hlf-reconstruction-2.md`
+  - `HLF_MCP_TODO.md`
+  - `TODO.md`
+- **Purpose**: Normalize reconstruction work by constitutive pillar, separate packaged truth from bridge and source-only surfaces, and give future sessions an operator-facing handoff that prioritizes trust, audit, and multi-agent coordination work
+
 ### Transcript-backed bridge artifacts
 - **Status**: Active bridge lane
 - **Files**:

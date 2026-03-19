@@ -48,6 +48,30 @@ The smallest local organism that can express full HLF intelligence requires:
 - **Governed tool use** (host-function tiers, intent capsules)
 - **Swarm-aware self-improvement** (SIA agent, pro/con board)
 
+## Recursive Build Adoption Plan
+
+Current bridge direction:
+
+- use the current packaged MCP surface immediately for local, bounded build assistance
+- do not center the story on remote `streamable-http` self-hosting until real MCP initialization succeeds end to end
+- treat `stdio` plus build-observation tools as the first credible "HLF helps finish HLF" milestone
+
+### First build-assist lane
+
+Use these surfaces together first:
+
+- `hlf_do`
+- `hlf_test_suite_summary`
+- `_toolkit.py status`
+- witness, memory, and audit surfaces that preserve build evidence
+
+### Immediate bridge tasks for this lane
+
+1. fix the current `streamable-http` dependency/runtime initialize fault
+2. rerun the smoke harness after the repair
+3. add an explicit packaged build-assist workflow that documents how `hlf_do`, `hlf_test_suite_summary`, and build-observation surfaces are used together
+4. promote broader self-build claims only after those gates are green
+
 ## Knowledge Substrate Refactor Baseline
 
 Use `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` as the active external research brief for the weekly knowledge substrate work.

@@ -24,10 +24,14 @@ For reconstruction, extraction, or architecture-recovery work, also read:
 11. [HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md](HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md)
 12. [HLF_MCP_TODO.md](HLF_MCP_TODO.md)
 
+When assessing architectural wording, MCP positioning, or maturity claims, also read:
+
+13. [docs/HLF_CLAIM_LANES.md](docs/HLF_CLAIM_LANES.md)
+
 For source archaeology against the upstream Sovereign repo, use:
 
-13. [hlf_source/AGENTS.md](hlf_source/AGENTS.md)
-14. [hlf_source/.github/copilot-instructions.md](hlf_source/.github/copilot-instructions.md)
+14. [hlf_source/AGENTS.md](hlf_source/AGENTS.md)
+15. [hlf_source/.github/copilot-instructions.md](hlf_source/.github/copilot-instructions.md)
 
 ## Why This File Exists
 
@@ -202,6 +206,8 @@ Default questions:
 2. Has any constitutive surface been flattened into a weaker substitute?
 3. Does this change preserve operator trust, governance legibility, and architectural intent?
 4. Does this move the repo toward full HLF completion professionally, or only toward a tidier package?
+
+If wording or positioning is part of the review, classify the claim explicitly with `docs/HLF_CLAIM_LANES.md` before reusing or promoting it.
 
 ## Final Directive
 

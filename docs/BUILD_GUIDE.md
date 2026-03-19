@@ -58,6 +58,16 @@ Supported transports:
 - `sse`
 - `streamable-http`
 
+### Current recursive-build stance
+
+For the current packaged repo, the first credible self-build workflow is local and bounded:
+
+- prefer `stdio` for agent-facing build assistance
+- use `hlf_do`, `hlf_test_suite_summary`, and `_toolkit.py status` as the first build-assist loop
+- treat HTTP health checks as transport bring-up, not as proof of full remote MCP readiness
+
+Do not center the build story on `streamable-http` self-hosting until full MCP initialization succeeds through the smoke harness.
+
 ### Local scheduled evidence pipeline
 
 ```bash

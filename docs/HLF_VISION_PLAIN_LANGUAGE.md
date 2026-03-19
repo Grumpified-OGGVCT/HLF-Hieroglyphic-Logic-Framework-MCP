@@ -164,6 +164,8 @@ The MCP server is important, but it is not the whole vision.
 
 It is the easiest adoption path.
 
+For the fuller positioning statement, read `docs/HLF_MCP_POSITIONING.md`.
+
 The idea is:
 
 - any agent can connect
@@ -172,6 +174,20 @@ The idea is:
 
 So the MCP server is the front door.
 It is not the house.
+
+## Why The Recursive Build Story Matters
+
+The fuller explanation now lives in `docs/HLF_RECURSIVE_BUILD_STORY.md`.
+
+The short version is:
+
+HLF is not only supposed to become useful after the build is complete.
+It is also supposed to become useful during construction, verification, and recovery in bounded, auditable ways.
+
+That matters because it makes the build process part of the product evidence rather than something conceptually separate from the finished system.
+
+The honest current milestone remains local and bounded assistance first.
+That is already enough to show the repo is moving toward a system where building, operating, and governing are not separate worlds.
 
 ## What This Repo Must Not Do Again
 

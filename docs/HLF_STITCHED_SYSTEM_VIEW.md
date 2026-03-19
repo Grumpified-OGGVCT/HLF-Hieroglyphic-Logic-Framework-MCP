@@ -26,6 +26,9 @@ This is the full target.
 Read:
 
 - `docs/HLF_VISION_PLAIN_LANGUAGE.md`
+- `docs/HLF_MCP_POSITIONING.md`
+- `docs/HLF_CLAIM_LANES.md`
+- `docs/HLF_RECURSIVE_BUILD_STORY.md`
 - `docs/HLF_VISION_MAP.md`
 - `docs/HLF_DESIGN_NORTH_STAR.md`
 - `HLF_VISION_DOCTRINE.md`
@@ -36,6 +39,7 @@ What this layer says:
 - HLF is bigger than grammar and bytecode
 - HLF is supposed to carry governed meaning across intent, tools, agents, memory, and execution
 - human-readable trust and real-code output are part of the product, not optional extras
+- bounded recursive build assistance is an early manifestation of that larger system logic, not an accidental side story
 
 ### 2. Current Build Truth
 
@@ -80,7 +84,11 @@ Read:
 - `HLF_ACTIONABLE_PLAN.md`
 - `HLF_CANONICALIZATION_MATRIX.md`
 - `HLF_IMPLEMENTATION_INDEX.md`
+- `docs/HLF_PILLAR_MAP.md`
+- `docs/HLF_OPERATOR_BUILD_NOTES_2026-03-19.md`
 - `HLF_MCP_TODO.md`
+- `plan/architecture-hlf-reconstruction-2.md`
+- `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`
 
 What this layer says:
 
@@ -110,7 +118,7 @@ The biggest code-level unfinished clusters are:
 1. gateway and routing fabric
 2. orchestration lifecycle and plan execution
 3. formal verification surface
-4. stronger governed memory contracts
+4. stronger HLF knowledge-substrate and governed-memory contracts
 5. richer persona/operator doctrine integration
 6. broader ecosystem and gallery/operator surfaces
 
@@ -118,6 +126,13 @@ So the honest answer is:
 
 - the documentation and architecture story can be stitched together now
 - the missing code pillars still require targeted source recovery work
+
+The active execution bridge is now split deliberately:
+
+- `plan/architecture-hlf-reconstruction-2.md` owns recovery sequencing
+- `docs/HLF_PILLAR_MAP.md` owns pillar disposition, ownership, and priority
+- `docs/HLF_OPERATOR_BUILD_NOTES_2026-03-19.md` owns operator-facing build status and handoff framing
+- `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md` owns doctrine-to-proof mapping
 
 ## Working Rule
 
@@ -127,7 +142,7 @@ From this point on, the repo should be read like this:
 - `docs/HLF_VISION_MAP.md` shows what already supports that vision
 - `docs/HLF_MISSING_PILLARS.md` shows what is still broken or missing
 - `SSOT_HLF_MCP.md` says what exists now
-- `HLF_ACTIONABLE_PLAN.md` and `HLF_MCP_TODO.md` define the path forward
+- `docs/HLF_PILLAR_MAP.md`, `HLF_ACTIONABLE_PLAN.md`, and `HLF_MCP_TODO.md` define the path forward
 
 ## Practical Answer To “Can We Stitch It Back Together Now?”
 

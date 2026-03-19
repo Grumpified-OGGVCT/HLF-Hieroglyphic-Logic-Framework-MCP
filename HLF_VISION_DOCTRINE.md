@@ -235,6 +235,36 @@ In other words:
 
 **yes, current HLF should be loaded and employed in the process of building fuller HLF.**
 
+But that recursion has to be staged correctly.
+
+### 6.1 First credible self-build milestone
+
+The first honest milestone is not "HLF remotely self-hosts all of HLF over every MCP transport."
+
+The first honest milestone is narrower and stronger:
+
+- the packaged MCP surface is used locally for bounded build assistance
+- `stdio` is treated as the first reliable operator path
+- build-observation and audit tools are used to inspect, summarize, and guide implementation work
+- the system helps finish itself without overstating transport completeness
+
+Concretely, the first credible "HLF helps finish HLF" milestone is:
+
+- `hlf_do` for plain-English intent-to-HLF build actions
+- `hlf_test_suite_summary` for regression-state awareness
+- `_toolkit.py status` and related build-observation surfaces for repo health checks
+- witness, memory, and audit surfaces for recording what happened and why
+
+### 6.2 Transport gating rule
+
+This doctrine does not treat every transport as equally ready for the recursive build story.
+
+- local bounded assistance may be centered immediately on packaged tools and `stdio`
+- HTTP transport health is useful, but health alone is not enough to claim full self-hosting readiness
+- remote `streamable-http` self-build positioning must remain gated until real MCP initialization succeeds end to end
+
+The vision therefore includes recursive HLF-assisted development, but the bridge path must earn that claim by stage.
+
 That is one of its main purposes.
 
 ---

@@ -7,6 +7,33 @@
 
 ---
 
+## 2026-03-19 Reconstruction Checkpoint
+
+The active backlog is now driven by the reconstruction planning stack rather than this historical checklist.
+
+Read in this order:
+
+1. `AGENTS.md`
+2. `docs/HLF_STITCHED_SYSTEM_VIEW.md`
+3. `docs/HLF_PILLAR_MAP.md`
+4. `docs/HLF_OPERATOR_BUILD_NOTES_2026-03-19.md`
+5. `plan/architecture-hlf-reconstruction-2.md`
+6. `HLF_MCP_TODO.md`
+
+### Active priorities
+
+- [ ] Recursive build-assist milestone: use packaged HLF locally through `stdio`, `hlf_do`, `hlf_test_suite_summary`, and `_toolkit.py status`, while keeping remote `streamable-http` self-hosting gated on a real initialize fix
+- [ ] Batch 1: routing fabric recovery spec, formal verification recovery spec, governance control matrix, and normalized memory evidence contracts
+- [ ] Batch 2: orchestration lifecycle recovery spec and verifier-backed multi-agent execution contracts
+- [ ] Batch 3: persona/operator doctrine, gallery/operator-legibility surfaces, and code-output proof surfaces
+- [ ] Keep current-truth docs and operator build notes aligned as each bridge artifact lands
+
+### Historical note
+
+The remainder of this file is preserved as project history and lower-level backlog context. It is no longer the authoritative reconstruction sequencing surface.
+
+---
+
 ## ✅ COMPLETED TASKS
 
 ### Phase 1: MCP Infrastructure (COMPLETE)

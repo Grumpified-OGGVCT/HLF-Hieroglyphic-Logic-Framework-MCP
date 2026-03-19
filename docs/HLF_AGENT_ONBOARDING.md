@@ -149,6 +149,12 @@ The most valuable ones are:
 - `hlf_source/config/agent_registry.json`
   Why it matters: shows the role map, skill division, and model/tier expectations around HLF-centered work.
 
+## Claim Discipline
+
+When writing or repeating architecture, product, or MCP-positioning statements from this repo, use `docs/HLF_CLAIM_LANES.md` to decide whether the statement is current-true, bridge-true, vision-true, partially overstated, or reductionist.
+
+This matters because onboarding docs are often reused as shorthand, and shorthand is where mixed-lane phrasing hardens fastest.
+
 - `hlf_source/config/jules_tasks.yaml`
   Why it matters: shows the intended autonomous pipeline, invariants, anti-simplification guardrails, and where HLF maximization fits.
 

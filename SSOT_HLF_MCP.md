@@ -25,12 +25,14 @@ Short boundary note:
 - `README.md` contains north-star framing and aspirational product language.
 - `TODO.md`, `HLF_MCP_TODO.md`, and `HLF_QUALITY_TARGETS.md` define the implementation and validation path required to earn those claims.
 - `SSOT_HLF_MCP.md` is the present-tense truth surface and should not treat README ambition as already shipped reality.
+- `docs/HLF_CLAIM_LANES.md` is the compact interpretation guide for classifying wording reused from README, bridge docs, assistant output, or external summaries.
 
 Additional boundary rule:
 
 - this file remains the authority for executable current truth
 - it must not erase constitutive HLF pillars simply because they are only partially packaged today
 - when external doctrine or local corpora preserve math, symbol, bytecode, trust-chain, evolution, verifier, or dual-surface HLF semantics, those belong in bridge and recovery planning rather than being silently treated as optional
+- when current-truth statements are reused elsewhere, they should remain `current-true` under `docs/HLF_CLAIM_LANES.md` rather than being expanded into bridge or vision phrasing without proof
 
 ## Repo Identity
 
@@ -185,6 +187,23 @@ The following claims are grounded in code present in this checkout.
 - Implemented health endpoint wrapper: `/health` for HTTP transports.
 - Implemented resources: grammar, opcodes, host functions, examples, governance files, stdlib listing.
 
+### Current recursive build-assist truth
+
+- The packaged MCP surface is already viable for local, bounded build assistance.
+- The first credible operator path for that story is `stdio`, plus packaged build-observation surfaces such as `hlf_do`, `hlf_test_suite_summary`, and `_toolkit.py status`.
+- HTTP transport health checks are useful and implemented.
+- However, remote `streamable-http` self-hosting is not yet current-truth ready if MCP `initialize` still fails end to end.
+
+Claim-lane reminder:
+
+- the bounded local build-assist lane is `current-true`
+- stronger self-build or remote self-hosting language remains `bridge-true` until the proof gates are actually closed
+
+Current truth rule:
+
+- local bounded build assistance may be claimed now
+- full remote `streamable-http` self-build may not be claimed until the initialize/smoke path is fixed and rerun successfully
+
 ### Memory and lifecycle
 
 - `hlf_mcp/rag/memory.py` provides the repo's current Infinite RAG memory implementation surface.
@@ -261,6 +280,11 @@ These areas are real, but should not be overstated.
 - The repo now has real packaged compiler, runtime, bytecode, manifest, integrity, and InsAIts surfaces.
 - The repo does not yet earn a full present-tense claim that governed language evolution, constitution-hash compatibility, signed registry/tool trust, pointer provenance, verifier-gated execution, and richer round-trip proof surfaces are complete in packaged authority.
 - Truthful claim: packaged executable bytecode/runtime authority exists now; the broader evolution-and-trust contract remains an active bridge/reconstruction area rather than a finished subsystem.
+
+Claim-lane reminder:
+
+- packaged bytecode/runtime authority is `current-true`
+- the fuller evolution-and-trust contract is `bridge-true`, not current product completion
 
 ## Roadmap and Vision
 
@@ -443,3 +467,5 @@ And beneath that, the central product problem is still unresolved: there is not 
 And separately, the central migration problem is also unresolved: this repo does not yet document or complete the full extraction/refactor boundary between itself and `Sovereign_Agentic_OS_with_HLF`.
 
 This document exists to keep those three categories separate.
+
+For compact wording classification when exporting claims from this document into other surfaces, use `docs/HLF_CLAIM_LANES.md`.

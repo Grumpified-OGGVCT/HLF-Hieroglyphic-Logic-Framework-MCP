@@ -26,7 +26,7 @@ It exists so reconstruction work can be pointed at real gaps instead of vague am
 | Typed effect and capability algebra | Damaged | Host-function registry and reference docs exist | Strong typed contracts for inputs, outputs, effects, failures, and proof surfaces are still incomplete | `governance/host_functions.json`, `docs/HLF_HOST_FUNCTIONS_REFERENCE.md`, `HLF_MCP_TODO.md` |
 | Human-readable audit and trust layer | Damaged | Translation, reference docs, explanatory narrative, plain-language vision surfaces | More explicit operator-facing audit, effect previews, and execution explanations still need hardening | `hlf_mcp/hlf/translator.py`, `hlf_mcp/hlf/insaits.py`, `README.md`, `docs/HLF_VISION_PLAIN_LANGUAGE.md` |
 | Real-code bridge | Damaged | Code generation exists and the doctrine is explicit | Broader target-language output, proof of correctness, and stronger generated-output workflows are still thin | `hlf_mcp/hlf/codegen.py`, `docs/HLF_DESIGN_NORTH_STAR.md`, `HLF_MCP_TODO.md` |
-| Memory as governed substrate | Damaged | Memory surfaces exist in packaged and legacy form | Provenance, freshness, confidence, trust-tier, forgetting, and weekly evidence discipline are not yet locked down as first-class contracts | `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, `HLF_MCP_TODO.md`, `hlf_source/agents/core/memory_scribe.py` |
+| Knowledge substrate and governed memory | Damaged | Packaged Infinite RAG, memory-node, and MCP memory surfaces exist, and the repo already carries an explicit HLF-native knowledge-substrate track | Provenance, freshness, confidence, trust-tier, forgetting, weekly evidence discipline, and the full HKS package boundary are not yet locked down as first-class contracts | `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, `hlf_mcp/server_memory.py`, `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md`, `docs/HLF_MEMORY_GOVERNANCE_RECOVERY_SPEC.md`, `HLF_MCP_TODO.md`, `hlf_source/agents/core/memory_scribe.py` |
 | Formal verification surface | Source-only | Doctrine and TODOs point at verification needs | No packaged equivalent to the upstream verifier is in place yet | `hlf_source/agents/core/formal_verifier.py`, `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`, `HLF_SOURCE_EXTRACTION_LEDGER.md` |
 | Gateway and routing fabric | Source-only | The current repo has MCP and runtime entry points, but not the fuller routing fabric | Validation chain, nonce/gas/routing middleware, richer provider selection, and routing traces are not restored | `hlf_source/agents/gateway/bus.py`, `hlf_source/agents/gateway/router.py`, `hlf_source/agents/gateway/sentinel_gate.py` |
 | Orchestration lifecycle and plan execution | Source-only | Some fixture and doctrine support exists | Spec-to-plan-to-execute lifecycle and DAG execution surfaces are not restored into the packaged repo | `hlf_source/agents/core/plan_executor.py`, `hlf_source/agents/core/crew_orchestrator.py`, `hlf_source/agents/core/task_classifier.py` |
@@ -47,7 +47,7 @@ The biggest under-recovered pillars are:
 1. gateway and routing fabric
 2. orchestration lifecycle
 3. formal verification
-4. richer governed memory contracts
+4. HLF knowledge substrate and richer governed memory contracts
 5. persona/operator doctrine
 6. ecosystem integration surfaces
 
@@ -61,3 +61,5 @@ Use this document to decide what kind of work a missing area needs:
 - or record why it remains source-only for now
 
 If a pillar is constitutive, it should never be silently treated as optional just because the smaller story is easier to maintain.
+
+That rule applies to the HLF-native knowledge substrate as well. The repo is not allowed to flatten Infinite RAG plus governed memory plus weekly evidence work back into a generic retrieval bucket or an unnamed "memory feature" lane.

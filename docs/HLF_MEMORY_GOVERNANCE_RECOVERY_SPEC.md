@@ -1,13 +1,28 @@
+---
+goal: Recover governed memory as an evidence-bearing HLF substrate instead of a generic retrieval layer
+version: 2.0
+date_created: 2026-03-17
+last_updated: 2026-03-19
+owner: GitHub Copilot
+status: 'Planned'
+tags: [memory, provenance, recovery, governance, audit, hlf]
+---
+
 # HLF Memory Governance Recovery Spec
 
+![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
+
 ## Purpose
-Establish a normalization and recovery plan for the knowledge substrate and memory subsystem, ensuring explicit ownership boundaries, governance, and full alignment with the original HLF vision.
+
+Establish a normalization and recovery plan for the knowledge substrate and memory subsystem, ensuring explicit ownership boundaries, governance, provenance, trust-tier semantics, and alignment with the original HLF vision.
 
 ## Scope
-- Canonical front-door files: hlf/infinite_rag_hlf.py, hlf_mcp/rag/memory.py, scripts/run_pipeline_scheduled.py, hlf_mcp/weekly_artifacts.py, governance/host_functions.json, governance/bytecode_spec.yaml
+
+- Canonical front-door files: `hlf/infinite_rag_hlf.py`, `hlf_mcp/rag/memory.py`, `scripts/run_pipeline_scheduled.py`, `hlf_mcp/weekly_artifacts.py`, `governance/host_functions.json`, `governance/bytecode_spec.yaml`
+- Upstream memory authority: `hlf_source/agents/core/memory_scribe.py`, `hlf_source/agents/core/context_pruner.py`, `hlf_source/scripts/verify_chain.py`
 - Weekly knowledge ingestion, recall, and artifact generation
 - Infinite RAG, dependency-aware retrieval, host function contracts
-- Pass-by-reference, pointer trust, provenance chains, memory sanitization, and evidence discipline
+- Pass-by-reference, pointer trust, provenance chains, memory sanitization, forgetting curves, and evidence discipline
 
 ## Goals
 1. Normalize fragmented memory/knowledge surfaces into a coherent subsystem
@@ -55,6 +70,58 @@ If a proposed knowledge subsystem does not exceed generic AgentKB/AgentSKB capab
 - All memory/knowledge surfaces must be traceable and auditable
 - External prior notes remain evidence inputs, but packaged local contracts remain current runtime authority
 
+## Required Runtime Contract
+
+Every governed memory object must be able to carry:
+
+1. `source_class`
+2. `source_path` or artifact identifier
+3. `branch`
+4. `commit_sha`
+5. `collected_at`
+6. `collector_version`
+7. `confidence`
+8. `freshness`
+9. `trust_tier`
+10. `pointer`
+11. `supersedes`
+12. `revoked` or tombstone state
+13. `operator_summary`
+
+These fields are not optional if the entry is used as route evidence, verifier evidence, weekly knowledge, or promoted exemplar memory.
+
+## Implementation Phases
+
+### Implementation Phase 1
+
+- **GOAL-001**: Normalize the evidence schema and ownership boundary.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-001 | Define one packaged evidence schema shared by benchmark artifacts, weekly knowledge, exemplars, and memory recall outputs. |  |  |
+| TASK-002 | Map ownership between `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, `hlf_mcp/server_memory.py`, and `hlf_mcp/weekly_artifacts.py`. |  |  |
+| TASK-003 | Define how pointer trust, supersession, expiry, and revocation are represented in packaged truth. |  |  |
+
+### Implementation Phase 2
+
+- **GOAL-002**: Recover governed memory lifecycle behavior.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-004 | Port evidence-friendly storage and archival semantics from `memory_scribe.py` where they strengthen packaged memory contracts. |  |  |
+| TASK-005 | Port forgetting-curve and pruning semantics from `context_pruner.py` as bounded-memory behavior rather than silent deletion. |  |  |
+| TASK-006 | Add chain-verification and provenance verification hooks informed by `verify_chain.py`. |  |  |
+
+### Implementation Phase 3
+
+- **GOAL-003**: Prove memory governance with deterministic tests and operator surfaces.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-007 | Add tests for stale artifact handling, supersession, revocation, and provenance-required recall. |  |  |
+| TASK-008 | Add tests proving benchmark or weekly artifacts cannot influence routing or promotion without required evidence fields. |  |  |
+| TASK-009 | Add operator-facing summaries that distinguish advisory retrieval from governed evidence. |  |  |
+
 ## Required Contract Additions
 
 The local corpora and related recovery work now make the following additions mandatory to the memory-governance target:
@@ -82,5 +149,12 @@ Instead:
 ## Bridge Implementation
 - Recovery tasks must be tracked and validated
 - No reduction of vision or scope
+
+## Related Specifications / Further Reading
+
+- `docs/HLF_PILLAR_MAP.md`
+- `docs/HLF_REJECTED_EXTRACTION_AUDIT.md`
+- `docs/HLF_README_OPERATIONALIZATION_MATRIX.md`
+- `plan/architecture-hlf-reconstruction-2.md`
 
 ---

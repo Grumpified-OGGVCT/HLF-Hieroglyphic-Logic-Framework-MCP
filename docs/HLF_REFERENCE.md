@@ -78,7 +78,8 @@ The packaged server checks the governance manifest at startup. Higher-trust surf
 
 Two adjacent packaged subsystems matter for the broader HLF story in this repo:
 
-- Infinite RAG memory at `hlf_mcp/rag/memory.py`
+- Infinite RAG memory subsystem at `hlf_mcp/rag/memory.py`
+- HKS-facing governed knowledge surfaces at `hlf_mcp/server_memory.py`, `hlf_mcp/server_context.py`, and `hlf_mcp/weekly_artifacts.py`
 - Instinct lifecycle at `hlf_mcp/instinct/lifecycle.py`
 
 The lifecycle system is documented separately in `docs/INSTINCT_REFERENCE.md`.

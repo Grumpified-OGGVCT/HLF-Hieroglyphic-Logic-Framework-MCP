@@ -905,7 +905,7 @@ Current packaged truth:
 
 - Infinite RAG persistence and recall are real
 - HKS exemplar capture and recall surfaces are real
-- weekly HKS artifact-integration hooks are real
+- Weekly HKS artifact-integration hooks are real
 - provenance-bearing memory nodes and Merkle-linked lineage are real
 - MCP memory-facing tools are real
 - broader freshness, trust-tier, supersession, weekly evidence, and fuller HKS contracts remain bridge work
@@ -1123,7 +1123,7 @@ HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 | `hlf_memory_query` | Query the Infinite RAG subsystem with governed filters for provenance and entry kinds |
 | `hlf_hks_capture` | Capture a validated HKS exemplar with provenance, tests, and solution metadata |
 | `hlf_hks_recall` | Recall governed HKS exemplars by domain and solution pattern |
-| `hlf_memory_stats` | Inspect Infinite RAG stats, including HKS exemplar counts and lineage data |
+| `hlf_memory_stats` | Inspect Infinite RAG stats, including HKS exemplar counts, Merkle chain depth, and topic/domain breakdowns |
 | `hlf_instinct_step` | Advance an Instinct SDD lifecycle mission |
 | `hlf_instinct_get` | Get current state of an Instinct mission |
 | `hlf_spec_lifecycle` | Full SPECIFY→PLAN→EXECUTE→VERIFY→MERGE orchestration |

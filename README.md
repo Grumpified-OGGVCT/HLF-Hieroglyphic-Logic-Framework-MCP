@@ -173,6 +173,54 @@ flowchart TD
     class MCP front
     class S,G,M,E,C,L,R system
 ```
+
+Visual guide:
+these are the constitutive pillars the repo is trying to hold together, rather than collapse into a parser-only or MCP-only story.
+
+```mermaid
+flowchart TB
+    Core[Semantic Core<br/>grammar<br/>compiler<br/>bytecode]
+    Gov[Governance Spine<br/>ALIGN<br/>capsules<br/>policy]
+    Mem[Knowledge Substrate<br/>memory<br/>witness<br/>provenance]
+    Exec[Execution Surface<br/>runtime<br/>admission<br/>tool and host effects]
+    Coord[Coordination Layer<br/>routing<br/>lifecycle<br/>orchestration]
+    Trust[Human Legibility<br/>audit<br/>explainability<br/>operator review]
+    Bridge[Real-world Bridge<br/>MCP<br/>real-code output<br/>delivery surfaces]
+
+    Core --> Exec
+    Gov --> Exec
+    Mem --> Coord
+    Exec --> Coord
+    Coord --> Trust
+    Exec --> Trust
+    Bridge --> Exec
+    Bridge --> Trust
+    Gov --> Trust
+    Mem --> Trust
+
+    classDef core fill:#efe3f8,stroke:#6f3f8f,color:#2a1736
+    classDef gov fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+    classDef mem fill:#e8f2e1,stroke:#4c7a4c,color:#173117
+    classDef exec fill:#dce9f9,stroke:#285a8f,color:#12263f
+    classDef coord fill:#f5eddc,stroke:#8b6a2b,color:#36270b
+    classDef trust fill:#f4f1ea,stroke:#705f49,color:#2b241a
+    classDef bridge fill:#e9e9e9,stroke:#6a6a6a,color:#222222
+
+    class Core core
+    class Gov gov
+    class Mem mem
+    class Exec exec
+    class Coord coord
+    class Trust trust
+    class Bridge bridge
+```
+
+Reading rule:
+
+- this is the shape of the system target, not a claim that every pillar is equally complete now
+- the packaged repo already has real pieces in each area, but not every pillar is equally restored
+- the bridge work exists to prevent any one pillar from pretending to be the whole system
+
 ## Table of Contents
 
 1. [What is HLF?](#1-what-is-hlf)

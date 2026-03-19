@@ -176,6 +176,62 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         return ctx.benchmark.multilingual_matrix(domains=domains, languages=languages)
 
     @mcp.tool()
+    def hlf_translation_memory_benchmark(
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+        top_k: int = 3,
+        topic: str = "hlf_translation_contract_benchmark",
+        persist: bool = True,
+    ) -> dict[str, Any]:
+        """Run retrieval-backed multilingual translation memory benchmarking."""
+        result = ctx.benchmark.translation_memory_retrieval_matrix(
+            ctx.memory_store,
+            domains=domains,
+            languages=languages,
+            top_k=top_k,
+            topic=topic,
+        )
+        artifact = {
+            "artifact_id": f"benchmark:{result['profile_name']}:{topic}",
+            "profile_name": result["profile_name"],
+            "benchmark_scores": dict(result.get("benchmark_scores") or {}),
+            "domains": list(result.get("domains") or []),
+            "languages": list(result.get("languages") or []),
+            "topic": topic,
+            "result": result,
+        }
+        persisted = ctx.persist_benchmark_artifact(artifact) if persist else artifact
+        return {**result, "artifact": persisted}
+
+    @mcp.tool()
+    def hlf_routing_context_benchmark(
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+        top_k: int = 3,
+        topic: str = "hlf_agent_routing_benchmark",
+        persist: bool = True,
+    ) -> dict[str, Any]:
+        """Run retrieval-backed multilingual routing-context benchmarking."""
+        result = ctx.benchmark.routing_context_retrieval_matrix(
+            ctx.memory_store,
+            domains=domains,
+            languages=languages,
+            top_k=top_k,
+            topic=topic,
+        )
+        artifact = {
+            "artifact_id": f"benchmark:{result['profile_name']}:{topic}",
+            "profile_name": result["profile_name"],
+            "benchmark_scores": dict(result.get("benchmark_scores") or {}),
+            "domains": list(result.get("domains") or []),
+            "languages": list(result.get("languages") or []),
+            "topic": topic,
+            "result": result,
+        }
+        persisted = ctx.persist_benchmark_artifact(artifact) if persist else artifact
+        return {**result, "artifact": persisted}
+
+    @mcp.tool()
     def hlf_translation_memory_query(
         query: str,
         top_k: int = 5,
@@ -432,6 +488,8 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
     return {
         "hlf_do": hlf_do,
         "hlf_benchmark_matrix": hlf_benchmark_matrix,
+        "hlf_translation_memory_benchmark": hlf_translation_memory_benchmark,
+        "hlf_routing_context_benchmark": hlf_routing_context_benchmark,
         "hlf_translation_memory_query": hlf_translation_memory_query,
         "hlf_translate_to_hlf": hlf_translate_to_hlf,
         "hlf_translate_repair": hlf_translate_repair,

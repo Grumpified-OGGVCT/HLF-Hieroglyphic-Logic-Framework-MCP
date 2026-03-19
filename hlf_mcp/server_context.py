@@ -22,6 +22,7 @@ from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.registry import HostFunctionRegistry
 from hlf_mcp.hlf.runtime import HLFRuntime
 from hlf_mcp.hlf.tool_dispatch import ToolRegistry
+from hlf_mcp.hlf.witness_governance import WitnessGovernance, WitnessObservation, WitnessRecommendedAction
 from hlf_mcp.instinct.lifecycle import InstinctLifecycle
 from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar, RAGMemory
 
@@ -42,6 +43,9 @@ class ServerContext:
     formal_verifier: FormalVerifier
     session_profiles: dict[str, dict[str, Any]]
     session_model_catalogs: dict[str, dict[str, Any]]
+    session_benchmark_artifacts: dict[str, dict[str, Any]]
+    session_governed_routes: dict[str, dict[str, Any]]
+    witness_governance: WitnessGovernance
     approval_ledger: ApprovalLedger
     audit_chain: AuditChain
     governance_events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=250))
@@ -103,6 +107,101 @@ class ServerContext:
         if subject_id:
             events = [event for event in events if event.get("subject_id") == subject_id]
         return events[:size]
+
+    def record_witness_observation(
+        self,
+        *,
+        subject_agent_id: str,
+        category: str,
+        witness_id: str = "operator",
+        severity: GovernanceSeverity = "warning",
+        confidence: float = 0.8,
+        goal_id: str = "",
+        session_id: str = "",
+        source: str = "server_context.record_witness_observation",
+        event_ref: dict[str, str] | None = None,
+        evidence_text: str = "",
+        recommended_action: WitnessRecommendedAction = "review",
+        details: dict[str, Any] | None = None,
+        negative: bool = True,
+    ) -> dict[str, Any]:
+        observation_details = dict(details or {})
+        if evidence_text:
+            observation_details.setdefault("evidence_text", evidence_text)
+        observation = WitnessObservation(
+            witness_id=witness_id,
+            subject_agent_id=subject_agent_id,
+            goal_id=goal_id,
+            session_id=session_id,
+            category=category,
+            severity=severity,
+            confidence=confidence,
+            source=source,
+            event_ref=dict(event_ref or {}),
+            recommended_action=recommended_action,
+            details=observation_details,
+            negative=negative,
+        )
+        snapshot = self.witness_governance.record_observation(observation)
+        memory_record = self.memory_store.store(
+            observation.render_content(),
+            topic="hlf_witness_governance",
+            confidence=observation.confidence,
+            provenance=source,
+            tags=sorted(
+                {
+                    "witness",
+                    observation.category,
+                    observation.severity,
+                    snapshot.trust_state,
+                    observation.subject_agent_id,
+                }
+            ),
+            entry_kind="witness_observation",
+            solution_kind=observation.category,
+            metadata=observation.to_dict(),
+        )
+        related_refs = [dict(observation.event_ref)] if observation.event_ref else []
+        governance_event = self.emit_governance_event(
+            kind="witness_observation",
+            source=source,
+            action="record_witness_observation",
+            status="warning" if observation.negative else "ok",
+            severity="critical" if snapshot.trust_state == "restricted" else observation.severity,
+            subject_id=subject_agent_id,
+            goal_id=goal_id,
+            session_id=session_id,
+            details={
+                "observation": observation.to_dict(),
+                "trust_state": snapshot.to_dict(),
+                "memory_fact_id": memory_record.get("id"),
+                "memory_sha256": memory_record.get("sha256"),
+            },
+            related_refs=related_refs,
+            agent_role="witness_governor",
+            anomaly_score=min(1.0, observation.impact_score() / 2.0),
+        )
+        return {
+            "status": "ok",
+            "observation": observation.to_dict(),
+            "trust_state": snapshot.to_dict(),
+            "memory_record": memory_record,
+            "governance_event": governance_event,
+        }
+
+    def get_witness_status(self, *, subject_agent_id: str | None = None) -> dict[str, Any] | None:
+        return self.witness_governance.status_snapshot(subject_agent_id=subject_agent_id)
+
+    def list_witness_subjects(self, *, trust_state: str | None = None) -> dict[str, Any]:
+        return {"subjects": self.witness_governance.list_snapshots(trust_state=trust_state)}
+
+    def get_effective_trust_state(self, *, subject_agent_id: str | None = None, default: str = "trusted") -> str:
+        if not subject_agent_id:
+            return default
+        snapshot = self.witness_governance.get_snapshot(subject_agent_id)
+        if snapshot is None:
+            return default
+        return snapshot.trust_state
 
     def store_known_good_translation_contract(
         self,
@@ -273,6 +372,71 @@ class ServerContext:
         )
         return self.session_model_catalogs[agent_id]
 
+    def persist_benchmark_artifact(self, artifact: dict[str, Any]) -> dict[str, Any]:
+        profile_name = str(artifact.get("profile_name") or artifact.get("artifact_id") or "unknown-benchmark")
+        persisted_artifact = dict(artifact)
+        collected_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        stored = self.memory_store.store(
+            json.dumps(persisted_artifact, ensure_ascii=False, sort_keys=True),
+            topic="hlf_benchmark_artifacts",
+            confidence=1.0,
+            provenance="server_context.persist_benchmark_artifact",
+            tags=["hlf", "benchmark", profile_name],
+            entry_kind="benchmark_artifact",
+            metadata={
+                "profile_name": profile_name,
+                "benchmark_scores": dict(persisted_artifact.get("benchmark_scores") or {}),
+                "artifact_id": persisted_artifact.get("artifact_id"),
+                "domains": list(persisted_artifact.get("domains") or []),
+                "languages": list(persisted_artifact.get("languages") or []),
+                "source": persisted_artifact.get("topic") or "hlf_benchmark_artifacts",
+                "operator_summary": f"Governed benchmark artifact for {profile_name}",
+                "governed_evidence": {
+                    "source_class": "benchmark_artifact",
+                    "source_type": "benchmark_artifact",
+                    "source": persisted_artifact.get("topic") or "hlf_benchmark_artifacts",
+                    "source_path": persisted_artifact.get("artifact_id"),
+                    "artifact_id": persisted_artifact.get("artifact_id"),
+                    "collector": "server_context.persist_benchmark_artifact",
+                    "collected_at": collected_at,
+                    "trust_tier": "validated",
+                    "operator_summary": f"Governed benchmark artifact for {profile_name}",
+                },
+            },
+        )
+        persisted_artifact["memory_ref"] = {"id": stored.get("id"), "sha256": stored.get("sha256")}
+        persisted_artifact["memory_evidence"] = stored.get("evidence")
+        self.session_benchmark_artifacts[profile_name] = persisted_artifact
+        self.emit_governance_event(
+            kind="validated_solution_capture",
+            source="server_context.persist_benchmark_artifact",
+            action="persist_benchmark_artifact",
+            subject_id=profile_name,
+            goal_id=str(persisted_artifact.get("artifact_id", "")),
+            details={
+                "profile_name": profile_name,
+                "benchmark_scores": dict(persisted_artifact.get("benchmark_scores") or {}),
+                "memory_fact_id": stored.get("id"),
+                "memory_sha256": stored.get("sha256"),
+            },
+            agent_role="benchmark_artifact",
+        )
+        return persisted_artifact
+
+    def get_benchmark_artifact(self, *, profile_name: str | None = None) -> dict[str, Any] | None:
+        if profile_name:
+            return self.session_benchmark_artifacts.get(profile_name)
+        if self.session_benchmark_artifacts:
+            latest_profile_name = next(reversed(self.session_benchmark_artifacts))
+            return self.session_benchmark_artifacts.get(latest_profile_name)
+        return None
+
+    def get_benchmark_scores(self, *, profile_name: str) -> dict[str, float] | None:
+        artifact = self.get_benchmark_artifact(profile_name=profile_name)
+        if artifact is None:
+            return None
+        return dict(artifact.get("benchmark_scores") or {})
+
     def get_model_catalog(self, *, agent_id: str | None = None) -> dict[str, Any] | None:
         if agent_id:
             return self.session_model_catalogs.get(agent_id)
@@ -300,6 +464,33 @@ class ServerContext:
             "remote_direct_env_error": catalog.get("remote_direct_env_error"),
             "remote_direct_entries": list(catalog.get("remote_direct_entries") or []),
         }
+
+    def persist_governed_route(self, route_trace: dict[str, Any]) -> dict[str, Any]:
+        agent_id = str(route_trace.get("request_context", {}).get("agent_id") or "unknown-agent")
+        self.session_governed_routes[agent_id] = dict(route_trace)
+        self.emit_governance_event(
+            kind="routing_decision",
+            source="server_context.persist_governed_route",
+            action="persist_governed_route",
+            subject_id=agent_id,
+            goal_id=str(route_trace.get("route_decision", {}).get("selected_lane", "")),
+            details={
+                "decision": route_trace.get("route_decision", {}).get("decision"),
+                "selected_lane": route_trace.get("route_decision", {}).get("selected_lane"),
+                "primary_model": route_trace.get("route_decision", {}).get("primary_model"),
+                "fallback_model": route_trace.get("route_decision", {}).get("fallback_model"),
+            },
+            agent_role="governed_router",
+        )
+        return self.session_governed_routes[agent_id]
+
+    def get_governed_route(self, *, agent_id: str | None = None) -> dict[str, Any] | None:
+        if agent_id:
+            return self.session_governed_routes.get(agent_id)
+        if self.session_governed_routes:
+            latest_agent_id = next(reversed(self.session_governed_routes))
+            return self.session_governed_routes.get(latest_agent_id)
+        return None
 
     def build_runtime_variables(
         self,
@@ -359,6 +550,9 @@ def build_server_context() -> ServerContext:
         formal_verifier=FormalVerifier(),
         session_profiles={},
         session_model_catalogs={},
+        session_benchmark_artifacts={},
+        session_governed_routes={},
+        witness_governance=WitnessGovernance(),
         approval_ledger=ApprovalLedger(),
         audit_chain=AuditChain(),
         governance_events=deque(maxlen=250),
@@ -396,6 +590,7 @@ def check_governance_manifest(logger: logging.Logger) -> None:
             "Governance file drift detected (MANIFEST.sha256): %s",
             ", ".join(drift),
         )
+
 
 
 

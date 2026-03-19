@@ -13,7 +13,8 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.governed_routing import build_governed_route
-from hlf_mcp.hlf.model_catalog import sync_model_catalog
+from hlf_mcp.hlf.model_catalog import build_lane_trace_context, evaluate_model_against_profile, evaluate_model_requirement_tiers, evaluate_model_requirements, load_model_qualification_profiles, sync_model_catalog
+from hlf_mcp.hlf.routing_trace import RouteDecisionRecord, RouteTraceRecord, build_operator_route_summary
 from hlf_mcp.server_context import ServerContext
 
 Workload = Literal[
@@ -24,6 +25,116 @@ Workload = Literal[
     "agent_routing_context",
     "long_form_standards_ingestion",
 ]
+
+_ROUTE_READY_TIERS = {"launch-qualified", "promotion-qualified"}
+_QUALIFICATION_PROFILES = dict((load_model_qualification_profiles().get("profiles") or {}))
+
+
+def _qualification_profile_for(workload: Workload, multilingual_required: bool) -> str | None:
+    if workload == "translation_memory" and multilingual_required:
+        return "translation_memory_multilingual"
+    if workload == "agent_routing_context" and multilingual_required:
+        return "agent_routing_context_multilingual"
+    return None
+
+
+def _route_profile_candidates(workload: Workload, selected_lane: str, multilingual_required: bool) -> list[str]:
+    profiles: list[str] = []
+    # Map lane families to qualification profiles
+    lane_profile_map = {
+        "retrieval": [],
+        "explainer": ["sidecar_quality_explainer"],
+        "code-generation": ["code_pattern_retrieval_english"],
+        "verifier": ["verifier_accuracy_multilingual"],
+        "standards-ingestion": [],
+        "multimodal": [],
+    }
+    # Add multilingual variants if required
+    if multilingual_required:
+        if "verifier_accuracy_multilingual" not in lane_profile_map["explainer"]:
+            lane_profile_map["explainer"].append("verifier_accuracy_multilingual")
+
+    # Always include the primary profile for the workload if defined
+    primary_profile = _qualification_profile_for(workload, multilingual_required)
+    if primary_profile:
+        profiles.append(primary_profile)
+
+    # Add profiles based on the selected lane
+    if selected_lane in lane_profile_map:
+        profiles.extend(lane_profile_map[selected_lane])
+
+    # Remove duplicates while preserving order
+    ordered: list[str] = []
+    for profile_name in profiles:
+        if profile_name not in ordered:
+            ordered.append(profile_name)
+    return ordered
+
+
+def _profile_metric_names(profile_name: str) -> set[str]:
+    profile = _QUALIFICATION_PROFILES.get(profile_name)
+    if not isinstance(profile, dict):
+        return set()
+    tiers = profile.get("tiers") or {}
+    metric_names: set[str] = set()
+    for definition in tiers.values():
+        if isinstance(definition, dict):
+            metric_names.update(str(metric_name) for metric_name in definition)
+    return metric_names
+
+
+def _collect_route_profile_artifacts(
+    ctx: ServerContext,
+    *,
+    profile_names: list[str],
+    benchmark_scores: dict[str, float] | None,
+) -> tuple[list[str], dict[str, dict[str, Any] | None], dict[str, dict[str, float]], dict[str, float]]:
+    explicit_scores = {str(metric): float(score) for metric, score in (benchmark_scores or {}).items()}
+    active_profiles: list[str] = []
+    artifacts: dict[str, dict[str, Any] | None] = {}
+    per_profile_scores: dict[str, dict[str, float]] = {}
+    merged_scores: dict[str, float] = {}
+
+    for profile_name in profile_names:
+        artifact = ctx.get_benchmark_artifact(profile_name=profile_name)
+        persisted_scores = {
+            str(metric): float(score)
+            for metric, score in ((artifact or {}).get("benchmark_scores") or {}).items()
+        }
+        relevant_explicit_scores = {
+            metric: score
+            for metric, score in explicit_scores.items()
+            if metric in _profile_metric_names(profile_name)
+        }
+        combined_scores = {**persisted_scores, **relevant_explicit_scores}
+        if not combined_scores:
+            continue
+        active_profiles.append(profile_name)
+        artifacts[profile_name] = artifact
+        per_profile_scores[profile_name] = combined_scores
+        merged_scores.update(combined_scores)
+
+    return active_profiles, artifacts, per_profile_scores, merged_scores
+
+
+def _profile_set_ready(profile_evaluations: dict[str, dict[str, Any]]) -> bool:
+    return bool(profile_evaluations) and all(
+        evaluation.get("resolved_tier") in _ROUTE_READY_TIERS
+        for evaluation in profile_evaluations.values()
+    )
+
+
+def _route_selection_profiles(
+    *,
+    active_profiles: list[str],
+    qualification_profile: str | None,
+    selected_lane: str,
+) -> list[str]:
+    if selected_lane != "retrieval" and qualification_profile:
+        filtered = [profile_name for profile_name in active_profiles if profile_name != qualification_profile]
+        if filtered:
+            return filtered
+    return list(active_profiles)
 
 
 def _parse_vram_gb(raw: str | None) -> float | None:
@@ -516,6 +627,7 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         agent_role: str = "generalist",
         runtime_status: dict[str, Any] | None = None,
         hardware_summary: dict[str, Any] | None = None,
+        benchmark_scores: dict[str, float] | None = None,
         persist: bool = True,
     ) -> dict[str, Any]:
         """Produce a packaged governed-routing verdict by combining ALIGN, hardware, runtime, and policy posture."""
@@ -556,6 +668,69 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             profile.get("fallback_recommendation", {}),
         )
 
+        route_profile_candidates = _route_profile_candidates(workload, selected_lane, multilingual_required)
+        active_profiles, benchmark_artifacts, profile_benchmark_scores, effective_benchmark_scores = _collect_route_profile_artifacts(
+            ctx,
+            profile_names=route_profile_candidates,
+            benchmark_scores=benchmark_scores,
+        )
+        required_evidence_profiles = [profile_name for profile_name in route_profile_candidates if profile_name]
+        missing_evidence_profiles = [
+            profile_name for profile_name in required_evidence_profiles if profile_name not in active_profiles
+        ]
+
+        qualification_profile = _qualification_profile_for(workload, multilingual_required)
+        selection_profiles = _route_selection_profiles(
+            active_profiles=active_profiles,
+            qualification_profile=qualification_profile,
+            selected_lane=selected_lane,
+        )
+        fallback_entry = lane_summary.get("best_local") or lane_summary.get("best_remote_direct") or lane_summary.get("fallback")
+        primary_qualification = None
+        fallback_qualification = None
+        primary_profile_evaluations: dict[str, dict[str, Any]] = {}
+        fallback_profile_evaluations: dict[str, dict[str, Any]] = {}
+        if lane_summary.get("preferred"):
+            for profile_name in active_profiles:
+                primary_profile_evaluations[profile_name] = evaluate_model_against_profile(
+                    lane_summary["preferred"],
+                    profile_name=profile_name,
+                    benchmark_scores=profile_benchmark_scores.get(profile_name),
+                    require_reachable=True,
+                )
+        if fallback_entry:
+            for profile_name in active_profiles:
+                fallback_profile_evaluations[profile_name] = evaluate_model_against_profile(
+                    fallback_entry,
+                    profile_name=profile_name,
+                    benchmark_scores=profile_benchmark_scores.get(profile_name),
+                    require_reachable=True,
+                )
+
+        primary_qualification = primary_profile_evaluations.get(qualification_profile) if qualification_profile else None
+        fallback_qualification = fallback_profile_evaluations.get(qualification_profile) if qualification_profile else None
+
+        selection_primary_evaluations = {
+            profile_name: primary_profile_evaluations[profile_name]
+            for profile_name in selection_profiles
+            if profile_name in primary_profile_evaluations
+        }
+        selection_fallback_evaluations = {
+            profile_name: fallback_profile_evaluations[profile_name]
+            for profile_name in selection_profiles
+            if profile_name in fallback_profile_evaluations
+        }
+        selected_primary_profile_evaluations = dict(primary_profile_evaluations)
+        selected_primary_qualification = primary_qualification
+
+        if selection_profiles and not _profile_set_ready(selection_primary_evaluations):
+            if fallback_entry and _profile_set_ready(selection_fallback_evaluations):
+                routing_primary = _catalog_candidate_to_route(fallback_entry, profile.get("embedding_recommendation", {}))
+                lane_summary = dict(lane_summary)
+                lane_summary["preferred"] = fallback_entry
+                selected_primary_profile_evaluations = dict(fallback_profile_evaluations)
+                selected_primary_qualification = fallback_qualification
+
         route_verdict = build_governed_route(
             workload=workload,
             align_status=str(align_verdict.get("status", "ok")),
@@ -567,6 +742,48 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             selected_lane=selected_lane,
             lane_candidate_summary=lane_summary,
         )
+        if active_profiles:
+            for profile_name in active_profiles:
+                evaluation = primary_profile_evaluations.get(profile_name)
+                if evaluation is None:
+                    continue
+                route_verdict.rationale.append(
+                    f"Qualification profile '{profile_name}' resolved the preferred candidate at tier {evaluation.get('resolved_tier', 'advisory-only')}."
+                )
+            if not _profile_set_ready(primary_profile_evaluations):
+                route_verdict.review_required = True
+                route_verdict.governance_mode = "qualification_constrained"
+                route_verdict.rationale.append(
+                    "Preferred candidate did not clear the evidence-backed qualification set for this governed lane, so preferred selection was constrained."
+                )
+                for profile_name in active_profiles:
+                    fallback_evaluation = fallback_profile_evaluations.get(profile_name)
+                    if fallback_evaluation:
+                        route_verdict.rationale.append(
+                            f"Fallback candidate under '{profile_name}' resolved at tier {fallback_evaluation.get('resolved_tier', 'advisory-only')}."
+                        )
+                route_verdict.primary_model = str(routing_primary.get("model", route_verdict.primary_model))
+                route_verdict.primary_access_mode = str(routing_primary.get("access_mode", route_verdict.primary_access_mode))
+        policy_basis_present = bool(align_result.get("governance_event", {}).get("event_ref")) and bool(align_verdict.get("status"))
+        if missing_evidence_profiles or not policy_basis_present:
+            route_verdict.allowed = False
+            route_verdict.decision = "deny"
+            route_verdict.governance_mode = "evidence_required"
+            route_verdict.review_required = True
+            if missing_evidence_profiles:
+                route_verdict.rationale.append(
+                    "Routing was denied because required benchmark evidence is missing for one or more governed profiles."
+                )
+                route_verdict.policy_constraints.append(
+                    f"Required benchmark evidence missing for profiles: {', '.join(missing_evidence_profiles)}."
+                )
+            if not policy_basis_present:
+                route_verdict.rationale.append(
+                    "Routing was denied because the policy basis could not be fully materialized from ALIGN status and governance event context."
+                )
+                route_verdict.policy_constraints.append(
+                    "A governed route requires both ALIGN status and a persisted governance event reference."
+                )
         governance_event = ctx.emit_governance_event(
             kind="routing_decision",
             source="server_profiles.hlf_route_governed_request",
@@ -586,6 +803,10 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "primary_access_mode": route_verdict.primary_access_mode,
                 "fallback_model": route_verdict.fallback_model,
                 "fallback_access_mode": route_verdict.fallback_access_mode,
+                "qualification_profile": qualification_profile,
+                "applied_qualification_profiles": active_profiles,
+                "preferred_model_tier": (primary_qualification or {}).get("resolved_tier"),
+                "benchmark_scores": effective_benchmark_scores,
                 "align_status": align_verdict.get("status"),
                 "align_rule_id": align_verdict.get("decisive_rule_id"),
             },
@@ -593,6 +814,52 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             anomaly_score=1.0 if not route_verdict.allowed else 0.5 if route_verdict.review_required else 0.0,
             related_refs=[align_result["governance_event"]["event_ref"]],
         )
+        route_trace = RouteTraceRecord(
+            request_context={
+                "agent_id": agent_id,
+                "agent_role": agent_role,
+                "workload": workload,
+                "trust_state": trust_state,
+            },
+            route_decision=RouteDecisionRecord(
+                decision=route_verdict.decision,
+                governance_mode=route_verdict.governance_mode,
+                review_required=route_verdict.review_required,
+                selected_lane=route_verdict.selected_lane,
+                primary_model=route_verdict.primary_model,
+                fallback_model=route_verdict.fallback_model,
+                primary_access_mode=route_verdict.primary_access_mode,
+                fallback_access_mode=route_verdict.fallback_access_mode,
+                qualification_profile=qualification_profile,
+                applied_qualification_profiles=list(active_profiles),
+                preferred_model_tier=(selected_primary_qualification or {}).get("resolved_tier"),
+                benchmark_scores=dict(effective_benchmark_scores),
+                align_status=str(align_verdict.get("status")) if align_verdict.get("status") is not None else None,
+                align_rule_id=align_verdict.get("decisive_rule_id"),
+            ),
+            selection_profiles=list(selection_profiles),
+            profile_evaluations=dict(selected_primary_profile_evaluations),
+            benchmark_evidence=dict(benchmark_artifacts),
+            policy_basis={
+                "align_status": align_verdict.get("status"),
+                "align_rule_id": align_verdict.get("decisive_rule_id"),
+                "governance_event_ref": governance_event.get("event_ref"),
+                "policy_constraints": list(route_verdict.policy_constraints),
+                "policy_basis_present": policy_basis_present,
+                "required_evidence_profiles": list(required_evidence_profiles),
+                "missing_evidence_profiles": list(missing_evidence_profiles),
+            },
+            fallback_chain=[
+                {
+                    "model": routing_fallback.get("model", ""),
+                    "access_mode": routing_fallback.get("access_mode", ""),
+                    "qualification": fallback_qualification,
+                }
+            ] if routing_fallback.get("model") else [],
+            lane_candidate_summary=build_lane_trace_context(catalog, selected_lane),
+        )
+        route_trace.operator_summary = build_operator_route_summary(route_trace)
+        persisted_route_trace = ctx.persist_governed_route(route_trace.to_dict())
         return {
             "status": "ok",
             "agent_id": agent_id,
@@ -602,6 +869,19 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "profile": profile,
             "model_catalog": catalog,
             "routing_verdict": route_verdict.to_dict(),
+            "qualification_profile": qualification_profile,
+            "applied_qualification_profiles": active_profiles,
+            "benchmark_scores": effective_benchmark_scores,
+            "benchmark_artifacts": benchmark_artifacts,
+            "required_evidence_profiles": required_evidence_profiles,
+            "missing_evidence_profiles": missing_evidence_profiles,
+            "primary_qualification": primary_qualification,
+            "fallback_qualification": fallback_qualification,
+            "selected_primary_qualification": selected_primary_qualification,
+            "primary_profile_evaluations": primary_profile_evaluations,
+            "fallback_profile_evaluations": fallback_profile_evaluations,
+            "selected_primary_profile_evaluations": selected_primary_profile_evaluations,
+            "route_trace": persisted_route_trace,
             "governance_event": governance_event,
         }
 
@@ -632,6 +912,170 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             return {"status": "not_found", "agent_id": agent_id}
         return {"status": "ok", "catalog_status": status}
 
+    @mcp.tool()
+    def hlf_record_benchmark_artifact(
+        profile_name: str,
+        benchmark_scores: dict[str, float],
+        artifact_id: str | None = None,
+        topic: str = "manual_governed_benchmark",
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Persist a governed benchmark artifact so routing and qualification can consume recorded evidence."""
+        normalized_scores = {str(metric): float(score) for metric, score in benchmark_scores.items()}
+        normalized_artifact_id = artifact_id or f"benchmark:{profile_name}:{topic}:{uuid.uuid4().hex[:12]}"
+        artifact = {
+            "artifact_id": normalized_artifact_id,
+            "profile_name": profile_name,
+            "benchmark_scores": normalized_scores,
+            "topic": topic,
+            "domains": list(domains or []),
+            "languages": list(languages or []),
+            "details": dict(details or {}),
+        }
+        persisted = ctx.persist_benchmark_artifact(artifact)
+        return {"status": "ok", "artifact": persisted}
+
+    @mcp.tool()
+    def hlf_get_benchmark_artifact(profile_name: str | None = None) -> dict[str, Any]:
+        """Retrieve the latest persisted governed benchmark artifact by profile."""
+        artifact = ctx.get_benchmark_artifact(profile_name=profile_name)
+        if artifact is None:
+            return {"status": "not_found", "profile_name": profile_name}
+        return {"status": "ok", "artifact": artifact}
+
+    @mcp.tool()
+    def hlf_evaluate_model_against_profile(
+        model_name: str,
+        profile_name: str,
+        agent_id: str | None = None,
+        benchmark_scores: dict[str, float] | None = None,
+        require_reachable: bool = True,
+    ) -> dict[str, Any]:
+        """Evaluate a synced model against a governed qualification profile, using persisted benchmark evidence when available."""
+        catalog = ctx.get_model_catalog(agent_id=agent_id)
+        if catalog is None:
+            return {"status": "not_found", "agent_id": agent_id, "model_name": model_name}
+
+        selected_entry = None
+        for entry in catalog.get("entries", []):
+            if str(entry.get("name")) == model_name:
+                selected_entry = entry
+                break
+        if selected_entry is None:
+            return {
+                "status": "not_found",
+                "agent_id": agent_id,
+                "model_name": model_name,
+                "available_models": [str(entry.get("name", "")) for entry in catalog.get("entries", [])],
+            }
+
+        artifact = ctx.get_benchmark_artifact(profile_name=profile_name)
+        effective_scores = {
+            str(metric): float(score)
+            for metric, score in ((artifact or {}).get("benchmark_scores") or {}).items()
+        }
+        if benchmark_scores:
+            effective_scores.update({str(metric): float(score) for metric, score in benchmark_scores.items()})
+
+        evaluation = evaluate_model_against_profile(
+            selected_entry,
+            profile_name=profile_name,
+            benchmark_scores=effective_scores,
+            require_reachable=require_reachable,
+        )
+        return {
+            "status": "ok",
+            "agent_id": agent_id,
+            "artifact": artifact,
+            "evaluation": evaluation,
+        }
+
+    @mcp.tool()
+    def hlf_evaluate_model_requirements(
+        model_name: str,
+        agent_id: str | None = None,
+        required_lanes: list[str] | None = None,
+        required_capabilities: list[str] | None = None,
+        required_languages: list[str] | None = None,
+        minimum_benchmark_scores: dict[str, float] | None = None,
+        benchmark_scores: dict[str, float] | None = None,
+        require_reachable: bool = True,
+    ) -> dict[str, Any]:
+        """Evaluate whether a synced model satisfies minimum lane, language, and benchmark requirements."""
+        catalog = ctx.get_model_catalog(agent_id=agent_id)
+        if catalog is None:
+            return {"status": "not_found", "agent_id": agent_id, "model_name": model_name}
+
+        selected_entry = None
+        for entry in catalog.get("entries", []):
+            if str(entry.get("name")) == model_name:
+                selected_entry = entry
+                break
+        if selected_entry is None:
+            return {
+                "status": "not_found",
+                "agent_id": agent_id,
+                "model_name": model_name,
+                "available_models": [str(entry.get("name", "")) for entry in catalog.get("entries", [])],
+            }
+
+        evaluation = evaluate_model_requirements(
+            selected_entry,
+            required_lanes=required_lanes or [],
+            required_capabilities=required_capabilities or [],
+            required_languages=required_languages or [],
+            minimum_benchmark_scores=minimum_benchmark_scores,
+            benchmark_scores=benchmark_scores,
+            require_reachable=require_reachable,
+        )
+        return {"status": "ok", "agent_id": agent_id, "evaluation": evaluation}
+
+    @mcp.tool()
+    def hlf_evaluate_model_requirement_tiers(
+        model_name: str,
+        agent_id: str | None = None,
+        required_lanes: list[str] | None = None,
+        required_capabilities: list[str] | None = None,
+        required_languages: list[str] | None = None,
+        baseline_benchmark_scores: dict[str, float] | None = None,
+        launch_benchmark_scores: dict[str, float] | None = None,
+        promotion_benchmark_scores: dict[str, float] | None = None,
+        benchmark_scores: dict[str, float] | None = None,
+        require_reachable: bool = True,
+    ) -> dict[str, Any]:
+        """Evaluate a synced model against advisory, baseline, launch, and promotion qualification tiers."""
+        catalog = ctx.get_model_catalog(agent_id=agent_id)
+        if catalog is None:
+            return {"status": "not_found", "agent_id": agent_id, "model_name": model_name}
+
+        selected_entry = None
+        for entry in catalog.get("entries", []):
+            if str(entry.get("name")) == model_name:
+                selected_entry = entry
+                break
+        if selected_entry is None:
+            return {
+                "status": "not_found",
+                "agent_id": agent_id,
+                "model_name": model_name,
+                "available_models": [str(entry.get("name", "")) for entry in catalog.get("entries", [])],
+            }
+
+        evaluation = evaluate_model_requirement_tiers(
+            selected_entry,
+            required_lanes=required_lanes or [],
+            required_capabilities=required_capabilities or [],
+            required_languages=required_languages or [],
+            baseline_benchmark_scores=baseline_benchmark_scores,
+            launch_benchmark_scores=launch_benchmark_scores,
+            promotion_benchmark_scores=promotion_benchmark_scores,
+            benchmark_scores=benchmark_scores,
+            require_reachable=require_reachable,
+        )
+        return {"status": "ok", "agent_id": agent_id, "evaluation": evaluation}
+
     return {
         "hlf_probe_local_hardware": hlf_probe_local_hardware,
         "hlf_recommend_embedding_profile": hlf_recommend_embedding_profile,
@@ -641,6 +1085,11 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_get_embedding_profile": hlf_get_embedding_profile,
         "hlf_get_model_catalog": hlf_get_model_catalog,
         "hlf_get_model_catalog_status": hlf_get_model_catalog_status,
+        "hlf_record_benchmark_artifact": hlf_record_benchmark_artifact,
+        "hlf_get_benchmark_artifact": hlf_get_benchmark_artifact,
+        "hlf_evaluate_model_against_profile": hlf_evaluate_model_against_profile,
+        "hlf_evaluate_model_requirements": hlf_evaluate_model_requirements,
+        "hlf_evaluate_model_requirement_tiers": hlf_evaluate_model_requirement_tiers,
     }
 
 

@@ -91,6 +91,18 @@ def _render_formal_verifier_status(ctx: object | None) -> str:
     return json.dumps({"status": "ok", "formal_verifier_status": ctx.formal_verifier.status_snapshot()}, indent=2)
 
 
+def _render_governed_route_status(ctx: object | None, *, agent_id: str | None = None) -> str:
+    if ctx is None or not hasattr(ctx, "get_governed_route"):
+        return json.dumps(
+            {"status": "error", "error": "governed_route_unavailable", "agent_id": agent_id},
+            indent=2,
+        )
+    route_trace = ctx.get_governed_route(agent_id=agent_id)
+    if route_trace is None:
+        return json.dumps({"status": "not_found", "agent_id": agent_id}, indent=2)
+    return json.dumps({"status": "ok", "route_trace": route_trace}, indent=2)
+
+
 def _render_instinct_status(ctx: object | None, *, mission_id: str | None = None) -> str:
     if ctx is None or not hasattr(ctx, "instinct_mgr"):
         return json.dumps({"status": "error", "error": "instinct_manager_unavailable", "mission_id": mission_id}, indent=2)
@@ -102,7 +114,64 @@ def _render_instinct_status(ctx: object | None, *, mission_id: str | None = None
     return json.dumps({"status": "ok", "missions": ctx.instinct_mgr.list_missions()}, indent=2)
 
 
+def _render_witness_status(ctx: object | None, *, subject_agent_id: str | None = None) -> str:
+    if ctx is None or not hasattr(ctx, "get_witness_status"):
+        return json.dumps(
+            {"status": "error", "error": "witness_governance_unavailable", "subject_agent_id": subject_agent_id},
+            indent=2,
+        )
+    status = ctx.get_witness_status(subject_agent_id=subject_agent_id)
+    if status is None:
+        return json.dumps({"status": "not_found", "subject_agent_id": subject_agent_id}, indent=2)
+    return json.dumps({"status": "ok", "witness_status": status}, indent=2)
+
+
 def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, object]:
+    @mcp.resource("hlf://status/benchmark_artifacts")
+    def get_benchmark_artifacts() -> str:
+        """Operator-facing: List all persisted benchmark artifacts."""
+        if ctx is None or not hasattr(ctx, "memory_store"):
+            return json.dumps({"status": "error", "error": "memory_store_unavailable"}, indent=2)
+        memory = ctx.memory_store
+        try:
+            artifacts = memory.query_facts(entry_kind="benchmark_artifact")
+        except Exception:
+            artifacts = []
+            for fact in memory.all_facts():
+                if fact.get("entry_kind") != "benchmark_artifact":
+                    continue
+                artifacts.append(fact)
+        return json.dumps({"status": "ok", "artifacts": artifacts}, indent=2)
+
+    @mcp.resource("hlf://status/active_profiles")
+    def get_active_profiles() -> str:
+        """Operator-facing: List currently active profiles and their supporting evidence."""
+        if ctx is None or not hasattr(ctx, "session_profiles"):
+            return json.dumps({"status": "error", "error": "session_profiles_unavailable"}, indent=2)
+        profiles = ctx.session_profiles
+        evidence = {}
+        if hasattr(ctx, "session_benchmark_artifacts"):
+            evidence = ctx.session_benchmark_artifacts
+        return json.dumps({"status": "ok", "active_profiles": profiles, "evidence": evidence}, indent=2)
+
+    @mcp.resource("hlf://status/profile_evidence/{profile_name}")
+    def get_profile_evidence(profile_name: str) -> str:
+        """Operator-facing: List all evidence (artifacts, scores, history) for a given profile."""
+        if ctx is None or not hasattr(ctx, "memory_store"):
+            return json.dumps({"status": "error", "error": "memory_store_unavailable"}, indent=2)
+        memory = ctx.memory_store
+        evidence = []
+        try:
+            evidence = memory.query_facts(entry_kind="benchmark_artifact", profile=profile_name)
+        except Exception:
+            for fact in memory.all_facts():
+                if fact.get("entry_kind") != "benchmark_artifact":
+                    continue
+                if fact.get("profile") != profile_name:
+                    continue
+                evidence.append(fact)
+        return json.dumps({"status": "ok", "profile": profile_name, "evidence": evidence}, indent=2)
+
     @mcp.resource("hlf://grammar")
     def get_grammar() -> str:
         """HLF grammar specification (LALR(1) Lark format)."""
@@ -180,6 +249,16 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
         """Operator-facing formal verifier status including solver and capability snapshot."""
         return _render_formal_verifier_status(ctx)
 
+    @mcp.resource("hlf://status/governed_route")
+    def get_governed_route_status_latest() -> str:
+        """Operator-facing latest governed route trace summary."""
+        return _render_governed_route_status(ctx)
+
+    @mcp.resource("hlf://status/governed_route/{agent_id}")
+    def get_governed_route_status_for_agent(agent_id: str) -> str:
+        """Operator-facing governed route trace summary for a specific agent."""
+        return _render_governed_route_status(ctx, agent_id=agent_id)
+
     @mcp.resource("hlf://status/instinct")
     def get_instinct_status() -> str:
         """Operator-facing Instinct lifecycle mission list with current phase and realignment counts."""
@@ -189,6 +268,16 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
     def get_instinct_status_for_mission(mission_id: str) -> str:
         """Operator-facing Instinct lifecycle status for a specific mission."""
         return _render_instinct_status(ctx, mission_id=mission_id)
+
+    @mcp.resource("hlf://status/witness_governance")
+    def get_witness_status_summary() -> str:
+        """Operator-facing packaged witness-governance summary across tracked subjects."""
+        return _render_witness_status(ctx)
+
+    @mcp.resource("hlf://status/witness_governance/{subject_agent_id}")
+    def get_witness_status_for_subject(subject_agent_id: str) -> str:
+        """Operator-facing packaged witness-governance status for a specific subject."""
+        return _render_witness_status(ctx, subject_agent_id=subject_agent_id)
 
     return {
         "hlf://grammar": get_grammar,
@@ -204,6 +293,13 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
         "hlf://status/model_catalog/{agent_id}": get_model_catalog_status_for_agent,
         "hlf://status/align": get_align_status,
         "hlf://status/formal_verifier": get_formal_verifier_status,
+        "hlf://status/governed_route": get_governed_route_status_latest,
+        "hlf://status/governed_route/{agent_id}": get_governed_route_status_for_agent,
         "hlf://status/instinct": get_instinct_status,
         "hlf://status/instinct/{mission_id}": get_instinct_status_for_mission,
+        "hlf://status/witness_governance": get_witness_status_summary,
+        "hlf://status/witness_governance/{subject_agent_id}": get_witness_status_for_subject,
+        "hlf://status/benchmark_artifacts": get_benchmark_artifacts,
+        "hlf://status/active_profiles": get_active_profiles,
+        "hlf://status/profile_evidence/{profile_name}": get_profile_evidence,
     }

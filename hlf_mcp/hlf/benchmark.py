@@ -6,6 +6,7 @@ Measures HLF token efficiency vs natural language and verbose JSON equivalents.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 try:
@@ -264,6 +265,274 @@ class HLFBenchmark:
             "domains": selected_domains,
             "languages": selected_languages,
             "tiktoken_model": "cl100k_base",
+        }
+
+    def language_comparison_summary(
+        self,
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Return a ranked multilingual comparison using measured benchmark outcomes.
+
+        Ranking is intentionally evidence-first: languages are ordered by
+        round-trip fidelity, then fallback discipline, then compression.
+        This avoids projecting a winner before the measured signals exist.
+        """
+        matrix = self.multilingual_matrix(domains=domains, languages=languages)
+
+        ranked_languages: list[dict[str, Any]] = []
+        for language in matrix["languages"]:
+            totals = matrix["per_language"][language]
+            ranked_languages.append(
+                {
+                    "language": language,
+                    "samples": int(totals["samples"]),
+                    "compression_pct": float(totals["compression_pct"]),
+                    "fallback_rate": float(totals["fallback_rate"]),
+                    "roundtrip_fidelity_avg": float(totals["roundtrip_fidelity_avg"]),
+                    "input_tokens": int(totals["input_tokens"]),
+                    "hlf_tokens": int(totals["hlf_tokens"]),
+                }
+            )
+
+        ranked_languages.sort(
+            key=lambda item: (
+                -item["roundtrip_fidelity_avg"],
+                item["fallback_rate"],
+                -item["compression_pct"],
+                item["language"],
+            )
+        )
+
+        return {
+            "ranked_languages": ranked_languages,
+            "leader": ranked_languages[0] if ranked_languages else None,
+            "ranking_policy": [
+                "roundtrip_fidelity_avg_desc",
+                "fallback_rate_asc",
+                "compression_pct_desc",
+                "language_asc",
+            ],
+            "domains": matrix["domains"],
+            "languages": matrix["languages"],
+            "tiktoken_model": matrix["tiktoken_model"],
+        }
+
+    def translation_memory_retrieval_matrix(
+        self,
+        memory_store: Any,
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+        top_k: int = 3,
+        topic: str = "hlf_translation_contract_benchmark",
+    ) -> dict[str, Any]:
+        """Measure retrieval-backed translation memory quality across supported languages."""
+        from hlf_mcp.hlf.translator import language_to_hlf, translation_diagnostics
+
+        selected_domains = domains or list(_MULTILINGUAL_NLP_TEMPLATES.keys())
+        selected_languages = languages or ["en", "fr", "es", "ar", "zh"]
+
+        rows: list[dict[str, Any]] = []
+        per_language: dict[str, dict[str, float | int]] = {
+            language: {
+                "samples": 0,
+                "same_language_hit_count": 0,
+                "exact_match_hit_count": 0,
+                "top_similarity_total": 0.0,
+                "retrieval_quality_total": 0.0,
+                "roundtrip_fidelity_total": 0.0,
+            }
+            for language in selected_languages
+        }
+
+        for domain in selected_domains:
+            templates = _MULTILINGUAL_NLP_TEMPLATES.get(domain)
+            if templates is None:
+                raise ValueError(f"Unsupported benchmark domain: {domain}")
+            for language in selected_languages:
+                text = templates.get(language)
+                if text is None:
+                    raise ValueError(f"Missing benchmark template for domain={domain}, language={language}")
+                source = language_to_hlf(text, language=language)
+                diagnostics = translation_diagnostics(text, language=language, source=source).to_dict()
+                payload = {
+                    "kind": "hlf_translation_contract",
+                    "benchmark_topic": topic,
+                    "language": language,
+                    "domain": domain,
+                    "original_text": text,
+                    "hlf_source": source,
+                    "translation": diagnostics,
+                }
+                memory_store.store(
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    topic=topic,
+                    confidence=float(diagnostics.get("roundtrip_fidelity_score", 1.0)),
+                    provenance="hlf_benchmark.translation_memory_retrieval_matrix",
+                    tags=["hlf", "translation", "benchmark", language, domain],
+                    metadata={"language": language, "domain": domain, "kind": "hlf_translation_contract"},
+                )
+
+                query_result = memory_store.query(text, top_k=top_k, topic=topic)
+                results = query_result.get("results", [])
+                top_similarity = float(results[0]["similarity"]) if results else 0.0
+                same_language_hit = any(row.get("metadata", {}).get("language") == language for row in results)
+                exact_match_hit = any(
+                    row.get("metadata", {}).get("language") == language
+                    and row.get("metadata", {}).get("domain") == domain
+                    for row in results
+                )
+                retrieval_quality = 1.0 if exact_match_hit else 0.5 if same_language_hit else 0.0
+
+                row = {
+                    "domain": domain,
+                    "language": language,
+                    "top_similarity": round(top_similarity, 4),
+                    "same_language_hit": same_language_hit,
+                    "exact_match_hit": exact_match_hit,
+                    "retrieval_quality": retrieval_quality,
+                    "roundtrip_fidelity_score": diagnostics.get("roundtrip_fidelity_score", 0.0),
+                    "fallback_used": diagnostics.get("fallback_used", False),
+                }
+                rows.append(row)
+
+                totals = per_language[language]
+                totals["samples"] = int(totals["samples"]) + 1
+                totals["same_language_hit_count"] = int(totals["same_language_hit_count"]) + int(same_language_hit)
+                totals["exact_match_hit_count"] = int(totals["exact_match_hit_count"]) + int(exact_match_hit)
+                totals["top_similarity_total"] = float(totals["top_similarity_total"]) + top_similarity
+                totals["retrieval_quality_total"] = float(totals["retrieval_quality_total"]) + retrieval_quality
+                totals["roundtrip_fidelity_total"] = float(totals["roundtrip_fidelity_total"]) + float(diagnostics.get("roundtrip_fidelity_score", 0.0))
+
+        for language, totals in per_language.items():
+            sample_count = int(totals["samples"])
+            totals["same_language_hit_rate"] = round(int(totals["same_language_hit_count"]) / sample_count, 3) if sample_count else 0.0
+            totals["exact_match_hit_rate"] = round(int(totals["exact_match_hit_count"]) / sample_count, 3) if sample_count else 0.0
+            totals["avg_top_similarity"] = round(float(totals["top_similarity_total"]) / sample_count, 4) if sample_count else 0.0
+            totals["retrieval_quality_avg"] = round(float(totals["retrieval_quality_total"]) / sample_count, 3) if sample_count else 0.0
+            totals["roundtrip_fidelity_avg"] = round(float(totals["roundtrip_fidelity_total"]) / sample_count, 3) if sample_count else 0.0
+
+        benchmark_scores = {
+            "translation_fidelity": min(float(per_language[language]["roundtrip_fidelity_avg"]) for language in selected_languages),
+            "retrieval_quality": min(float(per_language[language]["retrieval_quality_avg"]) for language in selected_languages),
+        }
+        return {
+            "rows": rows,
+            "per_language": per_language,
+            "domains": selected_domains,
+            "languages": selected_languages,
+            "topic": topic,
+            "benchmark_scores": benchmark_scores,
+            "profile_name": "translation_memory_multilingual",
+        }
+
+    def routing_context_retrieval_matrix(
+        self,
+        memory_store: Any,
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+        top_k: int = 3,
+        topic: str = "hlf_agent_routing_benchmark",
+    ) -> dict[str, Any]:
+        """Measure retrieval-backed multilingual routing-context quality across supported languages."""
+        from hlf_mcp.hlf.translator import language_to_hlf, translation_diagnostics
+
+        routing_lanes = {
+            "security_audit": "verifier",
+            "hello_world": "explainer",
+            "db_migration": "code-generation",
+            "content_delegation": "explainer",
+            "log_analysis": "verifier",
+            "stack_deployment": "explainer",
+        }
+        selected_domains = domains or list(_MULTILINGUAL_NLP_TEMPLATES.keys())
+        selected_languages = languages or ["en", "fr", "es", "ar", "zh"]
+
+        rows: list[dict[str, Any]] = []
+        per_language: dict[str, dict[str, float | int]] = {
+            language: {
+                "samples": 0,
+                "expected_lane_hit_count": 0,
+                "same_language_hit_count": 0,
+                "routing_quality_total": 0.0,
+                "translation_fidelity_total": 0.0,
+            }
+            for language in selected_languages
+        }
+
+        for domain in selected_domains:
+            templates = _MULTILINGUAL_NLP_TEMPLATES.get(domain)
+            if templates is None:
+                raise ValueError(f"Unsupported benchmark domain: {domain}")
+            expected_lane = routing_lanes[domain]
+            for language in selected_languages:
+                text = templates.get(language)
+                if text is None:
+                    raise ValueError(f"Missing benchmark template for domain={domain}, language={language}")
+                source = language_to_hlf(text, language=language)
+                diagnostics = translation_diagnostics(text, language=language, source=source).to_dict()
+                payload = {
+                    "kind": "hlf_routing_context",
+                    "benchmark_topic": topic,
+                    "language": language,
+                    "domain": domain,
+                    "expected_lane": expected_lane,
+                    "original_text": text,
+                    "hlf_source": source,
+                    "translation": diagnostics,
+                }
+                memory_store.store(
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    topic=topic,
+                    confidence=float(diagnostics.get("roundtrip_fidelity_score", 1.0)),
+                    provenance="hlf_benchmark.routing_context_retrieval_matrix",
+                    tags=["hlf", "routing", "benchmark", language, domain, expected_lane],
+                    metadata={"language": language, "domain": domain, "expected_lane": expected_lane, "kind": "hlf_routing_context"},
+                )
+
+                query_result = memory_store.query(text, top_k=top_k, topic=topic)
+                results = query_result.get("results", [])
+                same_language_hit = any(row.get("metadata", {}).get("language") == language for row in results)
+                expected_lane_hit = any(row.get("metadata", {}).get("expected_lane") == expected_lane for row in results)
+                routing_quality = 1.0 if expected_lane_hit and same_language_hit else 0.75 if expected_lane_hit else 0.25 if same_language_hit else 0.0
+
+                rows.append(
+                    {
+                        "domain": domain,
+                        "language": language,
+                        "expected_lane": expected_lane,
+                        "same_language_hit": same_language_hit,
+                        "expected_lane_hit": expected_lane_hit,
+                        "routing_quality": routing_quality,
+                        "roundtrip_fidelity_score": diagnostics.get("roundtrip_fidelity_score", 0.0),
+                    }
+                )
+                totals = per_language[language]
+                totals["samples"] = int(totals["samples"]) + 1
+                totals["expected_lane_hit_count"] = int(totals["expected_lane_hit_count"]) + int(expected_lane_hit)
+                totals["same_language_hit_count"] = int(totals["same_language_hit_count"]) + int(same_language_hit)
+                totals["routing_quality_total"] = float(totals["routing_quality_total"]) + routing_quality
+                totals["translation_fidelity_total"] = float(totals["translation_fidelity_total"]) + float(diagnostics.get("roundtrip_fidelity_score", 0.0))
+
+        for language, totals in per_language.items():
+            sample_count = int(totals["samples"])
+            totals["expected_lane_hit_rate"] = round(int(totals["expected_lane_hit_count"]) / sample_count, 3) if sample_count else 0.0
+            totals["same_language_hit_rate"] = round(int(totals["same_language_hit_count"]) / sample_count, 3) if sample_count else 0.0
+            totals["routing_quality_avg"] = round(float(totals["routing_quality_total"]) / sample_count, 3) if sample_count else 0.0
+            totals["translation_fidelity_avg"] = round(float(totals["translation_fidelity_total"]) / sample_count, 3) if sample_count else 0.0
+
+        benchmark_scores = {
+            "routing_quality": min(float(per_language[language]["routing_quality_avg"]) for language in selected_languages),
+            "translation_fidelity": min(float(per_language[language]["translation_fidelity_avg"]) for language in selected_languages),
+        }
+        return {
+            "rows": rows,
+            "per_language": per_language,
+            "domains": selected_domains,
+            "languages": selected_languages,
+            "topic": topic,
+            "benchmark_scores": benchmark_scores,
+            "profile_name": "agent_routing_context_multilingual",
         }
 
 

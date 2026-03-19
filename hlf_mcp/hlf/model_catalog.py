@@ -1,8 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
+from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
+
+
+def aggregate_benchmark_artifacts(memory_store, model_name: str, profile_name: str) -> list[dict[str, Any]]:
+    """Aggregate all persisted benchmark artifacts for a given model/profile from RAGMemory."""
+    artifacts = []
+    try:
+        artifacts = memory_store.query_facts(entry_kind="benchmark_artifact", model=model_name, profile=profile_name)
+    except Exception:
+        for fact in getattr(memory_store, "all_facts", lambda: [])():
+            if fact.get("entry_kind") != "benchmark_artifact":
+                continue
+            if fact.get("model") != model_name:
+                continue
+            if fact.get("profile") != profile_name:
+                continue
+            artifacts.append(fact)
+    return artifacts
 
 
 AccessMode = Literal[
@@ -12,6 +31,15 @@ AccessMode = Literal[
     "registry-known-not-configured",
 ]
 
+QualificationTier = Literal[
+    "advisory-only",
+    "baseline-qualified",
+    "launch-qualified",
+    "promotion-qualified",
+]
+
+_DEFAULT_QUALIFICATION_PROFILE_PATH = Path(__file__).resolve().parents[2] / "governance" / "model_qualification_profiles.json"
+
 
 @dataclass(slots=True, frozen=True)
 class ModelSpec:
@@ -19,6 +47,7 @@ class ModelSpec:
     family: str
     lanes: tuple[str, ...]
     capabilities: tuple[str, ...]
+    supported_languages: tuple[str, ...] = ()
     min_vram_gb: float = 0.0
     requires_local: bool = False
     privacy_preserving: bool = False
@@ -31,6 +60,7 @@ class ModelCatalogEntry:
     family: str
     lanes: list[str]
     capabilities: list[str]
+    supported_languages: list[str]
     access_mode: AccessMode
     endpoint: str
     installed: bool
@@ -49,6 +79,7 @@ class ModelCatalogEntry:
             "family": self.family,
             "lanes": list(self.lanes),
             "capabilities": list(self.capabilities),
+            "supported_languages": list(self.supported_languages),
             "access_mode": self.access_mode,
             "endpoint": self.endpoint,
             "installed": self.installed,
@@ -69,6 +100,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="embedding",
         lanes=("retrieval", "explainer"),
         capabilities=("embedding", "local-embedding", "privacy-preserving"),
+        supported_languages=("en",),
         requires_local=True,
         privacy_preserving=True,
         notes=("Strong default for privacy-preserving retrieval.",),
@@ -78,6 +110,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="embedding",
         lanes=("retrieval",),
         capabilities=("embedding", "lightweight"),
+        supported_languages=("en",),
         requires_local=True,
         privacy_preserving=True,
         notes=("Useful fallback for CPU-only retrieval lanes.",),
@@ -87,6 +120,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="embedding",
         lanes=("retrieval", "standards-ingestion"),
         capabilities=("embedding", "multilingual", "semantic-recall"),
+        supported_languages=("en", "fr", "es", "ar", "zh"),
         min_vram_gb=10.0,
         requires_local=True,
         privacy_preserving=True,
@@ -97,6 +131,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="embedding",
         lanes=("retrieval", "standards-ingestion"),
         capabilities=("embedding", "long-context", "semantic-recall"),
+        supported_languages=("en", "fr", "es", "ar", "zh"),
         min_vram_gb=10.0,
         requires_local=True,
         privacy_preserving=True,
@@ -106,6 +141,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="embedding",
         lanes=("retrieval", "code-generation"),
         capabilities=("embedding", "code-retrieval"),
+        supported_languages=("en",),
         min_vram_gb=4.0,
         requires_local=True,
         privacy_preserving=True,
@@ -115,6 +151,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="embedding",
         lanes=("retrieval",),
         capabilities=("embedding", "lightweight"),
+        supported_languages=("en",),
         requires_local=True,
         privacy_preserving=True,
     ),
@@ -123,6 +160,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="embedding",
         lanes=("retrieval", "standards-ingestion"),
         capabilities=("embedding", "long-context", "multilingual"),
+        supported_languages=("en", "fr", "es", "ar", "zh"),
         min_vram_gb=12.0,
         requires_local=True,
         privacy_preserving=True,
@@ -132,6 +170,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="reasoning",
         lanes=("code-generation", "verifier", "explainer"),
         capabilities=("reasoning", "coding", "explanations"),
+        supported_languages=("en", "fr", "es", "ar", "zh"),
         min_vram_gb=8.0,
         notes=("Useful general reasoning lane through Ollama-compatible endpoints.",),
     ),
@@ -140,6 +179,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="reasoning",
         lanes=("code-generation", "explainer"),
         capabilities=("reasoning", "coding", "generalist"),
+        supported_languages=("en",),
         min_vram_gb=8.0,
     ),
     ModelSpec(
@@ -147,6 +187,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="reasoning",
         lanes=("standards-ingestion", "explainer"),
         capabilities=("reasoning", "analysis", "long-context"),
+        supported_languages=("en",),
         min_vram_gb=10.0,
     ),
     ModelSpec(
@@ -154,6 +195,7 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="reasoning",
         lanes=("code-generation", "verifier"),
         capabilities=("reasoning", "coding", "review"),
+        supported_languages=("en",),
         min_vram_gb=16.0,
         notes=("Stronger coding and verification lane when reachable via cloud-via-ollama.",),
     ),
@@ -162,9 +204,229 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="multimodal",
         lanes=("multimodal", "explainer"),
         capabilities=("vision", "multimodal", "explanations"),
+        supported_languages=("en",),
         min_vram_gb=10.0,
     ),
 )
+
+
+def evaluate_model_requirements(
+    entry: dict[str, Any],
+    *,
+    required_lanes: list[str] | tuple[str, ...] = (),
+    required_capabilities: list[str] | tuple[str, ...] = (),
+    required_languages: list[str] | tuple[str, ...] = (),
+    minimum_benchmark_scores: dict[str, float] | None = None,
+    benchmark_scores: dict[str, float] | None = None,
+    require_reachable: bool = True,
+) -> dict[str, Any]:
+    """Evaluate whether a catalog entry satisfies an explicit minimum requirement contract."""
+    entry_name = str(entry.get("name", "unknown-model"))
+    lanes = {str(item) for item in entry.get("lanes", [])}
+    capabilities = {str(item) for item in entry.get("capabilities", [])}
+    supported_languages = {str(item) for item in entry.get("supported_languages", [])}
+    reachable = bool(entry.get("reachable", False))
+    known_but_impractical = bool(entry.get("known_but_impractical", False))
+
+    missing_lanes = sorted(str(item) for item in required_lanes if str(item) not in lanes)
+    missing_capabilities = sorted(str(item) for item in required_capabilities if str(item) not in capabilities)
+    missing_languages = sorted(str(item) for item in required_languages if str(item) not in supported_languages)
+
+    minimum_scores = {str(k): float(v) for k, v in (minimum_benchmark_scores or {}).items()}
+    provided_scores = {str(k): float(v) for k, v in (benchmark_scores or {}).items()}
+    failed_benchmarks: list[dict[str, Any]] = []
+    missing_benchmarks: list[str] = []
+    for benchmark_name, minimum_score in minimum_scores.items():
+        score = provided_scores.get(benchmark_name)
+        if score is None:
+            missing_benchmarks.append(benchmark_name)
+            continue
+        if score < minimum_score:
+            failed_benchmarks.append(
+                {
+                    "benchmark": benchmark_name,
+                    "required_minimum": minimum_score,
+                    "actual_score": score,
+                }
+            )
+
+    qualification_failures: list[str] = []
+    if require_reachable and not reachable:
+        qualification_failures.append("Model is not currently reachable.")
+    if known_but_impractical:
+        qualification_failures.append("Model is known but impractical on detected hardware.")
+    if missing_lanes:
+        qualification_failures.append(f"Missing required lanes: {', '.join(missing_lanes)}")
+    if missing_capabilities:
+        qualification_failures.append(f"Missing required capabilities: {', '.join(missing_capabilities)}")
+    if missing_languages:
+        qualification_failures.append(f"Missing required languages: {', '.join(missing_languages)}")
+    if missing_benchmarks:
+        qualification_failures.append(f"Missing benchmark scores: {', '.join(missing_benchmarks)}")
+    if failed_benchmarks:
+        qualification_failures.append("Benchmark thresholds not met.")
+
+    return {
+        "model": entry_name,
+        "qualified": len(qualification_failures) == 0,
+        "required_lanes": list(required_lanes),
+        "required_capabilities": list(required_capabilities),
+        "required_languages": list(required_languages),
+        "minimum_benchmark_scores": minimum_scores,
+        "benchmark_scores": provided_scores,
+        "missing_lanes": missing_lanes,
+        "missing_capabilities": missing_capabilities,
+        "missing_languages": missing_languages,
+        "missing_benchmarks": missing_benchmarks,
+        "failed_benchmarks": failed_benchmarks,
+        "qualification_failures": qualification_failures,
+    }
+
+
+def evaluate_model_requirement_tiers(
+    entry: dict[str, Any],
+    *,
+    required_lanes: list[str] | tuple[str, ...] = (),
+    required_capabilities: list[str] | tuple[str, ...] = (),
+    required_languages: list[str] | tuple[str, ...] = (),
+    baseline_benchmark_scores: dict[str, float] | None = None,
+    launch_benchmark_scores: dict[str, float] | None = None,
+    promotion_benchmark_scores: dict[str, float] | None = None,
+    benchmark_scores: dict[str, float] | None = None,
+    require_reachable: bool = True,
+) -> dict[str, Any]:
+    """Evaluate a model against advisory, baseline, launch, and promotion qualification tiers."""
+    advisory = evaluate_model_requirements(
+        entry,
+        required_lanes=required_lanes,
+        required_capabilities=required_capabilities,
+        required_languages=required_languages,
+        minimum_benchmark_scores={},
+        benchmark_scores=benchmark_scores,
+        require_reachable=False,
+    )
+    baseline = evaluate_model_requirements(
+        entry,
+        required_lanes=required_lanes,
+        required_capabilities=required_capabilities,
+        required_languages=required_languages,
+        minimum_benchmark_scores=baseline_benchmark_scores,
+        benchmark_scores=benchmark_scores,
+        require_reachable=require_reachable,
+    )
+    launch = evaluate_model_requirements(
+        entry,
+        required_lanes=required_lanes,
+        required_capabilities=required_capabilities,
+        required_languages=required_languages,
+        minimum_benchmark_scores=launch_benchmark_scores,
+        benchmark_scores=benchmark_scores,
+        require_reachable=require_reachable,
+    )
+    promotion = evaluate_model_requirements(
+        entry,
+        required_lanes=required_lanes,
+        required_capabilities=required_capabilities,
+        required_languages=required_languages,
+        minimum_benchmark_scores=promotion_benchmark_scores,
+        benchmark_scores=benchmark_scores,
+        require_reachable=require_reachable,
+    )
+
+    resolved_tier: QualificationTier = "advisory-only"
+    if baseline["qualified"]:
+        resolved_tier = "baseline-qualified"
+    if launch["qualified"]:
+        resolved_tier = "launch-qualified"
+    if promotion["qualified"]:
+        resolved_tier = "promotion-qualified"
+
+    return {
+        "model": str(entry.get("name", "unknown-model")),
+        "resolved_tier": resolved_tier,
+        "tiers": {
+            "advisory-only": advisory,
+            "baseline-qualified": baseline,
+            "launch-qualified": launch,
+            "promotion-qualified": promotion,
+        },
+    }
+
+
+def load_model_qualification_profiles(file_path: str | None = None) -> dict[str, Any]:
+    """Load governed model qualification profiles from repository authority."""
+    path = Path(file_path) if file_path else _DEFAULT_QUALIFICATION_PROFILE_PATH
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or "profiles" not in payload:
+        raise ValueError("Model qualification profile file must contain a top-level 'profiles' object.")
+    return payload
+
+
+def evaluate_model_against_profile(
+    entry: dict[str, Any],
+    *,
+    profile_name: str,
+    benchmark_scores: dict[str, float] | None = None,
+    require_reachable: bool = True,
+    file_path: str | None = None,
+) -> dict[str, Any]:
+    """Evaluate a model against a governed qualification profile."""
+    payload = load_model_qualification_profiles(file_path=file_path)
+    profiles = payload.get("profiles") or {}
+    profile = profiles.get(profile_name)
+    if not isinstance(profile, dict):
+        raise ValueError(f"Unknown model qualification profile: {profile_name}")
+
+    required_lanes = [str(item) for item in profile.get("required_lanes", [])]
+    required_capabilities = [str(item) for item in profile.get("required_capabilities", [])]
+    required_languages = [str(item) for item in profile.get("required_languages", [])]
+    tiers = profile.get("tiers") or {}
+
+    # Aggregate all benchmark artifacts for this model/profile
+    memory_store = entry.get("memory_store") if "memory_store" in entry else None
+    artifact_history = []
+    if memory_store is not None:
+        artifact_history = aggregate_benchmark_artifacts(memory_store, entry.get("name", ""), profile_name)
+
+    # Aggregate scores if history is available
+    aggregate_scores = {}
+    if artifact_history:
+        # For each metric, compute mean/min/max/count
+        metrics = set()
+        for artifact in artifact_history:
+            metrics.update(artifact.get("benchmark_scores", {}).keys())
+        for metric in metrics:
+            values = [float(a["benchmark_scores"].get(metric, 0.0)) for a in artifact_history if metric in a.get("benchmark_scores", {})]
+            if values:
+                aggregate_scores[metric] = {
+                    "mean": sum(values) / len(values),
+                    "min": min(values),
+                    "max": max(values),
+                    "count": len(values),
+                    "all": values,
+                }
+
+    # Use the latest artifact's scores for compatibility, but expose aggregate
+    latest_scores = benchmark_scores
+    if artifact_history:
+        latest_scores = artifact_history[-1].get("benchmark_scores", {})
+
+    evaluation = evaluate_model_requirement_tiers(
+        entry,
+        required_lanes=required_lanes,
+        required_capabilities=required_capabilities,
+        required_languages=required_languages,
+        baseline_benchmark_scores=tiers.get("baseline-qualified"),
+        launch_benchmark_scores=tiers.get("launch-qualified"),
+        promotion_benchmark_scores=tiers.get("promotion-qualified"),
+        benchmark_scores=latest_scores,
+        require_reachable=require_reachable,
+    )
+    evaluation["profile_name"] = profile_name
+    evaluation["profile"] = profile
+    evaluation["artifact_history"] = artifact_history
+    evaluation["aggregate_scores"] = aggregate_scores
+    return evaluation
 
 
 _ROLE_LANES: dict[str, tuple[str, ...]] = {
@@ -263,6 +525,23 @@ def _recommend_lane(entries: list[ModelCatalogEntry], lane: str) -> dict[str, An
     }
 
 
+def build_lane_trace_context(catalog: dict[str, Any], selected_lane: str) -> dict[str, Any]:
+    lane_recommendations = dict(catalog.get("lane_recommendations") or {})
+    lane_summary = dict(lane_recommendations.get(selected_lane) or {})
+    return {
+        "selected_lane": selected_lane,
+        "preferred_lanes": list(catalog.get("preferred_lanes") or []),
+        "summary": {
+            "preferred": lane_summary.get("preferred"),
+            "best_local": lane_summary.get("best_local"),
+            "best_cloud_via_ollama": lane_summary.get("best_cloud_via_ollama"),
+            "best_remote_direct": lane_summary.get("best_remote_direct"),
+            "fallback": lane_summary.get("fallback"),
+            "rationale": list(lane_summary.get("rationale") or []),
+        },
+    }
+
+
 def sync_model_catalog(
     *,
     ollama_endpoint: str,
@@ -294,6 +573,7 @@ def sync_model_catalog(
                 family=spec.family,
                 lanes=list(spec.lanes),
                 capabilities=list(spec.capabilities),
+                supported_languages=list(spec.supported_languages),
                 access_mode=access_mode,
                 endpoint=ollama_endpoint,
                 installed=installed,
@@ -316,6 +596,7 @@ def sync_model_catalog(
                 family="unknown",
                 lanes=["code-generation", "explainer"],
                 capabilities=["installed-unknown"],
+                supported_languages=[],
                 access_mode=ollama_access_mode,
                 endpoint=ollama_endpoint,
                 installed=True,
@@ -337,6 +618,7 @@ def sync_model_catalog(
                 family=str(entry.get("family", "remote-direct")),
                 lanes=[str(lane) for lane in entry.get("lanes", ["explainer"])],
                 capabilities=[str(cap) for cap in entry.get("capabilities", ["remote-direct"])],
+                supported_languages=[str(language) for language in entry.get("supported_languages", [])],
                 access_mode="remote-direct",
                 endpoint=str(entry.get("endpoint", "")),
                 installed=False,

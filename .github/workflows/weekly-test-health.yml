@@ -279,7 +279,7 @@ jobs:
         run: |
           WEEK=$(date +"%Y-W%V")
           python .github/scripts/create_github_issue.py \
-            --title "🧪 [Test Health] HLF coverage + AI-generated tests — ${WEEK}" \
+            --title "🧪 [Test Health] HLF coverage + AI-generated tests" \
             --body "@/tmp/test_issue.md" \
             --labels "testing,automated,coverage" \
             --conflict-title-substrings "test health,coverage + ai-generated tests" \

@@ -2,15 +2,13 @@
 # ║  HLF — Weekly Ethics Alignment Review                                        ║
 # ║                                                                              ║
 # ║  Model: deepseek-r1:14b (DeepSeek)                                          ║
-# ║  Best-in-class: Chain-of-thought reasoning, transparent thinking traces     ║
-# ║  Why: Ethics review is a REASONING task, not a coding task. The question    ║
-# ║        "does this PR violate the people-first ethos?" requires weighing      ║
-# ║        competing considerations — exactly what chain-of-thought excels at.  ║
-# ║        The "thinking" flag shows the full reasoning, making it auditable     ║
-# ║        (itself an ethos requirement: transparency in governance).            ║
+# ║  Why: ethics review still benefits from reasoning, but issue creation is    ║
+# ║        now gated to concrete regressions in changed governance surfaces      ║
+# ║        instead of recurring baseline philosophy reports.                     ║
 # ║                                                                              ║
 # ║  Triggers: Weekly Tuesday 02:00 UTC                                         ║
-# ║  Output: GitHub Issue with ethics compliance report + reasoning traces       ║
+# ║  Output: GitHub Issue only when changed ethics surfaces produce an           ║
+# ║          actionable, code-grounded finding                                  ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 name: "Weekly — Ethics Alignment Review (deepseek-r1:14b)"
 
@@ -57,6 +55,21 @@ jobs:
           # Limit diff size
           head -c 20000 /tmp/recent_diff.txt > /tmp/recent_diff_truncated.txt
 
+      - name: Detect relevant ethics/governance surface changes
+        id: ethics_scope
+        run: |
+          git --no-pager diff --name-only HEAD~10 HEAD -- \
+            governance/align_rules.json \
+            hlf_mcp/hlf/ethics/ \
+            hlf_mcp/hlf/compiler.py \
+            hlf_mcp/hlf/runtime.py > /tmp/ethics_changed_files.txt 2>/dev/null || true
+          cat /tmp/ethics_changed_files.txt
+          if [ -s /tmp/ethics_changed_files.txt ]; then
+            echo "has_relevant_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_relevant_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Read ALIGN rules and ethics stubs
         run: |
           ALIGN_CONTENT=$(cat governance/align_rules.json 2>/dev/null || echo '{}')
@@ -69,13 +82,15 @@ jobs:
           echo "$ALIGN_CONTENT" > /tmp/align_rules.txt
           printf "$ETHICS_FILES" > /tmp/ethics_stubs.txt
 
-      - name: "deepseek-r1:14b — Reasoning ethics review"
+      - name: "deepseek-r1:14b — Current-change ethics review"
+        if: steps.ethics_scope.outputs.has_relevant_changes == 'true'
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           ETHICS_STATUS=$(python -c "import json; d=json.load(open('/tmp/ethics_report.json')); print(d['summary_text'])")
           RECENT_COMMITS=$(cat /tmp/recent_commits.txt)
           RECENT_DIFF=$(cat /tmp/recent_diff_truncated.txt)
+          CHANGED_FILES=$(cat /tmp/ethics_changed_files.txt)
           ALIGN_RULES=$(cat /tmp/align_rules.txt)
           ETHICS_STUBS=$(cat /tmp/ethics_stubs.txt)
 
@@ -91,16 +106,19 @@ jobs:
           6. NON-OPPRESSIVE — enables creativity and legitimate research (red-hat path)
 
           Your task:
-          A) Review the ethics compliance status and identify the MOST CRITICAL gap
-          B) Review the recent code changes and check if any violate or weaken the ethos
-          C) Identify which ALIGN rules are missing or insufficient
-          D) For each finding, reason through WHY it matters to real people, not just abstract principles
-          E) Propose the single most important concrete action for the local agent to take this week
+          A) Review only the changed ethics/governance/runtime/compiler surfaces
+          B) Determine whether those current changes introduce an actionable ethos regression or governance gap
+          C) If there is no concrete actionable finding in the changed surfaces, output exactly: NO_ACTIONABLE_FINDINGS
+          D) If there is a finding, report only findings grounded in the provided changed files
 
-          Think step by step. Show your reasoning. Be honest about gaps — do not soften findings.
+          Do not generate philosophy-only backlog items from known baseline incompleteness.
+          Do not include hidden reasoning or thinking traces.
 
           --- ETHICS MODULE STATUS ---
           ${ETHICS_STATUS}
+
+          --- RELEVANT CHANGED FILES ---
+          ${CHANGED_FILES}
 
           --- RECENT COMMITS (last 20) ---
           ${RECENT_COMMITS}
@@ -118,14 +136,34 @@ jobs:
           python .github/scripts/ollama_client.py \
             --model "deepseek-r1:14b" \
             --fallback-model "nemotron-3-super" \
-            --system "You are a constitutional AI ethics reviewer. You reason carefully and transparently, showing your thinking. You care deeply about real people — not abstract concepts. Your reviews are honest, non-reductive, and actionable. You do NOT sanitize findings." \
+            --system "You are a constitutional AI ethics reviewer. Review current changed surfaces only, ground every finding in the provided code, and avoid turning standing philosophical gaps into recurring issues." \
             --prompt "@/tmp/ethics_prompt.txt" \
             --output /tmp/ethics_review.json \
-            --think \
             --temperature 0.1
 
           python -c "import json; d=json.load(open('/tmp/ethics_review.json')); print(d['content'])" > /tmp/ethics_review.md
           echo "Ethics review generated ($(wc -c < /tmp/ethics_review.md) chars)"
+
+      - name: Write no-op ethics review placeholder
+        if: steps.ethics_scope.outputs.has_relevant_changes != 'true'
+        run: |
+          cat > /tmp/ethics_review.json << 'EOF'
+          {"content": "NO_ACTIONABLE_FINDINGS", "reason": "no_relevant_changes"}
+          EOF
+          echo "NO_ACTIONABLE_FINDINGS" > /tmp/ethics_review.md
+
+      - name: Gate ethics issue creation
+        id: ethics_gate
+        run: |
+          python << 'PYEOF'
+          import os
+          from pathlib import Path
+
+          text = Path('/tmp/ethics_review.md').read_text(encoding='utf-8').strip()
+          actionable = 'NO_ACTIONABLE_FINDINGS' not in text and 'No actionable findings' not in text
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              fh.write(f"has_findings={'true' if actionable else 'false'}\n")
+          PYEOF
 
       - name: Build issue body
         run: |
@@ -137,12 +175,10 @@ jobs:
           cat > /tmp/ethics_issue.md << ISSUE_EOF
           ## ⚖️ HLF Ethics Alignment Review — ${WEEK}
 
-          **Reviewed by**: \`deepseek-r1:14b\` (chain-of-thought reasoning, thinking traces enabled)
+          **Reviewed by**: \`deepseek-r1:14b\` (changed-surface ethics review)
           **Workflow**: [Weekly Ethics Review]($RUN_URL)
 
-          > _This review is produced by a reasoning model with transparent thinking enabled.
-          > The "think" flag means the model's reasoning process is visible, not just its conclusion.
-          > This is itself an ethos requirement: governance must be transparent, not black-box._
+          > _This report is emitted only when changed governance/ethics/runtime surfaces produce a concrete actionable finding._
 
           ---
 
@@ -154,7 +190,7 @@ jobs:
 
           ---
 
-          ## 🧠 AI Ethics Review (deepseek-r1:14b, thinking enabled)
+          ## 🧠 AI Ethics Review (deepseek-r1:14b)
 
           ISSUE_EOF
 
@@ -181,13 +217,13 @@ jobs:
           retention-days: 90
 
       - name: Create GitHub issue
+        if: steps.ethics_scope.outputs.has_relevant_changes == 'true' && steps.ethics_gate.outputs.has_findings == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          WEEK=$(date +"%Y-W%V")
           python .github/scripts/create_github_issue.py \
-            --title "⚖️ [Ethics Review] HLF ethics alignment — ${WEEK}" \
+            --title "⚖️ [Ethics Review] HLF ethics alignment" \
             --body "@/tmp/ethics_issue.md" \
             --labels "ethics,governance,automated" \
             --conflict-labels "ethics" \

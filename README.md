@@ -23,8 +23,8 @@ This repo carries three things at once:
 - the code that already exists now
 - the bridge work needed to recover the larger system without flattening it
 
-Visual guide:
-read the repo through three lanes rather than one flattened story.
+Three-lane view:
+read the repo through vision, current truth, and bridge rather than one flattened story.
 
 ```mermaid
 flowchart LR
@@ -44,34 +44,6 @@ flowchart LR
     class B bridge
 ```
 
-If you want the vision first, read these:
-
-1. `docs/HLF_VISION_PLAIN_LANGUAGE.md`
-2. `docs/HLF_MCP_POSITIONING.md`
-3. `docs/HLF_CLAIM_LANES.md`
-4. `docs/HLF_RECURSIVE_BUILD_STORY.md`
-5. `docs/HLF_VISION_MAP.md`
-6. `docs/HLF_MISSING_PILLARS.md`
-7. `docs/HLF_DESIGN_NORTH_STAR.md`
-8. `HLF_VISION_DOCTRINE.md`
-
-If you want the strict current build truth, read these:
-
-1. `SSOT_HLF_MCP.md`
-2. `HLF_QUALITY_TARGETS.md`
-3. `BUILD_GUIDE.md`
-4. `CHANGELOG.md`
-
-If you want the bridge from current repo to full HLF, read these:
-
-1. `HLF_ACTIONABLE_PLAN.md`
-2. `HLF_CANONICALIZATION_MATRIX.md`
-3. `HLF_IMPLEMENTATION_INDEX.md`
-4. `HLF_SOURCE_EXTRACTION_LEDGER.md`
-5. `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`
-6. `plan/architecture-hlf-reconstruction-2.md`
-7. `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`
-
 Quick reading guide for first-time readers:
 
 | If you want... | Read this first | Then read |
@@ -81,20 +53,17 @@ Quick reading guide for first-time readers:
 | the recovery path | `plan/architecture-hlf-reconstruction-2.md` | `HLF_ACTIONABLE_PLAN.md` |
 | the wording discipline | `docs/HLF_CLAIM_LANES.md` | `docs/HLF_MCP_POSITIONING.md` |
 
+For a broader document map after that first pass, use `HLF_IMPLEMENTATION_INDEX.md`, `HLF_SOURCE_EXTRACTION_LEDGER.md`, `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`, and `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`.
+
 Repository boundary:
 
 - `hlf_mcp/` is the packaged product surface and the main implementation line.
 - `hlf/` is a retained compatibility and support layer with useful legacy and bridge assets.
 - `hlf_source/` is preserved source context and reconstruction evidence from the broader Sovereign system.
 
-Short version:
-
 HLF is not supposed to stay a neat MCP wrapper.
-
 It is supposed to become a governed language and coordination substrate that connects intent, tools, memory, policy, execution, and human-readable trust.
-
-This repo already contains real parts of that system.
-The rest has to be recovered and built, not explained away.
+This repo already contains real parts of that system, and the rest has to be recovered rather than explained away.
 
 Bridge execution note:
 
@@ -120,9 +89,7 @@ The current honest milestone is local and bounded build assistance first.
 
 That is why this repo's build story is part of its product evidence, not just background process.
 
-For the full version of that claim, read `docs/HLF_RECURSIVE_BUILD_STORY.md`.
-For the audience-specific phrasing rules, read `docs/HLF_MESSAGING_LADDER.md`.
-For the latest changelog-style release summary, read `CHANGELOG.md`.
+For the full version of that claim, read `docs/HLF_RECURSIVE_BUILD_STORY.md`. For audience phrasing rules, read `docs/HLF_MESSAGING_LADDER.md`.
 
 ## For Agents And Builders
 
@@ -150,8 +117,8 @@ So the clean position is:
 
 For the full doctrinal version of that distinction, read `docs/HLF_MCP_POSITIONING.md`.
 
-Visual guide:
-MCP is the shipped entry surface, not the full ontology of the system.
+MCP front-door view:
+the shipped MCP surface is the entry lane, not the full ontology of the system.
 
 
 ```mermaid
@@ -183,8 +150,8 @@ flowchart TD
     class S,G,M,E,C,L,R system
 ```
 
-Visual guide:
-these are the constitutive pillars the repo is trying to hold together, rather than collapse into a parser-only or MCP-only story.
+Constitutive pillars view:
+these are the major surfaces the repo is trying to hold together rather than collapse into a parser-only or MCP-only story.
 
 ```mermaid
 flowchart TB

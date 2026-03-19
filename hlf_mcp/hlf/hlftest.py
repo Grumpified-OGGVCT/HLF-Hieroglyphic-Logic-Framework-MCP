@@ -216,9 +216,7 @@ def _cli_main(argv: list[str] | None = None) -> int:
         f"  Total: {total_report.total}  Passed: {total_report.passed}  "
         f"Failed: {total_report.failed}"
     )
-    print(
-        f"  Gas: {total_report.total_gas}  Time: {total_report.total_elapsed_ms:.0f}ms"
-    )
+    print(f"  Gas: {total_report.total_gas}  Time: {total_report.total_elapsed_ms:.0f}ms")
 
     if strict:
         return 0 if total_report.failed == 0 else 1

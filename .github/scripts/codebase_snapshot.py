@@ -17,8 +17,6 @@ Respects a soft token budget (defaults to 200K tokens @ ~4 chars/token = 800K ch
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import sys
 from pathlib import Path
 
@@ -53,8 +51,15 @@ SECONDARY_PATHS_GLOBS = [
 ]
 
 EXCLUDE_PATTERNS = [
-    "__pycache__", ".git", ".pytest_cache", "*.pyc", ".venv", "node_modules",
-    "*.egg-info", "dist", "build",
+    "__pycache__",
+    ".git",
+    ".pytest_cache",
+    "*.pyc",
+    ".venv",
+    "node_modules",
+    "*.egg-info",
+    "dist",
+    "build",
 ]
 
 CHAR_BUDGET = 800_000  # ~200K tokens
@@ -140,6 +145,7 @@ def build_snapshot(
     if used < char_budget * 0.9:
         _add("## SECONDARY SOURCE FILES\n\n")
         import glob as _glob
+
         seen = {ROOT / r for r in PRIORITY_PATHS}
         for pattern in SECONDARY_PATHS_GLOBS:
             for match in sorted(_glob.glob(str(ROOT / pattern))):
@@ -157,7 +163,9 @@ def build_snapshot(
 
     if output_file:
         Path(output_file).write_text(snapshot, encoding="utf-8")
-        print(f"[codebase_snapshot] Wrote {len(snapshot):,} chars to {output_file}", file=sys.stderr)
+        print(
+            f"[codebase_snapshot] Wrote {len(snapshot):,} chars to {output_file}", file=sys.stderr
+        )
     else:
         sys.stdout.write(snapshot)
 

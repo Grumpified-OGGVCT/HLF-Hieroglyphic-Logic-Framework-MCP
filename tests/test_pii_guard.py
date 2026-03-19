@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from hlf_mcp.hlf.pii_guard import (
     PIICategory,
     PIIDetection,
@@ -26,8 +24,8 @@ from hlf_mcp.hlf.pii_guard import (
     scan_for_pii,
 )
 
-
 # ── PIIDetection ──────────────────────────────────────────────────────────────
+
 
 class TestPIIDetection:
     def test_redaction_short_value(self):
@@ -47,6 +45,7 @@ class TestPIIDetection:
 
 
 # ── PIIScanResult ─────────────────────────────────────────────────────────────
+
 
 class TestPIIScanResult:
     def test_to_dict_no_pii(self):
@@ -72,6 +71,7 @@ class TestPIIScanResult:
 
 
 # ── PIIGuard.scan() ───────────────────────────────────────────────────────────
+
 
 class TestPIIGuardScan:
     def setup_method(self):
@@ -162,6 +162,7 @@ class TestPIIGuardScan:
 
 # ── PIIGuard.scan_and_block() ─────────────────────────────────────────────────
 
+
 class TestScanAndBlock:
     def setup_method(self):
         self.guard = PIIGuard()
@@ -180,6 +181,7 @@ class TestScanAndBlock:
 
 
 # ── Convenience functions ─────────────────────────────────────────────────────
+
 
 class TestConvenienceFunctions:
     def test_scan_for_pii_returns_result_object(self):
@@ -201,7 +203,9 @@ class TestConvenienceFunctions:
         assert "pattern_count" in stats
         assert stats["pattern_count"] >= 7
         assert "EMAIL" in stats["categories"]
-        assert stats["policy_source"].endswith("governance\\pii_policy.json") or stats["policy_source"].endswith("governance/pii_policy.json")
+        assert stats["policy_source"].endswith("governance\\pii_policy.json") or stats[
+            "policy_source"
+        ].endswith("governance/pii_policy.json")
 
 
 class TestGovernedPIIPolicy:
@@ -227,11 +231,13 @@ class TestGovernedPIIPolicy:
 
 # ── Runtime integration: memory_store PII guard ───────────────────────────────
 
+
 class TestRuntimeMemoryStorePIIGuard:
     """Verify that _dispatch_host('memory_store', ...) redacts PII values."""
 
     def _call_memory_store(self, value: str) -> tuple[dict, list]:
         from hlf_mcp.hlf.runtime import _dispatch_host
+
         scope: dict = {}
         side_effects: list = []
         _dispatch_host("memory_store", ["test_key", value], scope, side_effects)
@@ -272,6 +278,7 @@ class TestRuntimeMemoryStorePIIGuard:
 
     def test_none_value_handled_gracefully(self):
         from hlf_mcp.hlf.runtime import _dispatch_host
+
         scope: dict = {}
         side_effects: list = []
         # Two args: key + None as value

@@ -53,7 +53,9 @@ def register_verifier_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         property_name: str = "gas_budget",
     ) -> dict[str, Any]:
         """Prove or refute that a deterministic gas budget covers the supplied task costs."""
-        result = ctx.formal_verifier.verify_gas_budget(task_costs, budget, property_name=property_name)
+        result = ctx.formal_verifier.verify_gas_budget(
+            task_costs, budget, property_name=property_name
+        )
         governance_event = ctx.emit_governance_event(
             kind="formal_verification",
             source="server_verifier.hlf_verify_gas_budget",

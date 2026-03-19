@@ -49,20 +49,20 @@ class TestHLFTestHarness:
 
     def test_runner_directory(self, tmp_path: Path) -> None:
         for name in ["a", "b"]:
-            (tmp_path / f"{name}.hlf").write_text(_program('SET value = 1'), encoding="utf-8")
+            (tmp_path / f"{name}.hlf").write_text(_program("SET value = 1"), encoding="utf-8")
         report = HLFTestRunner().test_directory(tmp_path)
         assert report.total == 2
         assert report.total_gas > 0
 
     def test_assert_helpers(self) -> None:
-        result = assert_compiles('SET port = 8080')
+        result = assert_compiles("SET port = 8080")
         assert result.compiles is True
         with pytest.raises(AssertionError, match="exceeds limit"):
-            assert_gas_under('SET x = 1', limit=0)
+            assert_gas_under("SET x = 1", limit=0)
 
     def test_cli_entry(self, tmp_path: Path) -> None:
         hlf_file = tmp_path / "ok.hlf"
-        hlf_file.write_text(_program('SET ok = true'), encoding="utf-8")
+        hlf_file.write_text(_program("SET ok = true"), encoding="utf-8")
         assert _cli_main([str(hlf_file)]) == 0
 
 
@@ -81,7 +81,7 @@ class TestHLFShell:
         assert shell.env["name"] == "world"
 
     def test_gas_and_reset_commands(self, shell: HLFShell) -> None:
-        shell.eval('SET count = 1')
+        shell.eval("SET count = 1")
         gas = shell.handle_command(":gas")
         assert gas is not None and "Gas used" in gas
         reset = shell.handle_command(":reset")
@@ -98,7 +98,7 @@ class TestHLFShell:
 
     def test_load_and_quit(self, shell: HLFShell, tmp_path: Path) -> None:
         hlf_file = tmp_path / "loadable.hlf"
-        hlf_file.write_text(_program('SET loaded = true'), encoding="utf-8")
+        hlf_file.write_text(_program("SET loaded = true"), encoding="utf-8")
         loaded = shell.handle_command(f":load {hlf_file}")
         assert loaded is not None and "loaded = true" in loaded
         with pytest.raises(SystemExit):

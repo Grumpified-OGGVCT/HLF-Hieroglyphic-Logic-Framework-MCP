@@ -5,7 +5,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -25,13 +24,21 @@ def test_verify_chain_accepts_valid_chain() -> None:
     second = {"event": "run", "data": {"status": "ok"}}
 
     first["trace_id"] = hashlib.sha256(
-        (module.ZERO_HASH + json.dumps({"event": "compile", "data": {"file": "hello.hlf"}}, sort_keys=True)).encode()
+        (
+            module.ZERO_HASH
+            + json.dumps({"event": "compile", "data": {"file": "hello.hlf"}}, sort_keys=True)
+        ).encode()
     ).hexdigest()
     second["trace_id"] = hashlib.sha256(
-        (first["trace_id"] + json.dumps({"event": "run", "data": {"status": "ok"}}, sort_keys=True)).encode()
+        (
+            first["trace_id"]
+            + json.dumps({"event": "run", "data": {"status": "ok"}}, sort_keys=True)
+        ).encode()
     ).hexdigest()
 
-    ok, errors, final_hash = module.verify_chain([first, second], expected_last_hash=second["trace_id"])
+    ok, errors, final_hash = module.verify_chain(
+        [first, second], expected_last_hash=second["trace_id"]
+    )
     assert ok is True
     assert errors == []
     assert final_hash == second["trace_id"]

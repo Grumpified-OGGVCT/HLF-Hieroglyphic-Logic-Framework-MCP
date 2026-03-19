@@ -7,10 +7,11 @@ hlf_to_english() converts HLF AST to prose (using InsAIts human_readable fields)
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
+
 import locale
 import os
 import re
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -38,8 +39,29 @@ _SYSTEM_LANGUAGE_HINTS: dict[str, str] = {
 
 _LANGUAGE_CUE_WORDS: dict[str, tuple[str, ...]] = {
     "en": ("analyze", "read", "check", "inspect", "audit", "delegate", "remember", "recall"),
-    "fr": ("analyser", "lire", "verifier", "vérifier", "inspecter", "audit", "deleguer", "déléguer", "memoire", "mémoire", "rappeler"),
-    "es": ("analizar", "leer", "verificar", "inspeccionar", "auditar", "delegar", "recordar", "recuperar"),
+    "fr": (
+        "analyser",
+        "lire",
+        "verifier",
+        "vérifier",
+        "inspecter",
+        "audit",
+        "deleguer",
+        "déléguer",
+        "memoire",
+        "mémoire",
+        "rappeler",
+    ),
+    "es": (
+        "analizar",
+        "leer",
+        "verificar",
+        "inspeccionar",
+        "auditar",
+        "delegar",
+        "recordar",
+        "recuperar",
+    ),
     "ar": ("تحليل", "اقرأ", "قراءة", "تحقق", "تفقد", "راجع", "فوض", "تذكر", "استرجع"),
     "zh": ("分析", "读取", "检查", "审计", "查看", "委托", "记住", "召回", "检索"),
 }
@@ -263,28 +285,43 @@ _PATH_PATTERNS: dict[str, re.Pattern[str]] = {
     "zh": re.compile(r"(?:[A-Za-z]:[\\/][^\s\"']+|/[\w/._-]+)"),
 }
 
+
 class Tone(Enum):
-    NEUTRAL    = "neutral"
+    NEUTRAL = "neutral"
     FRUSTRATED = "frustrated"
-    URGENT     = "urgent"
-    CURIOUS    = "curious"
-    CONFIDENT  = "confident"
-    UNCERTAIN  = "uncertain"
-    DECISIVE   = "decisive"
+    URGENT = "urgent"
+    CURIOUS = "curious"
+    CONFIDENT = "confident"
+    UNCERTAIN = "uncertain"
+    DECISIVE = "decisive"
+
 
 _TONE_CUE_WORDS: dict[Tone, list[str]] = {
-    Tone.FRUSTRATED: ["stuck", "frustrated", "annoyed", "blocked", "cannot", "impossible", "broken"],
-    Tone.URGENT:     ["urgent", "critical", "asap", "immediately", "deadline", "emergency", "now"],
-    Tone.CURIOUS:    ["wonder", "curious", "explore", "investigate", "understand", "what if"],
-    Tone.CONFIDENT:  ["will", "definitely", "certainly", "sure", "completed", "done", "ready"],
-    Tone.UNCERTAIN:  ["maybe", "might", "perhaps", "unclear", "unsure", "think", "possibly"],
-    Tone.DECISIVE:   ["must", "shall", "required", "executing", "enforce", "mandate"],
+    Tone.FRUSTRATED: [
+        "stuck",
+        "frustrated",
+        "annoyed",
+        "blocked",
+        "cannot",
+        "impossible",
+        "broken",
+    ],
+    Tone.URGENT: ["urgent", "critical", "asap", "immediately", "deadline", "emergency", "now"],
+    Tone.CURIOUS: ["wonder", "curious", "explore", "investigate", "understand", "what if"],
+    Tone.CONFIDENT: ["will", "definitely", "certainly", "sure", "completed", "done", "ready"],
+    Tone.UNCERTAIN: ["maybe", "might", "perhaps", "unclear", "unsure", "think", "possibly"],
+    Tone.DECISIVE: ["must", "shall", "required", "executing", "enforce", "mandate"],
 }
 
 _NUANCE_GLYPHS: dict[str, str] = {
-    "frustrated": "⚠", "urgent": "⚡", "curious": "🔍",
-    "confident":  "✓", "uncertain": "?", "decisive": "!",
+    "frustrated": "⚠",
+    "urgent": "⚡",
+    "curious": "🔍",
+    "confident": "✓",
+    "uncertain": "?",
+    "decisive": "!",
 }
+
 
 def detect_tone(text: str) -> Tone:
     text_lower = text.lower()
@@ -444,7 +481,12 @@ def translation_diagnostics(
     fallback_count = 0
     for line in effective_source.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith("[HLF-v") or stripped.startswith("#") or stripped == "Ω":
+        if (
+            not stripped
+            or stripped.startswith("[HLF-v")
+            or stripped.startswith("#")
+            or stripped == "Ω"
+        ):
             continue
         extracted_statement_count += 1
         if fallback_marker in stripped:
@@ -455,12 +497,20 @@ def translation_diagnostics(
                 goal_value = stripped.split('goal="', 1)[1].split('"', 1)[0]
             except Exception:
                 goal_value = ""
-            if not any(flag for flag in _semantic_expectations(text, language=resolved_language).values()) and goal_value not in recognized_goals:
+            if (
+                not any(
+                    flag
+                    for flag in _semantic_expectations(text, language=resolved_language).values()
+                )
+                and goal_value not in recognized_goals
+            ):
                 fallback_count += 1
 
     expected = _semantic_expectations(text, language=resolved_language)
     actual = _semantic_actuals(effective_source)
-    missing = tuple(key for key, expected_present in expected.items() if expected_present and not actual[key])
+    missing = tuple(
+        key for key, expected_present in expected.items() if expected_present and not actual[key]
+    )
     expected_count = sum(1 for present in expected.values() if present)
     matched_count = expected_count - len(missing)
     fidelity_score = round((matched_count / expected_count), 3) if expected_count else 1.0
@@ -571,17 +621,21 @@ def build_translation_repair_plan(
         diagnostics=diagnostics,
     )
 
+
 def english_to_hlf(english: str, tone: Tone | None = None, version: str = "3") -> str:
     """Convert English instructions to HLF program source."""
     return _language_profile_to_hlf(english, language="en", tone=tone, version=version)
+
 
 def french_to_hlf(french: str, tone: Tone | None = None, version: str = "3") -> str:
     """Convert French instructions to HLF program source."""
     return _language_profile_to_hlf(french, language="fr", tone=tone, version=version)
 
+
 def spanish_to_hlf(spanish: str, tone: Tone | None = None, version: str = "3") -> str:
     """Convert Spanish instructions to HLF program source."""
     return _language_profile_to_hlf(spanish, language="es", tone=tone, version=version)
+
 
 def arabic_to_hlf(arabic: str, tone: Tone | None = None, version: str = "3") -> str:
     """Convert Arabic instructions to HLF program source."""
@@ -604,12 +658,13 @@ def _language_profile_to_hlf(text: str, language: str, tone: Tone | None, versio
     lines.append("Ω")
     return "\n".join(lines) + "\n"
 
+
 def _extract_actions(text: str, *, language: str = "en") -> list[str]:
     """Heuristically extract HLF statements from supported language text."""
     profile = _LANGUAGE_PROFILES[language]
     actions = []
     # Split sentence boundaries without breaking dotted file paths like /var/log/app.log.
-    sentences = re.split(r'[;!?\n]|\.(?!\w)', text)
+    sentences = re.split(r"[;!?\n]|\.(?!\w)", text)
     for sentence in sentences:
         s = sentence.strip()
         if not s:
@@ -626,9 +681,11 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
         elif any(w in s_lower for w in profile.route_words):
             actions.append(f'⌘ [ROUTE] strategy="{profile.route_strategy}" tier="$DEPLOYMENT_TIER"')
         elif any(w in s_lower for w in profile.memory_store_words):
-            actions.append(f'MEMORY [{profile.memory_label}] value="' + s[:40].replace('"', "'") + '"')
+            actions.append(
+                f'MEMORY [{profile.memory_label}] value="' + s[:40].replace('"', "'") + '"'
+            )
         elif any(w in s_lower for w in profile.memory_recall_words):
-            actions.append(f'RECALL [{profile.recall_label}]')
+            actions.append(f"RECALL [{profile.recall_label}]")
         elif any(w in s_lower for w in profile.vote_words):
             actions.append(f'⨝ [VOTE] consensus="{profile.vote_label}"')
         elif any(w in s_lower for w in profile.assert_words):
@@ -641,13 +698,16 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
             actions.append(f'Δ [INTENT] goal="{goal}"')
     return actions or [f'Δ [INTENT] goal="{profile.generic_execute_goal}"']
 
+
 def _extract_path(text: str, *, language: str = "en") -> str | None:
     m = _PATH_PATTERNS[language].search(text)
     return m.group(0) if m else None
 
+
 def _extract_quoted(text: str) -> str | None:
     m = re.search(r'"([^"]+)"', text)
     return m.group(1) if m else None
+
 
 def hlf_to_english(ast: dict[str, Any]) -> str:
     """Convert HLF AST to natural language summary using human_readable fields."""
@@ -669,10 +729,15 @@ def hlf_to_language(ast: dict[str, Any], language: str = "en") -> str:
     program_hr = ast.get("human_readable", "")
     if program_hr:
         prefix = program_hr + profile.summary_prefix_suffix
-        return prefix + profile.joiner.join(summaries) + "." if summaries else profile.no_readable_statements
+        return (
+            prefix + profile.joiner.join(summaries) + "."
+            if summaries
+            else profile.no_readable_statements
+        )
     if summaries:
         return f"{profile.localized_human_readable_prefix}{profile.summary_prefix_suffix}{profile.joiner.join(summaries)}."
     return profile.no_readable_statements
+
 
 def hlf_source_to_english(source: str) -> str:
     """Convenience: parse source and return English summary."""
@@ -684,6 +749,7 @@ def hlf_source_to_language(source: str, language: str = "en") -> str:
     resolved_language = resolve_language(language)
     profile = _LANGUAGE_PROFILES[resolved_language]
     from hlf_mcp.hlf.compiler import HLFCompiler
+
     try:
         result = HLFCompiler().compile(source)
         return hlf_to_language(result["ast"], language=resolved_language)

@@ -6,7 +6,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-
 GovernanceEventKind = Literal[
     "routing_decision",
     "model_catalog_sync",

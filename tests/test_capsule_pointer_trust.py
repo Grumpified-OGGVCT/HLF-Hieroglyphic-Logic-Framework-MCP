@@ -4,7 +4,12 @@ import uuid
 
 from hlf_mcp import server
 from hlf_mcp.hlf.capsules import capsule_for_tier
-from hlf_mcp.hlf.formal_verifier import ConstraintKind, VerificationReport, VerificationResult, VerificationStatus
+from hlf_mcp.hlf.formal_verifier import (
+    ConstraintKind,
+    VerificationReport,
+    VerificationResult,
+    VerificationStatus,
+)
 from hlf_mcp.hlf.memory_node import HLFPointer, build_pointer_ref, verify_pointer_ref
 from hlf_mcp.hlf.runtime import _dispatch_host
 
@@ -261,7 +266,9 @@ def test_capsule_run_denies_when_verifier_finds_counterexample(monkeypatch) -> N
     monkeypatch.setattr(server._ctx.formal_verifier, "verify_constraints", lambda ast: report)
 
     source = '[HLF-v3]\nΔ [INTENT] goal="sealed-run"\n∇ [RESULT] message="sealed"\nΩ\n'
-    result = server.hlf_capsule_run(source, tier="hearth", capsule_id=_unique_capsule_id("capsule-proof-deny"))
+    result = server.hlf_capsule_run(
+        source, tier="hearth", capsule_id=_unique_capsule_id("capsule-proof-deny")
+    )
 
     assert result["status"] == "verification_denied"
     assert result["verification"]["verdict"] == "verification_denied"
@@ -281,7 +288,9 @@ def test_capsule_run_allows_when_verifier_proves_packaged_constraints(monkeypatc
     monkeypatch.setattr(server._ctx.formal_verifier, "verify_constraints", lambda ast: report)
 
     source = '[HLF-v3]\nΔ [INTENT] goal="sealed-run"\n∇ [RESULT] message="sealed"\nΩ\n'
-    result = server.hlf_capsule_run(source, tier="hearth", capsule_id=_unique_capsule_id("capsule-proof-allow"))
+    result = server.hlf_capsule_run(
+        source, tier="hearth", capsule_id=_unique_capsule_id("capsule-proof-allow")
+    )
 
     assert result["status"] == "ok"
     assert result["verification"]["admitted"] is True

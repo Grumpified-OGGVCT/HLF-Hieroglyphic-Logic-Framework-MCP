@@ -75,7 +75,9 @@ class VerificationReport:
 
     @property
     def failed_count(self) -> int:
-        return sum(1 for result in self.results if result.status == VerificationStatus.COUNTEREXAMPLE)
+        return sum(
+            1 for result in self.results if result.status == VerificationStatus.COUNTEREXAMPLE
+        )
 
     @property
     def total_count(self) -> int:
@@ -95,7 +97,11 @@ class VerificationReport:
 
     @property
     def all_proven(self) -> bool:
-        return self.total_count > 0 and self.failed_count == 0 and self.proven_count == self.total_count
+        return (
+            self.total_count > 0
+            and self.failed_count == 0
+            and self.proven_count == self.total_count
+        )
 
     def add(self, result: VerificationResult) -> None:
         self.results.append(result)
@@ -308,7 +314,9 @@ class FallbackSolver:
             duration_ms=(time.time() - start) * 1000,
         )
 
-    def check_gas_budget(self, task_costs: list[int], budget: int, *, name: str = "") -> VerificationResult:
+    def check_gas_budget(
+        self, task_costs: list[int], budget: int, *, name: str = ""
+    ) -> VerificationResult:
         start = time.time()
         total = sum(task_costs)
         if total <= budget:
@@ -350,10 +358,14 @@ class FormalVerifier:
             ],
         }
 
-    def verify_constraints(self, ast: dict[str, Any], *, gas_budget: int = 10_000) -> VerificationReport:
+    def verify_constraints(
+        self, ast: dict[str, Any], *, gas_budget: int = 10_000
+    ) -> VerificationReport:
         return self.verify_ast(ast, gas_budget=gas_budget)
 
-    def verify_type(self, value: Any, expected_type: str, *, property_name: str = "") -> VerificationResult:
+    def verify_type(
+        self, value: Any, expected_type: str, *, property_name: str = ""
+    ) -> VerificationResult:
         return self._fallback.check_type(value, expected_type, name=property_name)
 
     def verify_range(

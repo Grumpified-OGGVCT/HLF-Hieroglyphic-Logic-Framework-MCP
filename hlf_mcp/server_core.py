@@ -11,7 +11,6 @@ from hlf_mcp.hlf.compiler import CompileError
 from hlf_mcp.server_context import ServerContext
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
 
-
 _log = logging.getLogger(__name__)
 
 
@@ -127,7 +126,9 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         return ctx.compiler.validate(source)
 
     @mcp.tool()
-    def hlf_benchmark(source: str, compare_text: str | None = None, domain: str | None = None) -> dict[str, Any]:
+    def hlf_benchmark(
+        source: str, compare_text: str | None = None, domain: str | None = None
+    ) -> dict[str, Any]:
         """Measure HLF token compression vs natural language."""
         return ctx.benchmark.analyze(source, compare_text=compare_text, domain=domain)
 
@@ -164,7 +165,8 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         stmts = ast.get("statements", [])
         env: dict[str, Any] = {}
         try:
-            from hlf_mcp.hlf.ethics.governor import GovernorError, check as _ethics_check
+            from hlf_mcp.hlf.ethics.governor import GovernorError
+            from hlf_mcp.hlf.ethics.governor import check as _ethics_check
 
             governor_result = _ethics_check(ast=ast, env=env, source="", tier="hearth")
             strict_mode = _os.environ.get("HLF_STRICT", "1") != "0"
@@ -181,7 +183,9 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 elif strict_mode:
                     return {"status": "blocked", "error": "; ".join(governor_result.blocks)}
                 else:
-                    _log.warning("[HLF_STRICT=0] Governor blocks: %s", "; ".join(governor_result.blocks))
+                    _log.warning(
+                        "[HLF_STRICT=0] Governor blocks: %s", "; ".join(governor_result.blocks)
+                    )
         except GovernorError as exc:
             return {"status": "blocked", "error": str(exc)}
         except Exception as exc:  # pragma: no cover

@@ -185,9 +185,7 @@ class HLFShell:
             diagnostics = self._linter.lint(_ensure_program(self.last_input))
             if not diagnostics:
                 return _green("No lint issues")
-            return "\n".join(
-                f"  {diag['level']}: {diag['message']}" for diag in diagnostics
-            )
+            return "\n".join(f"  {diag['level']}: {diag['message']}" for diag in diagnostics)
         if action in {":quit", ":exit", ":q"}:
             raise SystemExit(0)
         return _red(f"Unknown command: {action}. Type :help for commands.")

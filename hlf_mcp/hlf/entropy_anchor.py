@@ -6,7 +6,6 @@ from typing import Any
 
 from hlf_mcp.hlf import insaits
 
-
 DEFAULT_THRESHOLD = 0.5
 HIGH_RISK_THRESHOLD = 0.65
 POLICY_MODES = {"advisory", "enforce", "high_risk_enforce"}
@@ -44,10 +43,10 @@ class EntropyAnchorResult:
 
 def _resolve_threshold(policy_mode: str, threshold: float | None) -> float:
     if policy_mode not in POLICY_MODES:
-        raise ValueError(
-            f"policy_mode must be one of {sorted(POLICY_MODES)}, got {policy_mode!r}"
-        )
-    effective_threshold = HIGH_RISK_THRESHOLD if policy_mode == "high_risk_enforce" else DEFAULT_THRESHOLD
+        raise ValueError(f"policy_mode must be one of {sorted(POLICY_MODES)}, got {policy_mode!r}")
+    effective_threshold = (
+        HIGH_RISK_THRESHOLD if policy_mode == "high_risk_enforce" else DEFAULT_THRESHOLD
+    )
     if threshold is not None:
         effective_threshold = threshold
     if not 0.0 <= effective_threshold <= 1.0:

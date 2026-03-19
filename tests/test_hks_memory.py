@@ -104,7 +104,9 @@ def test_rag_memory_query_filters_superseded_entries_by_default() -> None:
     assert active["count"] == 1
     assert active["results"][0]["sha256"] == replacement["sha256"]
     assert full_history["count"] == 2
-    superseded = next(result for result in full_history["results"] if result["sha256"] == original["sha256"])
+    superseded = next(
+        result for result in full_history["results"] if result["sha256"] == original["sha256"]
+    )
     assert superseded["evidence"]["superseded"] is True
     assert superseded["governance_status"] == "superseded"
 
@@ -154,9 +156,13 @@ def test_rag_memory_query_filters_stale_and_requires_evidence_backed_provenance(
     provenance_results = memory.query(unique, require_provenance=True)
 
     assert default_results["count"] == 2
-    assert all(result["evidence"]["freshness_status"] == "fresh" for result in default_results["results"])
+    assert all(
+        result["evidence"]["freshness_status"] == "fresh" for result in default_results["results"]
+    )
     assert stale_results["count"] == 3
-    assert any(result["evidence"]["freshness_status"] == "stale" for result in stale_results["results"])
+    assert any(
+        result["evidence"]["freshness_status"] == "stale" for result in stale_results["results"]
+    )
     assert provenance_results["count"] == 1
     assert provenance_results["results"][0]["evidence"]["provenance_grade"] == "evidence-backed"
 

@@ -15,7 +15,6 @@ Features:
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 import hashlib
 import json
 import math
@@ -24,8 +23,8 @@ import re
 import sqlite3
 import threading
 import time
+from dataclasses import asdict, dataclass, field
 from typing import Any
-
 
 # ── Simple vector embedding (bag-of-words TF-IDF approximation) ───────────────
 # Used when a proper ML embedding model is unavailable.
@@ -184,7 +183,13 @@ class HKSValidatedExemplar:
             raise ValueError(f"Unsupported HKS domain: {self.domain}")
 
     def to_content(self) -> str:
-        parts = [self.problem, self.validated_solution, self.summary, self.domain, self.solution_kind]
+        parts = [
+            self.problem,
+            self.validated_solution,
+            self.summary,
+            self.domain,
+            self.solution_kind,
+        ]
         if self.tags:
             parts.append(" ".join(self.tags))
         return "\n".join(part for part in parts if part)
@@ -205,9 +210,7 @@ class RAGMemory:
         # sqlite3.connect(":memory:") would open a *distinct* empty database).
         # For file-backed paths we still share the connection for simplicity
         # and to avoid WAL conflicts between competing connections.
-        self._conn: sqlite3.Connection = sqlite3.connect(
-            self._db_path, check_same_thread=False
-        )
+        self._conn: sqlite3.Connection = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._init_db()
 
@@ -221,8 +224,7 @@ class RAGMemory:
 
     def _ensure_column(self, table: str, column: str, ddl: str) -> None:
         existing = {
-            row["name"]
-            for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+            row["name"] for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
         }
         if column not in existing:
             self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
@@ -258,7 +260,9 @@ class RAGMemory:
             or provenance_payload.get("artifact_path")
         )
         artifact_id = governed_evidence.get("artifact_id") or normalized.get("artifact_id")
-        collector = governed_evidence.get("collector") or provenance_payload.get("collector") or provenance
+        collector = (
+            governed_evidence.get("collector") or provenance_payload.get("collector") or provenance
+        )
         collected_at = (
             governed_evidence.get("collected_at")
             or provenance_payload.get("collected_at")
@@ -267,22 +271,44 @@ class RAGMemory:
         governed_evidence.update(
             {
                 "source_class": governed_evidence.get("source_class") or entry_kind,
-                "source_type": governed_evidence.get("source_type") or provenance_payload.get("source_type") or entry_kind,
-                "source": governed_evidence.get("source") or provenance_payload.get("source") or normalized.get("source") or provenance,
+                "source_type": governed_evidence.get("source_type")
+                or provenance_payload.get("source_type")
+                or entry_kind,
+                "source": governed_evidence.get("source")
+                or provenance_payload.get("source")
+                or normalized.get("source")
+                or provenance,
                 "source_path": source_path,
                 "artifact_id": artifact_id,
-                "workflow_run_url": governed_evidence.get("workflow_run_url") or provenance_payload.get("workflow_run_url"),
+                "workflow_run_url": governed_evidence.get("workflow_run_url")
+                or provenance_payload.get("workflow_run_url"),
                 "branch": governed_evidence.get("branch") or provenance_payload.get("branch"),
-                "commit_sha": governed_evidence.get("commit_sha") or provenance_payload.get("commit_sha"),
+                "commit_sha": governed_evidence.get("commit_sha")
+                or provenance_payload.get("commit_sha"),
                 "collector": collector,
-                "collector_version": governed_evidence.get("collector_version") or normalized.get("collector_version"),
+                "collector_version": governed_evidence.get("collector_version")
+                or normalized.get("collector_version"),
                 "collected_at": collected_at,
-                "confidence": float(governed_evidence.get("confidence") or provenance_payload.get("confidence") or confidence),
-                "fresh_until": governed_evidence.get("fresh_until") or normalized.get("fresh_until"),
-                "trust_tier": governed_evidence.get("trust_tier") or normalized.get("trust_tier") or "local",
-                "operator_summary": governed_evidence.get("operator_summary") or normalized.get("operator_summary") or normalized.get("summary") or "",
-                "revoked": _coerce_bool(governed_evidence.get("revoked") or normalized.get("revoked")),
-                "tombstoned": _coerce_bool(governed_evidence.get("tombstoned") or normalized.get("tombstoned")),
+                "confidence": float(
+                    governed_evidence.get("confidence")
+                    or provenance_payload.get("confidence")
+                    or confidence
+                ),
+                "fresh_until": governed_evidence.get("fresh_until")
+                or normalized.get("fresh_until"),
+                "trust_tier": governed_evidence.get("trust_tier")
+                or normalized.get("trust_tier")
+                or "local",
+                "operator_summary": governed_evidence.get("operator_summary")
+                or normalized.get("operator_summary")
+                or normalized.get("summary")
+                or "",
+                "revoked": _coerce_bool(
+                    governed_evidence.get("revoked") or normalized.get("revoked")
+                ),
+                "tombstoned": _coerce_bool(
+                    governed_evidence.get("tombstoned") or normalized.get("tombstoned")
+                ),
                 "supersedes": governed_evidence.get("supersedes") or supersedes_sha256,
                 "topic": topic,
                 "domain": domain,
@@ -296,7 +322,11 @@ class RAGMemory:
         rows = conn.execute(
             "SELECT DISTINCT supersedes_sha256 FROM fact_store WHERE supersedes_sha256 != ''"
         ).fetchall()
-        return {str(row["supersedes_sha256"]).strip().lower() for row in rows if row["supersedes_sha256"]}
+        return {
+            str(row["supersedes_sha256"]).strip().lower()
+            for row in rows
+            if row["supersedes_sha256"]
+        }
 
     def _build_evidence(
         self,
@@ -306,24 +336,59 @@ class RAGMemory:
         superseded_hashes: set[str],
         now: float,
     ) -> dict[str, Any]:
-        governed = metadata.get("governed_evidence") if isinstance(metadata.get("governed_evidence"), dict) else {}
-        provenance_payload = metadata.get("provenance") if isinstance(metadata.get("provenance"), dict) else {}
+        governed = (
+            metadata.get("governed_evidence")
+            if isinstance(metadata.get("governed_evidence"), dict)
+            else {}
+        )
+        provenance_payload = (
+            metadata.get("provenance") if isinstance(metadata.get("provenance"), dict) else {}
+        )
 
-        collector = governed.get("collector") or provenance_payload.get("collector") or row["provenance"]
-        collected_at = governed.get("collected_at") or provenance_payload.get("collected_at") or _timestamp_to_iso8601(row["created_at"])
-        source = governed.get("source") or provenance_payload.get("source") or metadata.get("source") or row["provenance"]
-        source_type = governed.get("source_type") or provenance_payload.get("source_type") or row["entry_kind"]
-        source_path = governed.get("source_path") or metadata.get("artifact_path") or provenance_payload.get("artifact_path") or metadata.get("source_path")
+        collector = (
+            governed.get("collector") or provenance_payload.get("collector") or row["provenance"]
+        )
+        collected_at = (
+            governed.get("collected_at")
+            or provenance_payload.get("collected_at")
+            or _timestamp_to_iso8601(row["created_at"])
+        )
+        source = (
+            governed.get("source")
+            or provenance_payload.get("source")
+            or metadata.get("source")
+            or row["provenance"]
+        )
+        source_type = (
+            governed.get("source_type")
+            or provenance_payload.get("source_type")
+            or row["entry_kind"]
+        )
+        source_path = (
+            governed.get("source_path")
+            or metadata.get("artifact_path")
+            or provenance_payload.get("artifact_path")
+            or metadata.get("source_path")
+        )
         artifact_id = governed.get("artifact_id") or metadata.get("artifact_id")
-        workflow_run_url = governed.get("workflow_run_url") or provenance_payload.get("workflow_run_url")
+        workflow_run_url = governed.get("workflow_run_url") or provenance_payload.get(
+            "workflow_run_url"
+        )
         branch = governed.get("branch") or provenance_payload.get("branch")
         commit_sha = governed.get("commit_sha") or provenance_payload.get("commit_sha")
-        operator_summary = governed.get("operator_summary") or metadata.get("operator_summary") or metadata.get("summary") or ""
+        operator_summary = (
+            governed.get("operator_summary")
+            or metadata.get("operator_summary")
+            or metadata.get("summary")
+            or ""
+        )
         collector_version = governed.get("collector_version") or metadata.get("collector_version")
         trust_tier = governed.get("trust_tier") or metadata.get("trust_tier") or "local"
         fresh_until = governed.get("fresh_until") or metadata.get("fresh_until")
         fresh_until_ts = _parse_fresh_until(fresh_until)
-        freshness_status = "stale" if fresh_until_ts is not None and fresh_until_ts < now else "fresh"
+        freshness_status = (
+            "stale" if fresh_until_ts is not None and fresh_until_ts < now else "fresh"
+        )
         revoked = _coerce_bool(governed.get("revoked") or metadata.get("revoked"))
         tombstoned = _coerce_bool(governed.get("tombstoned") or metadata.get("tombstoned"))
         superseded = str(row["sha256"]).lower() in superseded_hashes
@@ -366,7 +431,11 @@ class RAGMemory:
             "collected_at": collected_at,
             "created_at": _timestamp_to_iso8601(row["created_at"]),
             "accessed_at": _timestamp_to_iso8601(row["accessed_at"]),
-            "confidence": float(governed.get("confidence") or provenance_payload.get("confidence") or row["confidence"]),
+            "confidence": float(
+                governed.get("confidence")
+                or provenance_payload.get("confidence")
+                or row["confidence"]
+            ),
             "trust_tier": trust_tier,
             "fresh_until": fresh_until,
             "freshness_status": freshness_status,
@@ -531,10 +600,15 @@ class RAGMemory:
             # Update hot tier
             if topic not in self._hot:
                 self._hot[topic] = []
-            self._hot[topic].append({
-                "id": row_id, "content": content, "topic": topic,
-                "confidence": confidence, "vector": vec,
-            })
+            self._hot[topic].append(
+                {
+                    "id": row_id,
+                    "content": content,
+                    "topic": topic,
+                    "confidence": confidence,
+                    "vector": vec,
+                }
+            )
 
         return {
             "id": row_id,
@@ -552,29 +626,42 @@ class RAGMemory:
                 "topic": topic,
                 "domain": normalized_domain,
                 "solution_kind": solution_kind or "",
-                "source_class": normalized_metadata["governed_evidence"].get("source_class") or entry_kind,
-                "source_type": normalized_metadata["governed_evidence"].get("source_type") or entry_kind,
+                "source_class": normalized_metadata["governed_evidence"].get("source_class")
+                or entry_kind,
+                "source_type": normalized_metadata["governed_evidence"].get("source_type")
+                or entry_kind,
                 "source": normalized_metadata["governed_evidence"].get("source") or provenance,
                 "source_path": normalized_metadata["governed_evidence"].get("source_path"),
                 "artifact_id": normalized_metadata["governed_evidence"].get("artifact_id"),
-                "workflow_run_url": normalized_metadata["governed_evidence"].get("workflow_run_url"),
+                "workflow_run_url": normalized_metadata["governed_evidence"].get(
+                    "workflow_run_url"
+                ),
                 "branch": normalized_metadata["governed_evidence"].get("branch"),
                 "commit_sha": normalized_metadata["governed_evidence"].get("commit_sha"),
-                "collector": normalized_metadata["governed_evidence"].get("collector") or provenance,
-                "collector_version": normalized_metadata["governed_evidence"].get("collector_version"),
-                "collected_at": normalized_metadata["governed_evidence"].get("collected_at") or _timestamp_to_iso8601(now),
+                "collector": normalized_metadata["governed_evidence"].get("collector")
+                or provenance,
+                "collector_version": normalized_metadata["governed_evidence"].get(
+                    "collector_version"
+                ),
+                "collected_at": normalized_metadata["governed_evidence"].get("collected_at")
+                or _timestamp_to_iso8601(now),
                 "created_at": _timestamp_to_iso8601(now),
                 "accessed_at": _timestamp_to_iso8601(now),
-                "confidence": normalized_metadata["governed_evidence"].get("confidence", confidence),
+                "confidence": normalized_metadata["governed_evidence"].get(
+                    "confidence", confidence
+                ),
                 "trust_tier": normalized_metadata["governed_evidence"].get("trust_tier", "local"),
                 "fresh_until": normalized_metadata["governed_evidence"].get("fresh_until"),
                 "freshness_status": "fresh",
                 "revoked": normalized_metadata["governed_evidence"].get("revoked", False),
                 "tombstoned": normalized_metadata["governed_evidence"].get("tombstoned", False),
-                "supersedes": normalized_metadata["governed_evidence"].get("supersedes") or supersedes_sha256 or "",
+                "supersedes": normalized_metadata["governed_evidence"].get("supersedes")
+                or supersedes_sha256
+                or "",
                 "superseded": False,
                 "state": "active",
-                "operator_summary": normalized_metadata["governed_evidence"].get("operator_summary") or "",
+                "operator_summary": normalized_metadata["governed_evidence"].get("operator_summary")
+                or "",
                 "provenance_grade": "evidence-backed"
                 if bool(normalized_metadata.get("provenance"))
                 or any(
@@ -677,7 +764,9 @@ class RAGMemory:
                 require_provenance=require_provenance,
             ):
                 continue
-            scored.append(self._row_to_fact(row=row, metadata=metadata, evidence=evidence, similarity=sim))
+            scored.append(
+                self._row_to_fact(row=row, metadata=metadata, evidence=evidence, similarity=sim)
+            )
 
         scored.sort(key=lambda x: x["similarity"], reverse=True)
         results = scored[:top_k]

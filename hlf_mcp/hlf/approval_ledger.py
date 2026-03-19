@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 _DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "db" / "hlf_capsule_approvals.sqlite3"
 _ZERO_HASH = "0" * 64
 
@@ -77,7 +76,7 @@ def _requirements_hash(requirements: list[dict[str, Any]]) -> str:
 
 
 def _compute_trace_id(prev_hash: str, payload: str) -> str:
-    return hashlib.sha256(f"{prev_hash}{payload}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{prev_hash}{payload}".encode()).hexdigest()
 
 
 @dataclass(slots=True)
@@ -279,7 +278,11 @@ class ApprovalLedger:
         params.append(max(1, min(limit, 200)))
         with self._lock, self._connect() as conn:
             rows = conn.execute(sql, params).fetchall()
-            return [self._row_to_request(row).to_dict() for row in rows if self._row_to_request(row) is not None]
+            return [
+                self._row_to_request(row).to_dict()
+                for row in rows
+                if self._row_to_request(row) is not None
+            ]
 
     def decide(
         self,
@@ -351,7 +354,9 @@ class ApprovalLedger:
                 errors.append(
                     f"entry {index}: prev_hash mismatch expected {prev_hash[:16]} got {actual_prev[:16]}"
                 )
-            expected = _compute_trace_id(prev_hash, _canonical_json({"event": event_type, "data": data}))
+            expected = _compute_trace_id(
+                prev_hash, _canonical_json({"event": event_type, "data": data})
+            )
             actual = str(row["trace_id"])
             if actual != expected:
                 errors.append(

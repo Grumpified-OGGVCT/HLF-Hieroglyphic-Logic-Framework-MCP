@@ -10,7 +10,12 @@ from hlf_mcp.hlf.oci_client import OCIError, OCIModuleRef
 
 
 class FakeOCIClient:
-    def __init__(self, pulled_path: Path | None = None, checksum: str | None = None, tags: list[str] | None = None):
+    def __init__(
+        self,
+        pulled_path: Path | None = None,
+        checksum: str | None = None,
+        tags: list[str] | None = None,
+    ):
         self.pulled_path = pulled_path
         self.checksum = checksum
         self.tags = tags or []
@@ -31,7 +36,9 @@ class FakeOCIClient:
 
 def test_install_offline_creates_stub_module(tmp_path: Path) -> None:
     install_root = tmp_path / "modules"
-    pm = HlfPackageManager(install_root=install_root, lockfile=tmp_path / "hlf.lock.json", oci_client=FakeOCIClient())
+    pm = HlfPackageManager(
+        install_root=install_root, lockfile=tmp_path / "hlf.lock.json", oci_client=FakeOCIClient()
+    )
 
     result = pm.install("math@v1.0.0")
 
@@ -48,9 +55,13 @@ def test_install_copies_pulled_module_and_respects_checksum(tmp_path: Path) -> N
         json.dumps({"name": "math", "ref": "registry.hlf.io/library/math:v1.0.0"}, indent=2),
         encoding="utf-8",
     )
-    (source_root / "math.hlf").write_text("[HLF-v3]\nRESULT 0 \"ok\"\nΩ\n", encoding="utf-8")
+    (source_root / "math.hlf").write_text('[HLF-v3]\nRESULT 0 "ok"\nΩ\n', encoding="utf-8")
 
-    temp_pm = HlfPackageManager(install_root=tmp_path / "unused", lockfile=tmp_path / "unused.lock.json", oci_client=FakeOCIClient())
+    temp_pm = HlfPackageManager(
+        install_root=tmp_path / "unused",
+        lockfile=tmp_path / "unused.lock.json",
+        oci_client=FakeOCIClient(),
+    )
     checksum = temp_pm._compute_checksum(source_root)
 
     pm = HlfPackageManager(

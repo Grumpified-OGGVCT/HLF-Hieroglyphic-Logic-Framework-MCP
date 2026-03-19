@@ -5,7 +5,6 @@ from typing import Any
 
 from hlf_mcp.hlf.formal_verifier import FormalVerifier
 
-
 _EFFECTFUL_TAGS: frozenset[str] = frozenset(
     {
         "ACTION",
@@ -133,7 +132,9 @@ def evaluate_verifier_admission(
     mode: str = "enforce",
 ) -> VerificationAdmissionDecision:
     normalized_mode = str(mode or "enforce").strip().lower()
-    effective_mode = normalized_mode if normalized_mode in {"enforce", "audit", "disabled", "off"} else "enforce"
+    effective_mode = (
+        normalized_mode if normalized_mode in {"enforce", "audit", "disabled", "off"} else "enforce"
+    )
     effective_tier = _normalize_tier(tier)
     effective_requested_tier = _normalize_tier(requested_tier or tier)
     effect_summary = summarize_execution_effects(ast)
@@ -232,7 +233,9 @@ def evaluate_verifier_admission(
         return VerificationAdmissionDecision(
             verdict="verification_admitted",
             admitted=True,
-            reasons=["Formal verifier proved every extracted packaged constraint for this execution."],
+            reasons=[
+                "Formal verifier proved every extracted packaged constraint for this execution."
+            ],
             report=report_payload,
             effect_summary=effect_summary,
             tier=effective_tier,

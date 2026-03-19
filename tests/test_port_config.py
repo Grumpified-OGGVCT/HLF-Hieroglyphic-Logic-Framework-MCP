@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from hlf.mcp_client import HLFMCPClient, resolve_mcp_url

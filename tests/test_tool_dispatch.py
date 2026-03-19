@@ -33,7 +33,9 @@ def test_dispatch_requires_activation_then_returns_simulated_result() -> None:
         registry.dispatch("demo.tool", {"message": "hi"})
 
     token = registry._registry["demo.tool"]["approval_token"]
-    assert registry.approve_forged_tool("demo.tool", operator="tester", approval_token=token) is True
+    assert (
+        registry.approve_forged_tool("demo.tool", operator="tester", approval_token=token) is True
+    )
 
     result = registry.dispatch("demo.tool", {"message": "hi"})
 
@@ -47,8 +49,7 @@ def test_dynamic_dispatch_loads_entrypoint_from_install_path(tmp_path: Path) -> 
     tool_dir = tmp_path / "demo_tool"
     tool_dir.mkdir()
     (tool_dir / "main.py").write_text(
-        "def run(message: str) -> dict[str, str]:\n"
-        "    return {'echo': message}\n",
+        "def run(message: str) -> dict[str, str]:\n    return {'echo': message}\n",
         encoding="utf-8",
     )
 

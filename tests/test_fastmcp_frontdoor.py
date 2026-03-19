@@ -1,5 +1,6 @@
-from hlf_mcp import server
 import json
+
+from hlf_mcp import server
 
 
 def test_hlf_do_dry_run_generates_governed_audit() -> None:
@@ -114,7 +115,7 @@ def test_hlf_benchmark_matrix_returns_multilingual_rows() -> None:
 
 
 def test_hlf_translate_to_english_accepts_localized_output() -> None:
-    source = "[HLF-v3]\nΔ [INTENT] goal=\"analyze\" target=\"/var/log/app.log\"\nΩ\n"
+    source = '[HLF-v3]\nΔ [INTENT] goal="analyze" target="/var/log/app.log"\nΩ\n'
 
     result = server.hlf_translate_to_english(source, language="fr")
 
@@ -124,7 +125,7 @@ def test_hlf_translate_to_english_accepts_localized_output() -> None:
 
 
 def test_hlf_decompile_ast_accepts_localized_output() -> None:
-    source = "[HLF-v3]\nΔ [INTENT] goal=\"analyze\" target=\"/var/log/app.log\"\nΩ\n"
+    source = '[HLF-v3]\nΔ [INTENT] goal="analyze" target="/var/log/app.log"\nΩ\n'
 
     result = server.hlf_decompile_ast(source, language="es")
 
@@ -267,7 +268,14 @@ def test_hlf_test_suite_summary_reads_latest_metrics_file(tmp_path) -> None:
                 "exit_code": 0,
                 "passed": True,
                 "duration_ms": 123.4,
-                "counts": {"passed": 10, "failed": 0, "errors": 0, "skipped": 0, "xfailed": 0, "xpassed": 0},
+                "counts": {
+                    "passed": 10,
+                    "failed": 0,
+                    "errors": 0,
+                    "skipped": 0,
+                    "xfailed": 0,
+                    "xpassed": 0,
+                },
                 "stdout": "10 passed",
                 "stderr": "",
                 "metrics_dir": str(tmp_path),
@@ -293,7 +301,14 @@ def test_hlf_test_suite_summary_can_include_output(tmp_path) -> None:
                 "exit_code": 1,
                 "passed": False,
                 "duration_ms": 55.0,
-                "counts": {"passed": 2, "failed": 1, "errors": 0, "skipped": 0, "xfailed": 0, "xpassed": 0},
+                "counts": {
+                    "passed": 2,
+                    "failed": 1,
+                    "errors": 0,
+                    "skipped": 0,
+                    "xfailed": 0,
+                    "xpassed": 0,
+                },
                 "stdout": "2 passed, 1 failed",
                 "stderr": "AssertionError",
                 "metrics_dir": str(tmp_path),
@@ -385,7 +400,9 @@ def test_instinct_realign_persists_mission_status_in_resource() -> None:
         affected_nodes=["verify"],
     )
     listing = json.loads(server.REGISTERED_RESOURCES["hlf://status/instinct"]())
-    mission_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/instinct/{mission_id}"](mission_id))
+    mission_resource = json.loads(
+        server.REGISTERED_RESOURCES["hlf://status/instinct/{mission_id}"](mission_id)
+    )
 
     assert created["status"] == "ok"
     assert realigned["status"] == "ok"
@@ -426,16 +443,27 @@ def test_model_catalog_status_surfaces_lane_summary_for_tool_and_resource(monkey
 
     tool_status = server.hlf_get_model_catalog_status(agent_id="status-agent")
     latest_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/model_catalog"]())
-    agent_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/model_catalog/{agent_id}"]("status-agent"))
+    agent_resource = json.loads(
+        server.REGISTERED_RESOURCES["hlf://status/model_catalog/{agent_id}"]("status-agent")
+    )
 
     assert tool_status["status"] == "ok"
     assert tool_status["catalog_status"]["agent_id"] == "status-agent"
     assert tool_status["catalog_status"]["summary"]["configured_remote_direct_count"] == 1
-    assert tool_status["catalog_status"]["agent_lane_summary"]["code-generation"]["best_remote_direct"]["name"] == "remote-coder"
+    assert (
+        tool_status["catalog_status"]["agent_lane_summary"]["code-generation"][
+            "best_remote_direct"
+        ]["name"]
+        == "remote-coder"
+    )
 
     assert latest_resource["status"] == "ok"
     assert latest_resource["catalog_status"]["agent_id"] == "status-agent"
-    assert agent_resource["catalog_status"]["preferred_lanes"] == ["code-generation", "verifier", "explainer"]
+    assert agent_resource["catalog_status"]["preferred_lanes"] == [
+        "code-generation",
+        "verifier",
+        "explainer",
+    ]
 
 
 def test_route_governed_request_can_use_remote_direct_catalog_path(monkeypatch) -> None:
@@ -540,7 +568,10 @@ def test_route_governed_request_denies_when_required_evidence_is_missing(monkeyp
     assert route["routing_verdict"]["decision"] == "deny"
     assert route["routing_verdict"]["governance_mode"] == "evidence_required"
     assert route["missing_evidence_profiles"] == ["code_pattern_retrieval_english"]
-    assert any("Required benchmark evidence missing" in item for item in route["routing_verdict"]["policy_constraints"])
+    assert any(
+        "Required benchmark evidence missing" in item
+        for item in route["routing_verdict"]["policy_constraints"]
+    )
 
 
 def test_governed_route_resource_surfaces_latest_trace(monkeypatch) -> None:
@@ -591,7 +622,11 @@ def test_governed_route_resource_surfaces_latest_trace(monkeypatch) -> None:
         hardware_summary={"cpu_only": False, "gpu_vram_gb": 16.0},
     )
     latest_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/governed_route"]())
-    agent_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/governed_route/{agent_id}"]("route-resource-agent"))
+    agent_resource = json.loads(
+        server.REGISTERED_RESOURCES["hlf://status/governed_route/{agent_id}"](
+            "route-resource-agent"
+        )
+    )
 
     assert route["route_trace"]["request_context"]["agent_id"] == "route-resource-agent"
     assert route["route_trace"]["policy_basis"]["missing_evidence_profiles"] == []
@@ -600,7 +635,9 @@ def test_governed_route_resource_surfaces_latest_trace(monkeypatch) -> None:
     assert agent_resource["route_trace"]["request_context"]["agent_id"] == "route-resource-agent"
 
 
-def test_route_governed_request_requires_launch_qualified_model_for_multilingual_lane(monkeypatch) -> None:
+def test_route_governed_request_requires_launch_qualified_model_for_multilingual_lane(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv(
         "HLF_REMOTE_MODEL_ENDPOINTS",
         json.dumps(
@@ -657,7 +694,9 @@ def test_route_governed_request_requires_launch_qualified_model_for_multilingual
     assert route["routing_verdict"]["review_required"] is True
 
 
-def test_route_governed_request_uses_persisted_benchmark_artifact_when_scores_not_passed(monkeypatch) -> None:
+def test_route_governed_request_uses_persisted_benchmark_artifact_when_scores_not_passed(
+    monkeypatch,
+) -> None:
     monkeypatch.delenv("HLF_REMOTE_MODEL_ENDPOINTS", raising=False)
 
     server.hlf_routing_context_benchmark(
@@ -696,7 +735,12 @@ def test_route_governed_request_uses_persisted_benchmark_artifact_when_scores_no
     assert route["qualification_profile"] == "agent_routing_context_multilingual"
     assert route["benchmark_scores"]
     assert route["benchmark_scores"]["routing_quality"] > 0.0
-    assert route["primary_qualification"]["resolved_tier"] in {"baseline-qualified", "launch-qualified", "promotion-qualified", "advisory-only"}
+    assert route["primary_qualification"]["resolved_tier"] in {
+        "baseline-qualified",
+        "launch-qualified",
+        "promotion-qualified",
+        "advisory-only",
+    }
 
 
 def test_benchmark_artifact_tools_roundtrip() -> None:
@@ -717,7 +761,9 @@ def test_benchmark_artifact_tools_roundtrip() -> None:
     assert fetched["artifact"]["memory_evidence"]["provenance_grade"] == "evidence-backed"
 
 
-def test_route_governed_request_uses_sidecar_and_verifier_artifacts_for_explainer_lane(monkeypatch) -> None:
+def test_route_governed_request_uses_sidecar_and_verifier_artifacts_for_explainer_lane(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv(
         "HLF_REMOTE_MODEL_ENDPOINTS",
         json.dumps(
@@ -785,11 +831,22 @@ def test_route_governed_request_uses_sidecar_and_verifier_artifacts_for_explaine
         "sidecar_quality_explainer",
         "verifier_accuracy_multilingual",
     }
-    assert route["benchmark_artifacts"]["sidecar_quality_explainer"]["profile_name"] == "sidecar_quality_explainer"
-    assert route["benchmark_artifacts"]["verifier_accuracy_multilingual"]["profile_name"] == "verifier_accuracy_multilingual"
+    assert (
+        route["benchmark_artifacts"]["sidecar_quality_explainer"]["profile_name"]
+        == "sidecar_quality_explainer"
+    )
+    assert (
+        route["benchmark_artifacts"]["verifier_accuracy_multilingual"]["profile_name"]
+        == "verifier_accuracy_multilingual"
+    )
     assert route["routing_verdict"]["primary_model"] == "qwen3:8b"
-    assert route["selected_primary_profile_evaluations"]["sidecar_quality_explainer"]["resolved_tier"] == "launch-qualified"
-    assert route["selected_primary_profile_evaluations"]["verifier_accuracy_multilingual"]["resolved_tier"] == "launch-qualified"
-
-
-
+    assert (
+        route["selected_primary_profile_evaluations"]["sidecar_quality_explainer"]["resolved_tier"]
+        == "launch-qualified"
+    )
+    assert (
+        route["selected_primary_profile_evaluations"]["verifier_accuracy_multilingual"][
+            "resolved_tier"
+        ]
+        == "launch-qualified"
+    )

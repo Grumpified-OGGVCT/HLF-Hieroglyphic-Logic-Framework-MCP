@@ -9,10 +9,10 @@ from hlf_mcp.hlf.translator import (
     detect_system_language,
     detect_tone,
     english_to_hlf,
-    hlf_source_to_language,
     hlf_source_to_english,
-    hlf_to_language,
+    hlf_source_to_language,
     hlf_to_english,
+    hlf_to_language,
     language_to_hlf,
     resolve_language,
     translation_diagnostics,
@@ -29,7 +29,7 @@ def test_english_to_hlf_emits_header_actions_and_terminator() -> None:
     source = english_to_hlf("Analyze /var/log/app.log in read-only mode.")
 
     assert source.startswith("[HLF-v3]\n")
-    assert '# Generated from English (tone: neutral)' in source
+    assert "# Generated from English (tone: neutral)" in source
     assert 'Δ [INTENT] goal="analyze" target="/var/log/app.log"' in source
     assert 'Ж [CONSTRAINT] mode="ro"' in source
     assert source.rstrip().endswith("Ω")
@@ -40,9 +40,9 @@ def test_english_to_hlf_supports_delegate_memory_and_recall_patterns() -> None:
     remembered = english_to_hlf("remember this deployment context for later")
     recalled = english_to_hlf("recall the last deployment context")
 
-    assert '[DELEGATE]' in delegated
-    assert 'MEMORY [context]' in remembered
-    assert 'RECALL [context]' in recalled
+    assert "[DELEGATE]" in delegated
+    assert "MEMORY [context]" in remembered
+    assert "RECALL [context]" in recalled
 
 
 def test_hlf_to_english_uses_human_readable_fields() -> None:
@@ -62,7 +62,7 @@ def test_hlf_to_english_uses_human_readable_fields() -> None:
 
 
 def test_hlf_source_to_english_returns_summary_for_valid_source() -> None:
-    source = "[HLF-v3]\nSET target = \"/app\"\nRESULT 0 \"ok\"\nΩ\n"
+    source = '[HLF-v3]\nSET target = "/app"\nRESULT 0 "ok"\nΩ\n'
     result = hlf_source_to_english(source)
 
     lowered = result.lower()
@@ -89,7 +89,7 @@ def test_language_to_hlf_supports_all_seed_languages() -> None:
 def test_chinese_to_hlf_matches_primary_action_patterns() -> None:
     source = chinese_to_hlf("分析 /var/log/app.log 并且只读")
 
-    assert '# 由中文生成 (tone: neutral)' in source
+    assert "# 由中文生成 (tone: neutral)" in source
     assert 'Δ [INTENT] goal="分析" target="/var/log/app.log"' in source
     assert 'Ж [CONSTRAINT] mode="ro"' in source
 
@@ -117,7 +117,10 @@ def test_detect_input_language_prefers_text_cues() -> None:
 
 
 def test_resolve_language_auto_uses_text_over_default() -> None:
-    assert resolve_language("auto", text="analyser /var/log/app.log", preferred_language="en_US") == "fr"
+    assert (
+        resolve_language("auto", text="analyser /var/log/app.log", preferred_language="en_US")
+        == "fr"
+    )
 
 
 def test_language_to_hlf_auto_respects_preferred_language_when_text_is_ambiguous() -> None:

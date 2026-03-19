@@ -135,7 +135,12 @@ def test_merge_is_blocked_when_verification_report_is_not_proven() -> None:
         "execute",
         {
             "execution_trace": [
-                {"node_id": "implement", "task_type": "modify_file", "success": True, "duration_ms": 5.0}
+                {
+                    "node_id": "implement",
+                    "task_type": "modify_file",
+                    "success": True,
+                    "duration_ms": 5.0,
+                }
             ]
         },
     )

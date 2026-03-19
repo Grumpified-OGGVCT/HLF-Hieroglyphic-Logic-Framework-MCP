@@ -24,11 +24,7 @@ def test_codegen_builds_packaged_v3_source() -> None:
 
 def test_codegen_build_and_compile_returns_ast() -> None:
     result = (
-        HLFCodeGenerator()
-        .set("name", "world")
-        .intent("hello")
-        .result(0, "ok")
-        .build_and_compile()
+        HLFCodeGenerator().set("name", "world").intent("hello").result(0, "ok").build_and_compile()
     )
 
     assert "ast" in result

@@ -6,10 +6,10 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf import insaits
-from hlf_mcp.hlf.memory_node import verify_pointer_ref
 from hlf_mcp.hlf.capsules import capsule_for_tier
 from hlf_mcp.hlf.compiler import CompileError
 from hlf_mcp.hlf.execution_admission import evaluate_verifier_admission
+from hlf_mcp.hlf.memory_node import verify_pointer_ref
 from hlf_mcp.server_context import ServerContext
 
 
@@ -146,7 +146,9 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 tier=tier,
                 requested_tier=capsule.requested_tier,
             ).to_dict()
-            verification_requirements = list(verification_admission.get("approval_requirements", []))
+            verification_requirements = list(
+                verification_admission.get("approval_requirements", [])
+            )
             capsule, approval_request = _resolve_approval_request(
                 ctx,
                 capsule=capsule,
@@ -162,7 +164,9 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 approval_granted=approval_granted,
             )
             violations = capsule.validate_ast(stmts, verification_requirements)
-            if not effective_verification.get("admitted", False) and not effective_verification.get("requires_operator_review", False):
+            if not effective_verification.get("admitted", False) and not effective_verification.get(
+                "requires_operator_review", False
+            ):
                 violations = [
                     f"Verifier admission denied: {reason}"
                     for reason in effective_verification.get("reasons", [])
@@ -238,7 +242,9 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 tier=tier,
                 requested_tier=capsule.requested_tier,
             ).to_dict()
-            verification_requirements = list(verification_admission.get("approval_requirements", []))
+            verification_requirements = list(
+                verification_admission.get("approval_requirements", [])
+            )
             capsule, approval_request = _resolve_approval_request(
                 ctx,
                 capsule=capsule,
@@ -401,11 +407,17 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             return {"status": "error", "error": str(exc)}
 
     @mcp.tool()
-    def hlf_capsule_review_queue(status: str = "pending", limit: int = 20, capsule_id: str = "") -> dict[str, Any]:
+    def hlf_capsule_review_queue(
+        status: str = "pending", limit: int = 20, capsule_id: str = ""
+    ) -> dict[str, Any]:
         """List persisted capsule approval requests for operator review."""
         try:
             normalized_status = status.strip().lower()
-            effective_status = normalized_status if normalized_status in {"pending", "approved", "rejected", "all"} else "pending"
+            effective_status = (
+                normalized_status
+                if normalized_status in {"pending", "approved", "rejected", "all"}
+                else "pending"
+            )
             requests = ctx.approval_ledger.list_requests(
                 status=None if effective_status == "all" else effective_status,
                 limit=limit,

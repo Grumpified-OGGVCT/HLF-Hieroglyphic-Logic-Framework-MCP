@@ -111,22 +111,23 @@ log = logging.getLogger("ollama_client")
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-OLLAMA_CLOUD_BASE      = "https://ollama.com/api"
-CONNECT_TIMEOUT        = 20      # seconds to establish TCP
-CHUNK_IDLE_TIMEOUT     = 60      # seconds between stream chunks before abort
-TOTAL_CALL_TIMEOUT     = 600     # hard ceiling per individual model call
-MAX_RETRIES_PER_MODEL  = 3       # attempts before advancing to next tier
-BASE_BACKOFF_SEC       = 2.0
-MAX_BACKOFF_SEC        = 90.0
-CIRCUIT_OPEN_SECONDS   = 300     # how long tripped circuit stays open
-CIRCUIT_FAIL_THRESHOLD = 4       # consecutive failures to trip circuit
-MIN_RESPONSE_CHARS     = 10
-STREAM_CHUNK_SIZE      = 4096    # bytes per streaming read
-ROLLING_WINDOW         = 20      # calls in ConnectionMonitor rolling window
+OLLAMA_CLOUD_BASE = "https://ollama.com/api"
+CONNECT_TIMEOUT = 20  # seconds to establish TCP
+CHUNK_IDLE_TIMEOUT = 60  # seconds between stream chunks before abort
+TOTAL_CALL_TIMEOUT = 600  # hard ceiling per individual model call
+MAX_RETRIES_PER_MODEL = 3  # attempts before advancing to next tier
+BASE_BACKOFF_SEC = 2.0
+MAX_BACKOFF_SEC = 90.0
+CIRCUIT_OPEN_SECONDS = 300  # how long tripped circuit stays open
+CIRCUIT_FAIL_THRESHOLD = 4  # consecutive failures to trip circuit
+MIN_RESPONSE_CHARS = 10
+STREAM_CHUNK_SIZE = 4096  # bytes per streaming read
+ROLLING_WINDOW = 20  # calls in ConnectionMonitor rolling window
 
 # ---------------------------------------------------------------------------
 # Model registry
 # ---------------------------------------------------------------------------
+
 
 @dataclasses.dataclass(frozen=True)
 class ModelSpec:
@@ -139,67 +140,118 @@ class ModelSpec:
 
 MODEL_REGISTRY: dict[str, ModelSpec] = {
     "nemotron-3-super": ModelSpec(
-        name="nemotron-3-super", context_k=256,
+        name="nemotron-3-super",
+        context_k=256,
         description=(
             "NVIDIA 120B LatentMoE+Mamba — ~12B active params per forward pass "
             "(MoE sparse activation), optimised for agentic reasoning and long-horizon planning"
         ),
     ),
     "glm-5:cloud": ModelSpec(
-        name="glm-5:cloud", context_k=198,
+        name="glm-5:cloud",
+        context_k=198,
         description="Z.ai 744B total / 40B active, strong reasoning, complex systems engineering, and long-horizon agentic work",
     ),
     "cogito-2.1:671b-cloud": ModelSpec(
-        name="cogito-2.1:671b-cloud", context_k=160,
+        name="cogito-2.1:671b-cloud",
+        context_k=160,
         description="Deep Cogito 671B cloud, strong math/planning/instruction-following with efficient reasoning",
     ),
     "kimi-k2-thinking:cloud": ModelSpec(
-        name="kimi-k2-thinking:cloud", context_k=256,
+        name="kimi-k2-thinking:cloud",
+        context_k=256,
         description="Moonshot thinking agent, strong long-horizon planning, search, and tool-using reasoning",
     ),
     "kimi-k2.5:cloud": ModelSpec(
-        name="kimi-k2.5:cloud", context_k=256,
+        name="kimi-k2.5:cloud",
+        context_k=256,
         description="Moonshot multimodal agentic model with vision-grounded planning, swarm execution, and UI/repo synthesis",
     ),
     "minimax-m2.7:cloud": ModelSpec(
-        name="minimax-m2.7:cloud", context_k=200,
+        name="minimax-m2.7:cloud",
+        context_k=200,
         description="MiniMax M2.7 cloud, professional software engineering, agentic workflows, and productivity execution",
     ),
     "devstral-2:123b-cloud": ModelSpec(
-        name="devstral-2:123b-cloud", context_k=256,
+        name="devstral-2:123b-cloud",
+        context_k=256,
         description="Devstral 2 123B cloud, top-tier software engineering agent for codebase exploration and multi-file edits",
     ),
     "qwen3-coder-next:cloud": ModelSpec(
-        name="qwen3-coder-next:cloud", context_k=256,
+        name="qwen3-coder-next:cloud",
+        context_k=256,
         description="Qwen coding-focused cloud model with repo-scale context and agentic tool-calling efficiency",
     ),
     "qwen3.5:cloud": ModelSpec(
-        name="qwen3.5:cloud", context_k=256,
+        name="qwen3.5:cloud",
+        context_k=256,
         description="Alibaba 397B cloud, Text+Image multimodal, universal fallback",
     ),
     "deepseek-v3.2:cloud": ModelSpec(
-        name="deepseek-v3.2:cloud", context_k=160,
+        name="deepseek-v3.2:cloud",
+        context_k=160,
         description="DeepSeek v3.2 cloud, high-efficiency reasoning and agent performance backstop",
         supports_think=True,
     ),
 }
 
 # Tiered chains — ordered strongest -> final safety net
-REASONING_CHAIN: list[str] = ["glm-5:cloud", "nemotron-3-super", "cogito-2.1:671b-cloud", "qwen3.5:cloud"]
-PLANNING_CHAIN:  list[str] = ["cogito-2.1:671b-cloud", "kimi-k2-thinking:cloud", "kimi-k2.5:cloud", "nemotron-3-super", "qwen3.5:cloud"]
-DOER_CHAIN:      list[str] = ["minimax-m2.7:cloud", "devstral-2:123b-cloud", "qwen3-coder-next:cloud", "glm-5:cloud", "nemotron-3-super", "qwen3.5:cloud"]
-CODING_CHAIN:    list[str] = ["devstral-2:123b-cloud", "minimax-m2.7:cloud", "qwen3-coder-next:cloud", "glm-5:cloud", "nemotron-3-super", "qwen3.5:cloud"]
-ANALYSIS_CHAIN:  list[str] = ["qwen3.5:cloud", "kimi-k2.5:cloud", "glm-5:cloud", "nemotron-3-super", "deepseek-v3.2:cloud"]
-ETHICS_CHAIN:    list[str] = ["deepseek-v3.2:cloud", "glm-5:cloud", "nemotron-3-super", "qwen3.5:cloud"]
-UNIVERSAL_CHAIN: list[str] = ["nemotron-3-super", "qwen3.5:cloud", "glm-5:cloud", "deepseek-v3.2:cloud"]
+REASONING_CHAIN: list[str] = [
+    "glm-5:cloud",
+    "nemotron-3-super",
+    "cogito-2.1:671b-cloud",
+    "qwen3.5:cloud",
+]
+PLANNING_CHAIN: list[str] = [
+    "cogito-2.1:671b-cloud",
+    "kimi-k2-thinking:cloud",
+    "kimi-k2.5:cloud",
+    "nemotron-3-super",
+    "qwen3.5:cloud",
+]
+DOER_CHAIN: list[str] = [
+    "minimax-m2.7:cloud",
+    "devstral-2:123b-cloud",
+    "qwen3-coder-next:cloud",
+    "glm-5:cloud",
+    "nemotron-3-super",
+    "qwen3.5:cloud",
+]
+CODING_CHAIN: list[str] = [
+    "devstral-2:123b-cloud",
+    "minimax-m2.7:cloud",
+    "qwen3-coder-next:cloud",
+    "glm-5:cloud",
+    "nemotron-3-super",
+    "qwen3.5:cloud",
+]
+ANALYSIS_CHAIN: list[str] = [
+    "qwen3.5:cloud",
+    "kimi-k2.5:cloud",
+    "glm-5:cloud",
+    "nemotron-3-super",
+    "deepseek-v3.2:cloud",
+]
+ETHICS_CHAIN: list[str] = [
+    "deepseek-v3.2:cloud",
+    "glm-5:cloud",
+    "nemotron-3-super",
+    "qwen3.5:cloud",
+]
+UNIVERSAL_CHAIN: list[str] = [
+    "nemotron-3-super",
+    "qwen3.5:cloud",
+    "glm-5:cloud",
+    "deepseek-v3.2:cloud",
+]
 
 CHAIN_MAP: dict[str, list[str]] = {
     "reasoning": REASONING_CHAIN,
-    "planning":  PLANNING_CHAIN,
-    "doer":      DOER_CHAIN,
-    "coding":    CODING_CHAIN,
-    "analysis":  ANALYSIS_CHAIN,
-    "ethics":    ETHICS_CHAIN,
+    "planning": PLANNING_CHAIN,
+    "doer": DOER_CHAIN,
+    "coding": CODING_CHAIN,
+    "analysis": ANALYSIS_CHAIN,
+    "ethics": ETHICS_CHAIN,
     "universal": UNIVERSAL_CHAIN,
 }
 
@@ -207,28 +259,30 @@ CHAIN_MAP: dict[str, list[str]] = {
 # Result dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclasses.dataclass
 class CompletionResult:
     content: str
     model_used: str
     model_requested: str
     chain_used: list[str]
-    tier_index: int           # 0 = primary; 1+ = fell back N times
-    attempts: int             # total API calls across all tiers
+    tier_index: int  # 0 = primary; 1+ = fell back N times
+    attempts: int  # total API calls across all tiers
     latency_s: float
     streamed: bool
-    truncated: bool           # True if stream ended without done sentinel
+    truncated: bool  # True if stream ended without done sentinel
     raw: dict[str, Any]
     audit_trail: list[dict[str, Any]]
-    thinking: str = ""                   # Chain-of-thought trace (deepseek-r1 etc.)
+    thinking: str = ""  # Chain-of-thought trace (deepseek-r1 etc.)
     tool_calls: list[dict[str, Any]] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
 class WebSearchResult:
     """Result from Ollama Cloud /api/web_search endpoint."""
+
     query: str
-    results: list[dict[str, Any]]    # [{title, url, content}, ...]
+    results: list[dict[str, Any]]  # [{title, url, content}, ...]
     raw: dict[str, Any]
 
 
@@ -236,15 +290,17 @@ class WebSearchResult:
 # Circuit Breaker
 # ---------------------------------------------------------------------------
 
+
 class CircuitBreaker:
     """
     Per-model circuit breaker (singleton per model name).
     States: CLOSED (normal) -> OPEN (fast-fail) -> HALF-OPEN (one probe).
     """
-    _instances: dict[str, "CircuitBreaker"] = {}
+
+    _instances: dict[str, CircuitBreaker] = {}
     _class_lock = threading.Lock()
 
-    def __new__(cls, model: str) -> "CircuitBreaker":
+    def __new__(cls, model: str) -> CircuitBreaker:
         with cls._class_lock:
             if model not in cls._instances:
                 inst = super().__new__(cls)
@@ -281,7 +337,8 @@ class CircuitBreaker:
                 self._opened_at = time.monotonic()
                 log.warning(
                     "Circuit OPENED for %s after %d consecutive failures",
-                    self._model, self._failures,
+                    self._model,
+                    self._failures,
                 )
 
     def reset(self) -> None:
@@ -294,18 +351,20 @@ class CircuitBreaker:
 # Connection Monitor
 # ---------------------------------------------------------------------------
 
+
 class ConnectionMonitor:
     """Rolling success-rate and latency tracker (singleton per model)."""
-    _instances: dict[str, "ConnectionMonitor"] = {}
+
+    _instances: dict[str, ConnectionMonitor] = {}
     _class_lock = threading.Lock()
 
-    def __new__(cls, model: str) -> "ConnectionMonitor":
+    def __new__(cls, model: str) -> ConnectionMonitor:
         with cls._class_lock:
             if model not in cls._instances:
                 inst = super().__new__(cls)
                 inst._model = model
                 inst._latencies: deque[float] = deque(maxlen=ROLLING_WINDOW)
-                inst._outcomes: deque[bool]   = deque(maxlen=ROLLING_WINDOW)
+                inst._outcomes: deque[bool] = deque(maxlen=ROLLING_WINDOW)
                 inst._lock = threading.Lock()
                 cls._instances[model] = inst
             return cls._instances[model]
@@ -341,11 +400,13 @@ class ConnectionMonitor:
 # Retry Policy  (decorrelated exponential jitter — AWS recommended)
 # ---------------------------------------------------------------------------
 
+
 class RetryPolicy:
     """
     sleep = min(MAX_CAP, random.uniform(BASE, prev_sleep * 3))
     This avoids thundering-herd better than pure exponential + fixed jitter.
     """
+
     def __init__(
         self,
         max_retries: int = MAX_RETRIES_PER_MODEL,
@@ -373,6 +434,7 @@ class RetryPolicy:
 # Streaming Buffer
 # ---------------------------------------------------------------------------
 
+
 class StreamingBuffer:
     """
     Reads Ollama NDJSON streaming response with full protection:
@@ -386,6 +448,7 @@ class StreamingBuffer:
     read_all()      → (content, is_complete)
     read_all_full() → (content, is_complete, thinking, tool_calls)
     """
+
     MAX_RESPONSE_CHARS = 400_000
 
     def __init__(self, response: http.client.HTTPResponse, model: str) -> None:
@@ -405,7 +468,8 @@ class StreamingBuffer:
             if time.monotonic() - last_chunk_at > CHUNK_IDLE_TIMEOUT:
                 log.warning(
                     "[%s] Streaming idle %.0fs — aborting, keeping partial",
-                    self._model, CHUNK_IDLE_TIMEOUT,
+                    self._model,
+                    CHUNK_IDLE_TIMEOUT,
                 )
                 break
 
@@ -462,7 +526,8 @@ class StreamingBuffer:
                     if total_chars > self.MAX_RESPONSE_CHARS:
                         log.warning(
                             "[%s] Response >%d chars — soft cap reached",
-                            self._model, self.MAX_RESPONSE_CHARS,
+                            self._model,
+                            self.MAX_RESPONSE_CHARS,
                         )
 
                 if obj.get("done") is True:
@@ -487,12 +552,12 @@ class StreamingBuffer:
         if not done_seen:
             log.warning(
                 "[%s] Stream ended without done:true — response may be truncated (%d chars)",
-                self._model, len(content),
+                self._model,
+                len(content),
             )
         thinking = "".join(getattr(self, "_thinking_buf", []))
         tool_calls = getattr(self, "_tool_calls_buf", [])
         return content, done_seen, thinking, tool_calls
-
 
     def read_all(self) -> tuple[str, bool]:
         """Simple 2-return-value API for callers that don't need thinking/tool_calls."""
@@ -504,11 +569,17 @@ class StreamingBuffer:
 # Response Validator
 # ---------------------------------------------------------------------------
 
+
 class ResponseValidator:
     _ERROR_INDICATORS = (
-        "rate limit exceeded", "model not found", "unauthorized",
-        "quota exceeded", "service unavailable", "internal server error",
-        "context length exceeded", "model is not available",
+        "rate limit exceeded",
+        "model not found",
+        "unauthorized",
+        "quota exceeded",
+        "service unavailable",
+        "internal server error",
+        "context length exceeded",
+        "model is not available",
     )
 
     @classmethod
@@ -525,6 +596,7 @@ class ResponseValidator:
 # ---------------------------------------------------------------------------
 # Low-level single call
 # ---------------------------------------------------------------------------
+
 
 def _call_single(
     model: str,
@@ -549,7 +621,7 @@ def _call_single(
         web_search    — If True, inject a web_search tool automatically so
                         the model can fetch live search results during inference.
     """
-    cb  = CircuitBreaker(model)
+    cb = CircuitBreaker(model)
     mon = ConnectionMonitor(model)
 
     if cb.is_open:
@@ -558,7 +630,7 @@ def _call_single(
     spec = MODEL_REGISTRY.get(model)
     messages = [
         {"role": "system", "content": system},
-        {"role": "user",   "content": prompt},
+        {"role": "user", "content": prompt},
     ]
     payload: dict[str, Any] = {
         "model": model,
@@ -578,37 +650,39 @@ def _call_single(
     resolved_tools = list(tools) if tools else []
     if web_search:
         # Inject the built-in Ollama web_search tool definition
-        resolved_tools.append({
-            "type": "function",
-            "function": {
-                "name": "web_search",
-                "description": "Search the web for current information to answer the user's query accurately.",
-                "parameters": {
-                    "type": "object",
-                    "required": ["query"],
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query to look up",
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum results to return (1-10, default 5)",
+        resolved_tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "description": "Search the web for current information to answer the user's query accurately.",
+                    "parameters": {
+                        "type": "object",
+                        "required": ["query"],
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query to look up",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum results to return (1-10, default 5)",
+                            },
                         },
                     },
                 },
-            },
-        })
+            }
+        )
     if resolved_tools:
         payload["tools"] = resolved_tools
 
-    body    = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    url     = f"{OLLAMA_CLOUD_BASE}/chat"
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    url = f"{OLLAMA_CLOUD_BASE}/chat"
     headers = {
-        "Content-Type":  "application/json; charset=utf-8",
+        "Content-Type": "application/json; charset=utf-8",
         "Authorization": f"Bearer {api_key}",
-        "Accept":        "application/x-ndjson, application/json",
-        "User-Agent":    "hlf-mcp-agent/1.0",
+        "Accept": "application/x-ndjson, application/json",
+        "User-Agent": "hlf-mcp-agent/1.0",
     }
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
 
@@ -617,20 +691,24 @@ def _call_single(
         with urllib.request.urlopen(req, timeout=TOTAL_CALL_TIMEOUT) as resp:
             if resp.status != 200:
                 raise urllib.error.HTTPError(
-                    url=req.full_url, code=resp.status,
-                    msg=resp.reason, hdrs=resp.headers,
+                    url=req.full_url,
+                    code=resp.status,
+                    msg=resp.reason,
+                    hdrs=resp.headers,
                     fp=io.BytesIO(resp.read()),
                 )
             if use_streaming:
                 buf = StreamingBuffer(resp, model)
                 content, is_complete, thinking, tool_calls = buf._read_all_full()
                 raw_meta = {
-                    "model": model, "streamed": True,
-                    "thinking": thinking, "tool_calls": tool_calls,
+                    "model": model,
+                    "streamed": True,
+                    "thinking": thinking,
+                    "tool_calls": tool_calls,
                 }
             else:
                 raw_bytes = resp.read()
-                raw_meta  = json.loads(raw_bytes.decode("utf-8"))
+                raw_meta = json.loads(raw_bytes.decode("utf-8"))
                 msg = raw_meta.get("message", {})
                 content = msg.get("content", "") if isinstance(msg, dict) else ""
                 if not content:
@@ -640,7 +718,7 @@ def _call_single(
                 is_complete = True
                 # Capture thinking and tool_calls from batch response
                 if isinstance(msg, dict):
-                    raw_meta["thinking"]   = msg.get("thinking", "")
+                    raw_meta["thinking"] = msg.get("thinking", "")
                     raw_meta["tool_calls"] = msg.get("tool_calls", [])
 
         latency = time.monotonic() - t0
@@ -654,7 +732,7 @@ def _call_single(
         mon.record(latency, False)
         body_snippet = ""
         try:
-            body_snippet = (exc.fp.read(400).decode("utf-8", errors="replace") if exc.fp else "")
+            body_snippet = exc.fp.read(400).decode("utf-8", errors="replace") if exc.fp else ""
         except Exception:
             pass
         log.warning("[%s] HTTP %d %.1fs: %s", model, exc.code, latency, body_snippet[:180])
@@ -678,6 +756,7 @@ def _call_single(
 # ---------------------------------------------------------------------------
 # Fallback Orchestrator
 # ---------------------------------------------------------------------------
+
 
 class FallbackOrchestrator:
     """
@@ -741,7 +820,9 @@ class FallbackOrchestrator:
             cb = CircuitBreaker(model)
             if cb.is_open:
                 log.warning("[%s] Circuit OPEN — skipping tier %d", model, tier_idx + 1)
-                audit.append({"tier": tier_idx, "model": model, "outcome": "circuit_open", "attempts": 0})
+                audit.append(
+                    {"tier": tier_idx, "model": model, "outcome": "circuit_open", "attempts": 0}
+                )
                 continue
 
             retry = RetryPolicy(max_retries=self.max_retries_per_tier)
@@ -754,10 +835,15 @@ class FallbackOrchestrator:
 
                 try:
                     content, is_complete, raw = _call_single(
-                        model=model, system=system, prompt=prompt,
-                        temperature=self.temperature, think=self.think,
-                        api_key=self._api_key, use_streaming=self.use_streaming,
-                        tools=self.tools, format_schema=self.format_schema,
+                        model=model,
+                        system=system,
+                        prompt=prompt,
+                        temperature=self.temperature,
+                        think=self.think,
+                        api_key=self._api_key,
+                        use_streaming=self.use_streaming,
+                        tools=self.tools,
+                        format_schema=self.format_schema,
                         web_search=self.web_search,
                     )
                     latency = time.monotonic() - t_att
@@ -769,21 +855,30 @@ class FallbackOrchestrator:
                         audit.append(rec)
                         continue  # retry
 
-                    rec.update({
-                        "outcome": "success", "latency_s": round(latency, 2),
-                        "chars": len(content), "complete": is_complete,
-                        "thinking_chars": len(raw.get("thinking", "")),
-                        "tool_calls_count": len(raw.get("tool_calls", [])),
-                    })
+                    rec.update(
+                        {
+                            "outcome": "success",
+                            "latency_s": round(latency, 2),
+                            "chars": len(content),
+                            "complete": is_complete,
+                            "thinking_chars": len(raw.get("thinking", "")),
+                            "tool_calls_count": len(raw.get("tool_calls", [])),
+                        }
+                    )
                     audit.append(rec)
 
                     return CompletionResult(
-                        content=content, model_used=model,
-                        model_requested=self.chain[0], chain_used=self.chain,
-                        tier_index=tier_idx, attempts=total_attempts,
+                        content=content,
+                        model_used=model,
+                        model_requested=self.chain[0],
+                        chain_used=self.chain,
+                        tier_index=tier_idx,
+                        attempts=total_attempts,
                         latency_s=round(time.monotonic() - t_start, 2),
-                        streamed=self.use_streaming, truncated=not is_complete,
-                        raw=raw, audit_trail=audit,
+                        streamed=self.use_streaming,
+                        truncated=not is_complete,
+                        raw=raw,
+                        audit_trail=audit,
                         thinking=raw.get("thinking", ""),
                         tool_calls=raw.get("tool_calls", []),
                     )
@@ -791,8 +886,17 @@ class FallbackOrchestrator:
                 except RuntimeError as exc:
                     latency = time.monotonic() - t_att
                     msg = str(exc)
-                    non_retriable = any(k in msg for k in ("Auth failure", "not found", "Circuit OPEN"))
-                    rec.update({"outcome": "error", "error": msg[:300], "latency_s": round(latency, 2), "non_retriable": non_retriable})
+                    non_retriable = any(
+                        k in msg for k in ("Auth failure", "not found", "Circuit OPEN")
+                    )
+                    rec.update(
+                        {
+                            "outcome": "error",
+                            "error": msg[:300],
+                            "latency_s": round(latency, 2),
+                            "non_retriable": non_retriable,
+                        }
+                    )
                     audit.append(rec)
                     log.warning("[%s] attempt %d error: %s", model, attempt, msg[:160])
                     if non_retriable:
@@ -800,7 +904,13 @@ class FallbackOrchestrator:
 
                 except Exception as exc:
                     latency = time.monotonic() - t_att
-                    rec.update({"outcome": "error", "error": str(exc)[:300], "latency_s": round(latency, 2)})
+                    rec.update(
+                        {
+                            "outcome": "error",
+                            "error": str(exc)[:300],
+                            "latency_s": round(latency, 2),
+                        }
+                    )
                     audit.append(rec)
                     log.warning("[%s] attempt %d unexpected: %s", model, attempt, exc)
 
@@ -815,7 +925,7 @@ class FallbackOrchestrator:
     def health_report(self) -> str:
         lines = [f"Chain health ({' -> '.join(self.chain)}):"]
         for model in self.chain:
-            cb  = CircuitBreaker(model)
+            cb = CircuitBreaker(model)
             mon = ConnectionMonitor(model)
             state = "OPEN " if cb.is_open else "CLOSED"
             lines.append(f"  [{state}] {mon.summary()}")
@@ -826,6 +936,7 @@ class FallbackOrchestrator:
 # Standalone Web Search  (POST /api/web_search)
 # Ref: https://docs.ollama.com/capabilities/web-search
 # ---------------------------------------------------------------------------
+
 
 def web_search(
     query: str,
@@ -849,11 +960,12 @@ def web_search(
     payload = json.dumps({"query": query, "max_results": max_results}, ensure_ascii=False).encode()
     url = f"{OLLAMA_CLOUD_BASE}/web_search"
     req = urllib.request.Request(
-        url, data=payload,
+        url,
+        data=payload,
         headers={
-            "Content-Type":  "application/json; charset=utf-8",
+            "Content-Type": "application/json; charset=utf-8",
             "Authorization": f"Bearer {resolved_key}",
-            "User-Agent":    "hlf-mcp-agent/1.0",
+            "User-Agent": "hlf-mcp-agent/1.0",
         },
         method="POST",
     )
@@ -876,15 +988,23 @@ def web_search(
 # Backward-compat shims (keep all existing tests green)
 # ---------------------------------------------------------------------------
 
+
 def call_ollama(
-    model: str, system: str, prompt: str,
-    temperature: float = 0.2, timeout: int = TOTAL_CALL_TIMEOUT,
-    api_key: str | None = None, think: bool = False,
+    model: str,
+    system: str,
+    prompt: str,
+    temperature: float = 0.2,
+    timeout: int = TOTAL_CALL_TIMEOUT,
+    api_key: str | None = None,
+    think: bool = False,
 ) -> dict[str, Any]:
     """Single-model call — backward compat. Prefer FallbackOrchestrator."""
     content, is_complete, raw = _call_single(
-        model=model, system=system, prompt=prompt,
-        temperature=temperature, think=think,
+        model=model,
+        system=system,
+        prompt=prompt,
+        temperature=temperature,
+        think=think,
         api_key=api_key or os.environ.get("OLLAMA_API_KEY", ""),
         use_streaming=True,
     )
@@ -895,14 +1015,21 @@ def call_ollama(
 
 
 def call_with_fallback(
-    model: str, fallback_model: str, system: str, prompt: str,
-    temperature: float = 0.2, timeout: int = TOTAL_CALL_TIMEOUT,
-    api_key: str | None = None, think: bool = False,
+    model: str,
+    fallback_model: str,
+    system: str,
+    prompt: str,
+    temperature: float = 0.2,
+    timeout: int = TOTAL_CALL_TIMEOUT,
+    api_key: str | None = None,
+    think: bool = False,
 ) -> tuple[dict[str, Any], str]:
     """2-tier compat shim. Prefer FallbackOrchestrator."""
     orch = FallbackOrchestrator(
-        chain=[model, fallback_model], temperature=temperature,
-        think=think, api_key=api_key,
+        chain=[model, fallback_model],
+        temperature=temperature,
+        think=think,
+        api_key=api_key,
     )
     result = orch.complete(system=system, prompt=prompt)
     raw = result.raw
@@ -930,6 +1057,7 @@ def extract_content(response: dict[str, Any]) -> str:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Ollama Cloud — tiered fallback client",
@@ -948,17 +1076,17 @@ def main() -> None:
         ),
     )
     grp = parser.add_mutually_exclusive_group(required=True)
-    grp.add_argument("--chain",  choices=list(CHAIN_MAP), help="Named tiered chain")
-    grp.add_argument("--model",  help="Primary model (requires --fallback-model)")
+    grp.add_argument("--chain", choices=list(CHAIN_MAP), help="Named tiered chain")
+    grp.add_argument("--model", help="Primary model (requires --fallback-model)")
     parser.add_argument("--fallback-model", default="qwen3.5:cloud")
-    parser.add_argument("--system",      required=True)
-    parser.add_argument("--prompt",      required=True, help="Prompt text or @file.txt")
-    parser.add_argument("--output",      default="-")
+    parser.add_argument("--system", required=True)
+    parser.add_argument("--prompt", required=True, help="Prompt text or @file.txt")
+    parser.add_argument("--output", default="-")
     parser.add_argument("--temperature", type=float, default=0.2)
-    parser.add_argument("--think",       action="store_true")
-    parser.add_argument("--no-stream",   action="store_true")
-    parser.add_argument("--retries",     type=int, default=MAX_RETRIES_PER_MODEL)
-    parser.add_argument("--health",      action="store_true", help="Print chain health and exit")
+    parser.add_argument("--think", action="store_true")
+    parser.add_argument("--no-stream", action="store_true")
+    parser.add_argument("--retries", type=int, default=MAX_RETRIES_PER_MODEL)
+    parser.add_argument("--health", action="store_true", help="Print chain health and exit")
     args = parser.parse_args()
 
     chain = CHAIN_MAP[args.chain] if args.chain else [args.model, args.fallback_model]
@@ -974,8 +1102,11 @@ def main() -> None:
         log.info("Prompt loaded from file (%d chars)", len(prompt))
 
     orch = FallbackOrchestrator(
-        chain=chain, temperature=args.temperature, think=args.think,
-        use_streaming=not args.no_stream, max_retries_per_tier=args.retries,
+        chain=chain,
+        temperature=args.temperature,
+        think=args.think,
+        use_streaming=not args.no_stream,
+        max_retries_per_tier=args.retries,
     )
 
     try:
@@ -987,21 +1118,25 @@ def main() -> None:
         sys.exit(1)
 
     if result.tier_index > 0:
-        log.warning("Used tier %d (%s) — primary %s was unavailable",
-                    result.tier_index + 1, result.model_used, result.model_requested)
+        log.warning(
+            "Used tier %d (%s) — primary %s was unavailable",
+            result.tier_index + 1,
+            result.model_used,
+            result.model_requested,
+        )
     if result.truncated:
         log.warning("Response may be truncated (stream ended without done sentinel)")
 
     output_data = {
-        "model":           result.model_used,
+        "model": result.model_used,
         "model_requested": result.model_requested,
-        "tier_index":      result.tier_index,
-        "attempts":        result.attempts,
-        "latency_s":       result.latency_s,
-        "streamed":        result.streamed,
-        "truncated":       result.truncated,
-        "content":         result.content,
-        "audit_trail":     result.audit_trail,
+        "tier_index": result.tier_index,
+        "attempts": result.attempts,
+        "latency_s": result.latency_s,
+        "streamed": result.streamed,
+        "truncated": result.truncated,
+        "content": result.content,
+        "audit_trail": result.audit_trail,
     }
 
     if args.output == "-":
@@ -1010,8 +1145,12 @@ def main() -> None:
         _write_output(args.output, json.dumps(output_data, indent=2, ensure_ascii=False))
         log.info(
             "Written to %s (model=%s tier=%d/%d attempts=%d %.1fs %s)",
-            args.output, result.model_used, result.tier_index + 1,
-            len(chain), result.attempts, result.latency_s,
+            args.output,
+            result.model_used,
+            result.tier_index + 1,
+            len(chain),
+            result.attempts,
+            result.latency_s,
             "TRUNCATED" if result.truncated else "complete",
         )
 

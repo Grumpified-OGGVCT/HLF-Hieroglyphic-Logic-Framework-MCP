@@ -16,7 +16,9 @@ def test_collect_governance_manifest_snapshot_reports_clean_manifest(tmp_path: P
     import hashlib
 
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
-    (governance_dir / "MANIFEST.sha256").write_text(f"{digest} align_rules.json\n", encoding="utf-8")
+    (governance_dir / "MANIFEST.sha256").write_text(
+        f"{digest} align_rules.json\n", encoding="utf-8"
+    )
 
     snapshot = collect_governance_manifest_snapshot(repo_root)
 
@@ -48,7 +50,11 @@ def test_build_weekly_artifact_uses_latest_suite_summary(monkeypatch, tmp_path: 
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_server_surface",
-        lambda: {"registered_tool_count": 34, "registered_resource_count": 9, "exported_callable_count": 34},
+        lambda: {
+            "registered_tool_count": 34,
+            "registered_resource_count": 9,
+            "exported_callable_count": 34,
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
@@ -85,12 +91,21 @@ def test_build_hks_exemplar_from_weekly_artifact_returns_validated_entry(tmp_pat
             "passed": True,
             "exit_code": 0,
             "duration_ms": 101.0,
-            "counts": {"passed": 12, "failed": 0, "errors": 0, "skipped": 0, "xfailed": 0, "xpassed": 0},
+            "counts": {
+                "passed": 12,
+                "failed": 0,
+                "errors": 0,
+                "skipped": 0,
+                "xfailed": 0,
+                "xpassed": 0,
+            },
         },
         "scheduled_pipeline": {"toolkit_command": "status"},
     }
 
-    exemplar = build_hks_exemplar_from_weekly_artifact(artifact, artifact_path=tmp_path / "weekly_pipeline_latest.json")
+    exemplar = build_hks_exemplar_from_weekly_artifact(
+        artifact, artifact_path=tmp_path / "weekly_pipeline_latest.json"
+    )
 
     assert exemplar is not None
     assert exemplar.domain == "hlf-specific"
@@ -111,14 +126,16 @@ def test_local_scheduler_status_reads_config_and_latest_artifact(tmp_path: Path)
 
     config_path = tmp_path / "local_pipeline_scheduler.json"
     config_path.write_text(
-        json.dumps({
-            "local_pipeline_scheduler": {
-                "enabled": True,
-                "interval_hours": 24,
-                "run_tests": False,
-                "toolkit_command": "security",
+        json.dumps(
+            {
+                "local_pipeline_scheduler": {
+                    "enabled": True,
+                    "interval_hours": 24,
+                    "run_tests": False,
+                    "toolkit_command": "security",
+                }
             }
-        }),
+        ),
         encoding="utf-8",
     )
 

@@ -9,12 +9,22 @@ import uuid
 from typing import Any, Literal
 
 import httpx
-
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.governed_routing import build_governed_route
-from hlf_mcp.hlf.model_catalog import build_lane_trace_context, evaluate_model_against_profile, evaluate_model_requirement_tiers, evaluate_model_requirements, load_model_qualification_profiles, sync_model_catalog
-from hlf_mcp.hlf.routing_trace import RouteDecisionRecord, RouteTraceRecord, build_operator_route_summary
+from hlf_mcp.hlf.model_catalog import (
+    build_lane_trace_context,
+    evaluate_model_against_profile,
+    evaluate_model_requirement_tiers,
+    evaluate_model_requirements,
+    load_model_qualification_profiles,
+    sync_model_catalog,
+)
+from hlf_mcp.hlf.routing_trace import (
+    RouteDecisionRecord,
+    RouteTraceRecord,
+    build_operator_route_summary,
+)
 from hlf_mcp.server_context import ServerContext
 
 Workload = Literal[
@@ -27,7 +37,7 @@ Workload = Literal[
 ]
 
 _ROUTE_READY_TIERS = {"launch-qualified", "promotion-qualified"}
-_QUALIFICATION_PROFILES = dict((load_model_qualification_profiles().get("profiles") or {}))
+_QUALIFICATION_PROFILES = dict(load_model_qualification_profiles().get("profiles") or {})
 
 
 def _qualification_profile_for(workload: Workload, multilingual_required: bool) -> str | None:
@@ -38,7 +48,9 @@ def _qualification_profile_for(workload: Workload, multilingual_required: bool) 
     return None
 
 
-def _route_profile_candidates(workload: Workload, selected_lane: str, multilingual_required: bool) -> list[str]:
+def _route_profile_candidates(
+    workload: Workload, selected_lane: str, multilingual_required: bool
+) -> list[str]:
     profiles: list[str] = []
     # Map lane families to qualification profiles
     lane_profile_map = {
@@ -88,8 +100,12 @@ def _collect_route_profile_artifacts(
     *,
     profile_names: list[str],
     benchmark_scores: dict[str, float] | None,
-) -> tuple[list[str], dict[str, dict[str, Any] | None], dict[str, dict[str, float]], dict[str, float]]:
-    explicit_scores = {str(metric): float(score) for metric, score in (benchmark_scores or {}).items()}
+) -> tuple[
+    list[str], dict[str, dict[str, Any] | None], dict[str, dict[str, float]], dict[str, float]
+]:
+    explicit_scores = {
+        str(metric): float(score) for metric, score in (benchmark_scores or {}).items()
+    }
     active_profiles: list[str] = []
     artifacts: dict[str, dict[str, Any] | None] = {}
     per_profile_scores: dict[str, dict[str, float]] = {}
@@ -131,7 +147,11 @@ def _route_selection_profiles(
     selected_lane: str,
 ) -> list[str]:
     if selected_lane != "retrieval" and qualification_profile:
-        filtered = [profile_name for profile_name in active_profiles if profile_name != qualification_profile]
+        filtered = [
+            profile_name
+            for profile_name in active_profiles
+            if profile_name != qualification_profile
+        ]
         if filtered:
             return filtered
     return list(active_profiles)
@@ -240,7 +260,10 @@ def _load_remote_direct_entries() -> tuple[list[dict[str, Any]], str | None]:
     if isinstance(payload, dict):
         payload = payload.get("entries", [])
     if not isinstance(payload, list):
-        return [], "HLF_REMOTE_MODEL_ENDPOINTS must be a JSON list or an object with an 'entries' list."
+        return (
+            [],
+            "HLF_REMOTE_MODEL_ENDPOINTS must be a JSON list or an object with an 'entries' list.",
+        )
 
     normalized: list[dict[str, Any]] = []
     for index, entry in enumerate(payload):
@@ -255,7 +278,9 @@ def _load_remote_direct_entries() -> tuple[list[dict[str, Any]], str | None]:
                 "family": str(entry.get("family") or "remote-direct"),
                 "endpoint": endpoint,
                 "lanes": [str(lane) for lane in entry.get("lanes", ["explainer"])],
-                "capabilities": [str(capability) for capability in entry.get("capabilities", ["remote-direct"])],
+                "capabilities": [
+                    str(capability) for capability in entry.get("capabilities", ["remote-direct"])
+                ],
                 "reachable": bool(entry.get("reachable", True)),
                 "known_but_impractical": bool(entry.get("known_but_impractical", False)),
                 "privacy_preserving": bool(entry.get("privacy_preserving", False)),
@@ -264,7 +289,9 @@ def _load_remote_direct_entries() -> tuple[list[dict[str, Any]], str | None]:
                     str(reason)
                     for reason in entry.get(
                         "rationale",
-                        ["Remote direct operator endpoint configured through HLF_REMOTE_MODEL_ENDPOINTS."],
+                        [
+                            "Remote direct operator endpoint configured through HLF_REMOTE_MODEL_ENDPOINTS."
+                        ],
                     )
                 ],
             }
@@ -284,7 +311,9 @@ def _workload_to_catalog_lane(workload: Workload) -> str:
     return lane_map[workload]
 
 
-def _catalog_candidate_to_route(candidate: dict[str, Any] | None, fallback: dict[str, Any]) -> dict[str, Any]:
+def _catalog_candidate_to_route(
+    candidate: dict[str, Any] | None, fallback: dict[str, Any]
+) -> dict[str, Any]:
     if not candidate:
         return dict(fallback)
     return {
@@ -342,14 +371,18 @@ def _probe_local_hardware() -> dict[str, Any]:
     }
 
 
-def _check_ollama_runtime(endpoint: str, recommended_model: str, fallback_model: str) -> dict[str, Any]:
+def _check_ollama_runtime(
+    endpoint: str, recommended_model: str, fallback_model: str
+) -> dict[str, Any]:
     tags_url = endpoint.rstrip("/") + "/api/tags"
     try:
         response = httpx.get(tags_url, timeout=1.5)
         response.raise_for_status()
         payload = response.json()
         models = payload.get("models", []) if isinstance(payload, dict) else []
-        installed_names = [str(model.get("name", "")) for model in models if isinstance(model, dict)]
+        installed_names = [
+            str(model.get("name", "")) for model in models if isinstance(model, dict)
+        ]
         installed_set = set(installed_names)
         return {
             "ollama_available": True,
@@ -382,13 +415,17 @@ def _recommend_model(
 
     if cpu_only:
         if workload == "long_form_standards_ingestion":
-            reasons.append("CPU-only mode is not a strong first target for long-form standards ingestion.")
+            reasons.append(
+                "CPU-only mode is not a strong first target for long-form standards ingestion."
+            )
             return "embeddinggemma", "all-minilm", reasons
         if workload == "agent_routing_context":
             reasons.append("Routing context should stay lightweight on CPU-only systems.")
             return "embeddinggemma", "all-minilm", reasons
         if workload == "translation_memory" and multilingual_required:
-            reasons.append("CPU-only mode prefers the most practical quality/size balance over heavier multilingual models.")
+            reasons.append(
+                "CPU-only mode prefers the most practical quality/size balance over heavier multilingual models."
+            )
             return "embeddinggemma", "all-minilm", reasons
         reasons.append("CPU-only mode prioritizes portability and low operational cost.")
         return "embeddinggemma", "all-minilm", reasons
@@ -397,9 +434,13 @@ def _recommend_model(
 
     if workload == "translation_memory":
         if multilingual_required and vram >= 10:
-            reasons.append("Translation memory benefits from stronger multilingual semantic recall.")
+            reasons.append(
+                "Translation memory benefits from stronger multilingual semantic recall."
+            )
             return "nomic-embed-text-v2-moe", "embeddinggemma", reasons
-        reasons.append("Translation memory can start with a lighter model if multilingual pressure is modest.")
+        reasons.append(
+            "Translation memory can start with a lighter model if multilingual pressure is modest."
+        )
         return "embeddinggemma", "all-minilm", reasons
 
     if workload == "repair_pattern_recall":
@@ -407,28 +448,40 @@ def _recommend_model(
         return "embeddinggemma", "bge-m3" if vram >= 10 else "all-minilm", reasons
 
     if workload == "governance_policy_retrieval":
-        reasons.append("Governance retrieval remains deterministic-first; semantic retrieval is advisory only.")
+        reasons.append(
+            "Governance retrieval remains deterministic-first; semantic retrieval is advisory only."
+        )
         return "embeddinggemma", "all-minilm" if vram < 4 else "bge-m3", reasons
 
     if workload == "code_pattern_retrieval":
         if vram >= 10 and (long_context_required or latency_priority == "quality"):
-            reasons.append("Code and doc retrieval benefit from a longer-context embedding model when hardware allows.")
+            reasons.append(
+                "Code and doc retrieval benefit from a longer-context embedding model when hardware allows."
+            )
             return "bge-m3", "mxbai-embed-large", reasons
-        reasons.append("Shorter-context English-heavy code retrieval can start with a lighter, faster model.")
+        reasons.append(
+            "Shorter-context English-heavy code retrieval can start with a lighter, faster model."
+        )
         return "mxbai-embed-large" if vram >= 4 else "embeddinggemma", "embeddinggemma", reasons
 
     if workload == "agent_routing_context":
         if multilingual_required and vram >= 10:
-            reasons.append("Multilingual routing context can justify a stronger multilingual embedding model.")
+            reasons.append(
+                "Multilingual routing context can justify a stronger multilingual embedding model."
+            )
             return "nomic-embed-text-v2-moe", "embeddinggemma", reasons
         reasons.append("Routing context should remain cheap, fast, and optional.")
         return "embeddinggemma", "all-minilm", reasons
 
     if workload == "long_form_standards_ingestion":
         if long_context_required and vram >= 12:
-            reasons.append("Long-form standards ingestion benefits from larger context capacity when hardware can support it.")
+            reasons.append(
+                "Long-form standards ingestion benefits from larger context capacity when hardware can support it."
+            )
             return "bge-m3", "qwen3-embedding:4b", reasons
-        reasons.append("Standards ingestion should start with disciplined chunking before heavier model adoption.")
+        reasons.append(
+            "Standards ingestion should start with disciplined chunking before heavier model adoption."
+        )
         return "bge-m3" if vram >= 10 else "embeddinggemma", "embeddinggemma", reasons
 
     reasons.append("Defaulting to a conservative local embedding profile.")
@@ -465,7 +518,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 detected_vram = _parse_vram_gb(os.environ.get("HLF_VRAM"))
                 detected_from = "environment" if detected_vram is not None else "unknown"
 
-        effective_cpu_only = cpu_only or bool(hardware_probe.get("cpu_only", False) and detected_vram in {None, 0.0})
+        effective_cpu_only = cpu_only or bool(
+            hardware_probe.get("cpu_only", False) and detected_vram in {None, 0.0}
+        )
 
         normalized_latency = latency_priority.lower().strip()
         if normalized_latency not in {"speed", "balanced", "quality"}:
@@ -487,9 +542,13 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "Apply governed PII handling before persistent memory writes.",
         ]
         if effective_cpu_only:
-            constraints.append("CPU-only mode should avoid latency-sensitive routing loops and large long-form ingestion as first deployments.")
+            constraints.append(
+                "CPU-only mode should avoid latency-sensitive routing loops and large long-form ingestion as first deployments."
+            )
         if workload == "long_form_standards_ingestion":
-            constraints.append("Long-form standards ingestion still requires chunking, provenance, and freshness policy beyond model selection.")
+            constraints.append(
+                "Long-form standards ingestion still requires chunking, provenance, and freshness policy beyond model selection."
+            )
 
         endpoint = _normalize_ollama_endpoint(ollama_host)
         runtime_status = _check_ollama_runtime(endpoint, recommended_model, fallback_model)
@@ -528,7 +587,8 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "allowed_modes": {
                 "deterministic_only": True,
                 "advisory_memory_context": True,
-                "default_enable_memory_context": workload in {"translation_memory", "repair_pattern_recall"},
+                "default_enable_memory_context": workload
+                in {"translation_memory", "repair_pattern_recall"},
             },
             "policy_constraints": constraints,
             "runtime_status": runtime_status,
@@ -550,14 +610,24 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     ) -> dict[str, Any]:
         """Sync a governed model catalog for an agent, including explicit remote-direct endpoints from HLF_REMOTE_MODEL_ENDPOINTS."""
         profile = ctx.get_embedding_profile(agent_id=agent_id)
-        endpoint = _normalize_ollama_endpoint(ollama_host or (profile or {}).get("embedding_recommendation", {}).get("endpoint"))
-        effective_hardware = dict(hardware_summary or (profile or {}).get("hardware_summary") or _probe_local_hardware())
+        endpoint = _normalize_ollama_endpoint(
+            ollama_host or (profile or {}).get("embedding_recommendation", {}).get("endpoint")
+        )
+        effective_hardware = dict(
+            hardware_summary or (profile or {}).get("hardware_summary") or _probe_local_hardware()
+        )
 
         effective_runtime = dict(runtime_status or (profile or {}).get("runtime_status") or {})
         if not effective_runtime:
-            reference_model = (profile or {}).get("embedding_recommendation", {}).get("model", "embeddinggemma")
-            fallback_model = (profile or {}).get("fallback_recommendation", {}).get("model", "all-minilm")
-            effective_runtime = _check_ollama_runtime(endpoint, str(reference_model), str(fallback_model))
+            reference_model = (
+                (profile or {}).get("embedding_recommendation", {}).get("model", "embeddinggemma")
+            )
+            fallback_model = (
+                (profile or {}).get("fallback_recommendation", {}).get("model", "all-minilm")
+            )
+            effective_runtime = _check_ollama_runtime(
+                endpoint, str(reference_model), str(fallback_model)
+            )
 
         remote_direct_entries, env_error = _load_remote_direct_entries()
         catalog = sync_model_catalog(
@@ -571,7 +641,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         if env_error:
             catalog["remote_direct_env_error"] = env_error
         catalog["remote_direct_entries"] = remote_direct_entries
-        catalog["remote_direct_env_var_present"] = bool(os.environ.get("HLF_REMOTE_MODEL_ENDPOINTS", "").strip())
+        catalog["remote_direct_env_var_present"] = bool(
+            os.environ.get("HLF_REMOTE_MODEL_ENDPOINTS", "").strip()
+        )
         if persist:
             catalog = ctx.persist_model_catalog(catalog)
         return {"status": "ok", "catalog": catalog}
@@ -589,7 +661,11 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             source="server_profiles.hlf_align_check",
             action="align_check",
             status="blocked" if verdict.status == "blocked" else verdict.status,
-            severity="critical" if verdict.status == "blocked" else "warning" if verdict.status == "warning" else "info",
+            severity="critical"
+            if verdict.status == "blocked"
+            else "warning"
+            if verdict.status == "warning"
+            else "info",
             subject_id=verdict.subject_hash,
             goal_id=agent_id,
             details={
@@ -602,7 +678,11 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "matches": verdict.to_dict()["matches"],
             },
             agent_role="align_governor",
-            anomaly_score=1.0 if verdict.status == "blocked" else 0.5 if verdict.status == "warning" else 0.0,
+            anomaly_score=1.0
+            if verdict.status == "blocked"
+            else 0.5
+            if verdict.status == "warning"
+            else 0.0,
         )
         return {
             "status": "ok",
@@ -668,15 +748,26 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             profile.get("fallback_recommendation", {}),
         )
 
-        route_profile_candidates = _route_profile_candidates(workload, selected_lane, multilingual_required)
-        active_profiles, benchmark_artifacts, profile_benchmark_scores, effective_benchmark_scores = _collect_route_profile_artifacts(
+        route_profile_candidates = _route_profile_candidates(
+            workload, selected_lane, multilingual_required
+        )
+        (
+            active_profiles,
+            benchmark_artifacts,
+            profile_benchmark_scores,
+            effective_benchmark_scores,
+        ) = _collect_route_profile_artifacts(
             ctx,
             profile_names=route_profile_candidates,
             benchmark_scores=benchmark_scores,
         )
-        required_evidence_profiles = [profile_name for profile_name in route_profile_candidates if profile_name]
+        required_evidence_profiles = [
+            profile_name for profile_name in route_profile_candidates if profile_name
+        ]
         missing_evidence_profiles = [
-            profile_name for profile_name in required_evidence_profiles if profile_name not in active_profiles
+            profile_name
+            for profile_name in required_evidence_profiles
+            if profile_name not in active_profiles
         ]
 
         qualification_profile = _qualification_profile_for(workload, multilingual_required)
@@ -685,7 +776,11 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             qualification_profile=qualification_profile,
             selected_lane=selected_lane,
         )
-        fallback_entry = lane_summary.get("best_local") or lane_summary.get("best_remote_direct") or lane_summary.get("fallback")
+        fallback_entry = (
+            lane_summary.get("best_local")
+            or lane_summary.get("best_remote_direct")
+            or lane_summary.get("fallback")
+        )
         primary_qualification = None
         fallback_qualification = None
         primary_profile_evaluations: dict[str, dict[str, Any]] = {}
@@ -707,8 +802,16 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     require_reachable=True,
                 )
 
-        primary_qualification = primary_profile_evaluations.get(qualification_profile) if qualification_profile else None
-        fallback_qualification = fallback_profile_evaluations.get(qualification_profile) if qualification_profile else None
+        primary_qualification = (
+            primary_profile_evaluations.get(qualification_profile)
+            if qualification_profile
+            else None
+        )
+        fallback_qualification = (
+            fallback_profile_evaluations.get(qualification_profile)
+            if qualification_profile
+            else None
+        )
 
         selection_primary_evaluations = {
             profile_name: primary_profile_evaluations[profile_name]
@@ -725,7 +828,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
 
         if selection_profiles and not _profile_set_ready(selection_primary_evaluations):
             if fallback_entry and _profile_set_ready(selection_fallback_evaluations):
-                routing_primary = _catalog_candidate_to_route(fallback_entry, profile.get("embedding_recommendation", {}))
+                routing_primary = _catalog_candidate_to_route(
+                    fallback_entry, profile.get("embedding_recommendation", {})
+                )
                 lane_summary = dict(lane_summary)
                 lane_summary["preferred"] = fallback_entry
                 selected_primary_profile_evaluations = dict(fallback_profile_evaluations)
@@ -762,9 +867,15 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                         route_verdict.rationale.append(
                             f"Fallback candidate under '{profile_name}' resolved at tier {fallback_evaluation.get('resolved_tier', 'advisory-only')}."
                         )
-                route_verdict.primary_model = str(routing_primary.get("model", route_verdict.primary_model))
-                route_verdict.primary_access_mode = str(routing_primary.get("access_mode", route_verdict.primary_access_mode))
-        policy_basis_present = bool(align_result.get("governance_event", {}).get("event_ref")) and bool(align_verdict.get("status"))
+                route_verdict.primary_model = str(
+                    routing_primary.get("model", route_verdict.primary_model)
+                )
+                route_verdict.primary_access_mode = str(
+                    routing_primary.get("access_mode", route_verdict.primary_access_mode)
+                )
+        policy_basis_present = bool(
+            align_result.get("governance_event", {}).get("event_ref")
+        ) and bool(align_verdict.get("status"))
         if missing_evidence_profiles or not policy_basis_present:
             route_verdict.allowed = False
             route_verdict.decision = "deny"
@@ -788,8 +899,16 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             kind="routing_decision",
             source="server_profiles.hlf_route_governed_request",
             action="route_governed_request",
-            status="blocked" if not route_verdict.allowed else "warning" if route_verdict.review_required else "ok",
-            severity="critical" if not route_verdict.allowed else "warning" if route_verdict.review_required else "info",
+            status="blocked"
+            if not route_verdict.allowed
+            else "warning"
+            if route_verdict.review_required
+            else "ok",
+            severity="critical"
+            if not route_verdict.allowed
+            else "warning"
+            if route_verdict.review_required
+            else "info",
             subject_id=agent_id,
             goal_id=str(profile.get("profile_id", "")),
             details={
@@ -811,7 +930,11 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "align_rule_id": align_verdict.get("decisive_rule_id"),
             },
             agent_role="governed_router",
-            anomaly_score=1.0 if not route_verdict.allowed else 0.5 if route_verdict.review_required else 0.0,
+            anomaly_score=1.0
+            if not route_verdict.allowed
+            else 0.5
+            if route_verdict.review_required
+            else 0.0,
             related_refs=[align_result["governance_event"]["event_ref"]],
         )
         route_trace = RouteTraceRecord(
@@ -834,7 +957,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 applied_qualification_profiles=list(active_profiles),
                 preferred_model_tier=(selected_primary_qualification or {}).get("resolved_tier"),
                 benchmark_scores=dict(effective_benchmark_scores),
-                align_status=str(align_verdict.get("status")) if align_verdict.get("status") is not None else None,
+                align_status=str(align_verdict.get("status"))
+                if align_verdict.get("status") is not None
+                else None,
                 align_rule_id=align_verdict.get("decisive_rule_id"),
             ),
             selection_profiles=list(selection_profiles),
@@ -855,7 +980,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     "access_mode": routing_fallback.get("access_mode", ""),
                     "qualification": fallback_qualification,
                 }
-            ] if routing_fallback.get("model") else [],
+            ]
+            if routing_fallback.get("model")
+            else [],
             lane_candidate_summary=build_lane_trace_context(catalog, selected_lane),
         )
         route_trace.operator_summary = build_operator_route_summary(route_trace)
@@ -923,8 +1050,12 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         details: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Persist a governed benchmark artifact so routing and qualification can consume recorded evidence."""
-        normalized_scores = {str(metric): float(score) for metric, score in benchmark_scores.items()}
-        normalized_artifact_id = artifact_id or f"benchmark:{profile_name}:{topic}:{uuid.uuid4().hex[:12]}"
+        normalized_scores = {
+            str(metric): float(score) for metric, score in benchmark_scores.items()
+        }
+        normalized_artifact_id = (
+            artifact_id or f"benchmark:{profile_name}:{topic}:{uuid.uuid4().hex[:12]}"
+        )
         artifact = {
             "artifact_id": normalized_artifact_id,
             "profile_name": profile_name,
@@ -968,7 +1099,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "status": "not_found",
                 "agent_id": agent_id,
                 "model_name": model_name,
-                "available_models": [str(entry.get("name", "")) for entry in catalog.get("entries", [])],
+                "available_models": [
+                    str(entry.get("name", "")) for entry in catalog.get("entries", [])
+                ],
             }
 
         artifact = ctx.get_benchmark_artifact(profile_name=profile_name)
@@ -977,7 +1110,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             for metric, score in ((artifact or {}).get("benchmark_scores") or {}).items()
         }
         if benchmark_scores:
-            effective_scores.update({str(metric): float(score) for metric, score in benchmark_scores.items()})
+            effective_scores.update(
+                {str(metric): float(score) for metric, score in benchmark_scores.items()}
+            )
 
         evaluation = evaluate_model_against_profile(
             selected_entry,
@@ -1018,7 +1153,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "status": "not_found",
                 "agent_id": agent_id,
                 "model_name": model_name,
-                "available_models": [str(entry.get("name", "")) for entry in catalog.get("entries", [])],
+                "available_models": [
+                    str(entry.get("name", "")) for entry in catalog.get("entries", [])
+                ],
             }
 
         evaluation = evaluate_model_requirements(
@@ -1060,7 +1197,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "status": "not_found",
                 "agent_id": agent_id,
                 "model_name": model_name,
-                "available_models": [str(entry.get("name", "")) for entry in catalog.get("entries", [])],
+                "available_models": [
+                    str(entry.get("name", "")) for entry in catalog.get("entries", [])
+                ],
             }
 
         evaluation = evaluate_model_requirement_tiers(
@@ -1091,7 +1230,3 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_evaluate_model_requirements": hlf_evaluate_model_requirements,
         "hlf_evaluate_model_requirement_tiers": hlf_evaluate_model_requirement_tiers,
     }
-
-
-
-

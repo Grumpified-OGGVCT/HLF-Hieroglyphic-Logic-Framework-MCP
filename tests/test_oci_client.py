@@ -82,7 +82,9 @@ def test_push_returns_simulated_digest_and_size(tmp_path: Path) -> None:
     assert result["size"] > 0
 
 
-def test_get_checksum_and_list_tags_fail_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_checksum_and_list_tags_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     client = OCIClient(cache_path=tmp_path)
 
     def raise_manifest(ref: OCIModuleRef) -> dict:
@@ -98,7 +100,9 @@ def test_get_checksum_and_list_tags_fail_closed(tmp_path: Path, monkeypatch: pyt
     assert client.list_tags("library/math") == []
 
 
-def test_pull_fetches_manifest_and_layers_when_cache_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pull_fetches_manifest_and_layers_when_cache_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     client = OCIClient(cache_path=tmp_path)
     ref = OCIModuleRef.parse("math:v1")
     layer = _make_tar_layer({"module.json": b'{"name":"math","version":"v1"}'})

@@ -10,32 +10,36 @@ MemoryStore: in-memory + SQLite-persistent store with:
   - Tag and entity indexing
   - Merkle chain for append integrity
 """
+
 from __future__ import annotations
-import dataclasses, hashlib, json, math, re, uuid
-from datetime import datetime, timezone
-from pathlib import Path
+
+import dataclasses
+import hashlib
+import math
+import re
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
-UTC = timezone.utc
 
 @dataclasses.dataclass
 class MemoryNode:
-    node_id:      str   = dataclasses.field(default_factory=lambda: str(uuid.uuid4()))
-    entity_id:    str   = ""
-    content:      str   = ""
-    content_hash: str   = ""
-    confidence:   float = 1.0
-    importance:   float = 0.5
-    ttl_seconds:  int | None = None
-    created_at:   str   = dataclasses.field(default_factory=lambda: datetime.now(UTC).isoformat())
-    updated_at:   str   = dataclasses.field(default_factory=lambda: datetime.now(UTC).isoformat())
-    parent_id:    str | None = None
-    children:     list[str] = dataclasses.field(default_factory=list)
-    tags:         list[str] = dataclasses.field(default_factory=list)
-    embedding:    list[float] | None = None
-    source:       str   = ""
-    spec_id:      str | None = None
-    merkle_hash:  str   = ""
+    node_id: str = dataclasses.field(default_factory=lambda: str(uuid.uuid4()))
+    entity_id: str = ""
+    content: str = ""
+    content_hash: str = ""
+    confidence: float = 1.0
+    importance: float = 0.5
+    ttl_seconds: int | None = None
+    created_at: str = dataclasses.field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = dataclasses.field(default_factory=lambda: datetime.now(UTC).isoformat())
+    parent_id: str | None = None
+    children: list[str] = dataclasses.field(default_factory=list)
+    tags: list[str] = dataclasses.field(default_factory=list)
+    embedding: list[float] | None = None
+    source: str = ""
+    spec_id: str | None = None
+    merkle_hash: str = ""
 
     def compute_hash(self) -> str:
         return hashlib.sha256(self.content.encode()).hexdigest()
@@ -194,7 +198,7 @@ class HLFPointer:
         trust_tier: str = "local",
         fresh_until: str | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> "HLFPointer":
+    ) -> HLFPointer:
         digest = hashlib.sha256(str(content).encode("utf-8")).hexdigest()
         return cls(
             alias=_sanitize_pointer_alias(alias),
@@ -269,7 +273,9 @@ def verify_pointer_ref(
         return {
             "status": "revoked",
             "reason": "pointer_revoked",
-            "governance_status": "tombstoned" if bool(entry.get("tombstoned", False)) else "revoked",
+            "governance_status": "tombstoned"
+            if bool(entry.get("tombstoned", False))
+            else "revoked",
             "freshness_status": "unknown",
             "pointer": parsed["pointer"],
             "alias": parsed["alias"],
@@ -298,7 +304,9 @@ def verify_pointer_ref(
         "algorithm": parsed["algorithm"],
         "digest": parsed["digest"],
         "trust_tier": entry.get("trust_tier", "local"),
-        "resolved_value": effective_content if effective_content is not None else entry.get("value"),
+        "resolved_value": effective_content
+        if effective_content is not None
+        else entry.get("value"),
     }
 
 
@@ -317,7 +325,11 @@ class MemoryStore:
         node.content_hash = node.compute_hash()
         # SHA-256 exact dedup
         if node.content_hash in self._hash_index:
-            return {"stored": False, "reason": "exact_duplicate", "node_id": self._hash_index[node.content_hash]}
+            return {
+                "stored": False,
+                "reason": "exact_duplicate",
+                "node_id": self._hash_index[node.content_hash],
+            }
         # Embedding similarity dedup
         node.embedding = node.compute_embedding()
         for existing_id, existing in self._nodes.items():
@@ -325,7 +337,12 @@ class MemoryStore:
                 a, b = _align_embeddings(node.embedding, existing.embedding)
                 sim = _cosine(a, b)
                 if sim > self.dedup_threshold:
-                    return {"stored": False, "reason": "near_duplicate", "similarity": round(sim, 4), "node_id": existing_id}
+                    return {
+                        "stored": False,
+                        "reason": "near_duplicate",
+                        "similarity": round(sim, 4),
+                        "node_id": existing_id,
+                    }
         # Merkle chain
         chain_input = self._prev_merkle + node.content_hash
         node.merkle_hash = hashlib.sha256(chain_input.encode()).hexdigest()
@@ -340,10 +357,15 @@ class MemoryStore:
             if tag not in self._tag_index:
                 self._tag_index[tag] = []
             self._tag_index[tag].append(node.node_id)
-        return {"stored": True, "node_id": node.node_id, "merkle_hash": node.merkle_hash[:16] + "..."}
+        return {
+            "stored": True,
+            "node_id": node.node_id,
+            "merkle_hash": node.merkle_hash[:16] + "...",
+        }
 
-    def recall(self, entity_id: str = "", query: str = "", top_k: int = 5,
-               tags: list[str] | None = None) -> list[dict[str, Any]]:
+    def recall(
+        self, entity_id: str = "", query: str = "", top_k: int = 5, tags: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         if entity_id:
             node_ids = self._entity_index.get(entity_id, [])
         elif tags:

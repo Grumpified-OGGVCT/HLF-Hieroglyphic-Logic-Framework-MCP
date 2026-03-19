@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-
 _INTRO = """\
 You are connected to the HLF (Hieroglyphic Logic Framework) MCP server.
 
@@ -102,12 +101,10 @@ def build_server_instructions(
     resources: Mapping[str, Any],
 ) -> str:
     tool_lines = [
-        f"  {name:<28} - {_first_line(func, 'HLF MCP tool')}"
-        for name, func in tools.items()
+        f"  {name:<28} - {_first_line(func, 'HLF MCP tool')}" for name, func in tools.items()
     ]
     resource_lines = [
-        f"  {uri:<32} - {_first_line(func, 'HLF MCP resource')}"
-        for uri, func in resources.items()
+        f"  {uri:<32} - {_first_line(func, 'HLF MCP resource')}" for uri, func in resources.items()
     ]
     sections = [
         _INTRO.rstrip(),

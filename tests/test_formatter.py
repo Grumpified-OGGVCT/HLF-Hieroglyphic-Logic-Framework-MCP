@@ -25,12 +25,12 @@ def test_format_preserves_omega():
 
 
 def test_format_trailing_newline():
-    result = FMT.format('[HLF-v3]\nΔ test\nΩ')
+    result = FMT.format("[HLF-v3]\nΔ test\nΩ")
     assert result.endswith("\n")
 
 
 def test_format_strips_blank_lines():
-    src = '[HLF-v3]\n\n\nΔ test\n\nΩ\n'
+    src = "[HLF-v3]\n\n\nΔ test\n\nΩ\n"
     result = FMT.format(src)
     # Should not have multiple consecutive blank lines in output
     assert "\n\n\n" not in result
@@ -41,17 +41,17 @@ def test_format_sub_statement_indentation():
     result = FMT.format(src)
     lines = result.splitlines()
     # Find the Ж line and verify indentation
-    zhe_line = next((l for l in lines if l.lstrip().startswith("Ж")), None)
+    zhe_line = next((line for line in lines if line.lstrip().startswith("Ж")), None)
     assert zhe_line is not None
     # Sub-statement should be indented (preceded by spaces/tabs)
     assert zhe_line.startswith("  ")
 
 
 def test_format_primary_glyph_not_indented():
-    src = '[HLF-v3]\nΔ analyze /foo\nΩ\n'
+    src = "[HLF-v3]\nΔ analyze /foo\nΩ\n"
     result = FMT.format(src)
     lines = result.splitlines()
-    delta_line = next(l for l in lines if l.lstrip().startswith("Δ"))
+    delta_line = next(line for line in lines if line.lstrip().startswith("Δ"))
     # Primary glyph should NOT be indented
     assert not delta_line.startswith("  ")
 
@@ -82,7 +82,7 @@ def test_format_collapses_spaces():
     result = FMT.format(src)
     # Should not have multiple consecutive spaces after formatting
     lines = result.splitlines()
-    delta_line = next((l for l in lines if "INTENT" in l), None)
+    delta_line = next((line for line in lines if "INTENT" in line), None)
     assert delta_line is not None
     # Multiple spaces should be collapsed
     assert "   " not in delta_line

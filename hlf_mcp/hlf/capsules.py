@@ -13,6 +13,7 @@ Usage:
 """
 
 from __future__ import annotations
+
 import dataclasses
 import hashlib
 import uuid
@@ -23,6 +24,7 @@ from hlf_mcp.hlf.memory_node import (
     parse_pointer_ref,
     verify_pointer_ref,
 )
+
 
 class CapsuleViolation(Exception):
     def __init__(self, message):
@@ -61,12 +63,14 @@ def build_capsule_approval_token(
     payload = f"{capsule_id}|{normalize_tier(base_tier)}|{normalize_tier(requested_tier)}|{serialized_requirements}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
+
 @dataclasses.dataclass
 class IntentCapsule:
     """Sandboxed execution capsule with capability restrictions."""
-    allowed_tags: set[str]       # empty = all allowed
+
+    allowed_tags: set[str]  # empty = all allowed
     denied_tags: set[str]
-    allowed_tools: set[str]      # empty = all allowed (if no deny)
+    allowed_tools: set[str]  # empty = all allowed (if no deny)
     denied_tools: set[str]
     max_gas: int
     tier: str
@@ -83,7 +87,9 @@ class IntentCapsule:
     approval_token: str = ""
     metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
 
-    def collect_approval_requirements(self, statements: list[dict[str, Any]]) -> list[dict[str, str]]:
+    def collect_approval_requirements(
+        self, statements: list[dict[str, Any]]
+    ) -> list[dict[str, str]]:
         requirements: list[dict[str, str]] = []
         if tier_rank(self.requested_tier) > tier_rank(self.base_tier):
             requirements.append(
@@ -107,7 +113,9 @@ class IntentCapsule:
             for key in ("body", "statements"):
                 sub = node.get(key)
                 if isinstance(sub, dict):
-                    requirements.extend(self.collect_approval_requirements(sub.get("statements", [])))
+                    requirements.extend(
+                        self.collect_approval_requirements(sub.get("statements", []))
+                    )
                 elif isinstance(sub, list):
                     requirements.extend(self.collect_approval_requirements(sub))
 
@@ -258,7 +266,9 @@ class IntentCapsule:
             for key in ("body", "statements"):
                 sub = node.get(key)
                 if isinstance(sub, dict):
-                    violations.extend(self.validate_ast(sub.get("statements", []), extra_requirements))
+                    violations.extend(
+                        self.validate_ast(sub.get("statements", []), extra_requirements)
+                    )
                 elif isinstance(sub, list):
                     violations.extend(self.validate_ast(sub, extra_requirements))
         return violations
@@ -310,9 +320,13 @@ def sovereign_capsule(
     """Full permissions capsule for sovereign agents."""
     effective_tier = normalize_tier(requested_tier or "sovereign")
     return IntentCapsule(
-        allowed_tags=set(), denied_tags=set(),
-        allowed_tools=set(), denied_tools=set(),
-        max_gas=1000, tier=effective_tier, read_only_vars=set(),
+        allowed_tags=set(),
+        denied_tags=set(),
+        allowed_tools=set(),
+        denied_tools=set(),
+        max_gas=1000,
+        tier=effective_tier,
+        read_only_vars=set(),
         base_tier=normalize_tier(base_tier),
         agent_id=agent_id,
         capsule_id=capsule_id or str(uuid.uuid4()),
@@ -324,6 +338,7 @@ def sovereign_capsule(
         approved_by=approved_by,
         approval_token=approval_token,
     )
+
 
 def forge_capsule(
     *,
@@ -342,13 +357,43 @@ def forge_capsule(
     effective_tier = normalize_tier(requested_tier or "forge")
     return IntentCapsule(
         allowed_tags={
-            "SET", "ASSIGN", "IF", "FOR", "RESULT", "TOOL", "CALL", "MEMORY", "RECALL", "IMPORT", "LOG",
-            "INTENT", "CONSTRAINT", "EXPECT", "ASSERT", "PARAM", "ROUTE", "DELEGATE", "VOTE", "PRIORITY", "SOURCE", "ACTION",
+            "SET",
+            "ASSIGN",
+            "IF",
+            "FOR",
+            "RESULT",
+            "TOOL",
+            "CALL",
+            "MEMORY",
+            "RECALL",
+            "IMPORT",
+            "LOG",
+            "INTENT",
+            "CONSTRAINT",
+            "EXPECT",
+            "ASSERT",
+            "PARAM",
+            "ROUTE",
+            "DELEGATE",
+            "VOTE",
+            "PRIORITY",
+            "SOURCE",
+            "ACTION",
         },
         denied_tags={"SPAWN", "SHELL_EXEC"},
-        allowed_tools={"READ", "WRITE", "HTTP_GET", "hash_sha256", "log_emit", "memory_store", "memory_recall"},
+        allowed_tools={
+            "READ",
+            "WRITE",
+            "HTTP_GET",
+            "hash_sha256",
+            "log_emit",
+            "memory_store",
+            "memory_recall",
+        },
         denied_tools={"WEB_SEARCH", "spawn_agent", "z3_verify"},
-        max_gas=500, tier=effective_tier, read_only_vars={"SYS_INFO"},
+        max_gas=500,
+        tier=effective_tier,
+        read_only_vars={"SYS_INFO"},
         base_tier=normalize_tier(base_tier),
         agent_id=agent_id,
         capsule_id=capsule_id or str(uuid.uuid4()),
@@ -360,6 +405,7 @@ def forge_capsule(
         approved_by=approved_by,
         approval_token=approval_token,
     )
+
 
 def hearth_capsule(
     *,
@@ -377,10 +423,23 @@ def hearth_capsule(
     """Highly restricted capsule for hearth tier agents."""
     effective_tier = normalize_tier(requested_tier or "hearth")
     return IntentCapsule(
-        allowed_tags={"SET", "IF", "RESULT", "LOG", "INTENT", "CONSTRAINT", "ASSERT", "PARAM", "SOURCE"},
+        allowed_tags={
+            "SET",
+            "IF",
+            "RESULT",
+            "LOG",
+            "INTENT",
+            "CONSTRAINT",
+            "ASSERT",
+            "PARAM",
+            "SOURCE",
+        },
         denied_tags={"SPAWN", "SHELL_EXEC", "TOOL", "HOST", "MEMORY", "RECALL"},
-        allowed_tools=set(), denied_tools=set(),
-        max_gas=100, tier=effective_tier, read_only_vars={"SYS_INFO", "NOW"},
+        allowed_tools=set(),
+        denied_tools=set(),
+        max_gas=100,
+        tier=effective_tier,
+        read_only_vars={"SYS_INFO", "NOW"},
         base_tier=normalize_tier(base_tier),
         agent_id=agent_id,
         capsule_id=capsule_id or str(uuid.uuid4()),
@@ -392,6 +451,7 @@ def hearth_capsule(
         approved_by=approved_by,
         approval_token=approval_token,
     )
+
 
 def capsule_for_tier(
     tier: str,

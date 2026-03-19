@@ -19,8 +19,6 @@ Covers every surface of the MCP implementation:
 import asyncio
 import base64
 import json
-import shutil
-import tempfile
 import time
 from pathlib import Path
 
@@ -31,6 +29,7 @@ REPO_ROOT = Path(__file__).parent.parent
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def repo_root():
@@ -47,6 +46,7 @@ def tmp_friction(tmp_path):
 @pytest.fixture(scope="module")
 def resource_provider():
     from hlf.mcp_resources import HLFResourceProvider
+
     return HLFResourceProvider(REPO_ROOT)
 
 
@@ -54,6 +54,7 @@ def resource_provider():
 def tool_provider(tmp_friction):
     from hlf.mcp_resources import HLFResourceProvider
     from hlf.mcp_tools import HLFToolProvider
+
     rp = HLFResourceProvider(REPO_ROOT)
     return HLFToolProvider(resource_provider=rp, vm_executor=None, friction_drop=tmp_friction)
 
@@ -61,18 +62,21 @@ def tool_provider(tmp_friction):
 @pytest.fixture(scope="module")
 def prompt_provider():
     from hlf.mcp_prompts import HLFPromptProvider
+
     return HLFPromptProvider()
 
 
 @pytest.fixture()
 def mcp_server(tmp_friction):
     from hlf.mcp_server_complete import MCPServer
+
     return MCPServer(REPO_ROOT, tmp_friction)
 
 
 @pytest.fixture(scope="module")
 def metrics(tmp_path_factory):
     from hlf.mcp_metrics import HLFMetrics
+
     d = tmp_path_factory.mktemp("metrics")
     return HLFMetrics(metrics_dir=d)
 
@@ -81,40 +85,49 @@ def metrics(tmp_path_factory):
 # IMPORTS
 # ===========================================================================
 
+
 class TestImports:
     def test_mcp_resources(self):
         from hlf.mcp_resources import HLFResourceProvider, Resource, ResourceTemplate
+
         assert HLFResourceProvider and Resource and ResourceTemplate
 
     def test_mcp_tools(self):
         from hlf.mcp_tools import HLFToolProvider, ToolDefinition, ToolResult
+
         assert HLFToolProvider and ToolDefinition and ToolResult
 
     def test_mcp_prompts(self):
-        from hlf.mcp_prompts import HLFPromptProvider, PromptDefinition, PromptArgument
+        from hlf.mcp_prompts import HLFPromptProvider, PromptArgument, PromptDefinition
+
         assert HLFPromptProvider and PromptDefinition and PromptArgument
 
     def test_mcp_server(self):
-        from hlf.mcp_server_complete import MCPServer, MCP_PROTOCOL_VERSION
+        from hlf.mcp_server_complete import MCP_PROTOCOL_VERSION, MCPServer
+
         assert MCPServer
         assert MCP_PROTOCOL_VERSION == "2025-03-26"
 
     def test_mcp_client(self):
-        from hlf.mcp_client import HLFMCPClient, GrammarInfo, CompileResult, ExecuteResult
+        from hlf.mcp_client import CompileResult, ExecuteResult, GrammarInfo, HLFMCPClient
+
         assert HLFMCPClient and GrammarInfo and CompileResult and ExecuteResult
 
     def test_forge_agent(self):
         from hlf.forge_agent import ForgeAgent, FrictionReport, GrammarProposal
+
         assert ForgeAgent and FrictionReport and GrammarProposal
 
     def test_mcp_metrics(self):
         from hlf.mcp_metrics import HLFMetrics, get_metrics
+
         assert HLFMetrics and get_metrics
 
 
 # ===========================================================================
 # RESOURCES
 # ===========================================================================
+
 
 class TestResources:
     def test_list_resources_count(self, resource_provider):
@@ -199,10 +212,18 @@ class TestResources:
 # ===========================================================================
 
 REQUIRED_TOOLS = [
-    "hlf_compile", "hlf_execute", "hlf_validate", "hlf_friction_log",
-    "hlf_self_observe", "hlf_get_version", "hlf_compose",
-    "hlf_decompose", "hlf_analyze", "hlf_optimize",
+    "hlf_compile",
+    "hlf_execute",
+    "hlf_validate",
+    "hlf_friction_log",
+    "hlf_self_observe",
+    "hlf_get_version",
+    "hlf_compose",
+    "hlf_decompose",
+    "hlf_analyze",
+    "hlf_optimize",
 ]
+
 
 class TestToolDefinitions:
     def test_all_required_tools_present(self, tool_provider):
@@ -236,6 +257,7 @@ module test v0.5 {
 }
 """
 
+
 class TestCompile:
     def test_compile_valid_source(self, tool_provider):
         result = tool_provider.call_tool("hlf_compile", {"source": SAMPLE_HLF})
@@ -261,7 +283,9 @@ class TestCompile:
 
     def test_compile_with_profile(self, tool_provider):
         for profile in ["P0", "P1", "P2"]:
-            result = tool_provider.call_tool("hlf_compile", {"source": SAMPLE_HLF, "profile": profile})
+            result = tool_provider.call_tool(
+                "hlf_compile", {"source": SAMPLE_HLF, "profile": profile}
+            )
             assert result["success"] is True
 
     def test_compile_with_tier(self, tool_provider):
@@ -284,6 +308,7 @@ class TestCompile:
 # ===========================================================================
 # TOOLS — hlf_execute
 # ===========================================================================
+
 
 class TestExecute:
     def _get_bytecode(self, tool_provider):
@@ -321,6 +346,7 @@ class TestExecute:
 # TOOLS — hlf_validate
 # ===========================================================================
 
+
 class TestValidate:
     def test_validate_valid_source(self, tool_provider):
         result = tool_provider.call_tool("hlf_validate", {"source": SAMPLE_HLF})
@@ -354,13 +380,17 @@ class TestValidate:
 # TOOLS — hlf_friction_log
 # ===========================================================================
 
+
 class TestFrictionLog:
     def test_friction_log_creates_file(self, tool_provider, tmp_friction):
-        result = tool_provider.call_tool("hlf_friction_log", {
-            "source_snippet": "test ↦ unknown",
-            "failure_type": "expression",
-            "attempted_intent": "Map one value to another with unknown glyph",
-        })
+        result = tool_provider.call_tool(
+            "hlf_friction_log",
+            {
+                "source_snippet": "test ↦ unknown",
+                "failure_type": "expression",
+                "attempted_intent": "Map one value to another with unknown glyph",
+            },
+        )
         assert result["success"] is True
         assert "friction_id" in result
         assert len(result["friction_id"]) == 16
@@ -369,12 +399,15 @@ class TestFrictionLog:
         assert len(files) == 1
 
     def test_friction_log_file_content(self, tool_provider, tmp_friction):
-        tool_provider.call_tool("hlf_friction_log", {
-            "source_snippet": "fn missing(): void {}",
-            "failure_type": "compile",
-            "attempted_intent": "Define function with void return",
-            "proposed_fix": "Add void as return type keyword",
-        })
+        tool_provider.call_tool(
+            "hlf_friction_log",
+            {
+                "source_snippet": "fn missing(): void {}",
+                "failure_type": "compile",
+                "attempted_intent": "Define function with void return",
+                "proposed_fix": "Add void as return type keyword",
+            },
+        )
         files = list(tmp_friction.glob("*.hlf"))
         content = json.loads(files[-1].read_text())
         assert content["failure_type"] in ("compile", "expression")
@@ -383,25 +416,34 @@ class TestFrictionLog:
 
     def test_friction_log_all_failure_types(self, tool_provider):
         for ftype in ["parse", "compile", "effect", "gas", "expression", "type", "semantic"]:
-            result = tool_provider.call_tool("hlf_friction_log", {
-                "source_snippet": f"test for {ftype}",
-                "failure_type": ftype,
-            })
+            result = tool_provider.call_tool(
+                "hlf_friction_log",
+                {
+                    "source_snippet": f"test for {ftype}",
+                    "failure_type": ftype,
+                },
+            )
             assert result["success"] is True, f"friction_log failed for type: {ftype}"
 
     def test_friction_log_with_context(self, tool_provider):
-        result = tool_provider.call_tool("hlf_friction_log", {
-            "source_snippet": "agent spawn {}",
-            "failure_type": "semantic",
-            "context": {"tier": "forge", "profile": "P0"},
-        })
+        result = tool_provider.call_tool(
+            "hlf_friction_log",
+            {
+                "source_snippet": "agent spawn {}",
+                "failure_type": "semantic",
+                "context": {"tier": "forge", "profile": "P0"},
+            },
+        )
         assert result["success"] is True
 
     def test_friction_log_message_contains_id(self, tool_provider):
-        result = tool_provider.call_tool("hlf_friction_log", {
-            "source_snippet": "x",
-            "failure_type": "parse",
-        })
+        result = tool_provider.call_tool(
+            "hlf_friction_log",
+            {
+                "source_snippet": "x",
+                "failure_type": "parse",
+            },
+        )
         assert result["friction_id"] in result["message"]
 
 
@@ -409,36 +451,49 @@ class TestFrictionLog:
 # TOOLS — hlf_self_observe
 # ===========================================================================
 
+
 class TestSelfObserve:
     def test_self_observe_forge_tier(self, tool_provider, tmp_friction):
-        result = tool_provider.call_tool("hlf_self_observe", {
-            "meta_intent": {"phase": "compile", "gas_used": 500, "notes": "test"},
-            "tier": "forge",
-        })
+        result = tool_provider.call_tool(
+            "hlf_self_observe",
+            {
+                "meta_intent": {"phase": "compile", "gas_used": 500, "notes": "test"},
+                "tier": "forge",
+            },
+        )
         assert result["success"] is True
         assert "observe_id" in result
 
     def test_self_observe_sovereign_tier(self, tool_provider):
-        result = tool_provider.call_tool("hlf_self_observe", {
-            "meta_intent": {"phase": "execute"},
-            "tier": "sovereign",
-        })
+        result = tool_provider.call_tool(
+            "hlf_self_observe",
+            {
+                "meta_intent": {"phase": "execute"},
+                "tier": "sovereign",
+            },
+        )
         assert result["success"] is True
 
     def test_self_observe_guest_tier_blocked(self, tool_provider):
-        result = tool_provider.call_tool("hlf_self_observe", {
-            "meta_intent": {"phase": "test"},
-            "tier": "guest",
-        })
+        result = tool_provider.call_tool(
+            "hlf_self_observe",
+            {
+                "meta_intent": {"phase": "test"},
+                "tier": "guest",
+            },
+        )
         assert result["success"] is False
         assert "error" in result
 
     def test_self_observe_creates_file(self, tool_provider, tmp_friction):
         before = set(tmp_friction.glob("self_observe_*.hlf"))
-        tool_provider.call_tool("hlf_self_observe", {
-            "meta_intent": {"phase": "test"},
-            "tier": "forge",
-        })
+        tool_provider.call_tool(
+            "hlf_self_observe",
+            {
+                "meta_intent": {"phase": "test"},
+                "tier": "forge",
+            },
+        )
         after = set(tmp_friction.glob("self_observe_*.hlf"))
         assert len(after) > len(before)
 
@@ -446,6 +501,7 @@ class TestSelfObserve:
 # ===========================================================================
 # TOOLS — hlf_get_version
 # ===========================================================================
+
 
 class TestGetVersion:
     def test_get_version_returns_success(self, tool_provider):
@@ -467,12 +523,16 @@ class TestGetVersion:
 # TOOLS — hlf_compose
 # ===========================================================================
 
+
 class TestCompose:
     def test_compose_sequential(self, tool_provider):
-        result = tool_provider.call_tool("hlf_compose", {
-            "programs": ["module a { }", "module b { }"],
-            "strategy": "sequential",
-        })
+        result = tool_provider.call_tool(
+            "hlf_compose",
+            {
+                "programs": ["module a { }", "module b { }"],
+                "strategy": "sequential",
+            },
+        )
         assert result["success"] is True
         assert result["program_count"] == 2
         assert "composed_source" in result
@@ -480,18 +540,24 @@ class TestCompose:
         assert "module b" in result["composed_source"]
 
     def test_compose_parallel(self, tool_provider):
-        result = tool_provider.call_tool("hlf_compose", {
-            "programs": ["fn f() {}", "fn g() {}"],
-            "strategy": "parallel",
-        })
+        result = tool_provider.call_tool(
+            "hlf_compose",
+            {
+                "programs": ["fn f() {}", "fn g() {}"],
+                "strategy": "parallel",
+            },
+        )
         assert result["success"] is True
         assert "parallel" in result["composed_source"]
 
     def test_compose_pipeline(self, tool_provider):
-        result = tool_provider.call_tool("hlf_compose", {
-            "programs": ["stage_a", "stage_b", "stage_c"],
-            "strategy": "pipeline",
-        })
+        result = tool_provider.call_tool(
+            "hlf_compose",
+            {
+                "programs": ["stage_a", "stage_b", "stage_c"],
+                "strategy": "pipeline",
+            },
+        )
         assert result["success"] is True
         assert result["program_count"] == 3
 
@@ -504,28 +570,38 @@ class TestCompose:
 # TOOLS — hlf_decompose
 # ===========================================================================
 
+
 class TestDecompose:
     def test_decompose_functions(self, tool_provider):
-        result = tool_provider.call_tool("hlf_decompose", {
-            "source": SAMPLE_HLF,
-            "granularity": "function",
-        })
+        result = tool_provider.call_tool(
+            "hlf_decompose",
+            {
+                "source": SAMPLE_HLF,
+                "granularity": "function",
+            },
+        )
         assert result["success"] is True
         assert isinstance(result["components"], list)
 
     def test_decompose_module_granularity(self, tool_provider):
-        result = tool_provider.call_tool("hlf_decompose", {
-            "source": SAMPLE_HLF,
-            "granularity": "module",
-        })
+        result = tool_provider.call_tool(
+            "hlf_decompose",
+            {
+                "source": SAMPLE_HLF,
+                "granularity": "module",
+            },
+        )
         assert result["success"] is True
         assert result["total_count"] >= 1
 
     def test_decompose_statement_granularity(self, tool_provider):
-        result = tool_provider.call_tool("hlf_decompose", {
-            "source": "x = 1\ny = 2\nret x",
-            "granularity": "statement",
-        })
+        result = tool_provider.call_tool(
+            "hlf_decompose",
+            {
+                "source": "x = 1\ny = 2\nret x",
+                "granularity": "statement",
+            },
+        )
         assert result["success"] is True
         assert result["total_count"] >= 3
 
@@ -538,12 +614,16 @@ class TestDecompose:
 # TOOLS — hlf_analyze
 # ===========================================================================
 
+
 class TestAnalyze:
     def test_analyze_complexity(self, tool_provider):
-        result = tool_provider.call_tool("hlf_analyze", {
-            "source": SAMPLE_HLF,
-            "metrics": ["complexity"],
-        })
+        result = tool_provider.call_tool(
+            "hlf_analyze",
+            {
+                "source": SAMPLE_HLF,
+                "metrics": ["complexity"],
+            },
+        )
         assert result["success"] is True
         assert "complexity" in result["metrics"]
         c = result["metrics"]["complexity"]
@@ -553,29 +633,38 @@ class TestAnalyze:
 
     def test_analyze_effects(self, tool_provider):
         source = SAMPLE_HLF + "\nREAD_FILE('/tmp/x')\nWEB_SEARCH('query')\n"
-        result = tool_provider.call_tool("hlf_analyze", {
-            "source": source,
-            "metrics": ["effects"],
-        })
+        result = tool_provider.call_tool(
+            "hlf_analyze",
+            {
+                "source": source,
+                "metrics": ["effects"],
+            },
+        )
         assert result["success"] is True
         assert "READ_FILE" in result["metrics"]["effects"]
         assert "WEB_SEARCH" in result["metrics"]["effects"]
 
     def test_analyze_gas_estimate(self, tool_provider):
-        result = tool_provider.call_tool("hlf_analyze", {
-            "source": SAMPLE_HLF,
-            "metrics": ["gas_estimate"],
-        })
+        result = tool_provider.call_tool(
+            "hlf_analyze",
+            {
+                "source": SAMPLE_HLF,
+                "metrics": ["gas_estimate"],
+            },
+        )
         assert result["success"] is True
         ge = result["metrics"]["gas_estimate"]
         assert ge["total"] >= 0
 
     def test_analyze_dependencies(self, tool_provider):
         source = "import stdlib\nimport math\n" + SAMPLE_HLF
-        result = tool_provider.call_tool("hlf_analyze", {
-            "source": source,
-            "metrics": ["dependencies"],
-        })
+        result = tool_provider.call_tool(
+            "hlf_analyze",
+            {
+                "source": source,
+                "metrics": ["dependencies"],
+            },
+        )
         assert result["success"] is True
         deps = result["metrics"]["dependencies"]
         assert "stdlib" in deps
@@ -586,10 +675,13 @@ class TestAnalyze:
         assert result["success"] is False
 
     def test_analyze_all_metrics(self, tool_provider):
-        result = tool_provider.call_tool("hlf_analyze", {
-            "source": SAMPLE_HLF,
-            "metrics": ["complexity", "effects", "gas_estimate", "dependencies"],
-        })
+        result = tool_provider.call_tool(
+            "hlf_analyze",
+            {
+                "source": SAMPLE_HLF,
+                "metrics": ["complexity", "effects", "gas_estimate", "dependencies"],
+            },
+        )
         assert result["success"] is True
         assert len(result["metrics"]) == 4
 
@@ -597,6 +689,7 @@ class TestAnalyze:
 # ===========================================================================
 # TOOLS — hlf_optimize
 # ===========================================================================
+
 
 class TestOptimize:
     def test_optimize_returns_success(self, tool_provider):
@@ -606,15 +699,11 @@ class TestOptimize:
         assert "original" in result
 
     def test_optimize_target_gas(self, tool_provider):
-        result = tool_provider.call_tool("hlf_optimize", {
-            "source": SAMPLE_HLF, "target": "gas"
-        })
+        result = tool_provider.call_tool("hlf_optimize", {"source": SAMPLE_HLF, "target": "gas"})
         assert result["target"] == "gas"
 
     def test_optimize_target_memory(self, tool_provider):
-        result = tool_provider.call_tool("hlf_optimize", {
-            "source": SAMPLE_HLF, "target": "memory"
-        })
+        result = tool_provider.call_tool("hlf_optimize", {"source": SAMPLE_HLF, "target": "memory"})
         assert result["success"] is True
 
     def test_optimize_savings_estimate(self, tool_provider):
@@ -642,6 +731,7 @@ REQUIRED_PROMPTS = [
     "hlf_debug_execution",
 ]
 
+
 class TestPrompts:
     def test_all_required_prompts_present(self, prompt_provider):
         names = {p.name for p in prompt_provider.list_prompts()}
@@ -657,45 +747,51 @@ class TestPrompts:
             assert isinstance(p.arguments, list)
 
     def test_init_agent_prompt_forge(self, prompt_provider):
-        text = prompt_provider.get_prompt("hlf_initialize_agent", {
-            "tier": "forge", "profile": "P0"
-        })
+        text = prompt_provider.get_prompt(
+            "hlf_initialize_agent", {"tier": "forge", "profile": "P0"}
+        )
         assert "HLF" in text
         assert "forge" in text
         assert len(text) > 500
 
     def test_init_agent_prompt_sovereign(self, prompt_provider):
-        text = prompt_provider.get_prompt("hlf_initialize_agent", {
-            "tier": "sovereign", "profile": "P1"
-        })
+        text = prompt_provider.get_prompt(
+            "hlf_initialize_agent", {"tier": "sovereign", "profile": "P1"}
+        )
         assert "sovereign" in text
 
     def test_init_agent_prompt_all_tiers(self, prompt_provider):
         for tier in ["forge", "sovereign", "guest"]:
-            text = prompt_provider.get_prompt("hlf_initialize_agent", {
-                "tier": tier, "profile": "P0"
-            })
+            text = prompt_provider.get_prompt(
+                "hlf_initialize_agent", {"tier": tier, "profile": "P0"}
+            )
             assert tier in text
 
     def test_express_intent_prompt(self, prompt_provider):
-        text = prompt_provider.get_prompt("hlf_express_intent", {
-            "intent": "Read a file and write the result to another file"
-        })
+        text = prompt_provider.get_prompt(
+            "hlf_express_intent", {"intent": "Read a file and write the result to another file"}
+        )
         assert len(text) > 100
         assert "HLF" in text.upper() or "intent" in text.lower()
 
     def test_troubleshoot_prompt(self, prompt_provider):
-        text = prompt_provider.get_prompt("hlf_troubleshoot", {
-            "source": "fn bad() {",
-            "error": "Unexpected end of input",
-        })
+        text = prompt_provider.get_prompt(
+            "hlf_troubleshoot",
+            {
+                "source": "fn bad() {",
+                "error": "Unexpected end of input",
+            },
+        )
         assert len(text) > 50
 
     def test_propose_extension_prompt(self, prompt_provider):
-        text = prompt_provider.get_prompt("hlf_propose_extension", {
-            "intent": "Express async operations",
-            "rationale": "Need async effects for I/O",
-        })
+        text = prompt_provider.get_prompt(
+            "hlf_propose_extension",
+            {
+                "intent": "Express async operations",
+                "rationale": "Need async effects for I/O",
+            },
+        )
         assert len(text) > 50
 
     def test_explain_prompt(self, prompt_provider):
@@ -719,6 +815,7 @@ class TestPrompts:
 # ===========================================================================
 # SERVER — Protocol lifecycle
 # ===========================================================================
+
 
 class TestServerProtocol:
     def test_initialize_returns_protocol_version(self, mcp_server):
@@ -781,9 +878,9 @@ class TestServerProtocol:
         assert "hlf_initialize_agent" in names
 
     def test_prompts_get(self, mcp_server):
-        result = asyncio.run(mcp_server.prompts_get(
-            "hlf_initialize_agent", {"tier": "forge", "profile": "P0"}
-        ))
+        result = asyncio.run(
+            mcp_server.prompts_get("hlf_initialize_agent", {"tier": "forge", "profile": "P0"})
+        )
         assert "messages" in result
         assert result["messages"][0]["role"] == "user"
 
@@ -804,6 +901,7 @@ class TestServerProtocol:
 # ===========================================================================
 # SERVER — JSON-RPC message dispatch
 # ===========================================================================
+
 
 class TestMessageDispatch:
     def _dispatch(self, server, method, params=None, req_id=1):
@@ -828,9 +926,9 @@ class TestMessageDispatch:
         assert len(r["result"]["tools"]) >= 10
 
     def test_tools_call_dispatch(self, mcp_server):
-        r = self._dispatch(mcp_server, "tools/call", {
-            "name": "hlf_compile", "arguments": {"source": SAMPLE_HLF}
-        })
+        r = self._dispatch(
+            mcp_server, "tools/call", {"name": "hlf_compile", "arguments": {"source": SAMPLE_HLF}}
+        )
         assert "result" in r
         data = json.loads(r["result"]["content"][0]["text"])
         assert data["success"] is True
@@ -840,10 +938,14 @@ class TestMessageDispatch:
         assert "result" in r
 
     def test_prompts_get_dispatch(self, mcp_server):
-        r = self._dispatch(mcp_server, "prompts/get", {
-            "name": "hlf_initialize_agent",
-            "arguments": {"tier": "forge", "profile": "P0"},
-        })
+        r = self._dispatch(
+            mcp_server,
+            "prompts/get",
+            {
+                "name": "hlf_initialize_agent",
+                "arguments": {"tier": "forge", "profile": "P0"},
+            },
+        )
         assert "result" in r
 
     def test_roots_list_dispatch(self, mcp_server):
@@ -862,9 +964,9 @@ class TestMessageDispatch:
         assert r is None
 
     def test_resource_subscribe(self, mcp_server):
-        r = self._dispatch(mcp_server, "resources/subscribe", {
-            "uri": "hlf://grammar", "subscriptionId": "sub-001"
-        })
+        r = self._dispatch(
+            mcp_server, "resources/subscribe", {"uri": "hlf://grammar", "subscriptionId": "sub-001"}
+        )
         assert "result" in r
 
     def test_logging_set_level_dispatch(self, mcp_server):
@@ -877,9 +979,11 @@ class TestMessageDispatch:
 # FORGE AGENT
 # ===========================================================================
 
+
 class TestForgeAgent:
     def test_friction_report_dataclass(self):
         from hlf.forge_agent import FrictionReport
+
         report = FrictionReport(
             id="abc123",
             timestamp=time.time(),
@@ -897,11 +1001,18 @@ class TestForgeAgent:
 
     def test_friction_report_to_dict(self):
         from hlf.forge_agent import FrictionReport
+
         report = FrictionReport(
-            id="abc123", timestamp=1.0, grammar_version="0.5.0",
-            grammar_sha256="a" * 64, source_snippet="x",
-            failure_type="parse", attempted_intent="y",
-            context={}, proposed_fix=None, agent_metadata={},
+            id="abc123",
+            timestamp=1.0,
+            grammar_version="0.5.0",
+            grammar_sha256="a" * 64,
+            source_snippet="x",
+            failure_type="parse",
+            attempted_intent="y",
+            context={},
+            proposed_fix=None,
+            agent_metadata={},
         )
         d = report.to_dict()
         assert d["id"] == "abc123"
@@ -909,6 +1020,7 @@ class TestForgeAgent:
 
     def test_grammar_proposal_dataclass(self):
         from hlf.forge_agent import GrammarProposal
+
         proposal = GrammarProposal(
             id="prop-001",
             friction_id="abc123",
@@ -927,11 +1039,17 @@ class TestForgeAgent:
 
     def test_grammar_proposal_to_dict(self):
         from hlf.forge_agent import GrammarProposal
+
         proposal = GrammarProposal(
-            id="p", friction_id="f", timestamp=1.0,
-            proposed_syntax="x", rationale="y",
-            additive_only=True, breaking=False,
-            tier_required="forge", affected_opcodes=[],
+            id="p",
+            friction_id="f",
+            timestamp=1.0,
+            proposed_syntax="x",
+            rationale="y",
+            additive_only=True,
+            breaking=False,
+            tier_required="forge",
+            affected_opcodes=[],
             validation_token="",
         )
         d = proposal.to_dict()
@@ -939,36 +1057,50 @@ class TestForgeAgent:
 
     def test_forge_agent_init(self, repo_root):
         from hlf.forge_agent import ForgeAgent
+
         agent = ForgeAgent(repo_root)
         assert agent.repo_root == repo_root.resolve()
 
     def test_forge_agent_loads_grammar(self, repo_root):
         from hlf.forge_agent import ForgeAgent
+
         agent = ForgeAgent(repo_root)
         assert agent.current_grammar_sha is not None
         assert len(agent.current_grammar_sha) == 64
 
     def test_forge_agent_validate_known_friction_types(self, repo_root, tmp_path):
         from hlf.forge_agent import ForgeAgent, FrictionReport
+
         agent = ForgeAgent(repo_root)
         for ftype in ["parse", "compile", "effect", "gas", "expression", "type", "semantic"]:
             report = FrictionReport(
-                id="x", timestamp=time.time(),
-                grammar_version="0.5.0", grammar_sha256="a" * 64,
-                source_snippet="x", failure_type=ftype,
-                attempted_intent="", context={}, proposed_fix=None,
+                id="x",
+                timestamp=time.time(),
+                grammar_version="0.5.0",
+                grammar_sha256="a" * 64,
+                source_snippet="x",
+                failure_type=ftype,
+                attempted_intent="",
+                context={},
+                proposed_fix=None,
                 agent_metadata={},
             )
             assert agent._validate_friction(report) is True
 
     def test_forge_agent_validate_unknown_friction_type(self, repo_root):
         from hlf.forge_agent import ForgeAgent, FrictionReport
+
         agent = ForgeAgent(repo_root)
         report = FrictionReport(
-            id="x", timestamp=time.time(),
-            grammar_version="0.5.0", grammar_sha256="a" * 64,
-            source_snippet="x", failure_type="INVALID_TYPE",
-            attempted_intent="", context={}, proposed_fix=None,
+            id="x",
+            timestamp=time.time(),
+            grammar_version="0.5.0",
+            grammar_sha256="a" * 64,
+            source_snippet="x",
+            failure_type="INVALID_TYPE",
+            attempted_intent="",
+            context={},
+            proposed_fix=None,
             agent_metadata={},
         )
         assert agent._validate_friction(report) is False
@@ -977,6 +1109,7 @@ class TestForgeAgent:
 # ===========================================================================
 # METRICS
 # ===========================================================================
+
 
 class TestMetrics:
     def test_record_usage(self, metrics):
@@ -998,20 +1131,28 @@ class TestMetrics:
         assert tid.startswith("test_")
 
     def test_record_test_failure(self, metrics):
-        tid = metrics.record_test("test_broken", passed=False, duration_ms=5.0, error="AssertionError")
+        tid = metrics.record_test(
+            "test_broken", passed=False, duration_ms=5.0, error="AssertionError"
+        )
         assert tid.startswith("test_")
 
     def test_suggest_improvement(self, metrics):
         sid = metrics.suggest_improvement(
-            source="agent", category="grammar",
-            title="Add async effect", description="Need async I/O effects", priority=4,
+            source="agent",
+            category="grammar",
+            title="Add async effect",
+            description="Need async I/O effects",
+            priority=4,
         )
         assert len(sid) == 8  # sha256 truncated
 
     def test_get_open_suggestions(self, metrics):
         metrics.suggest_improvement(
-            source="user", category="performance",
-            title="Cache bytecode", description="Cache compiled bytecode", priority=3,
+            source="user",
+            category="performance",
+            title="Cache bytecode",
+            description="Cache compiled bytecode",
+            priority=3,
         )
         suggestions = metrics.get_open_suggestions()
         assert len(suggestions) >= 1
@@ -1024,24 +1165,36 @@ class TestMetrics:
 
     def test_vote_improvement(self, metrics):
         sid = metrics.suggest_improvement(
-            source="agent", category="docs",
-            title="Improve docs", description="More examples", priority=2,
+            source="agent",
+            category="docs",
+            title="Improve docs",
+            description="More examples",
+            priority=2,
         )
         result = metrics.vote_improvement(sid, vote=1)
         assert result is True
 
     def test_resolve_improvement(self, metrics):
         sid = metrics.suggest_improvement(
-            source="agent", category="tool",
-            title="Fix bug", description="Fix X", priority=5,
+            source="agent",
+            category="tool",
+            title="Fix bug",
+            description="Fix X",
+            priority=5,
         )
         result = metrics.resolve_improvement(sid, status="resolved")
         assert result is True
 
     def test_get_stats_structure(self, metrics):
         stats = metrics.get_stats()
-        for key in ["total_uses", "successful_uses", "failed_uses",
-                    "tests_passed", "tests_failed", "suggestions_open"]:
+        for key in [
+            "total_uses",
+            "successful_uses",
+            "failed_uses",
+            "tests_passed",
+            "tests_failed",
+            "suggestions_open",
+        ]:
             assert key in stats
 
     def test_health_report(self, metrics):
@@ -1081,35 +1234,41 @@ class TestMetrics:
 # METRICS — convenience wrappers
 # ===========================================================================
 
+
 class TestMetricsWrappers:
     def test_record_tool_call(self):
         from hlf.mcp_metrics import record_tool_call
+
         record_tool_call("hlf_compile", success=True, duration_ms=10, gas_used=100)
 
     def test_record_tool_call_failure(self):
         from hlf.mcp_metrics import record_tool_call
+
         record_tool_call("hlf_execute", success=False, error="VM error")
 
     def test_suggest_improvement_wrapper(self):
         from hlf.mcp_metrics import suggest_improvement
+
         sid = suggest_improvement("Performance", "Add bytecode caching", priority=2)
         assert isinstance(sid, str)
         assert len(sid) == 8
 
     def test_suggest_improvement_with_title(self):
         from hlf.mcp_metrics import suggest_improvement
+
         sid = suggest_improvement(
-            "Grammar", "Extend type system", priority=3,
-            source="agent", title="Add union types"
+            "Grammar", "Extend type system", priority=3, source="agent", title="Add union types"
         )
         assert isinstance(sid, str)
 
     def test_record_test_result(self):
         from hlf.mcp_metrics import record_test_result
+
         record_test_result("test_example", success=True, duration_ms=5.0)
 
     def test_record_friction_wrapper(self):
         from hlf.mcp_metrics import record_friction
+
         record_friction("expression", "test ↦ unknown", context={"tier": "forge"})
 
 
@@ -1117,45 +1276,65 @@ class TestMetricsWrappers:
 # CLIENT — dataclasses and instantiation
 # ===========================================================================
 
+
 class TestClient:
     def test_client_instantiation(self):
         from hlf.mcp_client import HLFMCPClient
+
         client = HLFMCPClient("http://localhost:8000")
         assert client.base_url == "http://localhost:8000"
         assert client.cache_ttl == 3600
 
     def test_client_custom_cache_ttl(self):
         from hlf.mcp_client import HLFMCPClient
+
         client = HLFMCPClient("http://localhost:9999", cache_ttl=60)
         assert client.cache_ttl == 60
 
     def test_client_has_all_methods(self):
         from hlf.mcp_client import HLFMCPClient
+
         client = HLFMCPClient("http://localhost:8000")
-        for method in ["get_version", "get_grammar", "get_dictionaries",
-                       "get_init_prompt", "compile", "execute",
-                       "validate", "friction_log", "get_system_prompt"]:
+        for method in [
+            "get_version",
+            "get_grammar",
+            "get_dictionaries",
+            "get_init_prompt",
+            "compile",
+            "execute",
+            "validate",
+            "friction_log",
+            "get_system_prompt",
+        ]:
             assert hasattr(client, method), f"Missing method: {method}"
 
     def test_grammar_info_dataclass(self):
         from hlf.mcp_client import GrammarInfo
-        info = GrammarInfo(version="0.5.0", sha256="abc", generated_at=1.0, compatibility=["MCP-2025"])
+
+        info = GrammarInfo(
+            version="0.5.0", sha256="abc", generated_at=1.0, compatibility=["MCP-2025"]
+        )
         assert info.version == "0.5.0"
         assert info.compatibility == ["MCP-2025"]
 
     def test_compile_result_dataclass(self):
         from hlf.mcp_client import CompileResult
-        r = CompileResult(success=True, bytecode="abc", gas_estimate=100, effects=["IO"], warnings=[], errors=[])
+
+        r = CompileResult(
+            success=True, bytecode="abc", gas_estimate=100, effects=["IO"], warnings=[], errors=[]
+        )
         assert r.success is True
         assert r.gas_estimate == 100
 
     def test_execute_result_dataclass(self):
         from hlf.mcp_client import ExecuteResult
+
         r = ExecuteResult(success=True, result="42", gas_used=500, effects_triggered=[], errors=[])
         assert r.gas_used == 500
 
     def test_client_cache_initially_empty(self):
         from hlf.mcp_client import HLFMCPClient
+
         client = HLFMCPClient("http://localhost:8000")
         assert client.cached_grammar is None
         assert client.cached_dictionaries is None
@@ -1166,38 +1345,48 @@ class TestClient:
 # END-TO-END: compile → execute pipeline
 # ===========================================================================
 
+
 class TestCompileExecutePipeline:
     def test_compile_then_execute(self, tool_provider):
         compile_result = tool_provider.call_tool("hlf_compile", {"source": SAMPLE_HLF})
         assert compile_result["success"] is True
 
-        execute_result = tool_provider.call_tool("hlf_execute", {
-            "bytecode": compile_result["bytecode"],
-            "gas_limit": 50000,
-        })
+        execute_result = tool_provider.call_tool(
+            "hlf_execute",
+            {
+                "bytecode": compile_result["bytecode"],
+                "gas_limit": 50000,
+            },
+        )
         assert execute_result["success"] is True
         assert execute_result["gas_used"] <= 50000
 
     def test_compile_validate_agreement(self, tool_provider):
         """Validate and compile should agree on validity."""
-        validate_result = tool_provider.call_tool("hlf_validate", {"source": SAMPLE_HLF})
+        tool_provider.call_tool("hlf_validate", {"source": SAMPLE_HLF})
         compile_result = tool_provider.call_tool("hlf_compile", {"source": SAMPLE_HLF})
         # Both should succeed on valid source
         assert compile_result["success"] is True
 
     def test_analyze_then_compile(self, tool_provider):
-        analyze = tool_provider.call_tool("hlf_analyze", {
-            "source": SAMPLE_HLF, "metrics": ["gas_estimate"]
-        })
+        analyze = tool_provider.call_tool(
+            "hlf_analyze", {"source": SAMPLE_HLF, "metrics": ["gas_estimate"]}
+        )
         compile_result = tool_provider.call_tool("hlf_compile", {"source": SAMPLE_HLF})
         assert analyze["success"] is True
         assert compile_result["success"] is True
 
     def test_compose_then_validate(self, tool_provider):
-        compose = tool_provider.call_tool("hlf_compose", {
-            "programs": ["module a { fn f(): int { ret 1 } }", "module b { fn g(): int { ret 2 } }"],
-            "strategy": "sequential",
-        })
+        compose = tool_provider.call_tool(
+            "hlf_compose",
+            {
+                "programs": [
+                    "module a { fn f(): int { ret 1 } }",
+                    "module b { fn g(): int { ret 2 } }",
+                ],
+                "strategy": "sequential",
+            },
+        )
         assert compose["success"] is True
         validate = tool_provider.call_tool("hlf_validate", {"source": compose["composed_source"]})
         assert isinstance(validate["success"], bool)
@@ -1207,17 +1396,21 @@ class TestCompileExecutePipeline:
 # EDGE CASES + SECURITY BOUNDARIES
 # ===========================================================================
 
+
 class TestEdgeCases:
     def test_friction_log_large_snippet(self, tool_provider):
         big = "x" * 10000
-        result = tool_provider.call_tool("hlf_friction_log", {
-            "source_snippet": big,
-            "failure_type": "expression",
-        })
+        result = tool_provider.call_tool(
+            "hlf_friction_log",
+            {
+                "source_snippet": big,
+                "failure_type": "expression",
+            },
+        )
         assert result["success"] is True
 
     def test_compile_very_large_source(self, tool_provider):
-        large = (SAMPLE_HLF * 50)
+        large = SAMPLE_HLF * 50
         result = tool_provider.call_tool("hlf_compile", {"source": large})
         assert result["success"] is True
 
@@ -1234,16 +1427,22 @@ class TestEdgeCases:
         assert isinstance(data["success"], bool)
 
     def test_self_observe_default_tier_is_forge(self, tool_provider):
-        result = tool_provider.call_tool("hlf_self_observe", {
-            "meta_intent": {"phase": "test"},
-            # no tier specified → defaults to forge
-        })
+        result = tool_provider.call_tool(
+            "hlf_self_observe",
+            {
+                "meta_intent": {"phase": "test"},
+                # no tier specified → defaults to forge
+            },
+        )
         assert result["success"] is True
 
     def test_compose_single_program(self, tool_provider):
-        result = tool_provider.call_tool("hlf_compose", {
-            "programs": ["module solo { }"],
-        })
+        result = tool_provider.call_tool(
+            "hlf_compose",
+            {
+                "programs": ["module solo { }"],
+            },
+        )
         assert result["success"] is True
         assert result["program_count"] == 1
 

@@ -6,7 +6,6 @@ from typing import Any
 
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR
 
-
 DEFAULT_LOCAL_SCHEDULER_SETTINGS: dict[str, Any] = {
     "enabled": False,
     "interval_hours": 168,
@@ -19,7 +18,11 @@ DEFAULT_LOCAL_SCHEDULER_SETTINGS: dict[str, Any] = {
 def load_local_scheduler_settings(config_path: Path | None = None) -> dict[str, Any]:
     path = config_path or (Path.cwd() / "local_pipeline_scheduler.json")
     if not path.exists():
-        return {**DEFAULT_LOCAL_SCHEDULER_SETTINGS, "config_path": str(path), "config_present": False}
+        return {
+            **DEFAULT_LOCAL_SCHEDULER_SETTINGS,
+            "config_path": str(path),
+            "config_present": False,
+        }
 
     data = json.loads(path.read_text(encoding="utf-8"))
     scheduler_data = data.get("local_pipeline_scheduler", data)
@@ -39,7 +42,9 @@ def get_local_scheduler_status(
     effective_metrics_dir = metrics_dir or DEFAULT_METRICS_DIR
     latest_path = effective_metrics_dir / "weekly_pipeline_latest.json"
     settings = load_local_scheduler_settings(config_path)
-    latest_artifact = json.loads(latest_path.read_text(encoding="utf-8")) if latest_path.exists() else None
+    latest_artifact = (
+        json.loads(latest_path.read_text(encoding="utf-8")) if latest_path.exists() else None
+    )
 
     return {
         "enabled": bool(settings.get("enabled", False)),
@@ -51,5 +56,7 @@ def get_local_scheduler_status(
         "config_path": settings.get("config_path"),
         "last_artifact_path": str(latest_path),
         "last_run_at": latest_artifact.get("generated_at") if latest_artifact else None,
-        "last_run_branch": latest_artifact.get("git", {}).get("branch") if latest_artifact else None,
+        "last_run_branch": latest_artifact.get("git", {}).get("branch")
+        if latest_artifact
+        else None,
     }

@@ -7,10 +7,8 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 from hlf.mcp_metrics import HLFMetrics
-
 
 DEFAULT_PYTEST_ARGS = ["tests", "-q", "--tb=short"]
 DEFAULT_METRICS_DIR = Path.home() / ".sovereign" / "mcp_metrics"

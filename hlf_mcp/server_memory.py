@@ -26,7 +26,9 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             tags=tags or [],
         )
         pointer_alias = f"{topic}-{store_result.get('id', 'entry')}"
-        store_result["pointer"] = build_pointer_ref(pointer_alias, str(store_result.get("sha256", "")))
+        store_result["pointer"] = build_pointer_ref(
+            pointer_alias, str(store_result.get("sha256", ""))
+        )
         store_result["pointer_entry"] = {
             "alias": pointer_alias,
             "content_hash": str(store_result.get("sha256", "")),

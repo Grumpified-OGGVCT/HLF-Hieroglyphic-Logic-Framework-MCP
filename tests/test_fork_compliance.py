@@ -45,6 +45,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 # Fork Compliance Check Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestForkComplianceCheck:
     """Runs the compliance checker against the live repo root."""
 
@@ -55,18 +56,15 @@ class TestForkComplianceCheck:
 
     def test_live_repo_passes_hard_checks(self) -> None:
         report = run_compliance_check(self.root)
-        assert report.passed, (
-            "Live repo failed hard compliance checks:\n"
-            + "\n".join(r.message for r in report.hard_failures)
+        assert report.passed, "Live repo failed hard compliance checks:\n" + "\n".join(
+            r.message for r in report.hard_failures
         )
 
     def test_live_repo_has_no_required_file_failures(self) -> None:
         report = run_compliance_check(self.root)
         hard_names = {r.name for r in report.hard_failures}
         for name in hard_names:
-            assert not name.startswith("required_file:"), (
-                f"Required file check failed: {name}"
-            )
+            assert not name.startswith("required_file:"), f"Required file check failed: {name}"
 
     def test_report_passed_checks_not_empty(self) -> None:
         report = run_compliance_check(self.root)
@@ -75,15 +73,15 @@ class TestForkComplianceCheck:
     def test_to_dict_has_expected_keys(self) -> None:
         report = run_compliance_check(self.root)
         d = report.to_dict()
-        assert "fork_path"     in d
-        assert "passed"        in d
+        assert "fork_path" in d
+        assert "passed" in d
         assert "hard_failures" in d
-        assert "warnings"      in d
+        assert "warnings" in d
         assert "passed_checks" in d
-        assert "summary"       in d
+        assert "summary" in d
         assert "hard_failures" in d["summary"]
-        assert "warnings"      in d["summary"]
-        assert "passed"        in d["summary"]
+        assert "warnings" in d["summary"]
+        assert "passed" in d["summary"]
 
     def test_to_dict_is_json_serialisable(self) -> None:
         report = run_compliance_check(self.root)
@@ -117,8 +115,13 @@ class TestForkComplianceCheck:
         align_rules = {
             "version": "1.0.0",
             "rules": [
-                {"id": f"ALIGN-00{i}", "name": f"rule_{i}", "pattern": f"pattern{i}",
-                 "action": "warn", "description": f"Rule {i}"}
+                {
+                    "id": f"ALIGN-00{i}",
+                    "name": f"rule_{i}",
+                    "pattern": f"pattern{i}",
+                    "action": "warn",
+                    "description": f"Rule {i}",
+                }
                 for i in range(1, 6)
             ],
         }
@@ -136,9 +139,8 @@ class TestForkComplianceCheck:
 
         report = run_compliance_check(tmp_path)
         # Should pass hard checks (no hard_failures)
-        assert report.passed, (
-            "Expected to pass with required files present; hard_failures="
-            + str([r.name for r in report.hard_failures])
+        assert report.passed, "Expected to pass with required files present; hard_failures=" + str(
+            [r.name for r in report.hard_failures]
         )
 
     def test_low_align_rules_is_hard_failure(self, tmp_path: Path) -> None:
@@ -157,6 +159,7 @@ class TestForkComplianceCheck:
         align_path.write_text(json.dumps({"rules": rules}))
 
         from scripts.fork_compliance_check import check_align_rules
+
         result = check_align_rules(tmp_path)
         assert result.passed
 
@@ -167,6 +170,7 @@ class TestForkComplianceCheck:
         caps_path.write_text("hearth\nforge\n# third tier not defined here\n")
 
         from scripts.fork_compliance_check import check_capsule_tiers
+
         result = check_capsule_tiers(tmp_path)
         assert not result.passed
         assert result.level == "hard"
@@ -178,6 +182,7 @@ class TestForkComplianceCheck:
         caps_path.write_text("hearth\nforge\nsovereign\n")
 
         from scripts.fork_compliance_check import check_capsule_tiers
+
         result = check_capsule_tiers(tmp_path)
         assert result.passed
 
@@ -187,14 +192,16 @@ class TestForkComplianceCheck:
         dispatch.write_text("# tool dispatch without HIL\ndef dispatch(): pass\n")
 
         from scripts.fork_compliance_check import check_hil_gate
+
         result = check_hil_gate(tmp_path)
         assert not result.passed
-        assert result.level == "warn"   # warning, not hard block
+        assert result.level == "warn"  # warning, not hard block
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # License Revocation Ledger Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestRevocationLedger:
     def setup_method(self) -> None:
@@ -204,21 +211,19 @@ class TestRevocationLedger:
 
     def test_warn_creates_warning_entry(self) -> None:
         entry = self.ledger.warn(
-            entity    = "github.com/test-fork",
-            clause_id = "HLF-ETHICS-001",
-            evidence  = {"removed_file": "HLF_ETHICAL_GOVERNOR.md"},
-            operator  = "monitor",
+            entity="github.com/test-fork",
+            clause_id="HLF-ETHICS-001",
+            evidence={"removed_file": "HLF_ETHICAL_GOVERNOR.md"},
+            operator="monitor",
         )
         assert entry.entry_type == EntryType.WARNING
-        assert entry.entity    == "github.com/test-fork"
+        assert entry.entity == "github.com/test-fork"
         assert entry.clause_id == "HLF-ETHICS-001"
         assert entry.trace_id
         assert entry.prev_hash
 
     def test_warn_records_operator(self) -> None:
-        entry = self.ledger.warn(
-            entity="fork", clause_id="HLF-ETHICS-001", operator="alice"
-        )
+        entry = self.ledger.warn(entity="fork", clause_id="HLF-ETHICS-001", operator="alice")
         assert entry.operator == "alice"
 
     def test_warn_sets_appealable_true(self) -> None:
@@ -242,8 +247,10 @@ class TestRevocationLedger:
     def test_revoke_after_warning_succeeds(self) -> None:
         self.ledger.warn(entity="fork", clause_id="HLF-ETHICS-001", operator="monitor")
         entry = self.ledger.revoke(
-            entity="fork", clause_id="HLF-ETHICS-001", operator="alice",
-            notes="No response after 14 days."
+            entity="fork",
+            clause_id="HLF-ETHICS-001",
+            operator="alice",
+            notes="No response after 14 days.",
         )
         assert entry.entry_type == EntryType.REVOCATION
         assert "fork" in entry.description
@@ -263,9 +270,7 @@ class TestRevocationLedger:
         self.ledger.revoke(entity="fork", clause_id="HLF-ETHICS-001", operator="alice")
         assert self.ledger.is_revoked("fork") is True
 
-        self.ledger.reinstate(
-            entity="fork", operator="alice", notes="Files restored."
-        )
+        self.ledger.reinstate(entity="fork", operator="alice", notes="Files restored.")
         assert self.ledger.is_revoked("fork") is False
 
     def test_reinstate_creates_reinstate_entry(self) -> None:
@@ -354,9 +359,9 @@ class TestRevocationLedger:
         data = self.ledger.export_list()
         assert isinstance(data, list)
         assert len(data) == 1
-        assert "entry_id"   in data[0]
+        assert "entry_id" in data[0]
         assert "entry_type" in data[0]
-        assert "trace_id"   in data[0]
+        assert "trace_id" in data[0]
 
     def test_export_list_is_json_serialisable(self) -> None:
         self.ledger.warn(entity="fork", clause_id="HLF-ETHICS-001")

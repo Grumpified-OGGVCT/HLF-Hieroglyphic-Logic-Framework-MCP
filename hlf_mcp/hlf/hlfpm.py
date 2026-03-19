@@ -7,11 +7,17 @@ Usage:
   uv run hlfpm freeze
   uv run hlfpm search collections
 """
+
 from __future__ import annotations
-import hashlib, json, shutil, sys
+
+import hashlib
+import json
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
-from hlf_mcp.hlf.oci_client import OCIClient, OCIModuleRef, OCIError
+
+from hlf_mcp.hlf.oci_client import OCIClient, OCIError, OCIModuleRef
 
 
 class HlfPmError(Exception):
@@ -20,13 +26,11 @@ class HlfPmError(Exception):
 
 LOCKFILE_SCHEMA = {
     "version": "string",
-    "packages": [
-        {"name": "string", "ref": "string", "sha256": "string", "size": "integer"}
-    ],
+    "packages": [{"name": "string", "ref": "string", "sha256": "string", "size": "integer"}],
 }
 
 DEFAULT_INSTALL_ROOT = Path("hlf") / "modules"
-DEFAULT_LOCKFILE     = Path("hlf.lock.json")
+DEFAULT_LOCKFILE = Path("hlf.lock.json")
 
 
 class HlfPackageManager:
@@ -50,7 +54,7 @@ class HlfPackageManager:
             return {"status": "already_installed", "package": str(ref), "path": str(target_path)}
         try:
             module_path = self.oci_client.pull(ref)
-        except OCIError as exc:
+        except OCIError:
             # Offline: create a stub module
             target_path.mkdir(parents=True, exist_ok=True)
             stub_meta = {"name": ref.module, "version": ref.tag, "ref": str(ref), "status": "stub"}
@@ -60,9 +64,16 @@ class HlfPackageManager:
         expected = self.oci_client.get_checksum(ref)
         actual = self._compute_checksum(module_path)
         if expected and actual != expected:
-            raise HlfPmError(f"Checksum mismatch for {package_ref}: expected={expected[:16]}... actual={actual[:16]}...")
+            raise HlfPmError(
+                f"Checksum mismatch for {package_ref}: expected={expected[:16]}... actual={actual[:16]}..."
+            )
         shutil.copytree(str(module_path), str(target_path), dirs_exist_ok=True)
-        return {"status": "installed", "package": str(ref), "path": str(target_path), "sha256": actual[:16] + "..."}
+        return {
+            "status": "installed",
+            "package": str(ref),
+            "path": str(target_path),
+            "sha256": actual[:16] + "...",
+        }
 
     def uninstall(self, package_name: str) -> dict[str, Any]:
         module_path = self.install_root / package_name
@@ -87,28 +98,35 @@ class HlfPackageManager:
                     continue
                 except Exception:
                     pass
-            packages.append({
-                "name": module_dir.name,
-                "path": str(module_dir),
-                "status": "unknown",
-                "sha256": self._compute_checksum(module_dir)[:16] + "...",
-            })
+            packages.append(
+                {
+                    "name": module_dir.name,
+                    "path": str(module_dir),
+                    "status": "unknown",
+                    "sha256": self._compute_checksum(module_dir)[:16] + "...",
+                }
+            )
         return packages
 
     def search(self, query: str) -> list[dict[str, Any]]:
         tags = self.oci_client.list_tags(f"library/{query}")
-        return [{"name": query, "ref": f"registry.hlf.io/library/{query}:{t}", "tag": t} for t in tags[:20]]
+        return [
+            {"name": query, "ref": f"registry.hlf.io/library/{query}:{t}", "tag": t}
+            for t in tags[:20]
+        ]
 
     def freeze(self) -> dict[str, Any]:
         packages = []
         for pkg in self.list_installed():
             path = Path(pkg["path"])
-            packages.append({
-                "name": pkg["name"],
-                "ref": pkg.get("ref", f"registry.hlf.io/library/{pkg['name']}:unknown"),
-                "sha256": self._compute_checksum(path),
-                "size": sum(f.stat().st_size for f in path.rglob("*") if f.is_file()),
-            })
+            packages.append(
+                {
+                    "name": pkg["name"],
+                    "ref": pkg.get("ref", f"registry.hlf.io/library/{pkg['name']}:unknown"),
+                    "sha256": self._compute_checksum(path),
+                    "size": sum(f.stat().st_size for f in path.rglob("*") if f.is_file()),
+                }
+            )
         lockfile = {"version": "1.0", "packages": packages}
         self.lockfile_path.write_text(json.dumps(lockfile, indent=2))
         return lockfile
@@ -135,32 +153,45 @@ class HlfPackageManager:
 def main() -> None:
     """CLI: hlfpm <command> [args]"""
     import argparse
+
     parser = argparse.ArgumentParser(prog="hlfpm", description="HLF Package Manager")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("list")
-    inst = sub.add_parser("install"); inst.add_argument("package")
-    uninst = sub.add_parser("uninstall"); uninst.add_argument("package")
-    srch = sub.add_parser("search"); srch.add_argument("query")
+    inst = sub.add_parser("install")
+    inst.add_argument("package")
+    uninst = sub.add_parser("uninstall")
+    uninst.add_argument("package")
+    srch = sub.add_parser("search")
+    srch.add_argument("query")
     sub.add_parser("freeze")
-    upd = sub.add_parser("update"); upd.add_argument("package")
+    upd = sub.add_parser("update")
+    upd.add_argument("package")
     args = parser.parse_args()
     pm = HlfPackageManager()
+
     if args.command == "list":
         pkgs = pm.list_installed()
         if pkgs:
-            for p in pkgs: print(f"  {p['name']}  {p.get('status','?')}")
+            for package in pkgs:
+                print(f"  {package['name']}  {package.get('status', '?')}")
         else:
             print("  (no packages installed)")
     elif args.command == "install":
-        r = pm.install(args.package); print(f"  {r['status']}: {r['package']}")
+        result = pm.install(args.package)
+        print(f"  {result['status']}: {result['package']}")
     elif args.command == "uninstall":
-        r = pm.uninstall(args.package); print(f"  {r['status']}: {r['package']}")
+        result = pm.uninstall(args.package)
+        print(f"  {result['status']}: {result['package']}")
     elif args.command == "search":
         results = pm.search(args.query)
-        for r in results: print(f"  {r['name']}:{r['tag']}")
+        for result in results:
+            print(f"  {result['name']}:{result['tag']}")
     elif args.command == "freeze":
-        lf = pm.freeze(); print(f"  Lockfile written: {len(lf['packages'])} packages")
+        lockfile = pm.freeze()
+        print(f"  Lockfile written: {len(lockfile['packages'])} packages")
     elif args.command == "update":
-        r = pm.update(args.package); print(f"  {r['status']}: {r['package']}")
+        result = pm.update(args.package)
+        print(f"  {result['status']}: {result['package']}")
     else:
-        parser.print_help(); sys.exit(1)
+        parser.print_help()
+        sys.exit(1)

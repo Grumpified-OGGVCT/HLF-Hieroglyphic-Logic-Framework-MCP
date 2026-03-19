@@ -44,6 +44,7 @@ OPTIONAL_FIELDS: list[str] = [
 @dataclass
 class Attestation:
     """Immutable record of a red-hat declaration."""
+
     researcher_identity: str
     scope: str
     authorization: str
@@ -53,7 +54,9 @@ class Attestation:
 
     def __post_init__(self) -> None:
         if not self.fingerprint:
-            payload = f"{self.researcher_identity}|{self.scope}|{self.authorization}|{self.created_at}"
+            payload = (
+                f"{self.researcher_identity}|{self.scope}|{self.authorization}|{self.created_at}"
+            )
             self.fingerprint = hashlib.sha256(payload.encode()).hexdigest()
 
     def to_dict(self) -> dict[str, Any]:
@@ -86,6 +89,7 @@ def get_attestations() -> list[dict[str, Any]]:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def declare_research_intent(
     metadata: dict[str, Any] | None,

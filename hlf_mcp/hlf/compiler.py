@@ -35,7 +35,10 @@ _AST_CACHE_MAX = 256
 # Pattern matches any ASCII alias at the start of a logical line (after optional
 # whitespace), so aliases inside quoted string values are NOT replaced.
 _ALIAS_PATTERN = re.compile(
-    r"(?m)^([ \t]*)" + "(" + "|".join(re.escape(k) for k in sorted(ASCII_ALIASES, key=len, reverse=True)) + r")\b"
+    r"(?m)^([ \t]*)"
+    + "("
+    + "|".join(re.escape(k) for k in sorted(ASCII_ALIASES, key=len, reverse=True))
+    + r")\b"
 )
 
 
@@ -208,7 +211,9 @@ class HLFTransformer(Transformer):
 
     def if_block_stmt(self, _kw, condition, body, *rest):
         elif_clauses = [r for r in rest if isinstance(r, dict) and r.get("kind") == "elif_clause"]
-        else_clause = next((r for r in rest if isinstance(r, dict) and r.get("kind") == "else_clause"), None)
+        else_clause = next(
+            (r for r in rest if isinstance(r, dict) and r.get("kind") == "else_clause"), None
+        )
         n = _node(
             "if_block_stmt",
             condition=condition,
@@ -527,14 +532,18 @@ def _pass1_collect_env(statements: list[dict]) -> dict[str, Any]:
 def _pass2_expand_vars(value: Any, env: dict[str, Any]) -> Any:
     """Recursively expand $VAR and ${VAR} references in string values."""
     if isinstance(value, str):
+
         def _replace(m: re.Match) -> str:
             return str(env.get(m.group(1), m.group(0)))
+
         # Handle ${VAR}
         expanded = _VAR_RE.sub(_replace, value)
+
         # Handle $VAR (bare, uppercase only — to match HLF convention)
         def _replace_bare(m: re.Match) -> str:
             key = m.group(1)
             return str(env.get(key, m.group(0)))
+
         return re.sub(r"\$([A-Z_][A-Z0-9_]*)", _replace_bare, expanded)
     if isinstance(value, list):
         return [_pass2_expand_vars(v, env) for v in value]
@@ -565,10 +574,7 @@ _DEFAULT_ALIGN_RULES = [
 
 
 def _compile_align_rules(rules: list[dict]) -> list[tuple[str, str, re.Pattern, str]]:
-    return [
-        (r["id"], r["name"], re.compile(r["pattern"]), r["action"])
-        for r in rules
-    ]
+    return [(r["id"], r["name"], re.compile(r["pattern"]), r["action"]) for r in rules]
 
 
 _ALIGN_COMPILED = _compile_align_rules(_DEFAULT_ALIGN_RULES)
@@ -667,7 +673,9 @@ class HLFCompiler:
         # When HLF_STRICT=0, violations are logged as warnings instead of raising.
         _strict = os.environ.get("HLF_STRICT", "1") != "0"
         try:
-            from hlf_mcp.hlf.ethics.governor import GovernorError, check as _ethics_check
+            from hlf_mcp.hlf.ethics.governor import GovernorError
+            from hlf_mcp.hlf.ethics.governor import check as _ethics_check
+
             _gov_result = _ethics_check(ast=ast, env=env, source=normalized, tier="hearth")
             if not _gov_result.passed:
                 term = _gov_result.termination
@@ -682,8 +690,7 @@ class HLFCompiler:
                     _log.warning("[HLF_STRICT=0] Governor termination suppressed: %s", _msg)
                 elif _strict:
                     raise CompileError(
-                        "Ethics Governor blocked compilation: "
-                        + "; ".join(_gov_result.blocks)
+                        "Ethics Governor blocked compilation: " + "; ".join(_gov_result.blocks)
                     )
                 else:
                     _log.warning(
@@ -725,16 +732,20 @@ class HLFCompiler:
     def validate(self, source: str) -> dict[str, Any]:
         """Quick syntax validation without full pipeline."""
         if not source or not source.strip():
-            return {"valid": False, "version": None, "statement_count": 0,
-                    "has_terminator": False, "error": "Empty source"}
+            return {
+                "valid": False,
+                "version": None,
+                "statement_count": 0,
+                "has_terminator": False,
+                "error": "Empty source",
+            }
         normalized, _ = _pass0_normalize(source.strip())
         if not normalized.endswith("\n"):
             normalized += "\n"
         try:
             tree = self._parser.parse(normalized)
             stmt_count = sum(
-                1 for _ in tree.iter_subtrees()
-                if hasattr(_, "data") and _.data.endswith("_stmt")
+                1 for _ in tree.iter_subtrees() if hasattr(_, "data") and _.data.endswith("_stmt")
             )
             return {
                 "valid": True,
@@ -758,10 +769,7 @@ def _extract_version(tree) -> str:
         header = next(tree.find_data("header"))
         # Use isinstance(v, Token) to avoid calling .isdigit() on Tree nodes.
         ints = [
-            str(v)
-            for v in header.scan_values(
-                lambda v: isinstance(v, Token) and str(v).isdigit()
-            )
+            str(v) for v in header.scan_values(lambda v: isinstance(v, Token) and str(v).isdigit())
         ]
         return ".".join(ints) if ints else "3"
     except StopIteration:
@@ -771,27 +779,27 @@ def _extract_version(tree) -> str:
 def _estimate_gas(statements: list[dict]) -> int:
     """Estimate gas usage from AST statements."""
     GAS_TABLE: dict[str, int] = {
-        "glyph_stmt":        2,
-        "memory_stmt":       5,
-        "recall_stmt":       5,
-        "call_stmt":         3,
-        "tool_stmt":         4,
-        "spec_define_stmt":  4,
-        "spec_gate_stmt":    4,
-        "spec_update_stmt":  3,
-        "spec_seal_stmt":    4,
-        "set_stmt":          1,
-        "assign_stmt":       2,
-        "if_block_stmt":     2,
-        "if_flat_stmt":      1,
-        "for_stmt":          3,
-        "parallel_stmt":     5,
-        "func_block_stmt":   2,
-        "intent_stmt":       3,
-        "import_stmt":       2,
-        "log_stmt":          1,
-        "result_stmt":       1,
-        "return_stmt":       1,
+        "glyph_stmt": 2,
+        "memory_stmt": 5,
+        "recall_stmt": 5,
+        "call_stmt": 3,
+        "tool_stmt": 4,
+        "spec_define_stmt": 4,
+        "spec_gate_stmt": 4,
+        "spec_update_stmt": 3,
+        "spec_seal_stmt": 4,
+        "set_stmt": 1,
+        "assign_stmt": 2,
+        "if_block_stmt": 2,
+        "if_flat_stmt": 1,
+        "for_stmt": 3,
+        "parallel_stmt": 5,
+        "func_block_stmt": 2,
+        "intent_stmt": 3,
+        "import_stmt": 2,
+        "log_stmt": 1,
+        "result_stmt": 1,
+        "return_stmt": 1,
     }
     total = 0
     for stmt in statements:

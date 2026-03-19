@@ -73,7 +73,9 @@ def normalize_task_dag(raw_task_dag: list[dict[str, Any]]) -> list[dict[str, Any
     for step in steps:
         missing = [dep for dep in step.depends_on if dep not in known_ids]
         if missing:
-            raise ValueError(f"Task DAG node '{step.node_id}' depends on unknown nodes: {', '.join(missing)}")
+            raise ValueError(
+                f"Task DAG node '{step.node_id}' depends on unknown nodes: {', '.join(missing)}"
+            )
 
     return [_step.to_dict() for _step in _topological_sort(steps)]
 
@@ -105,19 +107,30 @@ def normalize_execution_trace(
             affected_files=[str(value) for value in item.get("affected_files", [])],
             outputs=[str(value) for value in item.get("outputs", [])],
             delegated_to=str(item.get("delegated_to") or plan_step.get("delegated_to") or ""),
-            escalation_role=str(item.get("escalation_role") or plan_step.get("escalation_role") or ""),
-            dissent_state=str(item.get("dissent_state") or plan_step.get("dissent_state") or "none"),
-            verification_status=str(item.get("verification_status") or ("passed" if item.get("success", False) else "pending")),
+            escalation_role=str(
+                item.get("escalation_role") or plan_step.get("escalation_role") or ""
+            ),
+            dissent_state=str(
+                item.get("dissent_state") or plan_step.get("dissent_state") or "none"
+            ),
+            verification_status=str(
+                item.get("verification_status")
+                or ("passed" if item.get("success", False) else "pending")
+            ),
         )
         normalized.append(entry.to_dict())
     return normalized
 
 
-def summarize_execution_trace(execution_trace: list[dict[str, Any]], *, task_dag: list[dict[str, Any]]) -> dict[str, Any]:
+def summarize_execution_trace(
+    execution_trace: list[dict[str, Any]], *, task_dag: list[dict[str, Any]]
+) -> dict[str, Any]:
     total_nodes = len(task_dag)
     completed = sum(1 for entry in execution_trace if bool(entry.get("success", False)))
     failed = sum(1 for entry in execution_trace if not bool(entry.get("success", False)))
-    escalated = sum(1 for entry in execution_trace if str(entry.get("escalation_role") or "").strip())
+    escalated = sum(
+        1 for entry in execution_trace if str(entry.get("escalation_role") or "").strip()
+    )
     delegated = sum(1 for entry in execution_trace if str(entry.get("delegated_to") or "").strip())
     return {
         "total_nodes": total_nodes,
@@ -131,7 +144,9 @@ def summarize_execution_trace(execution_trace: list[dict[str, Any]], *, task_dag
     }
 
 
-def execution_ready_for_verification(task_dag: list[dict[str, Any]], execution_trace: list[dict[str, Any]]) -> bool:
+def execution_ready_for_verification(
+    task_dag: list[dict[str, Any]], execution_trace: list[dict[str, Any]]
+) -> bool:
     if not task_dag:
         return False
     summary = summarize_execution_trace(execution_trace, task_dag=task_dag)
@@ -144,7 +159,9 @@ def _normalize_plan_step(raw_step: dict[str, Any], *, index: int) -> PlanStepCon
         node_id=node_id,
         task_type=str(raw_step.get("task_type") or raw_step.get("type") or "unknown"),
         title=str(raw_step.get("title") or raw_step.get("task") or ""),
-        depends_on=[str(value) for value in raw_step.get("depends_on") or raw_step.get("deps") or []],
+        depends_on=[
+            str(value) for value in raw_step.get("depends_on") or raw_step.get("deps") or []
+        ],
         assigned_role=str(raw_step.get("assigned_role") or raw_step.get("role") or ""),
         delegated_to=str(raw_step.get("delegated_to") or ""),
         escalation_role=str(raw_step.get("escalation_role") or ""),
@@ -164,7 +181,12 @@ def _topological_sort(steps: list[PlanStepContract]) -> list[PlanStepContract]:
         for dependency in step.depends_on:
             dependents[dependency].append(step.node_id)
 
-    queue = deque(sorted((step.node_id for step in steps if indegree[step.node_id] == 0), key=lambda node_id: order_index[node_id]))
+    queue = deque(
+        sorted(
+            (step.node_id for step in steps if indegree[step.node_id] == 0),
+            key=lambda node_id: order_index[node_id],
+        )
+    )
     ordered: list[PlanStepContract] = []
 
     while queue:

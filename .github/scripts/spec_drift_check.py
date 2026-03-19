@@ -14,19 +14,18 @@ Prints a structured JSON report to stdout.
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
 SPEC_YAML = ROOT / "governance" / "bytecode_spec.yaml"
-HF_JSON   = ROOT / "governance" / "host_functions.json"
+HF_JSON = ROOT / "governance" / "host_functions.json"
 BYTECODE_PY = ROOT / "hlf_mcp" / "hlf" / "bytecode.py"
-RUNTIME_PY  = ROOT / "hlf_mcp" / "hlf" / "runtime.py"
+RUNTIME_PY = ROOT / "hlf_mcp" / "hlf" / "runtime.py"
 REGISTRY_PY = ROOT / "hlf_mcp" / "hlf" / "registry.py"
-SERVER_PY   = ROOT / "hlf_mcp" / "server.py"
-README_MD   = ROOT / "README.md"
+SERVER_PY = ROOT / "hlf_mcp" / "server.py"
+README_MD = ROOT / "README.md"
 
 
 def _load_yaml_opcodes(path: Path) -> dict[str, int]:
@@ -123,7 +122,10 @@ def _readme_claimed_counts(path: Path) -> dict[str, int]:
         if m:
             counts.setdefault("tools", int(m.group(1)))
     # Stdlib modules
-    for pattern in [r"(\d+)\s+(?:stdlib|standard\s+lib)\s+modules?", r"stdlib\s+modules?\s*[·:]\s*(\d+)"]:
+    for pattern in [
+        r"(\d+)\s+(?:stdlib|standard\s+lib)\s+modules?",
+        r"stdlib\s+modules?\s*[·:]\s*(\d+)",
+    ]:
         m = re.search(pattern, text, re.IGNORECASE)
         if m:
             counts.setdefault("stdlib_modules", int(m.group(1)))
@@ -137,10 +139,10 @@ def run_checks() -> tuple[list[dict], bool]:
 
     # ── Check 1: bytecode_spec.yaml vs bytecode.py Op enum ──────────────────
     yaml_ops = _load_yaml_opcodes(SPEC_YAML)
-    py_ops   = _load_py_opcodes(BYTECODE_PY)
+    py_ops = _load_py_opcodes(BYTECODE_PY)
 
     only_in_yaml = set(yaml_ops) - set(py_ops)
-    only_in_py   = set(py_ops) - set(yaml_ops)
+    only_in_py = set(py_ops) - set(yaml_ops)
     code_mismatches = {
         name: {"yaml": hex(yaml_ops[name]), "py": hex(py_ops[name])}
         for name in yaml_ops.keys() & py_ops.keys()
@@ -149,64 +151,73 @@ def run_checks() -> tuple[list[dict], bool]:
 
     if only_in_yaml or only_in_py or code_mismatches:
         has_drift = True
-    findings.append({
-        "check": "bytecode_spec_vs_op_enum",
-        "drift": bool(only_in_yaml or only_in_py or code_mismatches),
-        "only_in_yaml": sorted(only_in_yaml),
-        "only_in_py": sorted(only_in_py),
-        "code_mismatches": code_mismatches,
-        "yaml_total": len(yaml_ops),
-        "py_total": len(py_ops),
-    })
+    findings.append(
+        {
+            "check": "bytecode_spec_vs_op_enum",
+            "drift": bool(only_in_yaml or only_in_py or code_mismatches),
+            "only_in_yaml": sorted(only_in_yaml),
+            "only_in_py": sorted(only_in_py),
+            "code_mismatches": code_mismatches,
+            "yaml_total": len(yaml_ops),
+            "py_total": len(py_ops),
+        }
+    )
 
     # ── Check 2: host_functions.json vs runtime HOST_FUNCTIONS ──────────────
-    json_hf   = _load_host_function_names(HF_JSON)
+    json_hf = _load_host_function_names(HF_JSON)
     runtime_hf = _load_runtime_host_functions(RUNTIME_PY)
 
-    only_json    = json_hf - runtime_hf
+    only_json = json_hf - runtime_hf
     only_runtime = runtime_hf - json_hf
 
     if json_hf and runtime_hf and (only_json or only_runtime):
         has_drift = True
 
-    findings.append({
-        "check": "host_functions_json_vs_runtime",
-        "drift": bool(only_json or only_runtime),
-        "only_in_json": sorted(only_json),
-        "only_in_runtime": sorted(only_runtime),
-        "json_total": len(json_hf),
-        "runtime_total": len(runtime_hf),
-        "note": "Empty sets are expected if governance file or runtime function list is not present",
-    })
+    findings.append(
+        {
+            "check": "host_functions_json_vs_runtime",
+            "drift": bool(only_json or only_runtime),
+            "only_in_json": sorted(only_json),
+            "only_in_runtime": sorted(only_runtime),
+            "json_total": len(json_hf),
+            "runtime_total": len(runtime_hf),
+            "note": "Empty sets are expected if governance file or runtime function list is not present",
+        }
+    )
 
     # ── Check 3: README claimed counts vs actual counts ──────────────────────
-    actual_tools   = _count_mcp_tools(SERVER_PY)
-    actual_stdlib  = _count_stdlib_modules(ROOT)
+    actual_tools = _count_mcp_tools(SERVER_PY)
+    actual_stdlib = _count_stdlib_modules(ROOT)
     actual_opcodes = len(py_ops)
-    readme_counts  = _readme_claimed_counts(README_MD)
+    readme_counts = _readme_claimed_counts(README_MD)
 
     count_drifts: dict[str, dict] = {}
     if "tools" in readme_counts and readme_counts["tools"] != actual_tools:
         count_drifts["tools"] = {"readme": readme_counts["tools"], "actual": actual_tools}
     if "stdlib_modules" in readme_counts and readme_counts["stdlib_modules"] != actual_stdlib:
-        count_drifts["stdlib_modules"] = {"readme": readme_counts["stdlib_modules"], "actual": actual_stdlib}
+        count_drifts["stdlib_modules"] = {
+            "readme": readme_counts["stdlib_modules"],
+            "actual": actual_stdlib,
+        }
     if "opcodes" in readme_counts and readme_counts["opcodes"] != actual_opcodes:
         count_drifts["opcodes"] = {"readme": readme_counts["opcodes"], "actual": actual_opcodes}
 
     if count_drifts:
         has_drift = True
 
-    findings.append({
-        "check": "readme_count_accuracy",
-        "drift": bool(count_drifts),
-        "drifts": count_drifts,
-        "actual": {
-            "tools": actual_tools,
-            "stdlib_modules": actual_stdlib,
-            "opcodes": actual_opcodes,
-        },
-        "readme_claimed": readme_counts,
-    })
+    findings.append(
+        {
+            "check": "readme_count_accuracy",
+            "drift": bool(count_drifts),
+            "drifts": count_drifts,
+            "actual": {
+                "tools": actual_tools,
+                "stdlib_modules": actual_stdlib,
+                "opcodes": actual_opcodes,
+            },
+            "readme_claimed": readme_counts,
+        }
+    )
 
     return findings, has_drift
 

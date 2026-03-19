@@ -33,7 +33,9 @@ def test_language_comparison_summary_ranks_only_measured_languages() -> None:
         "language_asc",
     ]
     assert summary["leader"] is not None
-    assert [entry["language"] for entry in summary["ranked_languages"]] == summary["languages"] or len(summary["ranked_languages"]) == len(summary["languages"])
+    assert [entry["language"] for entry in summary["ranked_languages"]] == summary[
+        "languages"
+    ] or len(summary["ranked_languages"]) == len(summary["languages"])
     assert any(entry["language"] == "zh" for entry in summary["ranked_languages"])
     assert all("roundtrip_fidelity_avg" in entry for entry in summary["ranked_languages"])
     assert all("fallback_rate" in entry for entry in summary["ranked_languages"])

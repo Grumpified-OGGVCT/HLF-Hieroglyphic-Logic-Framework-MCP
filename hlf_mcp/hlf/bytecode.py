@@ -17,99 +17,99 @@ import zlib
 from enum import IntEnum
 from typing import Any
 
-
 # ── Opcode table ──────────────────────────────────────────────────────────────
 
+
 class Op(IntEnum):
-    NOP           = 0x00
-    PUSH_CONST    = 0x01
-    STORE         = 0x02
-    LOAD          = 0x03
-    STORE_IMMUT   = 0x04
-    ADD           = 0x10
-    SUB           = 0x11
-    MUL           = 0x12
-    DIV           = 0x13
-    MOD           = 0x14
-    NEG           = 0x15
-    CMP_EQ        = 0x20
-    CMP_NE        = 0x21
-    CMP_LT        = 0x22
-    CMP_LE        = 0x23
-    CMP_GT        = 0x24
-    CMP_GE        = 0x25
-    AND           = 0x30
-    OR            = 0x31
-    NOT           = 0x32
-    JMP           = 0x40
-    JZ            = 0x41
-    JNZ           = 0x42
-    CALL_BUILTIN  = 0x50
-    CALL_HOST     = 0x51
-    CALL_TOOL     = 0x52
+    NOP = 0x00
+    PUSH_CONST = 0x01
+    STORE = 0x02
+    LOAD = 0x03
+    STORE_IMMUT = 0x04
+    ADD = 0x10
+    SUB = 0x11
+    MUL = 0x12
+    DIV = 0x13
+    MOD = 0x14
+    NEG = 0x15
+    CMP_EQ = 0x20
+    CMP_NE = 0x21
+    CMP_LT = 0x22
+    CMP_LE = 0x23
+    CMP_GT = 0x24
+    CMP_GE = 0x25
+    AND = 0x30
+    OR = 0x31
+    NOT = 0x32
+    JMP = 0x40
+    JZ = 0x41
+    JNZ = 0x42
+    CALL_BUILTIN = 0x50
+    CALL_HOST = 0x51
+    CALL_TOOL = 0x52
     OPENCLAW_TOOL = 0x53
-    TAG           = 0x60
-    INTENT        = 0x61
-    RESULT        = 0x62
-    MEMORY_STORE  = 0x63
+    TAG = 0x60
+    INTENT = 0x61
+    RESULT = 0x62
+    MEMORY_STORE = 0x63
     MEMORY_RECALL = 0x64
-    SPEC_DEFINE   = 0x65
-    SPEC_GATE     = 0x66
-    SPEC_UPDATE   = 0x67
-    SPEC_SEAL     = 0x68
-    HALT          = 0xFF
+    SPEC_DEFINE = 0x65
+    SPEC_GATE = 0x66
+    SPEC_UPDATE = 0x67
+    SPEC_SEAL = 0x68
+    HALT = 0xFF
 
 
 # ── Gas costs ─────────────────────────────────────────────────────────────────
 
 GAS_COSTS: dict[Op, int] = {
-    Op.NOP:           0,
-    Op.PUSH_CONST:    1,
-    Op.STORE:         2,
-    Op.LOAD:          1,
-    Op.STORE_IMMUT:   3,
-    Op.ADD:           2,
-    Op.SUB:           2,
-    Op.MUL:           3,
-    Op.DIV:           5,
-    Op.MOD:           3,
-    Op.NEG:           1,
-    Op.CMP_EQ:        1,
-    Op.CMP_NE:        1,
-    Op.CMP_LT:        1,
-    Op.CMP_LE:        1,
-    Op.CMP_GT:        1,
-    Op.CMP_GE:        1,
-    Op.AND:           1,
-    Op.OR:            1,
-    Op.NOT:           1,
-    Op.JMP:           1,
-    Op.JZ:            2,
-    Op.JNZ:           2,
-    Op.CALL_BUILTIN:  5,
-    Op.CALL_HOST:     10,
-    Op.CALL_TOOL:     15,
+    Op.NOP: 0,
+    Op.PUSH_CONST: 1,
+    Op.STORE: 2,
+    Op.LOAD: 1,
+    Op.STORE_IMMUT: 3,
+    Op.ADD: 2,
+    Op.SUB: 2,
+    Op.MUL: 3,
+    Op.DIV: 5,
+    Op.MOD: 3,
+    Op.NEG: 1,
+    Op.CMP_EQ: 1,
+    Op.CMP_NE: 1,
+    Op.CMP_LT: 1,
+    Op.CMP_LE: 1,
+    Op.CMP_GT: 1,
+    Op.CMP_GE: 1,
+    Op.AND: 1,
+    Op.OR: 1,
+    Op.NOT: 1,
+    Op.JMP: 1,
+    Op.JZ: 2,
+    Op.JNZ: 2,
+    Op.CALL_BUILTIN: 5,
+    Op.CALL_HOST: 10,
+    Op.CALL_TOOL: 15,
     Op.OPENCLAW_TOOL: 20,
-    Op.TAG:           1,
-    Op.INTENT:        2,
-    Op.RESULT:        1,
-    Op.MEMORY_STORE:  3,
+    Op.TAG: 1,
+    Op.INTENT: 2,
+    Op.RESULT: 1,
+    Op.MEMORY_STORE: 3,
     Op.MEMORY_RECALL: 2,
-    Op.SPEC_DEFINE:   4,
-    Op.SPEC_GATE:     4,
-    Op.SPEC_UPDATE:   4,
-    Op.SPEC_SEAL:     4,
-    Op.HALT:          0,
+    Op.SPEC_DEFINE: 4,
+    Op.SPEC_GATE: 4,
+    Op.SPEC_UPDATE: 4,
+    Op.SPEC_SEAL: 4,
+    Op.HALT: 0,
 }
 
 
 # ── Constant Pool ─────────────────────────────────────────────────────────────
 
-TYPE_INT    = 0x01
-TYPE_FLOAT  = 0x02
+TYPE_INT = 0x01
+TYPE_FLOAT = 0x02
 TYPE_STRING = 0x03
-TYPE_BOOL   = 0x04
-TYPE_NULL   = 0x05
+TYPE_BOOL = 0x04
+TYPE_NULL = 0x05
 
 
 class ConstantPool:
@@ -139,7 +139,7 @@ class ConstantPool:
         return b"".join(parts)
 
     @classmethod
-    def decode(cls, data: bytes) -> tuple["ConstantPool", int]:
+    def decode(cls, data: bytes) -> tuple[ConstantPool, int]:
         """Decode pool from bytes; returns (pool, bytes_consumed)."""
         if len(data) < 4:
             return cls(), 0
@@ -191,7 +191,7 @@ def _decode_const(data: bytes) -> tuple[Any, int]:
         if len(data) < 5:
             return "", 5
         length = struct.unpack("<I", data[1:5])[0]
-        raw = data[5: 5 + length]
+        raw = data[5 : 5 + length]
         try:
             return raw.decode("utf-8"), 5 + length
         except UnicodeDecodeError:
@@ -238,83 +238,83 @@ _GLYPH_OP: dict[str, Op] = {
 # ── Operand flags and descriptions ───────────────────────────────────────────
 
 _OP_HAS_OPERAND: dict[Op, bool] = {
-    Op.NOP:           False,
-    Op.PUSH_CONST:    True,
-    Op.STORE:         True,
-    Op.LOAD:          True,
-    Op.STORE_IMMUT:   True,
-    Op.ADD:           False,
-    Op.SUB:           False,
-    Op.MUL:           False,
-    Op.DIV:           False,
-    Op.MOD:           False,
-    Op.NEG:           False,
-    Op.CMP_EQ:        False,
-    Op.CMP_NE:        False,
-    Op.CMP_LT:        False,
-    Op.CMP_LE:        False,
-    Op.CMP_GT:        False,
-    Op.CMP_GE:        False,
-    Op.AND:           False,
-    Op.OR:            False,
-    Op.NOT:           False,
-    Op.JMP:           True,
-    Op.JZ:            True,
-    Op.JNZ:           True,
-    Op.CALL_BUILTIN:  True,
-    Op.CALL_HOST:     True,
-    Op.CALL_TOOL:     True,
+    Op.NOP: False,
+    Op.PUSH_CONST: True,
+    Op.STORE: True,
+    Op.LOAD: True,
+    Op.STORE_IMMUT: True,
+    Op.ADD: False,
+    Op.SUB: False,
+    Op.MUL: False,
+    Op.DIV: False,
+    Op.MOD: False,
+    Op.NEG: False,
+    Op.CMP_EQ: False,
+    Op.CMP_NE: False,
+    Op.CMP_LT: False,
+    Op.CMP_LE: False,
+    Op.CMP_GT: False,
+    Op.CMP_GE: False,
+    Op.AND: False,
+    Op.OR: False,
+    Op.NOT: False,
+    Op.JMP: True,
+    Op.JZ: True,
+    Op.JNZ: True,
+    Op.CALL_BUILTIN: True,
+    Op.CALL_HOST: True,
+    Op.CALL_TOOL: True,
     Op.OPENCLAW_TOOL: True,
-    Op.TAG:           True,
-    Op.INTENT:        True,
-    Op.RESULT:        False,
-    Op.MEMORY_STORE:  False,
+    Op.TAG: True,
+    Op.INTENT: True,
+    Op.RESULT: False,
+    Op.MEMORY_STORE: False,
     Op.MEMORY_RECALL: False,
-    Op.SPEC_DEFINE:   True,
-    Op.SPEC_GATE:     True,
-    Op.SPEC_UPDATE:   True,
-    Op.SPEC_SEAL:     True,
-    Op.HALT:          False,
+    Op.SPEC_DEFINE: True,
+    Op.SPEC_GATE: True,
+    Op.SPEC_UPDATE: True,
+    Op.SPEC_SEAL: True,
+    Op.HALT: False,
 }
 
 _OP_DESC: dict[Op, str] = {
-    Op.NOP:           "No operation",
-    Op.PUSH_CONST:    "Push constant from pool",
-    Op.STORE:         "Store TOS to variable slot",
-    Op.LOAD:          "Load variable slot onto stack",
-    Op.STORE_IMMUT:   "Store immutable variable",
-    Op.ADD:           "Add top two stack values",
-    Op.SUB:           "Subtract top two stack values",
-    Op.MUL:           "Multiply top two stack values",
-    Op.DIV:           "Divide top two stack values",
-    Op.MOD:           "Modulo top two stack values",
-    Op.NEG:           "Negate top of stack",
-    Op.CMP_EQ:        "== comparison",
-    Op.CMP_NE:        "!= comparison",
-    Op.CMP_LT:        "< comparison",
-    Op.CMP_LE:        "<= comparison",
-    Op.CMP_GT:        "> comparison",
-    Op.CMP_GE:        ">= comparison",
-    Op.AND:           "Logical AND",
-    Op.OR:            "Logical OR",
-    Op.NOT:           "Logical NOT",
-    Op.JMP:           "Unconditional jump",
-    Op.JZ:            "Jump if zero/false",
-    Op.JNZ:           "Jump if nonzero/true",
-    Op.CALL_BUILTIN:  "Call built-in function",
-    Op.CALL_HOST:     "Call host function by name index",
-    Op.CALL_TOOL:     "Call registered tool by name index",
+    Op.NOP: "No operation",
+    Op.PUSH_CONST: "Push constant from pool",
+    Op.STORE: "Store TOS to variable slot",
+    Op.LOAD: "Load variable slot onto stack",
+    Op.STORE_IMMUT: "Store immutable variable",
+    Op.ADD: "Add top two stack values",
+    Op.SUB: "Subtract top two stack values",
+    Op.MUL: "Multiply top two stack values",
+    Op.DIV: "Divide top two stack values",
+    Op.MOD: "Modulo top two stack values",
+    Op.NEG: "Negate top of stack",
+    Op.CMP_EQ: "== comparison",
+    Op.CMP_NE: "!= comparison",
+    Op.CMP_LT: "< comparison",
+    Op.CMP_LE: "<= comparison",
+    Op.CMP_GT: "> comparison",
+    Op.CMP_GE: ">= comparison",
+    Op.AND: "Logical AND",
+    Op.OR: "Logical OR",
+    Op.NOT: "Logical NOT",
+    Op.JMP: "Unconditional jump",
+    Op.JZ: "Jump if zero/false",
+    Op.JNZ: "Jump if nonzero/true",
+    Op.CALL_BUILTIN: "Call built-in function",
+    Op.CALL_HOST: "Call host function by name index",
+    Op.CALL_TOOL: "Call registered tool by name index",
     Op.OPENCLAW_TOOL: "OpenClaw sandboxed tool call",
-    Op.TAG:           "Tag/label annotation",
-    Op.INTENT:        "Declare intent",
-    Op.RESULT:        "Push result value",
-    Op.MEMORY_STORE:  "Store TOS to RAG memory",
+    Op.TAG: "Tag/label annotation",
+    Op.INTENT: "Declare intent",
+    Op.RESULT: "Push result value",
+    Op.MEMORY_STORE: "Store TOS to RAG memory",
     Op.MEMORY_RECALL: "Recall from RAG memory by key",
-    Op.SPEC_DEFINE:   "Define Instinct spec",
-    Op.SPEC_GATE:     "Gate on Instinct spec",
-    Op.SPEC_UPDATE:   "Update Instinct spec",
-    Op.SPEC_SEAL:     "Seal Instinct spec with SHA-256",
-    Op.HALT:          "Halt execution",
+    Op.SPEC_DEFINE: "Define Instinct spec",
+    Op.SPEC_GATE: "Gate on Instinct spec",
+    Op.SPEC_UPDATE: "Update Instinct spec",
+    Op.SPEC_SEAL: "Seal Instinct spec with SHA-256",
+    Op.HALT: "Halt execution",
 }
 
 
@@ -337,12 +337,14 @@ _CODE_TO_NAME: dict[int, str] = {op.value: op.name for op in Op}
 
 # ── Instruction helper ────────────────────────────────────────────────────────
 
+
 def _instr(op: Op, operand: int = 0) -> bytes:
     """Encode a fixed 3-byte instruction (little-endian operand)."""
     return struct.pack("<BH", op.value, operand)
 
 
 # ── BytecodeCompiler ──────────────────────────────────────────────────────────
+
 
 class BytecodeCompiler:
     """Compile AST dicts to .hlb bytecode."""
@@ -375,6 +377,7 @@ HLFBytecode = BytecodeCompiler
 
 # ── Disassembler ──────────────────────────────────────────────────────────────
 
+
 class Disassembler:
     """Disassemble .hlb bytecode to human-readable form."""
 
@@ -390,18 +393,18 @@ class Disassembler:
             raise ValueError("Invalid .hlb magic bytes")
 
         hdr = _decode_header(payload[:_HEADER_SIZE])
-        fmt_ver  = hdr["format_version"]
+        fmt_ver = hdr["format_version"]
         code_len = hdr["code_len"]
         stored_crc = hdr["crc32"]
-        flags    = hdr["flags"]
+        flags = hdr["flags"]
 
         pool, pool_size = ConstantPool.decode(payload[_HEADER_SIZE:])
         code_start = _HEADER_SIZE + pool_size
-        code_bytes = payload[code_start: code_start + code_len]
+        code_bytes = payload[code_start : code_start + code_len]
 
         actual_crc = zlib.crc32(code_bytes) & 0xFFFFFFFF
-        crc_ok  = actual_crc == stored_crc
-        sha_ok  = hashlib.sha256(payload).digest().hex() == stored_sha
+        crc_ok = actual_crc == stored_crc
+        sha_ok = hashlib.sha256(payload).digest().hex() == stored_sha
 
         instructions: list[dict[str, Any]] = []
         disasm_lines: list[str] = []
@@ -413,16 +416,16 @@ class Disassembler:
             has_operand = _OP_HAS_OPERAND.get(op, False) if op is not None else False
 
             if pc + 2 < len(code_bytes):
-                operand = struct.unpack("<H", code_bytes[pc + 1: pc + 3])[0]
+                operand = struct.unpack("<H", code_bytes[pc + 1 : pc + 3])[0]
             else:
                 operand = 0
 
             if has_operand:
                 const_val = pool.get(operand)
-                disasm_lines.append(
-                    f"  {pc:04X}  {op_name:<18} #{operand}  ; {const_val!r}"
+                disasm_lines.append(f"  {pc:04X}  {op_name:<18} #{operand}  ; {const_val!r}")
+                instructions.append(
+                    {"pc": pc, "op": op_name, "operand": operand, "const": const_val}
                 )
-                instructions.append({"pc": pc, "op": op_name, "operand": operand, "const": const_val})
             else:
                 disasm_lines.append(f"  {pc:04X}  {op_name}")
                 instructions.append({"pc": pc, "op": op_name})
@@ -450,6 +453,7 @@ class Disassembler:
 
 # ── AST emission helpers ──────────────────────────────────────────────────────
 
+
 def _emit_stmt(
     stmt: dict[str, Any],
     instructions: list[bytes],
@@ -461,11 +465,11 @@ def _emit_stmt(
 
     if kind == "glyph_stmt":
         glyph = stmt.get("glyph", "Δ")
-        tag   = stmt.get("tag", "")
-        args  = stmt.get("arguments", [])
-        op    = _GLYPH_OP.get(glyph, Op.CALL_HOST)
-        desc  = f"{glyph} [{tag}]" if tag else str(glyph)
-        idx   = add_const(desc)
+        tag = stmt.get("tag", "")
+        args = stmt.get("arguments", [])
+        op = _GLYPH_OP.get(glyph, Op.CALL_HOST)
+        desc = f"{glyph} [{tag}]" if tag else str(glyph)
+        idx = add_const(desc)
         for arg in args:
             _emit_arg(arg, instructions, add_const)
         instructions.append(_instr(op, idx))
@@ -493,9 +497,9 @@ def _emit_stmt(
     elif kind in ("spec_define_stmt", "spec_gate_stmt", "spec_update_stmt", "spec_seal_stmt"):
         op_map = {
             "spec_define_stmt": Op.SPEC_DEFINE,
-            "spec_gate_stmt":   Op.SPEC_GATE,
+            "spec_gate_stmt": Op.SPEC_GATE,
             "spec_update_stmt": Op.SPEC_UPDATE,
-            "spec_seal_stmt":   Op.SPEC_SEAL,
+            "spec_seal_stmt": Op.SPEC_SEAL,
         }
         idx = add_const(stmt.get("tag", ""))
         instructions.append(_instr(op_map[kind], idx))
@@ -513,8 +517,12 @@ def _emit_stmt(
         instructions.append(_instr(Op.LOAD, idx_name))
         _emit_value(stmt.get("value", {}), instructions, add_const)
         cmp_op = {
-            "<": Op.CMP_LT, ">": Op.CMP_GT, "==": Op.CMP_EQ,
-            "!=": Op.CMP_NE, ">=": Op.CMP_GE, "<=": Op.CMP_LE,
+            "<": Op.CMP_LT,
+            ">": Op.CMP_GT,
+            "==": Op.CMP_EQ,
+            "!=": Op.CMP_NE,
+            ">=": Op.CMP_GE,
+            "<=": Op.CMP_LE,
         }.get(stmt.get("cmp", "=="), Op.CMP_EQ)
         instructions.append(_instr(cmp_op))
         instructions.append(_instr(Op.JZ, 0x0000))
@@ -565,6 +573,7 @@ def _emit_value(value: dict[str, Any], instructions: list[bytes], add_const) -> 
 
 # ── Legacy pool helpers (kept for any remaining callers) ──────────────────────
 
+
 def _decode_pool(data: bytes) -> tuple[list[Any], int]:
     """Legacy shim: decode pool and return (list_of_values, bytes_consumed)."""
     pool, consumed = ConstantPool.decode(data)
@@ -572,6 +581,7 @@ def _decode_pool(data: bytes) -> tuple[list[Any], int]:
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     """CLI: hlfdis <file.hlb>  — disassemble an HLF bytecode file."""

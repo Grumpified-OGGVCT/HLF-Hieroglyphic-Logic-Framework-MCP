@@ -16,6 +16,7 @@ Sections:
 from __future__ import annotations
 
 import os
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -26,11 +27,13 @@ import pytest
 # the C3-CSAM pattern.  The phonetic-skeleton second pass fixes this.
 # ---------------------------------------------------------------------------
 
+
 class TestHomoglyphBypass:
     """CVE class: homoglyph substitution used to evade ethics patterns."""
 
     def _violations(self, source: str):
         from hlf_mcp.hlf.ethics.constitution import evaluate_constitution
+
         return evaluate_constitution(None, None, source=source)
 
     def _rule_ids(self, source: str):
@@ -82,18 +85,21 @@ class TestHomoglyphBypass:
     def test_skeleton_function_cyrillic(self):
         """_phonetic_skeleton maps Cyrillic с→s and е→e correctly."""
         from hlf_mcp.hlf.ethics.constitution import _phonetic_skeleton
+
         result = _phonetic_skeleton("child \u0441\u0435xual abuse")
         assert "sexual" in result.lower()
 
     def test_skeleton_function_greek(self):
         """_phonetic_skeleton maps Greek σ→s correctly."""
         from hlf_mcp.hlf.ethics.constitution import _phonetic_skeleton
+
         result = _phonetic_skeleton("\u03c3exual")
         assert result.lower().startswith("s")
 
     def test_skeleton_pure_ascii_unchanged(self):
         """_phonetic_skeleton must be a no-op on pure ASCII text."""
         from hlf_mcp.hlf.ethics.constitution import _phonetic_skeleton
+
         text = "this is a normal english sentence"
         assert _phonetic_skeleton(text) == text
 
@@ -104,6 +110,7 @@ class TestHomoglyphBypass:
         # launch with Cyrillic l→'л'→'l' via skeleton, weapon with Cyrillic п→'p'
         src = "launch weapon instructions synthesi nerve agent"
         from hlf_mcp.hlf.ethics.constitution import evaluate_constitution
+
         viols = evaluate_constitution({"statements": []}, {}, source=src)
         rule_ids = {v.rule_id for v in viols}
         assert "C1-LETHAL-OP" in rule_ids
@@ -113,11 +120,13 @@ class TestHomoglyphBypass:
 # 2. SSRF PROTECTION — net_mod URL validation
 # ---------------------------------------------------------------------------
 
+
 class TestSSRFProtection:
     """CVE class: Server-Side Request Forgery via unrestricted HTTP_GET."""
 
     def _validate(self, url: str):
         from hlf_mcp.hlf.stdlib.net_mod import _validate_url
+
         _validate_url(url)
 
     def _blocked(self, url: str) -> bool:
@@ -198,11 +207,13 @@ class TestSSRFProtection:
 # 3. SYS_ENV SECRETS BLOCKLIST — runtime.py
 # ---------------------------------------------------------------------------
 
+
 class TestSysEnvBlocklist:
     """CVE class: HLF programs reading process secrets via SYS_ENV."""
 
     def _call(self, var: str):
         from hlf_mcp.hlf.runtime import _dispatch_builtin
+
         return _dispatch_builtin("SYS_ENV", [var])
 
     def test_openai_key_blocked(self):
@@ -266,11 +277,13 @@ class TestSysEnvBlocklist:
 # 4. ACFS PATH TRAVERSAL (io_mod — defence in depth)
 # ---------------------------------------------------------------------------
 
+
 class TestACFSPathTraversal:
     """Verify ACFS sandbox blocks all standard path-traversal patterns."""
 
     def _read(self, path: str):
         from hlf_mcp.hlf.stdlib.io_mod import FILE_READ
+
         return FILE_READ(path)
 
     def test_dotdot_escape_blocked(self):
@@ -294,12 +307,14 @@ class TestACFSPathTraversal:
 # 5. GAS DoS / CACHE SOUNDNESS
 # ---------------------------------------------------------------------------
 
+
 class TestGasDos:
     """Compile-time size and cache interaction sanity checks."""
 
     def test_large_program_compiles_but_gas_estimated(self):
         """Compiler accepts large programs; gas_estimate reflects size."""
         from hlf_mcp.hlf.compiler import HLFCompiler
+
         stmts = "\n".join(f'\u0394 analyze "/data/f{i}.txt"' for i in range(100))
         src = f"[HLF-v3]\n{stmts}\n\u03a9\n"
         c = HLFCompiler()
@@ -308,7 +323,8 @@ class TestGasDos:
 
     def test_cache_key_is_content_addressed(self):
         """Two identical sources share the same cache entry (idempotent)."""
-        from hlf_mcp.hlf.compiler import HLFCompiler, _AST_CACHE
+        from hlf_mcp.hlf.compiler import _AST_CACHE, HLFCompiler
+
         src = '[HLF-v3]\n\u0394 analyze "/proof"\n\u03a9\n'
         c = HLFCompiler()
         before = len(_AST_CACHE)
@@ -320,6 +336,7 @@ class TestGasDos:
     def test_distinct_sources_get_distinct_cache_entries(self):
         """Different programs must NOT share a cache entry."""
         from hlf_mcp.hlf.compiler import HLFCompiler
+
         c = HLFCompiler()
         r1 = c.compile('[HLF-v3]\n\u0394 analyze "/path_a"\n\u03a9\n')
         r2 = c.compile('[HLF-v3]\n\u0394 analyze "/path_b"\n\u03a9\n')

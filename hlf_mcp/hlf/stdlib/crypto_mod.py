@@ -21,6 +21,7 @@ KEY_GENERATE        : Generate a cryptographically random 32-byte AES key (hex).
 MERKLE_ROOT         : Compute the Merkle root of a list of string values using SHA-256
                       pairwise hashing (same algorithm used by the ALIGN Ledger).
 """
+
 from __future__ import annotations
 
 import base64
@@ -28,11 +29,8 @@ import hashlib
 import hmac
 import os
 import secrets
-import struct
-from typing import Any
 
 # ── AES-256-GCM ───────────────────────────────────────────────────────────────
-
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
@@ -74,7 +72,7 @@ def ENCRYPT(data: str, key: str) -> str:
     :returns:    Base64-encoded authenticated ciphertext.
     """
     raw_key = _coerce_key(key)
-    nonce = os.urandom(12)          # 96-bit nonce — NIST SP 800-38D §8.2.1
+    nonce = os.urandom(12)  # 96-bit nonce — NIST SP 800-38D §8.2.1
     aesgcm = AESGCM(raw_key)
     ciphertext = aesgcm.encrypt(nonce, data.encode("utf-8"), None)  # no AAD
     return base64.b64encode(nonce + ciphertext).decode("ascii")
@@ -134,9 +132,7 @@ def SIGN_VERIFY(data: str, signature: str, public_key: str) -> bool:
 # ── Hashing ────────────────────────────────────────────────────────────────────
 
 
-_SUPPORTED_ALGOS = frozenset(
-    {"sha256", "sha512", "sha3_256", "sha3_512", "blake2b", "blake2s"}
-)
+_SUPPORTED_ALGOS = frozenset({"sha256", "sha512", "sha3_256", "sha3_512", "blake2b", "blake2s"})
 
 
 def HASH(data: str, algo: str = "sha256") -> str:
@@ -148,8 +144,9 @@ def HASH(data: str, algo: str = "sha256") -> str:
     """
     algo = algo.lower().replace("-", "_")
     if algo not in _SUPPORTED_ALGOS:
-        raise ValueError(f"Unsupported hash algorithm: {algo!r}. "
-                         f"Supported: {sorted(_SUPPORTED_ALGOS)}")
+        raise ValueError(
+            f"Unsupported hash algorithm: {algo!r}. Supported: {sorted(_SUPPORTED_ALGOS)}"
+        )
     if algo == "blake2b":
         h = hashlib.blake2b(data.encode("utf-8"))
     elif algo == "blake2s":
@@ -198,8 +195,8 @@ def KEY_DERIVE(
         dklen=32,
     )
     return {
-        "key_hex":    dk.hex(),
-        "salt_hex":   salt.hex(),
+        "key_hex": dk.hex(),
+        "salt_hex": salt.hex(),
         "iterations": iterations,
     }
 
@@ -234,7 +231,7 @@ def MERKLE_ROOT(items: list[str]) -> str:
 
     while len(layer) > 1:
         if len(layer) % 2 == 1:
-            layer.append(layer[-1])   # duplicate last leaf
+            layer.append(layer[-1])  # duplicate last leaf
         next_layer = []
         for i in range(0, len(layer), 2):
             combined = layer[i] + layer[i + 1]

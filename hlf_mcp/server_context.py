@@ -1,28 +1,37 @@
 from __future__ import annotations
 
-from collections import deque
 import hashlib
 import json
 import logging
+from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from hlf_mcp.hlf.approval_ledger import ApprovalLedger
 from hlf_mcp.hlf.align_governor import AlignGovernor
+from hlf_mcp.hlf.approval_ledger import ApprovalLedger
 from hlf_mcp.hlf.audit_chain import AuditChain
 from hlf_mcp.hlf.benchmark import HLFBenchmark
 from hlf_mcp.hlf.bytecode import HLFBytecode
 from hlf_mcp.hlf.compiler import HLFCompiler
-from hlf_mcp.hlf.formatter import HLFFormatter
 from hlf_mcp.hlf.formal_verifier import FormalVerifier
-from hlf_mcp.hlf.governance_events import GovernanceEvent, GovernanceEventKind, GovernanceSeverity, GovernanceStatus
+from hlf_mcp.hlf.formatter import HLFFormatter
+from hlf_mcp.hlf.governance_events import (
+    GovernanceEvent,
+    GovernanceEventKind,
+    GovernanceSeverity,
+    GovernanceStatus,
+)
 from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.registry import HostFunctionRegistry
 from hlf_mcp.hlf.runtime import HLFRuntime
 from hlf_mcp.hlf.tool_dispatch import ToolRegistry
-from hlf_mcp.hlf.witness_governance import WitnessGovernance, WitnessObservation, WitnessRecommendedAction
+from hlf_mcp.hlf.witness_governance import (
+    WitnessGovernance,
+    WitnessObservation,
+    WitnessRecommendedAction,
+)
 from hlf_mcp.instinct.lifecycle import InstinctLifecycle
 from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar, RAGMemory
 
@@ -195,7 +204,9 @@ class ServerContext:
     def list_witness_subjects(self, *, trust_state: str | None = None) -> dict[str, Any]:
         return {"subjects": self.witness_governance.list_snapshots(trust_state=trust_state)}
 
-    def get_effective_trust_state(self, *, subject_agent_id: str | None = None, default: str = "trusted") -> str:
+    def get_effective_trust_state(
+        self, *, subject_agent_id: str | None = None, default: str = "trusted"
+    ) -> str:
         if not subject_agent_id:
             return default
         snapshot = self.witness_governance.get_snapshot(subject_agent_id)
@@ -234,7 +245,9 @@ class ServerContext:
                     "details": {
                         "language": language,
                         "tier": tier,
-                        "roundtrip_fidelity_score": translation.get("roundtrip_fidelity_score", 1.0),
+                        "roundtrip_fidelity_score": translation.get(
+                            "roundtrip_fidelity_score", 1.0
+                        ),
                     },
                 }
             ],
@@ -290,7 +303,7 @@ class ServerContext:
                 source_type=source_type,
                 source=source or provenance,
                 collector=provenance,
-                collected_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                collected_at=datetime.now(UTC).replace(microsecond=0).isoformat(),
                 workflow_run_url=workflow_run_url,
                 branch=branch,
                 commit_sha=commit_sha,
@@ -342,7 +355,9 @@ class ServerContext:
         )
         return self.session_profiles[agent_id]
 
-    def get_embedding_profile(self, *, agent_id: str | None = None, profile_id: str | None = None) -> dict[str, Any] | None:
+    def get_embedding_profile(
+        self, *, agent_id: str | None = None, profile_id: str | None = None
+    ) -> dict[str, Any] | None:
         if agent_id:
             return self.session_profiles.get(agent_id)
         if profile_id:
@@ -373,9 +388,11 @@ class ServerContext:
         return self.session_model_catalogs[agent_id]
 
     def persist_benchmark_artifact(self, artifact: dict[str, Any]) -> dict[str, Any]:
-        profile_name = str(artifact.get("profile_name") or artifact.get("artifact_id") or "unknown-benchmark")
+        profile_name = str(
+            artifact.get("profile_name") or artifact.get("artifact_id") or "unknown-benchmark"
+        )
         persisted_artifact = dict(artifact)
-        collected_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        collected_at = datetime.now(UTC).replace(microsecond=0).isoformat()
         stored = self.memory_store.store(
             json.dumps(persisted_artifact, ensure_ascii=False, sort_keys=True),
             topic="hlf_benchmark_artifacts",
@@ -460,7 +477,9 @@ class ServerContext:
             "ollama_access_mode": catalog.get("ollama_access_mode"),
             "summary": dict(catalog.get("summary") or {}),
             "agent_lane_summary": dict(catalog.get("agent_lane_summary") or {}),
-            "remote_direct_env_var_present": bool(catalog.get("remote_direct_env_var_present", False)),
+            "remote_direct_env_var_present": bool(
+                catalog.get("remote_direct_env_var_present", False)
+            ),
             "remote_direct_env_error": catalog.get("remote_direct_env_error"),
             "remote_direct_entries": list(catalog.get("remote_direct_entries") or []),
         }
@@ -515,11 +534,21 @@ class ServerContext:
                 }
                 variables["_embedding_profile"] = profile
                 variables["_embedding_profile_id"] = profile.get("profile_id")
-                variables["_embedding_model"] = profile.get("embedding_recommendation", {}).get("model")
-                variables["_embedding_endpoint"] = profile.get("embedding_recommendation", {}).get("endpoint")
-                variables["_embedding_fallback_model"] = profile.get("fallback_recommendation", {}).get("model")
-                variables["_ollama_available"] = profile.get("runtime_status", {}).get("ollama_available", False)
-                variables["_embedding_model_runnable"] = profile.get("runtime_status", {}).get("recommended_model_runnable", False)
+                variables["_embedding_model"] = profile.get("embedding_recommendation", {}).get(
+                    "model"
+                )
+                variables["_embedding_endpoint"] = profile.get("embedding_recommendation", {}).get(
+                    "endpoint"
+                )
+                variables["_embedding_fallback_model"] = profile.get(
+                    "fallback_recommendation", {}
+                ).get("model")
+                variables["_ollama_available"] = profile.get("runtime_status", {}).get(
+                    "ollama_available", False
+                )
+                variables["_embedding_model_runnable"] = profile.get("runtime_status", {}).get(
+                    "recommended_model_runnable", False
+                )
                 if "_memory_context_enabled" not in variables:
                     variables["_memory_context_enabled"] = bool(
                         profile.get("allowed_modes", {}).get("default_enable_memory_context", False)
@@ -590,9 +619,3 @@ def check_governance_manifest(logger: logging.Logger) -> None:
             "Governance file drift detected (MANIFEST.sha256): %s",
             ", ".join(drift),
         )
-
-
-
-
-
-

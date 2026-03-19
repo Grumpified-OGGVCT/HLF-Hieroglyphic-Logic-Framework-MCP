@@ -7,47 +7,49 @@ The decompile_bytecode() function disassembles .hlb and maps opcodes to prose.
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 _OPCODE_PROSE: dict[str, str] = {
-    "NOP":          "no operation",
-    "PUSH_CONST":   "push constant value onto stack",
-    "STORE":        "store top of stack into mutable variable",
-    "LOAD":         "load variable value onto stack",
-    "STORE_IMMUT":  "store top of stack into immutable variable",
-    "ADD":          "add two numbers",
-    "SUB":          "subtract two numbers",
-    "MUL":          "multiply two numbers",
-    "DIV":          "divide two numbers",
-    "MOD":          "compute modulo",
-    "NEG":          "negate top of stack",
-    "CMP_EQ":       "compare for equality",
-    "CMP_NE":       "compare for inequality",
-    "CMP_LT":       "compare less-than",
-    "CMP_LE":       "compare less-than-or-equal",
-    "CMP_GT":       "compare greater-than",
-    "CMP_GE":       "compare greater-than-or-equal",
-    "AND":          "logical AND",
-    "OR":           "logical OR",
-    "NOT":          "logical NOT",
-    "JMP":          "unconditional jump",
-    "JZ":           "jump if false (zero)",
-    "JNZ":          "jump if true (non-zero)",
+    "NOP": "no operation",
+    "PUSH_CONST": "push constant value onto stack",
+    "STORE": "store top of stack into mutable variable",
+    "LOAD": "load variable value onto stack",
+    "STORE_IMMUT": "store top of stack into immutable variable",
+    "ADD": "add two numbers",
+    "SUB": "subtract two numbers",
+    "MUL": "multiply two numbers",
+    "DIV": "divide two numbers",
+    "MOD": "compute modulo",
+    "NEG": "negate top of stack",
+    "CMP_EQ": "compare for equality",
+    "CMP_NE": "compare for inequality",
+    "CMP_LT": "compare less-than",
+    "CMP_LE": "compare less-than-or-equal",
+    "CMP_GT": "compare greater-than",
+    "CMP_GE": "compare greater-than-or-equal",
+    "AND": "logical AND",
+    "OR": "logical OR",
+    "NOT": "logical NOT",
+    "JMP": "unconditional jump",
+    "JZ": "jump if false (zero)",
+    "JNZ": "jump if true (non-zero)",
     "CALL_BUILTIN": "call built-in function",
-    "CALL_HOST":    "call host function",
-    "CALL_TOOL":    "call registered tool",
-    "OPENCLAW_TOOL":"call OpenClaw sandboxed tool",
-    "TAG":          "apply semantic tag",
-    "INTENT":       "express agent intent",
-    "RESULT":       "return result value",
+    "CALL_HOST": "call host function",
+    "CALL_TOOL": "call registered tool",
+    "OPENCLAW_TOOL": "call OpenClaw sandboxed tool",
+    "TAG": "apply semantic tag",
+    "INTENT": "express agent intent",
+    "RESULT": "return result value",
     "MEMORY_STORE": "store data in RAG memory",
-    "MEMORY_RECALL":"recall data from RAG memory",
-    "SPEC_DEFINE":  "define Instinct spec",
-    "SPEC_GATE":    "gate on Instinct spec constraint",
-    "SPEC_UPDATE":  "update Instinct spec",
-    "SPEC_SEAL":    "seal Instinct spec with SHA-256 checksum",
-    "HALT":         "halt execution",
+    "MEMORY_RECALL": "recall data from RAG memory",
+    "SPEC_DEFINE": "define Instinct spec",
+    "SPEC_GATE": "gate on Instinct spec constraint",
+    "SPEC_UPDATE": "update Instinct spec",
+    "SPEC_SEAL": "seal Instinct spec with SHA-256 checksum",
+    "HALT": "halt execution",
 }
+
 
 def decompile(ast: dict[str, Any]) -> str:
     """Convert HLF AST to structured English documentation."""
@@ -75,7 +77,7 @@ def decompile(ast: dict[str, Any]) -> str:
         args = node.get("arguments", [])
         for arg in args:
             if arg.get("kind") == "kv_arg":
-                lines.append(f"   - `{arg['name']}` = `{arg.get('value',{}).get('value','?')}`")
+                lines.append(f"   - `{arg['name']}` = `{arg.get('value', {}).get('value', '?')}`")
         # Show block contents
         body = node.get("body") or node.get("block")
         if isinstance(body, dict) and body.get("statements"):
@@ -94,6 +96,7 @@ def decompile(ast: dict[str, Any]) -> str:
 def decompile_bytecode(hlb_data: bytes) -> str:
     """Convert HLF .hlb bytecode to prose description."""
     from hlf_mcp.hlf.bytecode import Disassembler
+
     try:
         disasm = Disassembler().disassemble(hlb_data)
     except Exception as exc:
@@ -137,7 +140,7 @@ def similarity_gate(
     threshold: float = 0.95,
 ) -> dict[str, Any]:
     """Check round-trip semantic similarity between original and decompiled text.
-    
+
     Uses bag-of-words cosine similarity as a lightweight proxy when an
     ML embedding model is unavailable.
     """

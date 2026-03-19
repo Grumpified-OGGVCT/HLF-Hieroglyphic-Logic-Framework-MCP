@@ -21,6 +21,7 @@ except ImportError:
     # Fallback: rough word/token estimate
     def _count(text: str) -> int:  # type: ignore[misc]
         import re
+
         return len(re.findall(r"\S+", text))
 
 
@@ -155,13 +156,14 @@ class HLFBenchmark:
             "compression_pct": compression_pct,
             "savings": nlp_tokens - hlf_tokens,
             "tiktoken_model": "cl100k_base",
-            "compare_text_preview": compare_source[:100] + "..." if len(compare_source) > 100 else compare_source,
+            "compare_text_preview": compare_source[:100] + "..."
+            if len(compare_source) > 100
+            else compare_source,
             "line_analysis": line_analysis,
         }
 
     def benchmark_suite(self) -> dict[str, Any]:
         """Run the full benchmark suite against all NLP templates."""
-        from hlf_mcp.hlf.grammar import GLYPHS
 
         results = []
         total_hlf = 0
@@ -173,12 +175,14 @@ class HLFBenchmark:
             hlf_source = _DOMAIN_HLF.get(domain, f"[HLF-v3]\nΔ {domain}\nΩ\n")
             hlf_tokens = _count(hlf_source)
             compression = round((1 - hlf_tokens / nlp_tokens) * 100, 1) if nlp_tokens > 0 else 0
-            results.append({
-                "domain": domain,
-                "nlp_tokens": nlp_tokens,
-                "hlf_tokens": hlf_tokens,
-                "compression_pct": compression,
-            })
+            results.append(
+                {
+                    "domain": domain,
+                    "nlp_tokens": nlp_tokens,
+                    "hlf_tokens": hlf_tokens,
+                    "compression_pct": compression,
+                }
+            )
             total_hlf += hlf_tokens
             total_nlp += nlp_tokens
 
@@ -219,10 +223,14 @@ class HLFBenchmark:
             for language in selected_languages:
                 text = templates.get(language)
                 if text is None:
-                    raise ValueError(f"Missing benchmark template for domain={domain}, language={language}")
+                    raise ValueError(
+                        f"Missing benchmark template for domain={domain}, language={language}"
+                    )
                 source = language_to_hlf(text, language=language)
                 analysis = self.analyze(source, compare_text=text)
-                diagnostics = translation_diagnostics(text, language=language, source=source).to_dict()
+                diagnostics = translation_diagnostics(
+                    text, language=language, source=source
+                ).to_dict()
                 input_bytes = len(text.encode("utf-8"))
                 input_chars = len(text)
                 row = {
@@ -245,19 +253,37 @@ class HLFBenchmark:
 
                 lang_totals = per_language[language]
                 lang_totals["samples"] = int(lang_totals["samples"]) + 1
-                lang_totals["input_tokens"] = int(lang_totals["input_tokens"]) + int(analysis["nlp_tokens"])
-                lang_totals["hlf_tokens"] = int(lang_totals["hlf_tokens"]) + int(analysis["hlf_tokens"])
+                lang_totals["input_tokens"] = int(lang_totals["input_tokens"]) + int(
+                    analysis["nlp_tokens"]
+                )
+                lang_totals["hlf_tokens"] = int(lang_totals["hlf_tokens"]) + int(
+                    analysis["hlf_tokens"]
+                )
                 lang_totals["input_bytes"] = int(lang_totals["input_bytes"]) + input_bytes
-                lang_totals["fallback_samples"] = int(lang_totals.get("fallback_samples", 0)) + int(diagnostics["fallback_used"])
-                lang_totals["roundtrip_fidelity_total"] = float(lang_totals.get("roundtrip_fidelity_total", 0.0)) + float(diagnostics["roundtrip_fidelity_score"])
+                lang_totals["fallback_samples"] = int(lang_totals.get("fallback_samples", 0)) + int(
+                    diagnostics["fallback_used"]
+                )
+                lang_totals["roundtrip_fidelity_total"] = float(
+                    lang_totals.get("roundtrip_fidelity_total", 0.0)
+                ) + float(diagnostics["roundtrip_fidelity_score"])
 
         for language, totals in per_language.items():
             input_tokens = int(totals["input_tokens"])
             hlf_tokens = int(totals["hlf_tokens"])
             sample_count = int(totals["samples"])
-            totals["compression_pct"] = round((1 - hlf_tokens / input_tokens) * 100, 1) if input_tokens > 0 else 0.0
-            totals["fallback_rate"] = round((int(totals.get("fallback_samples", 0)) / sample_count), 3) if sample_count > 0 else 0.0
-            totals["roundtrip_fidelity_avg"] = round((float(totals.get("roundtrip_fidelity_total", 0.0)) / sample_count), 3) if sample_count > 0 else 0.0
+            totals["compression_pct"] = (
+                round((1 - hlf_tokens / input_tokens) * 100, 1) if input_tokens > 0 else 0.0
+            )
+            totals["fallback_rate"] = (
+                round((int(totals.get("fallback_samples", 0)) / sample_count), 3)
+                if sample_count > 0
+                else 0.0
+            )
+            totals["roundtrip_fidelity_avg"] = (
+                round((float(totals.get("roundtrip_fidelity_total", 0.0)) / sample_count), 3)
+                if sample_count > 0
+                else 0.0
+            )
 
         return {
             "rows": rows,
@@ -352,9 +378,13 @@ class HLFBenchmark:
             for language in selected_languages:
                 text = templates.get(language)
                 if text is None:
-                    raise ValueError(f"Missing benchmark template for domain={domain}, language={language}")
+                    raise ValueError(
+                        f"Missing benchmark template for domain={domain}, language={language}"
+                    )
                 source = language_to_hlf(text, language=language)
-                diagnostics = translation_diagnostics(text, language=language, source=source).to_dict()
+                diagnostics = translation_diagnostics(
+                    text, language=language, source=source
+                ).to_dict()
                 payload = {
                     "kind": "hlf_translation_contract",
                     "benchmark_topic": topic,
@@ -370,13 +400,19 @@ class HLFBenchmark:
                     confidence=float(diagnostics.get("roundtrip_fidelity_score", 1.0)),
                     provenance="hlf_benchmark.translation_memory_retrieval_matrix",
                     tags=["hlf", "translation", "benchmark", language, domain],
-                    metadata={"language": language, "domain": domain, "kind": "hlf_translation_contract"},
+                    metadata={
+                        "language": language,
+                        "domain": domain,
+                        "kind": "hlf_translation_contract",
+                    },
                 )
 
                 query_result = memory_store.query(text, top_k=top_k, topic=topic)
                 results = query_result.get("results", [])
                 top_similarity = float(results[0]["similarity"]) if results else 0.0
-                same_language_hit = any(row.get("metadata", {}).get("language") == language for row in results)
+                same_language_hit = any(
+                    row.get("metadata", {}).get("language") == language for row in results
+                )
                 exact_match_hit = any(
                     row.get("metadata", {}).get("language") == language
                     and row.get("metadata", {}).get("domain") == domain
@@ -398,23 +434,59 @@ class HLFBenchmark:
 
                 totals = per_language[language]
                 totals["samples"] = int(totals["samples"]) + 1
-                totals["same_language_hit_count"] = int(totals["same_language_hit_count"]) + int(same_language_hit)
-                totals["exact_match_hit_count"] = int(totals["exact_match_hit_count"]) + int(exact_match_hit)
-                totals["top_similarity_total"] = float(totals["top_similarity_total"]) + top_similarity
-                totals["retrieval_quality_total"] = float(totals["retrieval_quality_total"]) + retrieval_quality
-                totals["roundtrip_fidelity_total"] = float(totals["roundtrip_fidelity_total"]) + float(diagnostics.get("roundtrip_fidelity_score", 0.0))
+                totals["same_language_hit_count"] = int(totals["same_language_hit_count"]) + int(
+                    same_language_hit
+                )
+                totals["exact_match_hit_count"] = int(totals["exact_match_hit_count"]) + int(
+                    exact_match_hit
+                )
+                totals["top_similarity_total"] = (
+                    float(totals["top_similarity_total"]) + top_similarity
+                )
+                totals["retrieval_quality_total"] = (
+                    float(totals["retrieval_quality_total"]) + retrieval_quality
+                )
+                totals["roundtrip_fidelity_total"] = float(
+                    totals["roundtrip_fidelity_total"]
+                ) + float(diagnostics.get("roundtrip_fidelity_score", 0.0))
 
         for language, totals in per_language.items():
             sample_count = int(totals["samples"])
-            totals["same_language_hit_rate"] = round(int(totals["same_language_hit_count"]) / sample_count, 3) if sample_count else 0.0
-            totals["exact_match_hit_rate"] = round(int(totals["exact_match_hit_count"]) / sample_count, 3) if sample_count else 0.0
-            totals["avg_top_similarity"] = round(float(totals["top_similarity_total"]) / sample_count, 4) if sample_count else 0.0
-            totals["retrieval_quality_avg"] = round(float(totals["retrieval_quality_total"]) / sample_count, 3) if sample_count else 0.0
-            totals["roundtrip_fidelity_avg"] = round(float(totals["roundtrip_fidelity_total"]) / sample_count, 3) if sample_count else 0.0
+            totals["same_language_hit_rate"] = (
+                round(int(totals["same_language_hit_count"]) / sample_count, 3)
+                if sample_count
+                else 0.0
+            )
+            totals["exact_match_hit_rate"] = (
+                round(int(totals["exact_match_hit_count"]) / sample_count, 3)
+                if sample_count
+                else 0.0
+            )
+            totals["avg_top_similarity"] = (
+                round(float(totals["top_similarity_total"]) / sample_count, 4)
+                if sample_count
+                else 0.0
+            )
+            totals["retrieval_quality_avg"] = (
+                round(float(totals["retrieval_quality_total"]) / sample_count, 3)
+                if sample_count
+                else 0.0
+            )
+            totals["roundtrip_fidelity_avg"] = (
+                round(float(totals["roundtrip_fidelity_total"]) / sample_count, 3)
+                if sample_count
+                else 0.0
+            )
 
         benchmark_scores = {
-            "translation_fidelity": min(float(per_language[language]["roundtrip_fidelity_avg"]) for language in selected_languages),
-            "retrieval_quality": min(float(per_language[language]["retrieval_quality_avg"]) for language in selected_languages),
+            "translation_fidelity": min(
+                float(per_language[language]["roundtrip_fidelity_avg"])
+                for language in selected_languages
+            ),
+            "retrieval_quality": min(
+                float(per_language[language]["retrieval_quality_avg"])
+                for language in selected_languages
+            ),
         }
         return {
             "rows": rows,
@@ -468,9 +540,13 @@ class HLFBenchmark:
             for language in selected_languages:
                 text = templates.get(language)
                 if text is None:
-                    raise ValueError(f"Missing benchmark template for domain={domain}, language={language}")
+                    raise ValueError(
+                        f"Missing benchmark template for domain={domain}, language={language}"
+                    )
                 source = language_to_hlf(text, language=language)
-                diagnostics = translation_diagnostics(text, language=language, source=source).to_dict()
+                diagnostics = translation_diagnostics(
+                    text, language=language, source=source
+                ).to_dict()
                 payload = {
                     "kind": "hlf_routing_context",
                     "benchmark_topic": topic,
@@ -487,14 +563,31 @@ class HLFBenchmark:
                     confidence=float(diagnostics.get("roundtrip_fidelity_score", 1.0)),
                     provenance="hlf_benchmark.routing_context_retrieval_matrix",
                     tags=["hlf", "routing", "benchmark", language, domain, expected_lane],
-                    metadata={"language": language, "domain": domain, "expected_lane": expected_lane, "kind": "hlf_routing_context"},
+                    metadata={
+                        "language": language,
+                        "domain": domain,
+                        "expected_lane": expected_lane,
+                        "kind": "hlf_routing_context",
+                    },
                 )
 
                 query_result = memory_store.query(text, top_k=top_k, topic=topic)
                 results = query_result.get("results", [])
-                same_language_hit = any(row.get("metadata", {}).get("language") == language for row in results)
-                expected_lane_hit = any(row.get("metadata", {}).get("expected_lane") == expected_lane for row in results)
-                routing_quality = 1.0 if expected_lane_hit and same_language_hit else 0.75 if expected_lane_hit else 0.25 if same_language_hit else 0.0
+                same_language_hit = any(
+                    row.get("metadata", {}).get("language") == language for row in results
+                )
+                expected_lane_hit = any(
+                    row.get("metadata", {}).get("expected_lane") == expected_lane for row in results
+                )
+                routing_quality = (
+                    1.0
+                    if expected_lane_hit and same_language_hit
+                    else 0.75
+                    if expected_lane_hit
+                    else 0.25
+                    if same_language_hit
+                    else 0.0
+                )
 
                 rows.append(
                     {
@@ -504,26 +597,58 @@ class HLFBenchmark:
                         "same_language_hit": same_language_hit,
                         "expected_lane_hit": expected_lane_hit,
                         "routing_quality": routing_quality,
-                        "roundtrip_fidelity_score": diagnostics.get("roundtrip_fidelity_score", 0.0),
+                        "roundtrip_fidelity_score": diagnostics.get(
+                            "roundtrip_fidelity_score", 0.0
+                        ),
                     }
                 )
                 totals = per_language[language]
                 totals["samples"] = int(totals["samples"]) + 1
-                totals["expected_lane_hit_count"] = int(totals["expected_lane_hit_count"]) + int(expected_lane_hit)
-                totals["same_language_hit_count"] = int(totals["same_language_hit_count"]) + int(same_language_hit)
-                totals["routing_quality_total"] = float(totals["routing_quality_total"]) + routing_quality
-                totals["translation_fidelity_total"] = float(totals["translation_fidelity_total"]) + float(diagnostics.get("roundtrip_fidelity_score", 0.0))
+                totals["expected_lane_hit_count"] = int(totals["expected_lane_hit_count"]) + int(
+                    expected_lane_hit
+                )
+                totals["same_language_hit_count"] = int(totals["same_language_hit_count"]) + int(
+                    same_language_hit
+                )
+                totals["routing_quality_total"] = (
+                    float(totals["routing_quality_total"]) + routing_quality
+                )
+                totals["translation_fidelity_total"] = float(
+                    totals["translation_fidelity_total"]
+                ) + float(diagnostics.get("roundtrip_fidelity_score", 0.0))
 
         for language, totals in per_language.items():
             sample_count = int(totals["samples"])
-            totals["expected_lane_hit_rate"] = round(int(totals["expected_lane_hit_count"]) / sample_count, 3) if sample_count else 0.0
-            totals["same_language_hit_rate"] = round(int(totals["same_language_hit_count"]) / sample_count, 3) if sample_count else 0.0
-            totals["routing_quality_avg"] = round(float(totals["routing_quality_total"]) / sample_count, 3) if sample_count else 0.0
-            totals["translation_fidelity_avg"] = round(float(totals["translation_fidelity_total"]) / sample_count, 3) if sample_count else 0.0
+            totals["expected_lane_hit_rate"] = (
+                round(int(totals["expected_lane_hit_count"]) / sample_count, 3)
+                if sample_count
+                else 0.0
+            )
+            totals["same_language_hit_rate"] = (
+                round(int(totals["same_language_hit_count"]) / sample_count, 3)
+                if sample_count
+                else 0.0
+            )
+            totals["routing_quality_avg"] = (
+                round(float(totals["routing_quality_total"]) / sample_count, 3)
+                if sample_count
+                else 0.0
+            )
+            totals["translation_fidelity_avg"] = (
+                round(float(totals["translation_fidelity_total"]) / sample_count, 3)
+                if sample_count
+                else 0.0
+            )
 
         benchmark_scores = {
-            "routing_quality": min(float(per_language[language]["routing_quality_avg"]) for language in selected_languages),
-            "translation_fidelity": min(float(per_language[language]["translation_fidelity_avg"]) for language in selected_languages),
+            "routing_quality": min(
+                float(per_language[language]["routing_quality_avg"])
+                for language in selected_languages
+            ),
+            "translation_fidelity": min(
+                float(per_language[language]["translation_fidelity_avg"])
+                for language in selected_languages
+            ),
         }
         return {
             "rows": rows,
@@ -539,6 +664,7 @@ class HLFBenchmark:
 def _estimate_nlp(source: str) -> str:
     """Generate a rough NLP equivalent from HLF source for comparison."""
     import re
+
     lines = []
     for raw in source.splitlines():
         line = raw.strip()
@@ -552,7 +678,12 @@ def _estimate_nlp(source: str) -> str:
             continue
         # Convert glyphs + tags to prose
         line = line.replace("Δ", "Analyze").replace("Ж", "Enforce").replace("⨝", "Vote")
-        line = line.replace("⌘", "Command").replace("∇", "Source").replace("⩕", "Priority").replace("⊎", "Branch")
+        line = (
+            line.replace("⌘", "Command")
+            .replace("∇", "Source")
+            .replace("⩕", "Priority")
+            .replace("⊎", "Branch")
+        )
         line = re.sub(r"\[([A-Z_]+)\]", lambda m: m.group(1).replace("_", " ").capitalize(), line)
         lines.append(line.strip() + ".")
     return " ".join(lines)

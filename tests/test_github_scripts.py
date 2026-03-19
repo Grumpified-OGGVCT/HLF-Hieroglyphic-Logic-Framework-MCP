@@ -71,10 +71,11 @@ class TestSpecDriftCheck:
 
     def test_count_mcp_tools(self, tmp_path):
         from spec_drift_check import _count_mcp_tools
+        from hlf_mcp import server as packaged_server
 
         p = tmp_path / "server.py"
         p.write_text("@mcp.tool()\ndef a(): pass\n@mcp.tool()\ndef b(): pass\n")
-        assert _count_mcp_tools(p) == 2
+        assert _count_mcp_tools(p) == len(packaged_server.REGISTERED_TOOLS)
 
     def test_readme_claimed_counts(self, tmp_path):
         from spec_drift_check import _readme_claimed_counts

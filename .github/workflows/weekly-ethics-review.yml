@@ -217,7 +217,7 @@ jobs:
           retention-days: 90
 
       - name: Create GitHub issue
-        if: steps.ethics_scope.outputs.has_relevant_changes == 'true' && steps.ethics_gate.outputs.has_findings == 'true'
+        if: steps.ethics_scope.outputs.has_relevant_changes == 'true' && steps.ethics_gate.outputs.has_findings == 'true' && github.ref_name == github.event.repository.default_branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}

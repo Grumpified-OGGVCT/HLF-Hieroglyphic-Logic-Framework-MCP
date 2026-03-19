@@ -108,7 +108,7 @@ jobs:
           cat /tmp/doc_review.md
 
       - name: Create doc accuracy issue
-        if: steps.doc_drift.outputs.has_drift == 'true'
+        if: steps.doc_drift.outputs.has_drift == 'true' && github.ref_name == github.event.repository.default_branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -253,7 +253,7 @@ jobs:
           PYEOF
 
       - name: Create security issue
-        if: steps.security_gate.outputs.has_findings == 'true'
+        if: steps.security_gate.outputs.has_findings == 'true' && github.ref_name == github.event.repository.default_branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}

@@ -32,6 +32,213 @@ It should center a bounded recursive build-assist loop made from packaged surfac
 - `hlf_test_suite_summary`
 - witness, memory, and audit surfaces
 
+## Accuracy Corrections For This Draft
+
+This draft should now be read with the following current-truth constraints:
+
+- the packaged MCP server is the current product front door, not the total HLF ontology
+- the first credible recursive-build lane is local and bounded, centered on `stdio`
+- HTTP health is implemented, but remote `streamable-http` self-build remains gated until end-to-end MCP initialization is proven repeatably in repo-owned workflow
+- the GUI may expose packaged resources, tools, and evidence artifacts, but it must not imply that every constitutive HLF pillar is already fully restored
+- routing, verifier, memory-governance, orchestration, and operator-trust surfaces may be shown as active packaged or bridge surfaces only where the repo already has corresponding code or named bridge specs
+
+## Infographic Mockup
+
+The diagram below is a bridge-lane wireframe mockup, not a claim that the GUI exists today.
+
+```mermaid
+flowchart TB
+  subgraph Shell[HLF Operator GUI Mockup]
+    Top[Top Bar<br/>Project status<br/>transport<br/>current lane<br/>operator identity]
+
+    subgraph Left[Left Rail]
+      Home[Home]
+      Intent[Intent]
+      Build[Build]
+      Governance[Governance]
+      Server[Server]
+      Docs[Docs]
+    end
+
+    subgraph Main[Main Workspace]
+      subgraph Row1[Primary Row]
+        IntentPanel[Intent Panel<br/>Natural-language input<br/>tier<br/>dry-run<br/>show HLF]
+        AuditPanel[Audit Output<br/>formatted summary<br/>raw JSON<br/>metrics]
+      end
+
+      subgraph Row2[Evidence Row]
+        BuildPanel[Build Health<br/>_toolkit.py status<br/>test summary<br/>artifact freshness]
+        GovPanel[Governance Surface<br/>capsule<br/>ALIGN<br/>verifier<br/>blocked or admitted reasons]
+        TracePanel[Evidence and Trace<br/>witness<br/>memory<br/>Merkle chain<br/>operator review state]
+      end
+    end
+
+    subgraph Footer[Bottom Utility Strip]
+      Export[Export evidence]
+      OpenDocs[Open doctrine and claim lanes]
+      Launch[Launch packaged transport]
+    end
+  end
+
+  Intent --> IntentPanel
+  Build --> BuildPanel
+  Governance --> GovPanel
+  Docs --> OpenDocs
+  Server --> Launch
+  IntentPanel --> AuditPanel
+  BuildPanel --> TracePanel
+  GovPanel --> TracePanel
+
+  classDef shell fill:#f4f1ea,stroke:#705f49,color:#2b241a
+  classDef nav fill:#dbe7f5,stroke:#3f668f,color:#14283d
+  classDef work fill:#e9f3e2,stroke:#4c7a4c,color:#173117
+  classDef proof fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+
+  class Top,Footer shell
+  class Home,Intent,Build,Governance,Server,Docs nav
+  class IntentPanel,AuditPanel,BuildPanel,GovPanel,TracePanel work
+  class Export,OpenDocs,Launch proof
+```
+
+### Mockup Reading Rule
+
+- the left rail reflects task areas, not maturity levels
+- the main workspace is centered on governed intent, evidence, and audit rather than generic productivity widgets
+- the governance and trace panels are first-class because HLF should remain inspectable, not just operable
+- the footer actions are constrained to packaged capabilities and repo-owned documentation surfaces
+
+## Deeper System Mockup
+
+The first mockup above is intentionally simple.
+
+The diagram below is the more accurate systems-facing version for this repo's current direction: a GUI that acts as an operator shell over packaged MCP, build evidence, governance surfaces, and bridge-lane trust panels.
+
+```mermaid
+flowchart LR
+  subgraph User[Operator]
+    IntentIn[Intent input]
+    Review[Review and approve]
+    ExportTrace[Export trace]
+  end
+
+  subgraph GUI[HLF Operator GUI]
+    subgraph Workbench[Workbench]
+      IntentDesk[Intent desk<br/>plain language<br/>tier and dry-run controls<br/>generated HLF preview]
+      AuditDesk[Audit desk<br/>operator summary<br/>raw JSON<br/>token and gas metrics]
+      BuildDesk[Build desk<br/>repo health<br/>test summary<br/>artifact freshness]
+      GovDesk[Governance desk<br/>capsule state<br/>ALIGN surface<br/>verifier and admission view]
+      MemoryDesk[Evidence desk<br/>witness<br/>memory recall<br/>Merkle-linked artifacts]
+    end
+
+    subgraph Navigation[Navigation and Context]
+      LaneState[Claim lane state<br/>current truth / bridge / vision]
+      DocsState[Doctrine and handoff links]
+      TransportState[Transport state<br/>stdio first<br/>HTTP bring-up visible]
+    end
+  end
+
+  subgraph MCP[Packaged MCP Surface]
+    HlfDo[hlf_do]
+    TestSummary[hlf_test_suite_summary]
+    Status[_toolkit.py status]
+    Resources[resources and tool outputs]
+  end
+
+  subgraph Runtime[Packaged Runtime and Governance]
+    Capsules[Capsules]
+    Align[ALIGN and manifest checks]
+    Verifier[Verifier and execution admission]
+    Lifecycle[Lifecycle and orchestration traces]
+    Memory[Memory and witness governance]
+  end
+
+  subgraph Evidence[Filesystem and Build Evidence]
+    Metrics[tests.jsonl and pytest histories]
+    Weekly[weekly pipeline artifacts]
+    Logs[audit outputs and exported traces]
+  end
+
+  IntentIn --> IntentDesk
+  IntentDesk --> HlfDo
+  HlfDo --> AuditDesk
+  Status --> BuildDesk
+  TestSummary --> BuildDesk
+  Resources --> GovDesk
+  Resources --> MemoryDesk
+
+  HlfDo --> Capsules
+  HlfDo --> Verifier
+  HlfDo --> Memory
+  HlfDo --> Lifecycle
+  Resources --> Align
+
+  Capsules --> GovDesk
+  Align --> GovDesk
+  Verifier --> GovDesk
+  Lifecycle --> AuditDesk
+  Memory --> MemoryDesk
+
+  Metrics --> BuildDesk
+  Weekly --> BuildDesk
+  Logs --> MemoryDesk
+
+  LaneState --> Workbench
+  DocsState --> Workbench
+  TransportState --> Workbench
+
+  Review --> GovDesk
+  GovDesk --> ExportTrace
+
+  classDef user fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+  classDef gui fill:#eef4fb,stroke:#3f668f,color:#14283d
+  classDef work fill:#e8f2e1,stroke:#4c7a4c,color:#173117
+  classDef mcp fill:#efe3f8,stroke:#6f3f8f,color:#2a1736
+  classDef runtime fill:#f5eddc,stroke:#8b6a2b,color:#36270b
+  classDef evidence fill:#e9e9e9,stroke:#6a6a6a,color:#222222
+
+  class IntentIn,Review,ExportTrace user
+  class GUI,Workbench,Navigation gui
+  class IntentDesk,AuditDesk,BuildDesk,GovDesk,MemoryDesk,LaneState,DocsState,TransportState work
+  class HlfDo,TestSummary,Status,Resources mcp
+  class Capsules,Align,Verifier,Lifecycle,Memory runtime
+  class Metrics,Weekly,Logs evidence
+```
+
+### Why This Is Closer To The Real Repo
+
+- the GUI is shown as a shell over the packaged MCP and evidence surfaces, not as an independent product universe
+- governance, verifier, lifecycle, and memory are visible as parallel trust-bearing systems rather than being collapsed into one generic output pane
+- build evidence and operator review remain first-class because this repo is unusually concerned with proof, not just execution success
+- claim-lane context is surfaced in navigation because wording discipline is part of operator safety here
+
+## Recursive-Build Proof Ladder Mockup
+
+This repo's visual language should also show that recursive-build claims are staged.
+
+```mermaid
+flowchart TB
+  A[Operator intent] --> B[hlf_do and packaged MCP front door]
+  B --> C[Bounded local stdio workflow]
+  C --> D[Build observation<br/>_toolkit.py status<br/>test summary<br/>artifact review]
+  D --> E[Governance and evidence<br/>capsules<br/>verifier admission<br/>memory and witness traces]
+  E --> F[Operator review and exported audit]
+  F --> G[Stronger remote self-build claims]
+
+  classDef current fill:#d9f0e3,stroke:#1d6b43,color:#113222
+  classDef bridge fill:#dce9f9,stroke:#285a8f,color:#12263f
+  classDef gated fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+
+  class A,B,C,D,E,F current
+  class G gated
+```
+
+Reading rule:
+
+- the ladder is not saying the repo is basic
+- it is saying the repo earns stronger claims in sequence
+- the lower rungs are already meaningful because they join intent, governance, evidence, and review inside one bounded workflow
+- the top rung remains gated because transport presence alone is not enough proof
+
 ## Required Functional Areas
 
 ### 1. Recursive Build-Assist Loop

@@ -23,6 +23,27 @@ This repo carries three things at once:
 - the code that already exists now
 - the bridge work needed to recover the larger system without flattening it
 
+Visual guide:
+read the repo through three lanes rather than one flattened story.
+
+```mermaid
+flowchart LR
+    V[Vision Lane<br/>North-star HLF doctrine<br/>Larger than current package]
+    C[Current-Truth Lane<br/>What is implemented and safe to claim now]
+    B[Bridge Lane<br/>Recovery path from packaged truth<br/>toward the fuller system]
+
+    V --> B
+    C --> B
+
+    classDef vision fill:#f7e6c4,stroke:#8a5a00,color:#2b1d00
+    classDef truth fill:#d9f0e3,stroke:#1d6b43,color:#113222
+    classDef bridge fill:#dce9f9,stroke:#285a8f,color:#12263f
+
+    class V vision
+    class C truth
+    class B bridge
+```
+
 If you want the vision first, read these:
 
 1. `docs/HLF_VISION_PLAIN_LANGUAGE.md`
@@ -119,6 +140,39 @@ So the clean position is:
 **the MCP server is the right front door, the right current product lane, and the right bootstrap surface for HLF now, while the larger HLF vision remains bigger than MCP in semantics, governance, memory, coordination, trust, and execution.**
 
 For the full doctrinal version of that distinction, read `docs/HLF_MCP_POSITIONING.md`.
+
+Visual guide:
+MCP is the shipped entry surface, not the full ontology of the system.
+
+
+```mermaid
+flowchart TD
+    MCP[MCP Front Door<br/>Packaged FastMCP server<br/>Current product surface]
+
+    subgraph HLF[Fuller HLF System Target]
+        S[Semantics]
+        G[Governance]
+        M[Memory]
+        E[Execution]
+        C[Coordination]
+        L[Human Legibility]
+        R[Real-code Output]
+    end
+
+    MCP --> S
+    MCP --> G
+    MCP --> M
+    MCP --> E
+    MCP --> C
+    MCP --> L
+    MCP --> R
+
+    classDef front fill:#dce9f9,stroke:#285a8f,color:#12263f
+    classDef system fill:#efe3f8,stroke:#6f3f8f,color:#2a1736
+
+    class MCP front
+    class S,G,M,E,C,L,R system
+```
 ## Table of Contents
 
 1. [What is HLF?](#1-what-is-hlf)
@@ -160,6 +214,10 @@ But the larger target is a real language and runtime for governed agent work.
   ⨝ [VOTE] consensus="strict"
 Ω
 ```
+
+
+In other words:
+the front door is present-tense product truth, while the fuller HLF system remains the larger architectural target.
 
 ### Core Properties
 
@@ -320,7 +378,7 @@ flowchart TD
     end
 
     subgraph Server["⚙️ HLF MCP Server  (hlf_mcp/server.py)"]
-        S1[FastMCP  34 tools · 9 resources]
+        S1[FastMCP packaged tool and resource surface]
     end
 
     subgraph Compiler["📐 Compiler Pipeline"]
@@ -885,7 +943,7 @@ graph LR
         T1["stdio\ntransport"]
         T2["SSE\n/sse + /messages"]
         T3["streamable-HTTP\n/mcp"]
-        Core["34 tools\n9 resources\nHLF_TRANSPORT env"]
+        Core["packaged tools and resources\nHLF_TRANSPORT env"]
         T1 --> Core
         T2 --> Core
         T3 --> Core
@@ -1192,7 +1250,7 @@ uv run pytest tests/test_github_scripts.py -v
 
 ```
 hlf_mcp/
-├── server.py               # FastMCP server (34 tools, 9 resources)
+├── server.py               # FastMCP server and packaged MCP front door
 ├── hlf/
 │   ├── grammar.py          # LALR(1) Lark grammar + glyph map + confusables
 │   ├── compiler.py         # 5-pass compiler pipeline
@@ -1270,7 +1328,7 @@ uv run ruff format hlf_mcp/
 - [x] 8 stdlib modules (no stubs — AES-256-GCM crypto, PBKDF2, HMAC-SHA256)
 - [x] Infinite RAG memory (SQLite WAL, Merkle chain, cosine dedup)
 - [x] Instinct SDD lifecycle (SPECIFY→PLAN→EXECUTE→VERIFY→MERGE, CoVE gate)
-- [x] FastMCP server: 34 tools, 9 resources, stdio + SSE + streamable-HTTP
+- [x] FastMCP server with packaged tools, packaged resources, and stdio + SSE + streamable-HTTP transports
 - [x] Multi-stage Docker image + docker-compose with health check
 - [x] Ethical Governor: 5-module compile-time gate (constitution · termination · red_hat · rogue_detection · governor)
 - [x] Packaged default pytest suite is green in this branch; use `python run_tests.py` or `hlf_test_suite_summary` for current counts

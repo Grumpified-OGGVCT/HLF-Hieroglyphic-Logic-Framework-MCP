@@ -269,6 +269,8 @@ def verify_pointer_ref(
         return {
             "status": "revoked",
             "reason": "pointer_revoked",
+            "governance_status": "tombstoned" if bool(entry.get("tombstoned", False)) else "revoked",
+            "freshness_status": "unknown",
             "pointer": parsed["pointer"],
             "alias": parsed["alias"],
             "digest": parsed["digest"],
@@ -279,6 +281,8 @@ def verify_pointer_ref(
         return {
             "status": "stale",
             "reason": "pointer_stale",
+            "governance_status": "stale",
+            "freshness_status": "stale",
             "pointer": parsed["pointer"],
             "alias": parsed["alias"],
             "digest": parsed["digest"],
@@ -287,6 +291,8 @@ def verify_pointer_ref(
 
     return {
         "status": "ok",
+        "governance_status": "active",
+        "freshness_status": "fresh",
         "pointer": parsed["pointer"],
         "alias": parsed["alias"],
         "algorithm": parsed["algorithm"],

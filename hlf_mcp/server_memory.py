@@ -37,6 +37,13 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "tombstoned": False,
             "topic": topic,
         }
+        if isinstance(store_result.get("evidence"), dict):
+            store_result["evidence"].update(
+                {
+                    "pointer": store_result["pointer"],
+                    "pointer_alias": pointer_alias,
+                }
+            )
         store_result["audit"] = ctx.audit_chain.log(
             "hlf_memory_store",
             {
@@ -80,6 +87,10 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         entry_kind: str | None = None,
         domain: str | None = None,
         solution_kind: str | None = None,
+        include_stale: bool = False,
+        include_superseded: bool = False,
+        include_revoked: bool = False,
+        require_provenance: bool = False,
     ) -> dict[str, Any]:
         """Query the Infinite RAG memory by semantic similarity."""
         return ctx.memory_store.query(
@@ -90,6 +101,10 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             entry_kind=entry_kind,
             domain=domain,
             solution_kind=solution_kind,
+            include_stale=include_stale,
+            include_superseded=include_superseded,
+            include_revoked=include_revoked,
+            require_provenance=require_provenance,
         )
 
     @mcp.tool()
@@ -156,6 +171,10 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         solution_kind: str | None = None,
         topic: str = "hlf_validated_exemplars",
         min_confidence: float = 0.0,
+        include_stale: bool = False,
+        include_superseded: bool = False,
+        include_revoked: bool = False,
+        require_provenance: bool = True,
     ) -> dict[str, Any]:
         """Recall validated HKS exemplars filtered by domain and solution pattern."""
         return ctx.memory_store.query(
@@ -166,6 +185,10 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             entry_kind="hks_exemplar",
             domain=domain,
             solution_kind=solution_kind,
+            include_stale=include_stale,
+            include_superseded=include_superseded,
+            include_revoked=include_revoked,
+            require_provenance=require_provenance,
         )
 
     @mcp.tool()
@@ -173,10 +196,60 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         """Return Infinite RAG memory store statistics."""
         return ctx.memory_store.stats()
 
+    @mcp.tool()
+    def hlf_witness_record(
+        subject_agent_id: str,
+        category: str,
+        severity: str = "warning",
+        confidence: float = 0.8,
+        witness_id: str = "operator",
+        goal_id: str = "",
+        session_id: str = "",
+        source: str = "server_memory.hlf_witness_record",
+        event_ref: dict[str, str] | None = None,
+        evidence_text: str = "",
+        recommended_action: str = "review",
+        details: dict[str, Any] | None = None,
+        negative: bool = True,
+    ) -> dict[str, Any]:
+        """Record a structured witness observation and compute the subject's packaged trust state."""
+        return ctx.record_witness_observation(
+            subject_agent_id=subject_agent_id,
+            category=category,
+            witness_id=witness_id,
+            severity=str(severity).lower(),
+            confidence=confidence,
+            goal_id=goal_id,
+            session_id=session_id,
+            source=source,
+            event_ref=event_ref,
+            evidence_text=evidence_text,
+            recommended_action=str(recommended_action).lower(),
+            details=details,
+            negative=negative,
+        )
+
+    @mcp.tool()
+    def hlf_witness_status(subject_agent_id: str | None = None) -> dict[str, Any]:
+        """Return the current packaged witness-governance trust state for a subject or the global summary."""
+        status = ctx.get_witness_status(subject_agent_id=subject_agent_id)
+        if status is None:
+            return {"status": "not_found", "subject_agent_id": subject_agent_id}
+        return {"status": "ok", "witness_status": status}
+
+    @mcp.tool()
+    def hlf_witness_list(trust_state: str | None = None) -> dict[str, Any]:
+        """List subjects tracked by witness governance, optionally filtered by trust state."""
+        listing = ctx.list_witness_subjects(trust_state=trust_state)
+        return {"status": "ok", **listing}
+
     return {
         "hlf_memory_store": hlf_memory_store,
         "hlf_memory_query": hlf_memory_query,
         "hlf_hks_capture": hlf_hks_capture,
         "hlf_hks_recall": hlf_hks_recall,
         "hlf_memory_stats": hlf_memory_stats,
+        "hlf_witness_record": hlf_witness_record,
+        "hlf_witness_status": hlf_witness_status,
+        "hlf_witness_list": hlf_witness_list,
     }

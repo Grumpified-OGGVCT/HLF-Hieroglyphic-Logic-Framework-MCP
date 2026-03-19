@@ -32,7 +32,10 @@ from typing import Any
 
 
 def _tokenize(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", text.lower())
+    return [
+        token.lower()
+        for token in re.findall(r"[\u3400-\u9fff]|[\u0600-\u06ff]+|[A-Za-zÀ-ÖØ-öø-ÿ0-9]+", text)
+    ]
 
 
 def _bow_vector(text: str, vocab: dict[str, int] | None = None) -> dict[str, float]:
@@ -99,6 +102,43 @@ PRAGMA synchronous = NORMAL;
 _DECAY_DAYS = 30
 _DEDUP_THRESHOLD = 0.98
 HKS_DOMAINS = {"general-coding", "ai-engineering", "hlf-specific"}
+
+
+def _timestamp_to_iso8601(value: float | int | None) -> str | None:
+    if value is None:
+        return None
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(float(value)))
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _parse_fresh_until(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            return None
+        try:
+            if normalized.endswith("Z"):
+                normalized = normalized[:-1] + "+00:00"
+            return time.mktime(time.strptime(normalized[:19], "%Y-%m-%dT%H:%M:%S"))
+        except ValueError:
+            try:
+                return float(normalized)
+            except ValueError:
+                return None
+    return None
 
 
 @dataclass(slots=True)
@@ -190,6 +230,204 @@ class RAGMemory:
     def _connect(self) -> sqlite3.Connection:
         return self._conn
 
+    def _normalize_metadata(
+        self,
+        *,
+        metadata: dict[str, Any] | None,
+        topic: str,
+        confidence: float,
+        provenance: str,
+        entry_kind: str,
+        domain: str,
+        solution_kind: str,
+        supersedes_sha256: str,
+        created_at: float,
+    ) -> dict[str, Any]:
+        normalized = dict(metadata or {})
+        provenance_payload = normalized.get("provenance")
+        if not isinstance(provenance_payload, dict):
+            provenance_payload = {}
+        governed_evidence = normalized.get("governed_evidence")
+        if not isinstance(governed_evidence, dict):
+            governed_evidence = {}
+
+        source_path = (
+            governed_evidence.get("source_path")
+            or normalized.get("artifact_path")
+            or normalized.get("source_path")
+            or provenance_payload.get("artifact_path")
+        )
+        artifact_id = governed_evidence.get("artifact_id") or normalized.get("artifact_id")
+        collector = governed_evidence.get("collector") or provenance_payload.get("collector") or provenance
+        collected_at = (
+            governed_evidence.get("collected_at")
+            or provenance_payload.get("collected_at")
+            or _timestamp_to_iso8601(created_at)
+        )
+        governed_evidence.update(
+            {
+                "source_class": governed_evidence.get("source_class") or entry_kind,
+                "source_type": governed_evidence.get("source_type") or provenance_payload.get("source_type") or entry_kind,
+                "source": governed_evidence.get("source") or provenance_payload.get("source") or normalized.get("source") or provenance,
+                "source_path": source_path,
+                "artifact_id": artifact_id,
+                "workflow_run_url": governed_evidence.get("workflow_run_url") or provenance_payload.get("workflow_run_url"),
+                "branch": governed_evidence.get("branch") or provenance_payload.get("branch"),
+                "commit_sha": governed_evidence.get("commit_sha") or provenance_payload.get("commit_sha"),
+                "collector": collector,
+                "collector_version": governed_evidence.get("collector_version") or normalized.get("collector_version"),
+                "collected_at": collected_at,
+                "confidence": float(governed_evidence.get("confidence") or provenance_payload.get("confidence") or confidence),
+                "fresh_until": governed_evidence.get("fresh_until") or normalized.get("fresh_until"),
+                "trust_tier": governed_evidence.get("trust_tier") or normalized.get("trust_tier") or "local",
+                "operator_summary": governed_evidence.get("operator_summary") or normalized.get("operator_summary") or normalized.get("summary") or "",
+                "revoked": _coerce_bool(governed_evidence.get("revoked") or normalized.get("revoked")),
+                "tombstoned": _coerce_bool(governed_evidence.get("tombstoned") or normalized.get("tombstoned")),
+                "supersedes": governed_evidence.get("supersedes") or supersedes_sha256,
+                "topic": topic,
+                "domain": domain,
+                "solution_kind": solution_kind,
+            }
+        )
+        normalized["governed_evidence"] = governed_evidence
+        return normalized
+
+    def _superseded_hashes(self, conn: sqlite3.Connection) -> set[str]:
+        rows = conn.execute(
+            "SELECT DISTINCT supersedes_sha256 FROM fact_store WHERE supersedes_sha256 != ''"
+        ).fetchall()
+        return {str(row["supersedes_sha256"]).strip().lower() for row in rows if row["supersedes_sha256"]}
+
+    def _build_evidence(
+        self,
+        *,
+        row: sqlite3.Row,
+        metadata: dict[str, Any],
+        superseded_hashes: set[str],
+        now: float,
+    ) -> dict[str, Any]:
+        governed = metadata.get("governed_evidence") if isinstance(metadata.get("governed_evidence"), dict) else {}
+        provenance_payload = metadata.get("provenance") if isinstance(metadata.get("provenance"), dict) else {}
+
+        collector = governed.get("collector") or provenance_payload.get("collector") or row["provenance"]
+        collected_at = governed.get("collected_at") or provenance_payload.get("collected_at") or _timestamp_to_iso8601(row["created_at"])
+        source = governed.get("source") or provenance_payload.get("source") or metadata.get("source") or row["provenance"]
+        source_type = governed.get("source_type") or provenance_payload.get("source_type") or row["entry_kind"]
+        source_path = governed.get("source_path") or metadata.get("artifact_path") or provenance_payload.get("artifact_path") or metadata.get("source_path")
+        artifact_id = governed.get("artifact_id") or metadata.get("artifact_id")
+        workflow_run_url = governed.get("workflow_run_url") or provenance_payload.get("workflow_run_url")
+        branch = governed.get("branch") or provenance_payload.get("branch")
+        commit_sha = governed.get("commit_sha") or provenance_payload.get("commit_sha")
+        operator_summary = governed.get("operator_summary") or metadata.get("operator_summary") or metadata.get("summary") or ""
+        collector_version = governed.get("collector_version") or metadata.get("collector_version")
+        trust_tier = governed.get("trust_tier") or metadata.get("trust_tier") or "local"
+        fresh_until = governed.get("fresh_until") or metadata.get("fresh_until")
+        fresh_until_ts = _parse_fresh_until(fresh_until)
+        freshness_status = "stale" if fresh_until_ts is not None and fresh_until_ts < now else "fresh"
+        revoked = _coerce_bool(governed.get("revoked") or metadata.get("revoked"))
+        tombstoned = _coerce_bool(governed.get("tombstoned") or metadata.get("tombstoned"))
+        superseded = str(row["sha256"]).lower() in superseded_hashes
+        provenance_backed = bool(provenance_payload) or any(
+            [
+                source_path,
+                artifact_id,
+                workflow_run_url,
+                branch,
+                commit_sha,
+            ]
+        )
+        if tombstoned:
+            state = "tombstoned"
+        elif revoked:
+            state = "revoked"
+        elif superseded:
+            state = "superseded"
+        elif freshness_status == "stale":
+            state = "stale"
+        else:
+            state = "active"
+
+        return {
+            "sha256": row["sha256"],
+            "entry_kind": row["entry_kind"],
+            "topic": row["topic"],
+            "domain": row["domain"],
+            "solution_kind": row["solution_kind"],
+            "source_class": governed.get("source_class") or row["entry_kind"],
+            "source_type": source_type,
+            "source": source,
+            "source_path": source_path,
+            "artifact_id": artifact_id,
+            "workflow_run_url": workflow_run_url,
+            "branch": branch,
+            "commit_sha": commit_sha,
+            "collector": collector,
+            "collector_version": collector_version,
+            "collected_at": collected_at,
+            "created_at": _timestamp_to_iso8601(row["created_at"]),
+            "accessed_at": _timestamp_to_iso8601(row["accessed_at"]),
+            "confidence": float(governed.get("confidence") or provenance_payload.get("confidence") or row["confidence"]),
+            "trust_tier": trust_tier,
+            "fresh_until": fresh_until,
+            "freshness_status": freshness_status,
+            "revoked": revoked,
+            "tombstoned": tombstoned,
+            "supersedes": governed.get("supersedes") or row["supersedes_sha256"],
+            "superseded": superseded,
+            "state": state,
+            "operator_summary": operator_summary,
+            "provenance_grade": "evidence-backed" if provenance_backed else "basic",
+            "provenance_available": bool(collector and collected_at),
+        }
+
+    def _row_to_fact(
+        self,
+        *,
+        row: sqlite3.Row,
+        metadata: dict[str, Any],
+        evidence: dict[str, Any],
+        similarity: float | None = None,
+    ) -> dict[str, Any]:
+        result = {
+            "id": row["id"],
+            "sha256": row["sha256"],
+            "content": row["content"],
+            "topic": row["topic"],
+            "confidence": row["confidence"],
+            "provenance": row["provenance"],
+            "tags": json.loads(row["tags"] or "[]"),
+            "created_at": row["created_at"],
+            "entry_kind": row["entry_kind"],
+            "domain": row["domain"],
+            "solution_kind": row["solution_kind"],
+            "supersedes_sha256": row["supersedes_sha256"],
+            "metadata": metadata,
+            "evidence": evidence,
+            "governance_status": evidence["state"],
+        }
+        if similarity is not None:
+            result["similarity"] = round(similarity, 4)
+        return result
+
+    def _include_fact(
+        self,
+        *,
+        evidence: dict[str, Any],
+        include_stale: bool,
+        include_superseded: bool,
+        include_revoked: bool,
+        require_provenance: bool,
+    ) -> bool:
+        if not include_revoked and (evidence["revoked"] or evidence["tombstoned"]):
+            return False
+        if not include_stale and evidence["freshness_status"] == "stale":
+            return False
+        if not include_superseded and evidence["superseded"]:
+            return False
+        if require_provenance and evidence["provenance_grade"] != "evidence-backed":
+            return False
+        return True
+
     # ── Store ─────────────────────────────────────────────────────────────────
 
     def store(
@@ -214,6 +452,18 @@ class RAGMemory:
         vec_json = json.dumps(vec)
         metadata_json = json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True)
         now = time.time()
+        normalized_metadata = self._normalize_metadata(
+            metadata=metadata,
+            topic=topic,
+            confidence=confidence,
+            provenance=provenance,
+            entry_kind=entry_kind,
+            domain=normalized_domain,
+            solution_kind=solution_kind or "",
+            supersedes_sha256=supersedes_sha256 or "",
+            created_at=now,
+        )
+        metadata_json = json.dumps(normalized_metadata, ensure_ascii=False, sort_keys=True)
 
         with self._lock, self._connect() as conn:
             # SHA-256 exact dedup
@@ -295,7 +545,50 @@ class RAGMemory:
             "domain": normalized_domain,
             "solution_kind": solution_kind or "",
             "supersedes_sha256": supersedes_sha256 or "",
-            "metadata": metadata or {},
+            "metadata": normalized_metadata,
+            "evidence": {
+                "sha256": sha256,
+                "entry_kind": entry_kind,
+                "topic": topic,
+                "domain": normalized_domain,
+                "solution_kind": solution_kind or "",
+                "source_class": normalized_metadata["governed_evidence"].get("source_class") or entry_kind,
+                "source_type": normalized_metadata["governed_evidence"].get("source_type") or entry_kind,
+                "source": normalized_metadata["governed_evidence"].get("source") or provenance,
+                "source_path": normalized_metadata["governed_evidence"].get("source_path"),
+                "artifact_id": normalized_metadata["governed_evidence"].get("artifact_id"),
+                "workflow_run_url": normalized_metadata["governed_evidence"].get("workflow_run_url"),
+                "branch": normalized_metadata["governed_evidence"].get("branch"),
+                "commit_sha": normalized_metadata["governed_evidence"].get("commit_sha"),
+                "collector": normalized_metadata["governed_evidence"].get("collector") or provenance,
+                "collector_version": normalized_metadata["governed_evidence"].get("collector_version"),
+                "collected_at": normalized_metadata["governed_evidence"].get("collected_at") or _timestamp_to_iso8601(now),
+                "created_at": _timestamp_to_iso8601(now),
+                "accessed_at": _timestamp_to_iso8601(now),
+                "confidence": normalized_metadata["governed_evidence"].get("confidence", confidence),
+                "trust_tier": normalized_metadata["governed_evidence"].get("trust_tier", "local"),
+                "fresh_until": normalized_metadata["governed_evidence"].get("fresh_until"),
+                "freshness_status": "fresh",
+                "revoked": normalized_metadata["governed_evidence"].get("revoked", False),
+                "tombstoned": normalized_metadata["governed_evidence"].get("tombstoned", False),
+                "supersedes": normalized_metadata["governed_evidence"].get("supersedes") or supersedes_sha256 or "",
+                "superseded": False,
+                "state": "active",
+                "operator_summary": normalized_metadata["governed_evidence"].get("operator_summary") or "",
+                "provenance_grade": "evidence-backed"
+                if bool(normalized_metadata.get("provenance"))
+                or any(
+                    [
+                        normalized_metadata["governed_evidence"].get("source_path"),
+                        normalized_metadata["governed_evidence"].get("artifact_id"),
+                        normalized_metadata["governed_evidence"].get("workflow_run_url"),
+                        normalized_metadata["governed_evidence"].get("branch"),
+                        normalized_metadata["governed_evidence"].get("commit_sha"),
+                    ]
+                )
+                else "basic",
+                "provenance_available": True,
+            },
         }
 
     def store_exemplar(self, exemplar: HKSValidatedExemplar) -> dict[str, Any]:
@@ -326,6 +619,10 @@ class RAGMemory:
         entry_kind: str | None = None,
         domain: str | None = None,
         solution_kind: str | None = None,
+        include_stale: bool = False,
+        include_superseded: bool = False,
+        include_revoked: bool = False,
+        require_provenance: bool = False,
     ) -> dict[str, Any]:
         """Query memory by semantic similarity."""
         query_vec = _bow_vector(query_text)
@@ -336,7 +633,7 @@ class RAGMemory:
         with self._connect() as conn:
             sql = """
                 SELECT id, content, topic, confidence, provenance, tags,
-                       vector_json, created_at, accessed_at, entry_kind,
+                      sha256, vector_json, created_at, accessed_at, entry_kind,
                        domain, solution_kind, supersedes_sha256, metadata_json
                 FROM fact_store
                 WHERE confidence >= ?
@@ -357,6 +654,7 @@ class RAGMemory:
                 params.append(solution_kind)
             sql += " ORDER BY confidence DESC, accessed_at DESC LIMIT 500"
 
+            superseded_hashes = self._superseded_hashes(conn)
             rows = conn.execute(sql, params).fetchall()
 
         # Score by cosine similarity
@@ -365,21 +663,21 @@ class RAGMemory:
             vec = json.loads(row["vector_json"] or "{}")
             sim = _cosine(query_vec, vec)
             metadata = json.loads(row["metadata_json"] or "{}")
-            scored.append({
-                "id": row["id"],
-                "content": row["content"],
-                "topic": row["topic"],
-                "confidence": row["confidence"],
-                "provenance": row["provenance"],
-                "tags": json.loads(row["tags"] or "[]"),
-                "similarity": round(sim, 4),
-                "created_at": row["created_at"],
-                "entry_kind": row["entry_kind"],
-                "domain": row["domain"],
-                "solution_kind": row["solution_kind"],
-                "supersedes_sha256": row["supersedes_sha256"],
-                "metadata": metadata,
-            })
+            evidence = self._build_evidence(
+                row=row,
+                metadata=metadata,
+                superseded_hashes=superseded_hashes,
+                now=now,
+            )
+            if not self._include_fact(
+                evidence=evidence,
+                include_stale=include_stale,
+                include_superseded=include_superseded,
+                include_revoked=include_revoked,
+                require_provenance=require_provenance,
+            ):
+                continue
+            scored.append(self._row_to_fact(row=row, metadata=metadata, evidence=evidence, similarity=sim))
 
         scored.sort(key=lambda x: x["similarity"], reverse=True)
         results = scored[:top_k]
@@ -400,7 +698,77 @@ class RAGMemory:
             "entry_kind": entry_kind,
             "domain": normalized_domain,
             "solution_kind": solution_kind,
+            "include_stale": include_stale,
+            "include_superseded": include_superseded,
+            "include_revoked": include_revoked,
+            "require_provenance": require_provenance,
         }
+
+    def query_facts(
+        self,
+        *,
+        entry_kind: str | None = None,
+        topic: str | None = None,
+        domain: str | None = None,
+        solution_kind: str | None = None,
+        profile: str | None = None,
+        model: str | None = None,
+        include_stale: bool = False,
+        include_superseded: bool = False,
+        include_revoked: bool = False,
+        require_provenance: bool = False,
+    ) -> list[dict[str, Any]]:
+        normalized_domain = self._normalize_domain(domain)
+        with self._connect() as conn:
+            sql = (
+                "SELECT id, sha256, content, topic, confidence, provenance, tags, "
+                "created_at, accessed_at, entry_kind, domain, solution_kind, "
+                "supersedes_sha256, metadata_json FROM fact_store WHERE 1=1"
+            )
+            params: list[Any] = []
+            if entry_kind:
+                sql += " AND entry_kind = ?"
+                params.append(entry_kind)
+            if topic:
+                sql += " AND topic = ?"
+                params.append(topic)
+            if normalized_domain:
+                sql += " AND domain = ?"
+                params.append(normalized_domain)
+            if solution_kind:
+                sql += " AND solution_kind = ?"
+                params.append(solution_kind)
+            sql += " ORDER BY created_at DESC"
+            superseded_hashes = self._superseded_hashes(conn)
+            rows = conn.execute(sql, params).fetchall()
+
+        now = time.time()
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            metadata = json.loads(row["metadata_json"] or "{}")
+            if profile and str(metadata.get("profile_name") or "") != profile:
+                continue
+            if model and str(metadata.get("model") or metadata.get("model_name") or "") != model:
+                continue
+            evidence = self._build_evidence(
+                row=row,
+                metadata=metadata,
+                superseded_hashes=superseded_hashes,
+                now=now,
+            )
+            if not self._include_fact(
+                evidence=evidence,
+                include_stale=include_stale,
+                include_superseded=include_superseded,
+                include_revoked=include_revoked,
+                require_provenance=require_provenance,
+            ):
+                continue
+            results.append(self._row_to_fact(row=row, metadata=metadata, evidence=evidence))
+        return results
+
+    def all_facts(self) -> list[dict[str, Any]]:
+        return self.query_facts(include_stale=True, include_superseded=True, include_revoked=True)
 
     # ── Merkle chain ──────────────────────────────────────────────────────────
 

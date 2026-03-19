@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
 
-def aggregate_benchmark_artifacts(memory_store, model_name: str, profile_name: str) -> list[dict[str, Any]]:
+def aggregate_benchmark_artifacts(
+    memory_store, model_name: str, profile_name: str
+) -> list[dict[str, Any]]:
     """Aggregate all persisted benchmark artifacts for a given model/profile from RAGMemory."""
     artifacts = []
     try:
-        artifacts = memory_store.query_facts(entry_kind="benchmark_artifact", model=model_name, profile=profile_name)
+        artifacts = memory_store.query_facts(
+            entry_kind="benchmark_artifact", model=model_name, profile=profile_name
+        )
     except Exception:
         for fact in getattr(memory_store, "all_facts", lambda: [])():
             if fact.get("entry_kind") != "benchmark_artifact":
@@ -38,7 +42,9 @@ QualificationTier = Literal[
     "promotion-qualified",
 ]
 
-_DEFAULT_QUALIFICATION_PROFILE_PATH = Path(__file__).resolve().parents[2] / "governance" / "model_qualification_profiles.json"
+_DEFAULT_QUALIFICATION_PROFILE_PATH = (
+    Path(__file__).resolve().parents[2] / "governance" / "model_qualification_profiles.json"
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -229,8 +235,12 @@ def evaluate_model_requirements(
     known_but_impractical = bool(entry.get("known_but_impractical", False))
 
     missing_lanes = sorted(str(item) for item in required_lanes if str(item) not in lanes)
-    missing_capabilities = sorted(str(item) for item in required_capabilities if str(item) not in capabilities)
-    missing_languages = sorted(str(item) for item in required_languages if str(item) not in supported_languages)
+    missing_capabilities = sorted(
+        str(item) for item in required_capabilities if str(item) not in capabilities
+    )
+    missing_languages = sorted(
+        str(item) for item in required_languages if str(item) not in supported_languages
+    )
 
     minimum_scores = {str(k): float(v) for k, v in (minimum_benchmark_scores or {}).items()}
     provided_scores = {str(k): float(v) for k, v in (benchmark_scores or {}).items()}
@@ -258,7 +268,9 @@ def evaluate_model_requirements(
     if missing_lanes:
         qualification_failures.append(f"Missing required lanes: {', '.join(missing_lanes)}")
     if missing_capabilities:
-        qualification_failures.append(f"Missing required capabilities: {', '.join(missing_capabilities)}")
+        qualification_failures.append(
+            f"Missing required capabilities: {', '.join(missing_capabilities)}"
+        )
     if missing_languages:
         qualification_failures.append(f"Missing required languages: {', '.join(missing_languages)}")
     if missing_benchmarks:
@@ -358,7 +370,9 @@ def load_model_qualification_profiles(file_path: str | None = None) -> dict[str,
     path = Path(file_path) if file_path else _DEFAULT_QUALIFICATION_PROFILE_PATH
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or "profiles" not in payload:
-        raise ValueError("Model qualification profile file must contain a top-level 'profiles' object.")
+        raise ValueError(
+            "Model qualification profile file must contain a top-level 'profiles' object."
+        )
     return payload
 
 
@@ -386,7 +400,9 @@ def evaluate_model_against_profile(
     memory_store = entry.get("memory_store") if "memory_store" in entry else None
     artifact_history = []
     if memory_store is not None:
-        artifact_history = aggregate_benchmark_artifacts(memory_store, entry.get("name", ""), profile_name)
+        artifact_history = aggregate_benchmark_artifacts(
+            memory_store, entry.get("name", ""), profile_name
+        )
 
     # Aggregate scores if history is available
     aggregate_scores = {}
@@ -396,7 +412,11 @@ def evaluate_model_against_profile(
         for artifact in artifact_history:
             metrics.update(artifact.get("benchmark_scores", {}).keys())
         for metric in metrics:
-            values = [float(a["benchmark_scores"].get(metric, 0.0)) for a in artifact_history if metric in a.get("benchmark_scores", {})]
+            values = [
+                float(a["benchmark_scores"].get(metric, 0.0))
+                for a in artifact_history
+                if metric in a.get("benchmark_scores", {})
+            ]
             if values:
                 aggregate_scores[metric] = {
                     "mean": sum(values) / len(values),
@@ -481,7 +501,9 @@ def _entry_sort_key(entry: ModelCatalogEntry) -> tuple[int, int, int, int, float
     )
 
 
-def _pick_best_entry(entries: list[ModelCatalogEntry], *, access_mode: AccessMode | None = None) -> ModelCatalogEntry | None:
+def _pick_best_entry(
+    entries: list[ModelCatalogEntry], *, access_mode: AccessMode | None = None
+) -> ModelCatalogEntry | None:
     candidates = entries
     if access_mode is not None:
         candidates = [entry for entry in candidates if entry.access_mode == access_mode]
@@ -492,7 +514,9 @@ def _pick_best_entry(entries: list[ModelCatalogEntry], *, access_mode: AccessMod
 
 def _recommend_lane(entries: list[ModelCatalogEntry], lane: str) -> dict[str, Any]:
     lane_entries = [entry for entry in entries if lane in entry.lanes]
-    preferred_local_only = bool(lane_entries) and all(entry.requires_local for entry in lane_entries)
+    preferred_local_only = bool(lane_entries) and all(
+        entry.requires_local for entry in lane_entries
+    )
     viable_entries = [entry for entry in lane_entries if not entry.known_but_impractical]
 
     best_local = _pick_best_entry(viable_entries, access_mode="local-via-ollama")
@@ -504,14 +528,24 @@ def _recommend_lane(entries: list[ModelCatalogEntry], lane: str) -> dict[str, An
     )
     fallback = _pick_best_entry(lane_entries)
 
-    preferred = best_local if preferred_local_only else best_cloud or best_remote_direct or best_local or fallback
+    preferred = (
+        best_local
+        if preferred_local_only
+        else best_cloud or best_remote_direct or best_local or fallback
+    )
     rationale: list[str] = []
     if preferred_local_only:
-        rationale.append("This lane prefers required-local models because it depends on governed retrieval or private memory context.")
+        rationale.append(
+            "This lane prefers required-local models because it depends on governed retrieval or private memory context."
+        )
     else:
-        rationale.append("This lane can use the strongest appropriate reachable model, including cloud-via-ollama and explicit remote-direct operator paths when available.")
+        rationale.append(
+            "This lane can use the strongest appropriate reachable model, including cloud-via-ollama and explicit remote-direct operator paths when available."
+        )
     if preferred is not None and preferred.known_but_impractical:
-        rationale.append("The best-known model for this lane is currently impractical on the detected hardware, so it remains advisory only.")
+        rationale.append(
+            "The best-known model for this lane is currently impractical on the detected hardware, so it remains advisory only."
+        )
 
     return {
         "lane": lane,
@@ -519,7 +553,9 @@ def _recommend_lane(entries: list[ModelCatalogEntry], lane: str) -> dict[str, An
         "best_local": best_local.to_dict() if best_local else None,
         "best_cloud_via_ollama": best_cloud.to_dict() if best_cloud else None,
         "best_remote_direct": best_remote_direct.to_dict() if best_remote_direct else None,
-        "strongest_privacy_preserving": strongest_privacy_preserving.to_dict() if strongest_privacy_preserving else None,
+        "strongest_privacy_preserving": strongest_privacy_preserving.to_dict()
+        if strongest_privacy_preserving
+        else None,
         "fallback": fallback.to_dict() if fallback else None,
         "rationale": rationale,
     }
@@ -559,14 +595,20 @@ def sync_model_catalog(
     for spec in _DEFAULT_MODEL_SPECS:
         installed = spec.name in installed_names
         known_but_impractical = _is_known_but_impractical(spec, hardware_summary)
-        access_mode: AccessMode = ollama_access_mode if ollama_available else "registry-known-not-configured"
+        access_mode: AccessMode = (
+            ollama_access_mode if ollama_available else "registry-known-not-configured"
+        )
         rationale = list(spec.notes)
         if spec.requires_local:
-            rationale.append("Embeddings remain locality-constrained unless an operator explicitly changes policy.")
+            rationale.append(
+                "Embeddings remain locality-constrained unless an operator explicitly changes policy."
+            )
         if known_but_impractical:
             rationale.append("Known model is currently impractical on detected hardware.")
         if ollama_available and not installed:
-            rationale.append("Model is registry-known and pullable through the configured Ollama-compatible endpoint.")
+            rationale.append(
+                "Model is registry-known and pullable through the configured Ollama-compatible endpoint."
+            )
         catalog_entries.append(
             ModelCatalogEntry(
                 name=spec.name,
@@ -607,7 +649,9 @@ def sync_model_catalog(
                 requires_local=False,
                 privacy_preserving=False,
                 min_vram_gb=0.0,
-                rationale=["Installed model discovered from the runtime but not yet classified in the packaged registry."],
+                rationale=[
+                    "Installed model discovered from the runtime but not yet classified in the packaged registry."
+                ],
             )
         )
 
@@ -618,7 +662,9 @@ def sync_model_catalog(
                 family=str(entry.get("family", "remote-direct")),
                 lanes=[str(lane) for lane in entry.get("lanes", ["explainer"])],
                 capabilities=[str(cap) for cap in entry.get("capabilities", ["remote-direct"])],
-                supported_languages=[str(language) for language in entry.get("supported_languages", [])],
+                supported_languages=[
+                    str(language) for language in entry.get("supported_languages", [])
+                ],
                 access_mode="remote-direct",
                 endpoint=str(entry.get("endpoint", "")),
                 installed=False,
@@ -629,7 +675,10 @@ def sync_model_catalog(
                 requires_local=False,
                 privacy_preserving=bool(entry.get("privacy_preserving", False)),
                 min_vram_gb=float(entry.get("min_vram_gb") or 0.0),
-                rationale=[str(reason) for reason in entry.get("rationale", ["Remote direct endpoint configured."])],
+                rationale=[
+                    str(reason)
+                    for reason in entry.get("rationale", ["Remote direct endpoint configured."])
+                ],
             )
         )
 
@@ -645,7 +694,9 @@ def sync_model_catalog(
         ]
     }
     preferred_lanes = infer_agent_lanes(agent_role=agent_role, agent_id=agent_id)
-    agent_lane_summary = {lane: lane_recommendations[lane] for lane in preferred_lanes if lane in lane_recommendations}
+    agent_lane_summary = {
+        lane: lane_recommendations[lane] for lane in preferred_lanes if lane in lane_recommendations
+    }
 
     return {
         "agent_id": agent_id,
@@ -653,18 +704,28 @@ def sync_model_catalog(
         "preferred_lanes": preferred_lanes,
         "ollama_endpoint": ollama_endpoint,
         "ollama_access_mode": ollama_access_mode,
-        "entries": [entry.to_dict() for entry in sorted(catalog_entries, key=lambda item: (item.family, item.name, item.access_mode))],
+        "entries": [
+            entry.to_dict()
+            for entry in sorted(
+                catalog_entries, key=lambda item: (item.family, item.name, item.access_mode)
+            )
+        ],
         "summary": {
             "total_models": len(catalog_entries),
             "installed_count": sum(1 for entry in catalog_entries if entry.installed),
             "reachable_count": sum(1 for entry in catalog_entries if entry.reachable),
             "pullable_count": sum(1 for entry in catalog_entries if entry.pullable),
-            "known_but_impractical_count": sum(1 for entry in catalog_entries if entry.known_but_impractical),
-            "configured_remote_direct_count": sum(1 for entry in catalog_entries if entry.access_mode == "remote-direct" and entry.configured),
+            "known_but_impractical_count": sum(
+                1 for entry in catalog_entries if entry.known_but_impractical
+            ),
+            "configured_remote_direct_count": sum(
+                1
+                for entry in catalog_entries
+                if entry.access_mode == "remote-direct" and entry.configured
+            ),
         },
         "lane_recommendations": lane_recommendations,
         "agent_lane_summary": agent_lane_summary,
         "runtime_status": dict(runtime_status),
         "hardware_summary": dict(hardware_summary),
     }
-

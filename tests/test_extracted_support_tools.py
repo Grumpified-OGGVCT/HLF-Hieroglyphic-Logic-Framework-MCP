@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -44,7 +42,9 @@ def test_gen_docs_writes_tag_and_stdlib_references(tmp_path: Path) -> None:
     source_dict = REPO_ROOT / "governance" / "templates" / "dictionary.json"
     source_host_functions = REPO_ROOT / "governance" / "host_functions.json"
     source_gen_from_spec = REPO_ROOT / "docs" / "gen_from_spec.py"
-    gov_dir.joinpath("dictionary.json").write_text(source_dict.read_text(encoding="utf-8"), encoding="utf-8")
+    gov_dir.joinpath("dictionary.json").write_text(
+        source_dict.read_text(encoding="utf-8"), encoding="utf-8"
+    )
     root_gov_dir.joinpath("host_functions.json").write_text(
         source_host_functions.read_text(encoding="utf-8"),
         encoding="utf-8",
@@ -74,7 +74,7 @@ def test_hlf_token_lint_reports_header_and_budget_violations() -> None:
     import tiktoken
 
     encoder = tiktoken.get_encoding("cl100k_base")
-    text = 'INTENT without header\n' + ('word ' * 40) + '\n'
+    text = "INTENT without header\n" + ("word " * 40) + "\n"
     errors = module.lint_text(text, encoder, max_file_tokens=20, max_line_tokens=10)
 
     assert any("Missing [HLF-v2] or [HLF-v3] header" in error for error in errors)
@@ -85,7 +85,7 @@ def test_hlf_token_lint_reports_header_and_budget_violations() -> None:
 def test_hlf_token_lint_discovers_files_in_directory(tmp_path: Path) -> None:
     module = _load_script_module("hlf_token_lint")
     fixture = tmp_path / "sample.hlf"
-    fixture.write_text("[HLF-v3]\nΔ [INTENT] goal=\"ok\"\nΩ\n", encoding="utf-8")
+    fixture.write_text('[HLF-v3]\nΔ [INTENT] goal="ok"\nΩ\n', encoding="utf-8")
 
     discovered = module.discover_hlf_files([str(tmp_path)])
     assert discovered == [fixture]
@@ -128,7 +128,9 @@ def test_run_pipeline_scheduled_writes_latest_and_history(monkeypatch, tmp_path:
     assert (metrics_dir / module.HISTORY_ARTIFACT).exists()
 
 
-def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(monkeypatch, tmp_path: Path) -> None:
+def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(
+    monkeypatch, tmp_path: Path
+) -> None:
     module = _load_script_module("run_pipeline_scheduled")
 
     metrics_dir = tmp_path / "metrics"
@@ -154,7 +156,14 @@ def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(mo
                 "passed": True,
                 "exit_code": 0,
                 "duration_ms": 50.0,
-                "counts": {"passed": 3, "failed": 0, "errors": 0, "skipped": 0, "xfailed": 0, "xpassed": 0},
+                "counts": {
+                    "passed": 3,
+                    "failed": 0,
+                    "errors": 0,
+                    "skipped": 0,
+                    "xfailed": 0,
+                    "xpassed": 0,
+                },
             },
         },
     )

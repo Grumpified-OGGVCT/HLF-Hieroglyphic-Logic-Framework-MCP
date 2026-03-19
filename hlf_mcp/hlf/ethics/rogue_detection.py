@@ -20,16 +20,16 @@ People are the priority.  AI is the tool.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-
 
 # ── Detection signal definitions ──────────────────────────────────────────────
 
+
 @dataclass
 class RogueSignal:
-    signal_id: str     # e.g. "INJECTION-SYS-PROMPT"
-    severity: str      # "high" | "medium" | "low"
+    signal_id: str  # e.g. "INJECTION-SYS-PROMPT"
+    severity: str  # "high" | "medium" | "low"
     description: str
     evidence: str = ""
     rule_id: str = ""  # maps to termination.CONSTITUTIONAL_ARTICLES key
@@ -103,6 +103,7 @@ _SOVEREIGN_SMUG = re.compile(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+
 def detect_rogue_signals(
     source: str,
     ast: dict[str, Any] | None = None,
@@ -127,48 +128,56 @@ def detect_rogue_signals(
     for sig_id, pattern, desc in _INJECTION_PATTERNS:
         m = pattern.search(source)
         if m:
-            signals.append(RogueSignal(
-                signal_id=sig_id,
-                severity="high",
-                description=desc,
-                evidence=source[max(0, m.start() - 20):m.end() + 20],
-                rule_id="ROGUE-INJECTION",
-            ))
+            signals.append(
+                RogueSignal(
+                    signal_id=sig_id,
+                    severity="high",
+                    description=desc,
+                    evidence=source[max(0, m.start() - 20) : m.end() + 20],
+                    rule_id="ROGUE-INJECTION",
+                )
+            )
 
     # 2. Hallucination heuristic
     if _HALLUCINATION_CAPABILITY_CLAIMS.search(source):
-        signals.append(RogueSignal(
-            signal_id="HALLUCINATION-CAP-CLAIM",
-            severity="medium",
-            description="Agent claims direct live-data/filesystem access — possible hallucination.",
-            rule_id="ROGUE-HALLUCINATION",
-        ))
+        signals.append(
+            RogueSignal(
+                signal_id="HALLUCINATION-CAP-CLAIM",
+                severity="medium",
+                description="Agent claims direct live-data/filesystem access — possible hallucination.",
+                rule_id="ROGUE-HALLUCINATION",
+            )
+        )
 
     # 3. Aggressive action verbs (possible drift / compromised agent)
     m = _AGGRESSIVE_ACTION_VERBS.search(source)
     if m:
-        signals.append(RogueSignal(
-            signal_id="INTENT-DRIFT-AGGRESSIVE",
-            severity="high",
-            description="Aggressive destructive verb detected (possible intent drift).",
-            evidence=source[max(0, m.start() - 20):m.end() + 20],
-            rule_id="ROGUE-AGGRESSION",
-        ))
+        signals.append(
+            RogueSignal(
+                signal_id="INTENT-DRIFT-AGGRESSIVE",
+                severity="high",
+                description="Aggressive destructive verb detected (possible intent drift).",
+                evidence=source[max(0, m.start() - 20) : m.end() + 20],
+                rule_id="ROGUE-AGGRESSION",
+            )
+        )
 
     # 4. Sovereign capability smuggling in restricted tier
     if tier != "sovereign":
         m = _SOVEREIGN_SMUG.search(source)
         if m:
-            signals.append(RogueSignal(
-                signal_id="TIER-SMUGGLING",
-                severity="high",
-                description=(
-                    f"Reference to sovereign-only symbol in '{tier}' tier context "
-                    "(possible tier smuggling)."
-                ),
-                evidence=m.group(0),
-                rule_id="ROGUE-ESCALATION",
-            ))
+            signals.append(
+                RogueSignal(
+                    signal_id="TIER-SMUGGLING",
+                    severity="high",
+                    description=(
+                        f"Reference to sovereign-only symbol in '{tier}' tier context "
+                        "(possible tier smuggling)."
+                    ),
+                    evidence=m.group(0),
+                    rule_id="ROGUE-ESCALATION",
+                )
+            )
 
     return signals
 
@@ -180,7 +189,7 @@ def signals_require_termination(signals: list[RogueSignal]) -> bool:
 
 def should_terminate(
     ast: dict[str, Any] | None,
-    violations: list[Any],     # kept for API compat with old stub callers
+    violations: list[Any],  # kept for API compat with old stub callers
 ) -> bool:
     """
     Legacy-compat entry point: return False by default.

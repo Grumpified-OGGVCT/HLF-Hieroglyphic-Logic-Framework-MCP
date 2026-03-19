@@ -25,21 +25,21 @@ import os
 import sys
 from typing import Any
 
-_log = logging.getLogger(__name__)
-
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.entropy_anchor import evaluate_entropy_anchor
-from hlf_mcp.server_instructions import build_server_instructions
-from hlf_mcp.server_core import register_core_tools
 from hlf_mcp.server_capsule import register_capsule_tools
 from hlf_mcp.server_context import build_server_context, check_governance_manifest
+from hlf_mcp.server_core import register_core_tools
 from hlf_mcp.server_instinct import register_instinct_tools
+from hlf_mcp.server_instructions import build_server_instructions
 from hlf_mcp.server_memory import register_memory_tools
 from hlf_mcp.server_profiles import register_profile_tools
 from hlf_mcp.server_resources import register_resources
 from hlf_mcp.server_translation import register_translation_tools
 from hlf_mcp.server_verifier import register_verifier_tools
+
+_log = logging.getLogger(__name__)
 
 # ── Server instance ────────────────────────────────────────────────────────────
 
@@ -130,9 +130,20 @@ def hlf_entropy_anchor(
             },
             agent_role="entropy_anchor",
             anomaly_score=1.0 if anchor.drift_detected else 0.0,
-            related_refs=[{"kind": "audit", "event_id": str(audit.get("trace_id", "")), "trace_id": str(audit.get("trace_id", ""))}],
+            related_refs=[
+                {
+                    "kind": "audit",
+                    "event_id": str(audit.get("trace_id", "")),
+                    "trace_id": str(audit.get("trace_id", "")),
+                }
+            ],
         )
-        return {"status": "ok", "anchor": anchor.to_dict(), "audit": audit, "governance_event": governance_event}
+        return {
+            "status": "ok",
+            "anchor": anchor.to_dict(),
+            "audit": audit,
+            "governance_event": governance_event,
+        }
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
 
@@ -149,6 +160,7 @@ mcp._mcp_server.instructions = _generated_instructions
 
 
 # ── Health endpoint (HTTP transports only) ────────────────────────────────────
+
 
 @mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
 async def health_endpoint(request: Any) -> Any:
@@ -168,7 +180,9 @@ def _get_http_bind() -> tuple[str, int]:
     host = os.environ.get("HLF_HOST", "0.0.0.0")
     raw_port = os.environ.get("HLF_PORT")
     if raw_port is None or not raw_port.strip():
-        raise RuntimeError("HLF_PORT must be set explicitly when HLF_TRANSPORT uses an HTTP transport")
+        raise RuntimeError(
+            "HLF_PORT must be set explicitly when HLF_TRANSPORT uses an HTTP transport"
+        )
     try:
         port = int(raw_port)
     except ValueError as exc:
@@ -198,13 +212,11 @@ def main() -> None:
         mcp.settings.port = port
         mcp.run(transport="streamable-http")
     else:
-        print(f"Unknown transport: {transport!r}. Use: stdio, sse, streamable-http", file=sys.stderr)
+        print(
+            f"Unknown transport: {transport!r}. Use: stdio, sse, streamable-http", file=sys.stderr
+        )
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
-
-
-
-

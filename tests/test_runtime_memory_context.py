@@ -27,9 +27,13 @@ def test_delegate_includes_memory_context_from_custom_retriever() -> None:
     assert result["delegated"] is True
     assert result["memory_context"]["source"] == "custom"
     assert result["memory_context"]["count"] == 1
-    assert result["memory_context"]["results"][0]["content"] == "Use known-good summarization contract"
+    assert (
+        result["memory_context"]["results"][0]["content"] == "Use known-good summarization contract"
+    )
 
-    context_event = next(event for event in side_effects if event.get("type") == "memory_context_query")
+    context_event = next(
+        event for event in side_effects if event.get("type") == "memory_context_query"
+    )
     assert context_event["source"] == "custom"
     assert context_event["query_chars"] == len("summarize release notes")
     assert "query" not in context_event
@@ -52,7 +56,10 @@ def test_route_uses_explicit_context_query_when_present() -> None:
 
     assert result["routed"] is True
     assert result["tier"] == "forge"
-    assert result["memory_context"]["results"][0]["content"] == "Prefer security-review routing profile"
+    assert (
+        result["memory_context"]["results"][0]["content"]
+        == "Prefer security-review routing profile"
+    )
 
 
 def test_delegate_memory_lookup_failure_fails_open() -> None:
@@ -68,7 +75,9 @@ def test_delegate_memory_lookup_failure_fails_open() -> None:
 
     assert result["delegated"] is True
     assert "memory_context" not in result
-    error_event = next(event for event in side_effects if event.get("type") == "memory_context_error")
+    error_event = next(
+        event for event in side_effects if event.get("type") == "memory_context_error"
+    )
     assert error_event["query_chars"] == len("summarize release notes")
 
 
@@ -77,7 +86,9 @@ def test_delegate_can_use_default_rag_memory_when_enabled(monkeypatch) -> None:
     from hlf_mcp.rag import memory as memory_module
 
     class FakeMemory:
-        def query(self, query_text: str, top_k: int = 5, topic: str | None = None) -> dict[str, Any]:
+        def query(
+            self, query_text: str, top_k: int = 5, topic: str | None = None
+        ) -> dict[str, Any]:
             assert query_text == "repair translation"
             assert top_k == 3
             assert topic == "translator"
@@ -93,7 +104,9 @@ def test_delegate_can_use_default_rag_memory_when_enabled(monkeypatch) -> None:
     }
     side_effects: list[dict[str, Any]] = []
 
-    result = runtime._dispatch_host("delegate", ["repairer", "repair translation"], scope, side_effects)
+    result = runtime._dispatch_host(
+        "delegate", ["repairer", "repair translation"], scope, side_effects
+    )
 
     assert result["delegated"] is True
     assert result["memory_context"]["source"] == "rag_memory"

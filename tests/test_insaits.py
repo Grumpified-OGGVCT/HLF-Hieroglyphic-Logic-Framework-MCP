@@ -4,7 +4,6 @@ from hlf_mcp.hlf.bytecode import BytecodeCompiler
 from hlf_mcp.hlf.compiler import HLFCompiler
 from hlf_mcp.hlf.insaits import decompile, decompile_bytecode, similarity_gate
 
-
 COMPILER = HLFCompiler()
 
 

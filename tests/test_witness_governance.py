@@ -100,11 +100,17 @@ def test_witness_resource_and_tool_contracts_are_operator_legible() -> None:
         evidence_text="fallback lane selected unexpectedly",
         event_ref={"kind": "routing_decision", "event_id": "route-1", "trace_id": "trace-1"},
     )
-    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/witness_governance/{subject_agent_id}"](subject_agent_id))
+    resource = json.loads(
+        server.REGISTERED_RESOURCES["hlf://status/witness_governance/{subject_agent_id}"](
+            subject_agent_id
+        )
+    )
 
     assert recorded["observation"]["evidence_hash"]
     assert recorded["governance_event"]["event"]["kind"] == "witness_observation"
     assert recorded["memory_record"]["entry_kind"] == "witness_observation"
     assert resource["status"] == "ok"
     assert resource["witness_status"]["subject"]["subject_agent_id"] == subject_agent_id
-    assert resource["witness_status"]["recent_observations"][0]["event_ref"]["event_id"] == "route-1"
+    assert (
+        resource["witness_status"]["recent_observations"][0]["event_ref"]["event_id"] == "route-1"
+    )

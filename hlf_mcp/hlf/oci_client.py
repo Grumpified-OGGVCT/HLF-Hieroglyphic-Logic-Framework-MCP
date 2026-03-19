@@ -4,14 +4,24 @@ HLF OCI Client — OCI Distribution Spec client for HLF module registry.
 Default registry: registry.hlf.io (simulated for offline use)
 Cache: ~/.hlf/oci_cache/{registry}/{namespace}/{module}/{tag}/
 """
+
 from __future__ import annotations
-import dataclasses, hashlib, io, json, logging, os, tarfile, urllib.error, urllib.request
+
+import dataclasses
+import hashlib
+import io
+import json
+import logging
+import tarfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_REGISTRY = "registry.hlf.io"
+
 
 class OCIError(Exception):
     pass
@@ -141,8 +151,6 @@ class OCIClient:
         layer_data = buf.getvalue()
         digest = "sha256:" + hashlib.sha256(layer_data).hexdigest()
         size = len(layer_data)
-        # Upload blob
-        blob_url = f"https://{ref.registry}/v2/{ref.namespace}/{ref.module}/blobs/uploads/"
         # For local/offline use, simulate success
         logger.warning("OCI push is simulated (no live registry configured): %s", ref)
         return {

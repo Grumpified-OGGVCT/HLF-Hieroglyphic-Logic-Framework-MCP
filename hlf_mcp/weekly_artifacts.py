@@ -4,17 +4,16 @@ import hashlib
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar
-
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _git_output(repo_root: Path, *args: str) -> str | None:
@@ -88,9 +87,7 @@ def collect_server_surface() -> dict[str, Any]:
     from hlf_mcp import server
 
     exported = sorted(
-        name
-        for name in dir(server)
-        if name.startswith("hlf_") and callable(getattr(server, name))
+        name for name in dir(server) if name.startswith("hlf_") and callable(getattr(server, name))
     )
     instructions = server.mcp.instructions or ""
     return {
@@ -162,7 +159,9 @@ def build_weekly_artifact(
         "git": collect_git_context(repo_root),
         "governance": collect_governance_manifest_snapshot(repo_root),
         "server_surface": collect_server_surface(),
-        "latest_suite_summary": latest_suite_summary if latest_suite_summary is not None else read_latest_suite_summary(effective_metrics_dir),
+        "latest_suite_summary": latest_suite_summary
+        if latest_suite_summary is not None
+        else read_latest_suite_summary(effective_metrics_dir),
     }
     if toolkit_command:
         artifact["toolkit"] = run_toolkit_command(repo_root, toolkit_command)

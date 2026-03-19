@@ -19,7 +19,7 @@ def test_module_import_rules_present() -> None:
 
     assert 'id: "M-001"' in text
     assert 'id: "M-002"' in text
-    assert 'DROP_AND_QUARANTINE' in text
+    assert "DROP_AND_QUARANTINE" in text
 
 
 def test_governance_package_is_shipped_in_wheel_config() -> None:

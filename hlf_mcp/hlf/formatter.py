@@ -17,7 +17,6 @@ import re
 import sys
 from difflib import unified_diff
 
-
 # ── Glyph → canonical sub-indentation logic ──────────────────────────────────
 # Sub-statements (Ж, ∇, ⩕) under a primary glyph (Δ, ⌘, ⊎) are indented.
 _PRIMARY_GLYPHS = {"Δ", "⌘", "⊎"}
@@ -98,8 +97,8 @@ class HLFFormatter:
         diff = list(unified_diff(orig_lines, fmt_lines, fromfile="original", tofile="formatted"))
         if not diff:
             return "No changes"
-        added = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
-        removed = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+        added = sum(1 for line in diff if line.startswith("+") and not line.startswith("+++"))
+        removed = sum(1 for line in diff if line.startswith("-") and not line.startswith("---"))
         return f"+{added} -{removed} lines changed"
 
 

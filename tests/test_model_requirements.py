@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from hlf_mcp import server
-from hlf_mcp.hlf.model_catalog import evaluate_model_against_profile, evaluate_model_requirement_tiers, evaluate_model_requirements, sync_model_catalog
+from hlf_mcp.hlf.model_catalog import (
+    evaluate_model_against_profile,
+    evaluate_model_requirement_tiers,
+    evaluate_model_requirements,
+    sync_model_catalog,
+)
 
 
 def _catalog_entries() -> dict[str, dict]:
@@ -107,7 +112,9 @@ def test_model_profile_evaluation_supports_sidecar_quality_profile() -> None:
     assert result["resolved_tier"] == "launch-qualified"
 
 
-def test_profile_tool_uses_persisted_benchmark_artifact_when_scores_are_omitted(monkeypatch) -> None:
+def test_profile_tool_uses_persisted_benchmark_artifact_when_scores_are_omitted(
+    monkeypatch,
+) -> None:
     monkeypatch.delenv("HLF_REMOTE_MODEL_ENDPOINTS", raising=False)
 
     server.hlf_record_benchmark_artifact(

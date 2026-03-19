@@ -11,26 +11,24 @@ Executes .hlb bytecode with:
 
 from __future__ import annotations
 
-import logging
 import hashlib
+import logging
+import math
+import platform
 import struct
 import sys
 from dataclasses import dataclass, field
 from typing import Any
 
 from hlf_mcp.hlf.bytecode import (
-    ConstantPool,
-    GAS_COSTS,
-    OPCODES,
-    Op,
-    _CODE_TO_NAME,
     _CODE_TO_OP,
     _HEADER_SIZE,
     _MAGIC,
-    _OP_HAS_OPERAND,
-    _decode_header,
-    _decode_pool,
+    GAS_COSTS,
+    ConstantPool,
     HLFBytecode,
+    Op,
+    _decode_header,
 )
 from hlf_mcp.hlf.pii_guard import PIIGuard
 
@@ -44,50 +42,132 @@ _PII_GUARD = PIIGuard()
 
 # Environment variables that HLF programs must never be allowed to read.
 # SYS_ENV will raise PermissionError for any name in this set.
-_ENV_BLOCKLIST: frozenset[str] = frozenset({
-    "HLF_STRICT",
-    "VALKEY_URL", "REDIS_URL",
-    "OLLAMA_API_KEY",
-    "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
-    "GITHUB_TOKEN", "GITHUB_API_KEY",
-    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
-    "AZURE_CLIENT_SECRET", "AZURE_STORAGE_KEY",
-    "DATABASE_URL", "POSTGRES_PASSWORD", "MYSQL_PASSWORD",
-})
+_ENV_BLOCKLIST: frozenset[str] = frozenset(
+    {
+        "HLF_STRICT",
+        "VALKEY_URL",
+        "REDIS_URL",
+        "OLLAMA_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GEMINI_API_KEY",
+        "GITHUB_TOKEN",
+        "GITHUB_API_KEY",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_STORAGE_KEY",
+        "DATABASE_URL",
+        "POSTGRES_PASSWORD",
+        "MYSQL_PASSWORD",
+    }
+)
 
 HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
-    "analyze":            {"tier": "all",       "gas": 2,  "effects": ["read_fs"],      "desc": "Analyze a file or resource"},
-    "enforce_constraint": {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Enforce a typed constraint"},
-    "vote":               {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Cast a consensus vote"},
-    "delegate":           {"tier": "all",       "gas": 3,  "effects": ["spawn_agent"],  "desc": "Delegate to a sub-agent"},
-    "route":              {"tier": "all",       "gas": 2,  "effects": ["model_call"],   "desc": "Route to a model"},
-    "read_file":          {"tier": "all",       "gas": 2,  "effects": ["read_fs"],      "desc": "Read a file"},
-    "write_file":         {"tier": "operators", "gas": 5,  "effects": ["write_fs"],     "desc": "Write a file (operator+)"},
-    "http_get":           {"tier": "all",       "gas": 4,  "effects": ["network"],      "desc": "HTTP GET request"},
-    "http_post":          {"tier": "operators", "gas": 5,  "effects": ["network"],      "desc": "HTTP POST request"},
-    "spawn_agent":        {"tier": "operators", "gas": 10, "effects": ["spawn_agent"],  "desc": "Spawn a new agent"},
-    "memory_store":       {"tier": "all",       "gas": 5,  "effects": ["memory_write"], "desc": "Store to RAG memory"},
-    "memory_recall":      {"tier": "all",       "gas": 5,  "effects": ["memory_read"],  "desc": "Recall from RAG memory"},
-    "log_emit":           {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Emit a log event"},
-    "assert_check":       {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Check an assertion"},
-    "get_vram":           {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Get available VRAM"},
-    "get_tier":           {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Get deployment tier"},
-    "hash_sha256":        {"tier": "all",       "gas": 2,  "effects": [],               "desc": "Compute SHA-256 hash"},
-    "merkle_chain":       {"tier": "all",       "gas": 3,  "effects": [],               "desc": "Append to Merkle chain"},
-    "align_verify":       {"tier": "all",       "gas": 4,  "effects": [],               "desc": "Verify ALIGN ledger rule"},
-    "spec_gate_check":    {"tier": "all",       "gas": 4,  "effects": [],               "desc": "Check SPEC_GATE constraint"},
-    "get_timestamp":      {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Get current timestamp"},
-    "generate_ulid":      {"tier": "all",       "gas": 1,  "effects": [],               "desc": "Generate a ULID"},
-    "compress_tokens":    {"tier": "all",       "gas": 3,  "effects": [],               "desc": "Apply HLF token compression"},
-    "summarize":          {"tier": "all",       "gas": 8,  "effects": ["model_call"],   "desc": "Fractal summarization"},
-    "embed_text":         {"tier": "all",       "gas": 5,  "effects": ["model_call"],   "desc": "Generate text embeddings"},
-    "cosine_similarity":  {"tier": "all",       "gas": 2,  "effects": [],               "desc": "Cosine similarity score"},
-    "cove_validate":      {"tier": "all",       "gas": 6,  "effects": ["model_call"],   "desc": "CoVE adversarial validation"},
-    "z3_verify":          {"tier": "operators", "gas": 10, "effects": [],               "desc": "Z3 formal verification"},
+    "analyze": {
+        "tier": "all",
+        "gas": 2,
+        "effects": ["read_fs"],
+        "desc": "Analyze a file or resource",
+    },
+    "enforce_constraint": {
+        "tier": "all",
+        "gas": 1,
+        "effects": [],
+        "desc": "Enforce a typed constraint",
+    },
+    "vote": {"tier": "all", "gas": 1, "effects": [], "desc": "Cast a consensus vote"},
+    "delegate": {
+        "tier": "all",
+        "gas": 3,
+        "effects": ["spawn_agent"],
+        "desc": "Delegate to a sub-agent",
+    },
+    "route": {"tier": "all", "gas": 2, "effects": ["model_call"], "desc": "Route to a model"},
+    "read_file": {"tier": "all", "gas": 2, "effects": ["read_fs"], "desc": "Read a file"},
+    "write_file": {
+        "tier": "operators",
+        "gas": 5,
+        "effects": ["write_fs"],
+        "desc": "Write a file (operator+)",
+    },
+    "http_get": {"tier": "all", "gas": 4, "effects": ["network"], "desc": "HTTP GET request"},
+    "http_post": {
+        "tier": "operators",
+        "gas": 5,
+        "effects": ["network"],
+        "desc": "HTTP POST request",
+    },
+    "spawn_agent": {
+        "tier": "operators",
+        "gas": 10,
+        "effects": ["spawn_agent"],
+        "desc": "Spawn a new agent",
+    },
+    "memory_store": {
+        "tier": "all",
+        "gas": 5,
+        "effects": ["memory_write"],
+        "desc": "Store to RAG memory",
+    },
+    "memory_recall": {
+        "tier": "all",
+        "gas": 5,
+        "effects": ["memory_read"],
+        "desc": "Recall from RAG memory",
+    },
+    "log_emit": {"tier": "all", "gas": 1, "effects": [], "desc": "Emit a log event"},
+    "assert_check": {"tier": "all", "gas": 1, "effects": [], "desc": "Check an assertion"},
+    "get_vram": {"tier": "all", "gas": 1, "effects": [], "desc": "Get available VRAM"},
+    "get_tier": {"tier": "all", "gas": 1, "effects": [], "desc": "Get deployment tier"},
+    "hash_sha256": {"tier": "all", "gas": 2, "effects": [], "desc": "Compute SHA-256 hash"},
+    "merkle_chain": {"tier": "all", "gas": 3, "effects": [], "desc": "Append to Merkle chain"},
+    "align_verify": {"tier": "all", "gas": 4, "effects": [], "desc": "Verify ALIGN ledger rule"},
+    "spec_gate_check": {
+        "tier": "all",
+        "gas": 4,
+        "effects": [],
+        "desc": "Check SPEC_GATE constraint",
+    },
+    "get_timestamp": {"tier": "all", "gas": 1, "effects": [], "desc": "Get current timestamp"},
+    "generate_ulid": {"tier": "all", "gas": 1, "effects": [], "desc": "Generate a ULID"},
+    "compress_tokens": {
+        "tier": "all",
+        "gas": 3,
+        "effects": [],
+        "desc": "Apply HLF token compression",
+    },
+    "summarize": {
+        "tier": "all",
+        "gas": 8,
+        "effects": ["model_call"],
+        "desc": "Fractal summarization",
+    },
+    "embed_text": {
+        "tier": "all",
+        "gas": 5,
+        "effects": ["model_call"],
+        "desc": "Generate text embeddings",
+    },
+    "cosine_similarity": {
+        "tier": "all",
+        "gas": 2,
+        "effects": [],
+        "desc": "Cosine similarity score",
+    },
+    "cove_validate": {
+        "tier": "all",
+        "gas": 6,
+        "effects": ["model_call"],
+        "desc": "CoVE adversarial validation",
+    },
+    "z3_verify": {"tier": "operators", "gas": 10, "effects": [], "desc": "Z3 formal verification"},
 }
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
+
 
 class HlfVMGasExhausted(Exception):
     """Raised when the gas limit is exceeded during execution."""
@@ -99,81 +179,102 @@ class HLFRuntimeError(Exception):
 
 # ── VMResult ──────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class VMResult:
-    code: int                                                    # 0 = ok, non-zero = error
+    code: int  # 0 = ok, non-zero = error
     message: str
     gas_used: int
-    stack: list[Any]          = field(default_factory=list)
-    scope: dict[str, Any]     = field(default_factory=dict)
+    stack: list[Any] = field(default_factory=list)
+    scope: dict[str, Any] = field(default_factory=dict)
     trace: list[dict[str, Any]] = field(default_factory=list)
     side_effects: list[dict[str, Any]] = field(default_factory=list)
-    error: str | None         = None
+    error: str | None = None
 
 
 # ── HlfVM ─────────────────────────────────────────────────────────────────────
+
 
 class HlfVM:
     """HLF stack-machine virtual machine."""
 
     def __init__(self, tier: str = "hearth", max_gas: int = 100) -> None:
-        self.tier     = tier
-        self.max_gas  = max_gas
+        self.tier = tier
+        self.max_gas = max_gas
         self.gas_used = 0
-        self.stack:      list[Any]          = []
-        self.scope:      dict[str, Any]     = {}
-        self.immutables: set[str]           = set()
-        self.trace:      list[dict[str, Any]] = []
-        self._halted         = False
-        self._result_code    = 0
+        self.stack: list[Any] = []
+        self.scope: dict[str, Any] = {}
+        self.immutables: set[str] = set()
+        self.trace: list[dict[str, Any]] = []
+        self._halted = False
+        self._result_code = 0
         self._result_message = "ok"
-        self._side_effects:  list[dict[str, Any]] = []
+        self._side_effects: list[dict[str, Any]] = []
 
     def execute(self, hlb_data: bytes) -> VMResult:
         """Execute .hlb bytecode and return a VMResult."""
         if len(hlb_data) < 32 + _HEADER_SIZE:
-            return VMResult(code=1, message="Bytecode too short", gas_used=0, error="Bytecode too short")
+            return VMResult(
+                code=1, message="Bytecode too short", gas_used=0, error="Bytecode too short"
+            )
 
         payload = hlb_data[32:]
         if payload[:4] != _MAGIC:
-            return VMResult(code=1, message="Invalid magic bytes", gas_used=0, error="Invalid magic bytes")
+            return VMResult(
+                code=1, message="Invalid magic bytes", gas_used=0, error="Invalid magic bytes"
+            )
 
-        hdr      = _decode_header(payload[:_HEADER_SIZE])
+        hdr = _decode_header(payload[:_HEADER_SIZE])
         code_len = hdr["code_len"]
 
         pool, pool_size = ConstantPool.decode(payload[_HEADER_SIZE:])
         code_start = _HEADER_SIZE + pool_size
-        code_bytes = payload[code_start: code_start + code_len]
+        code_bytes = payload[code_start : code_start + code_len]
 
         try:
             self._execute_code(code_bytes, pool)
         except HlfVMGasExhausted as exc:
             return VMResult(
-                code=2, message=str(exc), gas_used=self.gas_used,
-                stack=list(self.stack), scope=dict(self.scope),
-                trace=self.trace[:50], side_effects=self._side_effects,
+                code=2,
+                message=str(exc),
+                gas_used=self.gas_used,
+                stack=list(self.stack),
+                scope=dict(self.scope),
+                trace=self.trace[:50],
+                side_effects=self._side_effects,
                 error=str(exc),
             )
         except HLFRuntimeError as exc:
             return VMResult(
-                code=1, message=str(exc), gas_used=self.gas_used,
-                stack=list(self.stack), scope=dict(self.scope),
-                trace=self.trace[:50], side_effects=self._side_effects,
+                code=1,
+                message=str(exc),
+                gas_used=self.gas_used,
+                stack=list(self.stack),
+                scope=dict(self.scope),
+                trace=self.trace[:50],
+                side_effects=self._side_effects,
                 error=str(exc),
             )
         except Exception as exc:
             return VMResult(
-                code=1, message=str(exc), gas_used=self.gas_used,
-                stack=list(self.stack), scope=dict(self.scope),
-                trace=self.trace[:50], side_effects=self._side_effects,
+                code=1,
+                message=str(exc),
+                gas_used=self.gas_used,
+                stack=list(self.stack),
+                scope=dict(self.scope),
+                trace=self.trace[:50],
+                side_effects=self._side_effects,
                 error=str(exc),
             )
 
         return VMResult(
-            code=self._result_code, message=self._result_message,
+            code=self._result_code,
+            message=self._result_message,
             gas_used=self.gas_used,
-            stack=list(self.stack), scope=dict(self.scope),
-            trace=self.trace[:50], side_effects=self._side_effects,
+            stack=list(self.stack),
+            scope=dict(self.scope),
+            trace=self.trace[:50],
+            side_effects=self._side_effects,
         )
 
 
@@ -212,11 +313,13 @@ def _query_memory_context(
             return None
     except Exception as exc:  # noqa: BLE001
         logger.warning("Memory context lookup failed during runtime dispatch: %s", exc)
-        side_effects.append({
-            "type": "memory_context_error",
-            "source": source or "unknown",
-            "query_chars": len(normalized),
-        })
+        side_effects.append(
+            {
+                "type": "memory_context_error",
+                "source": source or "unknown",
+                "query_chars": len(normalized),
+            }
+        )
         return None
 
     results: list[Any]
@@ -232,12 +335,14 @@ def _query_memory_context(
         count = 1
 
     trimmed_results = results[:top_k]
-    side_effects.append({
-        "type": "memory_context_query",
-        "source": source or "unknown",
-        "query_chars": len(normalized),
-        "result_count": count,
-    })
+    side_effects.append(
+        {
+            "type": "memory_context_query",
+            "source": source or "unknown",
+            "query_chars": len(normalized),
+            "result_count": count,
+        }
+    )
     return {
         "source": source or "unknown",
         "count": count,
@@ -256,7 +361,9 @@ def _embedding_profile_summary(scope: dict[str, Any]) -> dict[str, Any] | None:
         "model": profile.get("embedding_recommendation", {}).get("model"),
         "fallback_model": profile.get("fallback_recommendation", {}).get("model"),
         "ollama_available": profile.get("runtime_status", {}).get("ollama_available", False),
-        "recommended_model_runnable": profile.get("runtime_status", {}).get("recommended_model_runnable", False),
+        "recommended_model_runnable": profile.get("runtime_status", {}).get(
+            "recommended_model_runnable", False
+        ),
     }
 
 
@@ -277,13 +384,15 @@ def _resolve_pointer_argument(
     if verification["status"] == "not_pointer":
         return value
 
-    side_effects.append({
-        "type": "pointer_validation",
-        "pointer": value[:120],
-        "status": verification["status"],
-        "alias": verification.get("alias", ""),
-        "trust_tier": verification.get("trust_tier", "unknown"),
-    })
+    side_effects.append(
+        {
+            "type": "pointer_validation",
+            "pointer": value[:120],
+            "status": verification["status"],
+            "alias": verification.get("alias", ""),
+            "trust_tier": verification.get("trust_tier", "unknown"),
+        }
+    )
     if verification["status"] != "ok":
         if str(scope.get("_pointer_trust_mode", "enforce")) == "audit":
             return value
@@ -303,7 +412,7 @@ def _resolve_pointer_argument(
                 raise HLFRuntimeError(f"Unknown opcode 0x{op_byte:02X} at pc={pc}")
 
             # Decode 2-byte little-endian operand (always present in fixed format)
-            operand = struct.unpack("<H", code[pc + 1: pc + 3])[0] if pc + 2 < len(code) else 0
+            operand = struct.unpack("<H", code[pc + 1 : pc + 3])[0] if pc + 2 < len(code) else 0
 
             # Charge gas BEFORE executing
             cost = GAS_COSTS.get(op, 1)
@@ -325,7 +434,7 @@ def _resolve_pointer_argument(
                 trace_entry["push"] = val
 
             elif op == Op.STORE:
-                val  = self.stack[-1] if self.stack else None
+                val = self.stack[-1] if self.stack else None
                 name = pool.get(operand)
                 if name in self.immutables:
                     raise HLFRuntimeError(f"Cannot reassign immutable variable '{name}'")
@@ -336,7 +445,7 @@ def _resolve_pointer_argument(
                 self.stack.append(self.scope.get(name))
 
             elif op == Op.STORE_IMMUT:
-                val  = self.stack[-1] if self.stack else None
+                val = self.stack[-1] if self.stack else None
                 name = pool.get(operand)
                 if name in self.immutables:
                     raise HLFRuntimeError(f"Cannot reassign immutable variable '{name}'")
@@ -491,7 +600,9 @@ def _resolve_pointer_argument(
 
             elif op == Op.SPEC_DEFINE:
                 tag = pool.get(operand) or ""
-                self._side_effects.append({"type": "spec_lifecycle", "op": "SPEC_DEFINE", "tag": tag})
+                self._side_effects.append(
+                    {"type": "spec_lifecycle", "op": "SPEC_DEFINE", "tag": tag}
+                )
 
             elif op == Op.SPEC_GATE:
                 tag = pool.get(operand) or ""
@@ -499,7 +610,9 @@ def _resolve_pointer_argument(
 
             elif op == Op.SPEC_UPDATE:
                 tag = pool.get(operand) or ""
-                self._side_effects.append({"type": "spec_lifecycle", "op": "SPEC_UPDATE", "tag": tag})
+                self._side_effects.append(
+                    {"type": "spec_lifecycle", "op": "SPEC_UPDATE", "tag": tag}
+                )
 
             elif op == Op.SPEC_SEAL:
                 tag = pool.get(operand) or ""
@@ -516,6 +629,7 @@ def _resolve_pointer_argument(
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _to_num(v: Any) -> float | int:
     """Convert a value to a numeric type (int preferred over float)."""
@@ -536,17 +650,17 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
     to a structured echo for unknown builtins rather than swallowing the call.
     """
     import hashlib as _hashlib
-    import time as _time
     import os as _os
+    import time as _time
 
     try:
         # ── Math builtins ────────────────────────────────────────────────────
         if name == "MATH_ABS":
             return abs(args[0]) if args else 0
         if name == "MATH_FLOOR":
-            import math; return math.floor(args[0]) if args else 0
+            return math.floor(args[0]) if args else 0
         if name == "MATH_CEIL":
-            import math; return math.ceil(args[0]) if args else 0
+            return math.ceil(args[0]) if args else 0
         if name == "MATH_ROUND":
             return round(args[0]) if args else 0
         if name == "MATH_MIN":
@@ -554,21 +668,21 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         if name == "MATH_MAX":
             return max(args[0], args[1]) if len(args) >= 2 else (args[0] if args else 0)
         if name == "MATH_SQRT":
-            import math; return math.sqrt(args[0]) if args else 0.0
+            return math.sqrt(args[0]) if args else 0.0
         if name == "MATH_POW":
-            import math; return math.pow(args[0], args[1]) if len(args) >= 2 else 0.0
+            return math.pow(args[0], args[1]) if len(args) >= 2 else 0.0
         if name in ("MATH_PI", "PI"):
-            import math; return math.pi
+            return math.pi
         if name in ("MATH_E", "E"):
-            import math; return math.e
+            return math.e
         if name == "MATH_SIN":
-            import math; return math.sin(args[0]) if args else 0.0
+            return math.sin(args[0]) if args else 0.0
         if name == "MATH_COS":
-            import math; return math.cos(args[0]) if args else 1.0
+            return math.cos(args[0]) if args else 1.0
         if name == "MATH_TAN":
-            import math; return math.tan(args[0]) if args else 0.0
+            return math.tan(args[0]) if args else 0.0
         if name == "MATH_LOG":
-            import math; return math.log(args[0]) if args else 0.0
+            return math.log(args[0]) if args else 0.0
 
         # ── String builtins ──────────────────────────────────────────────────
         if name == "STRING_LENGTH":
@@ -599,7 +713,7 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
             return str(args[0]).endswith(str(args[1])) if len(args) >= 2 else False
         if name == "STRING_SUBSTRING":
             if len(args) >= 3:
-                return str(args[0])[int(args[1]):int(args[2])]
+                return str(args[0])[int(args[1]) : int(args[2])]
             return str(args[0]) if args else ""
 
         # ── List / collection builtins ───────────────────────────────────────
@@ -630,41 +744,51 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
             return h.hexdigest()
         if name == "HASH_VERIFY":
             if len(args) >= 2:
-                data = str(args[0]); expected = str(args[1])
+                data = str(args[0])
+                expected = str(args[1])
                 algo = str(args[2]) if len(args) >= 3 else "sha256"
                 import hmac as _hmac
+
                 actual = _hashlib.new(algo.replace("-", "_"), data.encode("utf-8")).hexdigest()
                 return _hmac.compare_digest(actual, expected.lower())
             return False
         if name == "MERKLE_ROOT":
             from hlf_mcp.hlf.stdlib.crypto_mod import MERKLE_ROOT
+
             return MERKLE_ROOT([str(x) for x in (args[0] if args else [])])
         if name == "MERKLE_CHAIN_APPEND":
             from hlf_mcp.hlf.stdlib.crypto_mod import MERKLE_CHAIN_APPEND
+
             prev = str(args[0]) if args else "0" * 64
             entry = str(args[1]) if len(args) >= 2 else ""
             return MERKLE_CHAIN_APPEND(prev, entry)
         if name == "KEY_GENERATE":
             import secrets as _sec
+
             return _sec.token_hex(32)
         if name == "KEY_DERIVE":
             from hlf_mcp.hlf.stdlib.crypto_mod import KEY_DERIVE
+
             password = str(args[0]) if args else ""
             salt_hex = str(args[1]) if len(args) >= 2 else ""
             return KEY_DERIVE(password, salt_hex)
         if name == "ENCRYPT":
             from hlf_mcp.hlf.stdlib.crypto_mod import ENCRYPT
+
             return ENCRYPT(str(args[0]) if args else "", str(args[1]) if len(args) >= 2 else "")
         if name == "DECRYPT":
             from hlf_mcp.hlf.stdlib.crypto_mod import DECRYPT
+
             return DECRYPT(str(args[0]) if args else "", str(args[1]) if len(args) >= 2 else "")
         if name in ("SIGN", "HMAC_SHA256"):
             import hmac as _hmac
+
             data = str(args[0]) if args else ""
-            key  = str(args[1]) if len(args) >= 2 else ""
+            key = str(args[1]) if len(args) >= 2 else ""
             return _hmac.new(key.encode("utf-8"), data.encode("utf-8"), _hashlib.sha256).hexdigest()
         if name == "SIGN_VERIFY":
             from hlf_mcp.hlf.stdlib.crypto_mod import SIGN_VERIFY
+
             if len(args) >= 3:
                 return SIGN_VERIFY(str(args[0]), str(args[1]), str(args[2]))
             return False
@@ -673,9 +797,9 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         if name in ("SYS_TIME", "get_timestamp"):
             return int(_time.time())
         if name == "SYS_OS":
-            import platform; return platform.system()
+            return platform.system()
         if name == "SYS_ARCH":
-            import platform; return platform.machine()
+            return platform.machine()
         if name == "SYS_CWD":
             return _os.getcwd()
         if name == "SYS_ENV":
@@ -688,11 +812,12 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         if name in ("SYS_SLEEP", "SLEEP"):
             ms = int(args[0]) if args else 0
             if ms > 0:
-                _time.sleep(min(ms / 1000, 5.0))   # cap at 5 s in VM context
+                _time.sleep(min(ms / 1000, 5.0))  # cap at 5 s in VM context
             return True
         if name == "generate_ulid":
             # ULID: timestamp (48-bit ms) + random (80-bit) encoded in Crockford base32
             import secrets as _sec
+
             ts_ms = int(_time.time() * 1000)
             ts_bytes = ts_ms.to_bytes(6, "big")
             rand_bytes = _sec.token_bytes(10)
@@ -708,39 +833,50 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         # ── IO builtins (ACFS-confined) ──────────────────────────────────────
         if name in ("READ", "FILE_READ"):
             from hlf_mcp.hlf.stdlib.io_mod import FILE_READ
+
             return FILE_READ(str(args[0])) if args else ""
         if name in ("WRITE", "FILE_WRITE"):
             from hlf_mcp.hlf.stdlib.io_mod import FILE_WRITE
+
             if len(args) >= 2:
-                FILE_WRITE(str(args[0]), str(args[1])); return True
+                FILE_WRITE(str(args[0]), str(args[1]))
+                return True
             return False
         if name == "FILE_EXISTS":
             from hlf_mcp.hlf.stdlib.io_mod import FILE_EXISTS
+
             return FILE_EXISTS(str(args[0])) if args else False
         if name == "DIR_LIST":
             from hlf_mcp.hlf.stdlib.io_mod import DIR_LIST
+
             return DIR_LIST(str(args[0])) if args else []
 
         # ── Agent builtins ───────────────────────────────────────────────────
         if name == "AGENT_ID":
             from hlf_mcp.hlf.stdlib.agent import AGENT_ID
+
             return AGENT_ID()
         if name in ("AGENT_TIER", "get_tier"):
             from hlf_mcp.hlf.stdlib.agent import AGENT_TIER
+
             return AGENT_TIER()
         if name == "AGENT_CAPABILITIES":
             from hlf_mcp.hlf.stdlib.agent import AGENT_CAPABILITIES
+
             return AGENT_CAPABILITIES()
         if name == "GET_GOALS":
             from hlf_mcp.hlf.stdlib.agent import GET_GOALS
+
             return GET_GOALS()
         if name == "SET_GOAL":
             from hlf_mcp.hlf.stdlib.agent import SET_GOAL
+
             return SET_GOAL(str(args[0])) if args else False
 
         # ── Cosine similarity ────────────────────────────────────────────────
         if name == "cosine_similarity":
             import math as _math
+
             if len(args) >= 2:
                 a = [float(x) for x in args[0]] if hasattr(args[0], "__iter__") else []
                 b = [float(x) for x in args[1]] if hasattr(args[1], "__iter__") else []
@@ -757,12 +893,14 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         # ── VRAM (environment-driven) ────────────────────────────────────────
         if name == "get_vram":
             import os as _os
+
             return _os.environ.get("HLF_VRAM", "8GB")
 
         # ── Compression token count (tiktoken) ──────────────────────────────
         if name == "compress_tokens":
             try:
                 import tiktoken as _tt
+
                 enc = _tt.get_encoding("cl100k_base")
                 text = str(args[0]) if args else ""
                 return len(enc.encode(text))
@@ -772,6 +910,7 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         # ── ALIGN Ledger verify ──────────────────────────────────────────────
         if name == "align_verify":
             from hlf_mcp.hlf.compiler import _pass3_align_validate
+
             intent = str(args[0]) if args else ""
             violations = _pass3_align_validate([{"kind": "value", "value": intent}], strict=False)
             return len(violations) == 0
@@ -786,6 +925,7 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         # ── Log emit ────────────────────────────────────────────────────────
         if name == "log_emit":
             import logging as _log
+
             _log.getLogger("hlf.vm").info("[LOG_EMIT] %s", args[0] if args else "")
             return True
 
@@ -845,6 +985,7 @@ def _dispatch_host(
 
         elif fn_name == "merkle_chain":
             from hlf_mcp.hlf.stdlib.crypto_mod import MERKLE_CHAIN_APPEND
+
             prev = scope.get("_merkle_head", "0" * 64)
             entry = str(args[0]) if args else ""
             new_head = MERKLE_CHAIN_APPEND(str(prev), entry)
@@ -865,11 +1006,13 @@ def _dispatch_host(
                     key,
                     [c.name for c in _scan.categories_found],
                 )
-                side_effects.append({
-                    "type": "pii_redacted",
-                    "key": key,
-                    "categories": [c.name for c in _scan.categories_found],
-                })
+                side_effects.append(
+                    {
+                        "type": "pii_redacted",
+                        "key": key,
+                        "categories": [c.name for c in _scan.categories_found],
+                    }
+                )
                 val = _scan.redacted_text
             mem_key = f"_mem_{key}"
             existing = scope.get(mem_key, [])
@@ -884,7 +1027,9 @@ def _dispatch_host(
             key = str(args[0]) if args else "unknown"
             mem_key = f"_mem_{key}"
             stored = scope.get(mem_key, [])
-            result = stored if isinstance(stored, list) else ([stored] if stored is not None else [])
+            result = (
+                stored if isinstance(stored, list) else ([stored] if stored is not None else [])
+            )
 
         # ── Agent identity ───────────────────────────────────────────────────
         elif fn_name == "get_tier":
@@ -911,13 +1056,13 @@ def _dispatch_host(
 
         elif fn_name == "delegate":
             agent = str(args[0]) if args else "unknown"
-            goal  = str(args[1]) if len(args) >= 2 else ""
+            goal = str(args[1]) if len(args) >= 2 else ""
             memory_query = str(args[2]) if len(args) >= 3 else goal
             result = {
                 "delegated": True,
-                "agent":     agent,
-                "goal":      goal,
-                "task_id":   _dispatch_builtin("generate_ulid", []),
+                "agent": agent,
+                "goal": goal,
+                "task_id": _dispatch_builtin("generate_ulid", []),
                 "timestamp": int(_time.time()),
             }
             profile_summary = _embedding_profile_summary(scope)
@@ -931,10 +1076,10 @@ def _dispatch_host(
             strategy = str(args[0]) if args else "auto"
             tier = scope.get("_tier", _os.environ.get("HLF_TIER", "hearth"))
             result = {
-                "routed":    True,
-                "strategy":  strategy,
-                "tier":      tier,
-                "model":     _os.environ.get("HLF_MODEL", "llm-default"),
+                "routed": True,
+                "strategy": strategy,
+                "tier": tier,
+                "model": _os.environ.get("HLF_MODEL", "llm-default"),
                 "timestamp": int(_time.time()),
             }
             routing_query = str(args[1]) if len(args) >= 2 else str(scope.get("REQUEST_INTENT", ""))
@@ -947,20 +1092,23 @@ def _dispatch_host(
 
         # ── Analysis ─────────────────────────────────────────────────────────
         elif fn_name == "analyze":
-            target = str(_resolve_pointer_argument(str(args[0]), scope, side_effects)) if args else ""
+            target = (
+                str(_resolve_pointer_argument(str(args[0]), scope, side_effects)) if args else ""
+            )
             # Real analysis: try to read the target if it's a path
             content_preview = ""
             try:
                 from hlf_mcp.hlf.stdlib.io_mod import FILE_READ
+
                 content_preview = FILE_READ(target)[:200]
             except Exception:
                 content_preview = target[:200]
             sha = _hashlib.sha256(content_preview.encode()).hexdigest()
             result = {
-                "analyzed":       target,
-                "content_hash":   sha,
+                "analyzed": target,
+                "content_hash": sha,
                 "content_preview": content_preview[:80],
-                "timestamp":      int(_time.time()),
+                "timestamp": int(_time.time()),
             }
 
         # ── Assertions / ALIGN ───────────────────────────────────────────────
@@ -968,18 +1116,22 @@ def _dispatch_host(
             val = args[0] if args else False
             passed = bool(val) and not (isinstance(val, dict) and "error" in val)
             if not passed:
-                side_effects.append({"type": "assertion_failed", "fn": fn_name, "val": str(val)[:80]})
+                side_effects.append(
+                    {"type": "assertion_failed", "fn": fn_name, "val": str(val)[:80]}
+                )
             result = passed
 
         elif fn_name == "align_verify":
             intent = str(args[0]) if args else ""
             from hlf_mcp.hlf.compiler import _pass3_align_validate
+
             violations = _pass3_align_validate([{"kind": "value", "value": intent}], strict=False)
             result = {"passed": len(violations) == 0, "violations": violations}
 
         # ── Logging ──────────────────────────────────────────────────────────
         elif fn_name == "log_emit":
             import logging as _log
+
             msg = str(args[0]) if args else ""
             _log.getLogger("hlf.vm").info("[HOST:log_emit] %s", msg)
             side_effects.append({"type": "log", "fn": fn_name, "msg": msg[:200]})
@@ -998,14 +1150,20 @@ def _dispatch_host(
             artifact = args[0] if args else {}
             if isinstance(artifact, dict):
                 strings = []
+
                 def _collect(obj: Any) -> None:
-                    if isinstance(obj, str): strings.append(obj)
+                    if isinstance(obj, str):
+                        strings.append(obj)
                     elif isinstance(obj, dict):
-                        for v in obj.values(): _collect(v)
+                        for value in obj.values():
+                            _collect(value)
                     elif isinstance(obj, list):
-                        for v in obj: _collect(v)
+                        for value in obj:
+                            _collect(value)
+
                 _collect(artifact)
                 from hlf_mcp.hlf.compiler import _ALIGN_COMPILED
+
                 violations = []
                 for text in strings:
                     for rule_id, _, pattern, action in _ALIGN_COMPILED:
@@ -1020,6 +1178,7 @@ def _dispatch_host(
             constraints = args[0] if args else {}
             try:
                 import z3  # type: ignore[import]
+
                 # Build a simple satisfiability check from the constraints dict
                 solver = z3.Solver()
                 if isinstance(constraints, dict):
@@ -1031,16 +1190,25 @@ def _dispatch_host(
                 result = {"satisfiable": str(chk) == "sat", "solver": "z3"}
             except ImportError:
                 # Pure-Python fallback: all-integer constraints trivially satisfiable
-                result = {"satisfiable": True, "solver": "python-fallback",
-                          "note": "z3 not installed; fallback used"}
+                result = {
+                    "satisfiable": True,
+                    "solver": "python-fallback",
+                    "note": "z3 not installed; fallback used",
+                }
 
         # ── File I/O (ACFS-confined) ──────────────────────────────────────────
         elif fn_name in ("READ", "FILE_READ"):
             from hlf_mcp.hlf.stdlib.io_mod import FILE_READ
-            result = FILE_READ(str(_resolve_pointer_argument(str(args[0]), scope, side_effects))) if args else ""
+
+            result = (
+                FILE_READ(str(_resolve_pointer_argument(str(args[0]), scope, side_effects)))
+                if args
+                else ""
+            )
 
         elif fn_name in ("WRITE", "FILE_WRITE"):
             from hlf_mcp.hlf.stdlib.io_mod import FILE_WRITE
+
             if len(args) >= 2:
                 result = FILE_WRITE(
                     str(_resolve_pointer_argument(str(args[0]), scope, side_effects)),
@@ -1052,15 +1220,21 @@ def _dispatch_host(
         # ── HTTP (network-gated) ─────────────────────────────────────────────
         elif fn_name in ("HTTP_GET", "http_get"):
             import urllib.request as _req
+
             url = str(_resolve_pointer_argument(str(args[0]), scope, side_effects)) if args else ""
             with _req.urlopen(url, timeout=10) as resp:  # noqa: S310
                 result = resp.read().decode("utf-8")[:4096]
 
         elif fn_name in ("HTTP_POST", "http_post"):
             import urllib.request as _req
-            url  = str(_resolve_pointer_argument(str(args[0]), scope, side_effects)) if args else ""
-            body = str(_resolve_pointer_argument(str(args[1]), scope, side_effects)) if len(args) >= 2 else ""
-            req  = _req.Request(url, data=body.encode("utf-8"), method="POST")
+
+            url = str(_resolve_pointer_argument(str(args[0]), scope, side_effects)) if args else ""
+            body = (
+                str(_resolve_pointer_argument(str(args[1]), scope, side_effects))
+                if len(args) >= 2
+                else ""
+            )
+            req = _req.Request(url, data=body.encode("utf-8"), method="POST")
             with _req.urlopen(req, timeout=10) as resp:  # noqa: S310
                 result = resp.read().decode("utf-8")[:4096]
 
@@ -1068,10 +1242,10 @@ def _dispatch_host(
         else:
             result = {
                 "host_fn": fn_name,
-                "status":  "unresolved",
-                "args":    [str(a)[:80] for a in args[:4]],
-                "note":    f"No backend mapped for host function '{fn_name}'; "
-                           "register via governance/host_functions.json backend field",
+                "status": "unresolved",
+                "args": [str(a)[:80] for a in args[:4]],
+                "note": f"No backend mapped for host function '{fn_name}'; "
+                "register via governance/host_functions.json backend field",
             }
 
     except Exception as exc:  # noqa: BLE001
@@ -1081,16 +1255,19 @@ def _dispatch_host(
     # Hash sensitive results in the audit trail
     if sensitive and not isinstance(result, dict):
         result_str = str(result)
-        side_effects.append({
-            "type": "sensitive_output",
-            "fn": fn_name,
-            "result_sha256": _hashlib.sha256(result_str.encode()).hexdigest()[:16] + "...",
-        })
+        side_effects.append(
+            {
+                "type": "sensitive_output",
+                "fn": fn_name,
+                "result_sha256": _hashlib.sha256(result_str.encode()).hexdigest()[:16] + "...",
+            }
+        )
 
     return result
 
 
 # ── HLFRuntime (backward-compat wrapper) ─────────────────────────────────────
+
 
 class HLFRuntime:
     """Backward-compatible wrapper around HlfVM."""
@@ -1111,7 +1288,9 @@ class HLFRuntime:
         effective_variables = variables or {}
         effective_tier = tier or str(effective_variables.get("DEPLOYMENT_TIER", "hearth"))
         effective_audit_logger = audit_logger or effective_variables.get("_audit_logger")
-        effective_verification_admission = verification_admission or effective_variables.get("_verification_admission")
+        effective_verification_admission = verification_admission or effective_variables.get(
+            "_verification_admission"
+        )
 
         def _emit_audit(event: str, data: dict[str, Any]) -> dict[str, Any] | None:
             if effective_audit_logger is None or not hasattr(effective_audit_logger, "log"):
@@ -1141,7 +1320,9 @@ class HLFRuntime:
                         f"(Audit ID: {termination.audit_id})"
                     )
                 else:
-                    error = "Ethics Governor blocked execution: " + "; ".join(governor_result.blocks)
+                    error = "Ethics Governor blocked execution: " + "; ".join(
+                        governor_result.blocks
+                    )
                 return {
                     "status": "governor_blocked",
                     "result": None,
@@ -1169,9 +1350,15 @@ class HLFRuntime:
                         "hlf_execution_blocked",
                         {
                             "tier": effective_tier,
-                            "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest() if source else "",
-                            "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
-                            "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
+                            "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest()
+                            if source
+                            else "",
+                            "capsule_id": str(
+                                effective_variables.get("_capsule", {}).get("capsule_id", "")
+                            ),
+                            "capsule_request_id": str(
+                                effective_variables.get("_capsule_request_id", "")
+                            ),
                             "blocks": governor_result.blocks,
                         },
                     ),
@@ -1187,7 +1374,9 @@ class HLFRuntime:
                 "trace": [],
                 "side_effects": [],
                 "error": "; ".join(
-                    str(reason) for reason in effective_verification_admission.get("reasons", []) if reason
+                    str(reason)
+                    for reason in effective_verification_admission.get("reasons", [])
+                    if reason
                 )
                 or "Formal verifier denied execution admission.",
                 "verification": effective_verification_admission,
@@ -1195,11 +1384,21 @@ class HLFRuntime:
                     "hlf_execution_blocked",
                     {
                         "tier": effective_tier,
-                        "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest() if source else "",
-                        "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
-                        "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
-                        "verification_verdict": str(effective_verification_admission.get("verdict", "")),
-                        "verification_reasons": list(effective_verification_admission.get("reasons", [])),
+                        "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest()
+                        if source
+                        else "",
+                        "capsule_id": str(
+                            effective_variables.get("_capsule", {}).get("capsule_id", "")
+                        ),
+                        "capsule_request_id": str(
+                            effective_variables.get("_capsule_request_id", "")
+                        ),
+                        "verification_verdict": str(
+                            effective_verification_admission.get("verdict", "")
+                        ),
+                        "verification_reasons": list(
+                            effective_verification_admission.get("reasons", [])
+                        ),
                     },
                 ),
             }
@@ -1209,7 +1408,7 @@ class HLFRuntime:
             vm.scope.update(effective_variables)
         result = vm.execute(bytecode)
         status = "ok" if result.code == 0 else "error"
-        top    = result.stack[-1] if result.stack else None
+        top = result.stack[-1] if result.stack else None
         execution_audit = _emit_audit(
             "hlf_execution",
             {
@@ -1218,7 +1417,9 @@ class HLFRuntime:
                 "gas_used": result.gas_used,
                 "trace_length": len(result.trace),
                 "side_effect_count": len(result.side_effects),
-                "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest() if source else "",
+                "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest()
+                if source
+                else "",
                 "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
                 "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
                 "error": result.error or "",
@@ -1227,34 +1428,45 @@ class HLFRuntime:
         )
         sealed_side_effects: list[dict[str, Any]] = []
         for effect in result.side_effects:
-            if effect.get("type") not in {"memory_write", "memory_read", "host_error", "pointer_validation", "pii_redacted"}:
+            if effect.get("type") not in {
+                "memory_write",
+                "memory_read",
+                "host_error",
+                "pointer_validation",
+                "pii_redacted",
+            }:
                 continue
             entry = _emit_audit(
                 "hlf_side_effect",
                 {
                     "tier": effective_tier,
-                    "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
+                    "capsule_id": str(
+                        effective_variables.get("_capsule", {}).get("capsule_id", "")
+                    ),
                     "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
-                    "execution_trace_id": execution_audit.get("trace_id", "") if execution_audit else "",
+                    "execution_trace_id": execution_audit.get("trace_id", "")
+                    if execution_audit
+                    else "",
                     "effect": effect,
                 },
             )
             if entry is not None:
                 sealed_side_effects.append(entry)
         return {
-            "status":       status,
-            "result":       top,
-            "gas_used":     result.gas_used,
-            "trace":        result.trace,
+            "status": status,
+            "result": top,
+            "gas_used": result.gas_used,
+            "trace": result.trace,
             "side_effects": result.side_effects,
-            "error":        result.error,
-            "verification": effective_verification_admission if isinstance(effective_verification_admission, dict) else None,
+            "error": result.error,
+            "verification": effective_verification_admission
+            if isinstance(effective_verification_admission, dict)
+            else None,
             "audit": {
                 "execution": execution_audit,
                 "side_effects": sealed_side_effects,
             },
         }
-
 
 
 def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> None:
@@ -1266,10 +1478,12 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
         if op is None:
             raise HLFRuntimeError(f"Unknown opcode 0x{op_byte:02X} at pc={pc}")
 
-        operand = struct.unpack("<H", code[pc + 1: pc + 3])[0] if pc + 2 < len(code) else 0
+        operand = struct.unpack("<H", code[pc + 1 : pc + 3])[0] if pc + 2 < len(code) else 0
         cost = GAS_COSTS.get(op, 1)
         if self.gas_used + cost > self.max_gas:
-            raise HlfVMGasExhausted(f"Gas exhausted at pc={pc}: {self.gas_used}+{cost} > {self.max_gas}")
+            raise HlfVMGasExhausted(
+                f"Gas exhausted at pc={pc}: {self.gas_used}+{cost} > {self.max_gas}"
+            )
         self.gas_used += cost
 
         trace_entry: dict[str, Any] = {"pc": pc, "op": op.name, "gas": self.gas_used}
@@ -1313,7 +1527,7 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
             a = self.stack.pop() if self.stack else 0
             bn = _to_num(b)
             if bn == 0:
-                raise HLFRuntimeError('Division by zero')
+                raise HLFRuntimeError("Division by zero")
             result = _to_num(a) / bn
             self.stack.append(int(result) if result == int(result) else result)
         elif op == Op.MOD:
@@ -1321,7 +1535,7 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
             a = self.stack.pop() if self.stack else 0
             bn = _to_num(b)
             if bn == 0:
-                raise HLFRuntimeError('Modulo by zero')
+                raise HLFRuntimeError("Modulo by zero")
             self.stack.append(_to_num(a) % bn)
         elif op == Op.NEG:
             a = self.stack.pop() if self.stack else 0
@@ -1440,6 +1654,7 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
 HlfVM._execute_code = _hlfvm_execute_code_bound
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
+
 def main() -> None:
     """CLI: hlfrun <file.hlf>"""
     import argparse
@@ -1448,7 +1663,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Run an HLF program")
     ap.add_argument("file", help="HLF source file")
     ap.add_argument("--gas", type=int, default=1000, help="Gas limit")
-    ap.add_argument("--var", action="append", default=[], metavar="KEY=VALUE", help="Variable binding")
+    ap.add_argument(
+        "--var", action="append", default=[], metavar="KEY=VALUE", help="Variable binding"
+    )
     args = ap.parse_args()
 
     variables: dict[str, Any] = {}
@@ -1462,13 +1679,13 @@ def main() -> None:
     with open(args.file, encoding="utf-8") as f:
         source = f.read()
 
-    compiler    = HLFCompiler()
+    compiler = HLFCompiler()
     bytecode_enc = HLFBytecode()
-    runtime     = HLFRuntime()
+    runtime = HLFRuntime()
 
     try:
-        result  = compiler.compile(source)
-        bc      = bytecode_enc.encode(result["ast"])
+        result = compiler.compile(source)
+        bc = bytecode_enc.encode(result["ast"])
         run_result = runtime.run(bc, gas_limit=args.gas, variables=variables)
         print(json.dumps(run_result, indent=2, ensure_ascii=False))
         if run_result["status"] != "ok":
@@ -1476,5 +1693,3 @@ def main() -> None:
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         sys.exit(1)
-
-

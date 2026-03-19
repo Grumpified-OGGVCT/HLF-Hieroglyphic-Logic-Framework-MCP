@@ -70,7 +70,9 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             benchmark = ctx.benchmark.analyze(source, compare_text=normalized_intent)
             localized_audit = hlf_to_language(ast, language=resolved_language)
             english_audit = hlf_to_english(ast)
-            diagnostics = translation_diagnostics(normalized_intent, language=resolved_language, source=source).to_dict()
+            diagnostics = translation_diagnostics(
+                normalized_intent, language=resolved_language, source=source
+            ).to_dict()
 
             response: dict[str, Any] = {
                 "success": len(capsule_violations) == 0 and len(align_violations) == 0,
@@ -246,15 +248,24 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         )
 
     @mcp.tool()
-    def hlf_translate_to_hlf(text: str, version: str = "3", language: str = "auto") -> dict[str, Any]:
+    def hlf_translate_to_hlf(
+        text: str, version: str = "3", language: str = "auto"
+    ) -> dict[str, Any]:
         """Convert natural language instructions to HLF source code."""
         try:
             source = language_to_hlf(text, language=language, version=version)
             resolved_language = language
             if language == "auto":
                 resolved_language = resolve_language("auto", text=text)
-            diagnostics = translation_diagnostics(text, language=resolved_language, source=source).to_dict()
-            return {"status": "ok", "source": source, "language": resolved_language, "translation": diagnostics}
+            diagnostics = translation_diagnostics(
+                text, language=resolved_language, source=source
+            ).to_dict()
+            return {
+                "status": "ok",
+                "source": source,
+                "language": resolved_language,
+                "translation": diagnostics,
+            }
         except Exception as exc:
             return {"status": "error", "error": str(exc)}
 
@@ -446,7 +457,11 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         try:
             result = ctx.compiler.compile(source)
             resolved_language = resolve_language(language)
-            summary = insaits.decompile(result["ast"]) if resolved_language == "en" else hlf_to_language(result["ast"], language=resolved_language)
+            summary = (
+                insaits.decompile(result["ast"])
+                if resolved_language == "en"
+                else hlf_to_language(result["ast"], language=resolved_language)
+            )
             response = {"status": "ok", "summary": summary, "language": resolved_language}
             if resolved_language != "en":
                 response["summary_en"] = insaits.decompile(result["ast"])
@@ -462,8 +477,17 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         try:
             result = ctx.compiler.compile(source)
             resolved_language = resolve_language(language)
-            docs = insaits.decompile(result["ast"]) if resolved_language == "en" else hlf_to_language(result["ast"], language=resolved_language)
-            response = {"status": "ok", "docs": docs, "language": resolved_language, "ast": result["ast"]}
+            docs = (
+                insaits.decompile(result["ast"])
+                if resolved_language == "en"
+                else hlf_to_language(result["ast"], language=resolved_language)
+            )
+            response = {
+                "status": "ok",
+                "docs": docs,
+                "language": resolved_language,
+                "ast": result["ast"],
+            }
             if resolved_language != "en":
                 response["docs_en"] = insaits.decompile(result["ast"])
             return response

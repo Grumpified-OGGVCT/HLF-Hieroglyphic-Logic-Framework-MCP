@@ -6,15 +6,16 @@ defaults if JSON is not found (Docker/test environments).
 """
 
 from __future__ import annotations
+
 import dataclasses
 import hashlib
 import json
 import logging
-import time
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
 
 @dataclasses.dataclass
 class HostFunction:
@@ -34,6 +35,7 @@ class HostFunction:
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
+
 
 class HostFunctionRegistry:
     """Registry of available host functions."""
@@ -83,28 +85,155 @@ class HostFunctionRegistry:
 
     def _load_defaults(self) -> None:
         defaults = [
-            ("READ",       [{"name":"path","type":"path"}],        "string", ["hearth","forge","sovereign"], 1,  "dapr_file_read",  False),
-            ("WRITE",      [{"name":"path","type":"path"},{"name":"data","type":"string"}], "bool", ["hearth","forge","sovereign"], 2, "dapr_file_write", False),
-            ("HTTP_GET",   [{"name":"url","type":"string"}],        "string", ["forge","sovereign"],          3,  "dapr_http_proxy", False),
-            ("HTTP_POST",  [{"name":"url","type":"string"},{"name":"body","type":"string"}], "string", ["forge","sovereign"], 5, "dapr_http_proxy", False),
-            ("SPAWN",      [{"name":"image","type":"string"},{"name":"env","type":"map"}], "string", ["forge","sovereign"], 5, "docker_orchestrator", False),
-            ("SLEEP",      [{"name":"ms","type":"int"}],            "bool",   ["hearth","forge","sovereign"], 0,  "builtin",         False),
-            ("WEB_SEARCH", [{"name":"query","type":"string"}],      "string", ["forge","sovereign"],          5,  "dapr_http_proxy", True),
-            ("analyze",    [{"name":"target","type":"string"}],     "string", ["hearth","forge","sovereign"], 2,  "builtin",         False),
-            ("hash_sha256",[{"name":"data","type":"string"}],       "string", ["hearth","forge","sovereign"], 2,  "builtin",         False),
-            ("log_emit",   [{"name":"msg","type":"string"}],        "bool",   ["hearth","forge","sovereign"], 1,  "builtin",         False),
-            ("memory_store",[{"name":"key","type":"string"},{"name":"value","type":"any"}], "bool", ["hearth","forge","sovereign"], 5, "builtin", False),
-            ("memory_recall",[{"name":"key","type":"string"}],      "any",    ["hearth","forge","sovereign"], 5,  "builtin",         False),
-            ("get_tier",   [],                                       "string", ["hearth","forge","sovereign"], 1,  "builtin",         False),
-            ("get_vram",   [],                                       "string", ["hearth","forge","sovereign"], 1,  "builtin",         False),
-            ("vote",       [{"name":"config","type":"string"}],     "bool",   ["hearth","forge","sovereign"], 1,  "builtin",         False),
-            ("delegate",   [{"name":"agent","type":"string"},{"name":"goal","type":"string"}], "any", ["forge","sovereign"], 3, "builtin", False),
-            ("route",      [{"name":"strategy","type":"string"}],   "any",    ["forge","sovereign"],          2,  "builtin",         False),
+            (
+                "READ",
+                [{"name": "path", "type": "path"}],
+                "string",
+                ["hearth", "forge", "sovereign"],
+                1,
+                "dapr_file_read",
+                False,
+            ),
+            (
+                "WRITE",
+                [{"name": "path", "type": "path"}, {"name": "data", "type": "string"}],
+                "bool",
+                ["hearth", "forge", "sovereign"],
+                2,
+                "dapr_file_write",
+                False,
+            ),
+            (
+                "HTTP_GET",
+                [{"name": "url", "type": "string"}],
+                "string",
+                ["forge", "sovereign"],
+                3,
+                "dapr_http_proxy",
+                False,
+            ),
+            (
+                "HTTP_POST",
+                [{"name": "url", "type": "string"}, {"name": "body", "type": "string"}],
+                "string",
+                ["forge", "sovereign"],
+                5,
+                "dapr_http_proxy",
+                False,
+            ),
+            (
+                "SPAWN",
+                [{"name": "image", "type": "string"}, {"name": "env", "type": "map"}],
+                "string",
+                ["forge", "sovereign"],
+                5,
+                "docker_orchestrator",
+                False,
+            ),
+            (
+                "SLEEP",
+                [{"name": "ms", "type": "int"}],
+                "bool",
+                ["hearth", "forge", "sovereign"],
+                0,
+                "builtin",
+                False,
+            ),
+            (
+                "WEB_SEARCH",
+                [{"name": "query", "type": "string"}],
+                "string",
+                ["forge", "sovereign"],
+                5,
+                "dapr_http_proxy",
+                True,
+            ),
+            (
+                "analyze",
+                [{"name": "target", "type": "string"}],
+                "string",
+                ["hearth", "forge", "sovereign"],
+                2,
+                "builtin",
+                False,
+            ),
+            (
+                "hash_sha256",
+                [{"name": "data", "type": "string"}],
+                "string",
+                ["hearth", "forge", "sovereign"],
+                2,
+                "builtin",
+                False,
+            ),
+            (
+                "log_emit",
+                [{"name": "msg", "type": "string"}],
+                "bool",
+                ["hearth", "forge", "sovereign"],
+                1,
+                "builtin",
+                False,
+            ),
+            (
+                "memory_store",
+                [{"name": "key", "type": "string"}, {"name": "value", "type": "any"}],
+                "bool",
+                ["hearth", "forge", "sovereign"],
+                5,
+                "builtin",
+                False,
+            ),
+            (
+                "memory_recall",
+                [{"name": "key", "type": "string"}],
+                "any",
+                ["hearth", "forge", "sovereign"],
+                5,
+                "builtin",
+                False,
+            ),
+            ("get_tier", [], "string", ["hearth", "forge", "sovereign"], 1, "builtin", False),
+            ("get_vram", [], "string", ["hearth", "forge", "sovereign"], 1, "builtin", False),
+            (
+                "vote",
+                [{"name": "config", "type": "string"}],
+                "bool",
+                ["hearth", "forge", "sovereign"],
+                1,
+                "builtin",
+                False,
+            ),
+            (
+                "delegate",
+                [{"name": "agent", "type": "string"}, {"name": "goal", "type": "string"}],
+                "any",
+                ["forge", "sovereign"],
+                3,
+                "builtin",
+                False,
+            ),
+            (
+                "route",
+                [{"name": "strategy", "type": "string"}],
+                "any",
+                ["forge", "sovereign"],
+                2,
+                "builtin",
+                False,
+            ),
         ]
         for row in defaults:
             name, args, returns, tiers, gas, backend, sensitive = row
-            self._functions[name] = HostFunction(name=name, args=args, returns=returns,
-                tiers=tiers, gas=gas, backend=backend, sensitive=sensitive)
+            self._functions[name] = HostFunction(
+                name=name,
+                args=args,
+                returns=returns,
+                tiers=tiers,
+                gas=gas,
+                backend=backend,
+                sensitive=sensitive,
+            )
 
     def get(self, name: str) -> HostFunction | None:
         return self._functions.get(name)

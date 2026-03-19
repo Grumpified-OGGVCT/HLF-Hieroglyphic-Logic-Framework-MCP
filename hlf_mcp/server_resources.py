@@ -8,7 +8,6 @@ from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.bytecode import OPCODES
 
-
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _GOVERNANCE_DIR = _PACKAGE_DIR.parent / "governance"
 
@@ -82,13 +81,17 @@ def _render_model_catalog_status(ctx: object | None, *, agent_id: str | None = N
 def _render_align_status(ctx: object | None) -> str:
     if ctx is None or not hasattr(ctx, "align_governor"):
         return json.dumps({"status": "error", "error": "align_governor_unavailable"}, indent=2)
-    return json.dumps({"status": "ok", "align_status": ctx.align_governor.status_snapshot()}, indent=2)
+    return json.dumps(
+        {"status": "ok", "align_status": ctx.align_governor.status_snapshot()}, indent=2
+    )
 
 
 def _render_formal_verifier_status(ctx: object | None) -> str:
     if ctx is None or not hasattr(ctx, "formal_verifier"):
         return json.dumps({"status": "error", "error": "formal_verifier_unavailable"}, indent=2)
-    return json.dumps({"status": "ok", "formal_verifier_status": ctx.formal_verifier.status_snapshot()}, indent=2)
+    return json.dumps(
+        {"status": "ok", "formal_verifier_status": ctx.formal_verifier.status_snapshot()}, indent=2
+    )
 
 
 def _render_governed_route_status(ctx: object | None, *, agent_id: str | None = None) -> str:
@@ -105,7 +108,10 @@ def _render_governed_route_status(ctx: object | None, *, agent_id: str | None = 
 
 def _render_instinct_status(ctx: object | None, *, mission_id: str | None = None) -> str:
     if ctx is None or not hasattr(ctx, "instinct_mgr"):
-        return json.dumps({"status": "error", "error": "instinct_manager_unavailable", "mission_id": mission_id}, indent=2)
+        return json.dumps(
+            {"status": "error", "error": "instinct_manager_unavailable", "mission_id": mission_id},
+            indent=2,
+        )
     if mission_id:
         mission = ctx.instinct_mgr.get_mission(mission_id)
         if mission is None:
@@ -117,7 +123,11 @@ def _render_instinct_status(ctx: object | None, *, mission_id: str | None = None
 def _render_witness_status(ctx: object | None, *, subject_agent_id: str | None = None) -> str:
     if ctx is None or not hasattr(ctx, "get_witness_status"):
         return json.dumps(
-            {"status": "error", "error": "witness_governance_unavailable", "subject_agent_id": subject_agent_id},
+            {
+                "status": "error",
+                "error": "witness_governance_unavailable",
+                "subject_agent_id": subject_agent_id,
+            },
             indent=2,
         )
     status = ctx.get_witness_status(subject_agent_id=subject_agent_id)
@@ -147,12 +157,16 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
     def get_active_profiles() -> str:
         """Operator-facing: List currently active profiles and their supporting evidence."""
         if ctx is None or not hasattr(ctx, "session_profiles"):
-            return json.dumps({"status": "error", "error": "session_profiles_unavailable"}, indent=2)
+            return json.dumps(
+                {"status": "error", "error": "session_profiles_unavailable"}, indent=2
+            )
         profiles = ctx.session_profiles
         evidence = {}
         if hasattr(ctx, "session_benchmark_artifacts"):
             evidence = ctx.session_benchmark_artifacts
-        return json.dumps({"status": "ok", "active_profiles": profiles, "evidence": evidence}, indent=2)
+        return json.dumps(
+            {"status": "ok", "active_profiles": profiles, "evidence": evidence}, indent=2
+        )
 
     @mcp.resource("hlf://status/profile_evidence/{profile_name}")
     def get_profile_evidence(profile_name: str) -> str:

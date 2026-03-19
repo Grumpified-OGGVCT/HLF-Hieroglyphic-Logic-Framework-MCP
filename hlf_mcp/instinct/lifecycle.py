@@ -15,15 +15,19 @@ Rules:
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, field
 import hashlib
 import json
-import time
 import threading
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
-from hlf_mcp.instinct.orchestration import execution_ready_for_verification, normalize_execution_trace, normalize_task_dag, summarize_execution_trace
-
+from hlf_mcp.instinct.orchestration import (
+    execution_ready_for_verification,
+    normalize_execution_trace,
+    normalize_task_dag,
+    summarize_execution_trace,
+)
 
 # ── Phase definitions ──────────────────────────────────────────────────────────
 
@@ -63,10 +67,10 @@ _GATES: dict[str, dict[str, Any]] = {
 
 _ALLOWED_NEXT: dict[str, list[str]] = {
     "specify": ["plan"],
-    "plan":    ["execute"],
+    "plan": ["execute"],
     "execute": ["verify"],
-    "verify":  ["merge"],
-    "merge":   [],
+    "verify": ["merge"],
+    "merge": [],
 }
 
 
@@ -111,10 +115,7 @@ class InstinctLifecycle:
             # New mission — must start at specify
             if mission is None:
                 if phase != "specify":
-                    return _err(
-                        mission_id,
-                        f"New mission must start at 'specify', got '{phase}'"
-                    )
+                    return _err(mission_id, f"New mission must start at 'specify', got '{phase}'")
                 mission = _new_mission(mission_id, payload)
                 self._missions[mission_id] = mission
                 self._log_ledger(mission_id, "created", phase, payload)
@@ -162,10 +163,13 @@ class InstinctLifecycle:
                 mission["cove_gate_passed"] = True
 
             if phase == "verify" and mission.get("task_dag"):
-                if not execution_ready_for_verification(
-                    mission.get("task_dag", []),
-                    mission.get("execution_trace", []),
-                ) and not override:
+                if (
+                    not execution_ready_for_verification(
+                        mission.get("task_dag", []),
+                        mission.get("execution_trace", []),
+                    )
+                    and not override
+                ):
                     return {
                         "mission_id": mission_id,
                         "status": "blocked",
@@ -180,11 +184,13 @@ class InstinctLifecycle:
 
             # Advance phase
             mission["current_phase"] = phase
-            mission["phase_history"].append({
-                "phase": phase,
-                "timestamp": time.time(),
-                "payload_keys": list(payload.keys()),
-            })
+            mission["phase_history"].append(
+                {
+                    "phase": phase,
+                    "timestamp": time.time(),
+                    "payload_keys": list(payload.keys()),
+                }
+            )
             mission["artifacts"][phase] = {
                 "payload": payload,
                 "timestamp": time.time(),
@@ -265,7 +271,9 @@ class InstinctLifecycle:
                     "notes": f"REALIGNMENT: {event.change_type} - {event.change_description}",
                 }
             )
-            self._log_ledger(mission_id, "realignment", mission["current_phase"], realignment_payload)
+            self._log_ledger(
+                mission_id, "realignment", mission["current_phase"], realignment_payload
+            )
             return _ok_state(mission)
 
     def list_missions(self) -> list[dict[str, Any]]:
@@ -291,13 +299,15 @@ class InstinctLifecycle:
         phase: str,
         payload: dict[str, Any],
     ) -> None:
-        self._ledger.append({
-            "mission_id": mission_id,
-            "event": event,
-            "phase": phase,
-            "timestamp": time.time(),
-            "payload_sha256": hashlib.sha256(str(payload).encode()).hexdigest(),
-        })
+        self._ledger.append(
+            {
+                "mission_id": mission_id,
+                "event": event,
+                "phase": phase,
+                "timestamp": time.time(),
+                "payload_sha256": hashlib.sha256(str(payload).encode()).hexdigest(),
+            }
+        )
 
     def get_ledger(self, mission_id: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
@@ -314,17 +324,25 @@ def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         "mission_id": mission_id,
         "topic": str(payload.get("topic") or mission_id),
         "current_phase": "specify",
-        "phase_history": [{"phase": "specify", "timestamp": time.time(), "payload_keys": list(payload.keys())}],
-        "artifacts": {"specify": {
-            "payload": payload,
-            "timestamp": time.time(),
-            "sha256": hashlib.sha256(str(payload).encode()).hexdigest(),
-        }},
+        "phase_history": [
+            {"phase": "specify", "timestamp": time.time(), "payload_keys": list(payload.keys())}
+        ],
+        "artifacts": {
+            "specify": {
+                "payload": payload,
+                "timestamp": time.time(),
+                "sha256": hashlib.sha256(str(payload).encode()).hexdigest(),
+            }
+        },
         "spec": copy.deepcopy(payload),
-        "task_dag": list(payload.get("task_dag", [])) if isinstance(payload.get("task_dag"), list) else [],
+        "task_dag": list(payload.get("task_dag", []))
+        if isinstance(payload.get("task_dag"), list)
+        else [],
         "execution_trace": [],
         "execution_summary": {
-            "total_nodes": len(payload.get("task_dag", [])) if isinstance(payload.get("task_dag"), list) else 0,
+            "total_nodes": len(payload.get("task_dag", []))
+            if isinstance(payload.get("task_dag"), list)
+            else 0,
             "recorded_nodes": 0,
             "completed_nodes": 0,
             "failed_nodes": 0,
@@ -399,11 +417,19 @@ def _run_cove_gate(mission: dict[str, Any], cove_result: dict[str, Any] | None) 
         if "all_proven" in verification_report:
             return bool(verification_report.get("all_proven", False))
         if verification_report.get("verdict"):
-            return str(verification_report.get("verdict", "")).upper() in {"APPROVED", "PASSED", "PROVEN"}
+            return str(verification_report.get("verdict", "")).upper() in {
+                "APPROVED",
+                "PASSED",
+                "PROVEN",
+            }
         results = verification_report.get("results")
         if isinstance(results, list) and results:
             failing_statuses = {"counterexample", "error", "failed", "blocked"}
-            return not any(str(item.get("status", "")).lower() in failing_statuses for item in results if isinstance(item, dict))
+            return not any(
+                str(item.get("status", "")).lower() in failing_statuses
+                for item in results
+                if isinstance(item, dict)
+            )
 
     verify_artifact = mission.get("artifacts", {}).get("verify", {})
     if not verify_artifact:

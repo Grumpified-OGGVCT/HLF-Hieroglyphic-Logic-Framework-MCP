@@ -14,14 +14,13 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
-ETHICS_DIR  = ROOT / "hlf_mcp" / "hlf" / "ethics"
+ETHICS_DIR = ROOT / "hlf_mcp" / "hlf" / "ethics"
 COMPILER_PY = ROOT / "hlf_mcp" / "hlf" / "compiler.py"
-RUNTIME_PY  = ROOT / "hlf_mcp" / "hlf" / "runtime.py"
-ALIGN_JSON  = ROOT / "governance" / "align_rules.json"
+RUNTIME_PY = ROOT / "hlf_mcp" / "hlf" / "runtime.py"
+ALIGN_JSON = ROOT / "governance" / "align_rules.json"
 
 
 def _check_ethics_stubs() -> dict:
@@ -40,9 +39,13 @@ def _check_ethics_stubs() -> dict:
             results[module] = {"status": "MISSING", "is_stub": True}
             continue
         text = path.read_text(encoding="utf-8")
-        lines = [l.strip() for l in text.splitlines() if l.strip() and not l.strip().startswith("#")]
+        lines = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
         # Count meaningful non-stub lines
-        stub_lines = sum(1 for l in lines if any(ind in l for ind in stub_indicators))
+        stub_lines = sum(1 for line in lines if any(ind in line for ind in stub_indicators))
         real_lines = len(lines) - stub_lines
         is_stub = real_lines < 5 or stub_lines > real_lines
         results[module] = {
@@ -62,7 +65,7 @@ def _check_compiler_ethics_hook() -> dict:
     text = COMPILER_PY.read_text(encoding="utf-8")
     # Look for actual import or call of ethics module
     has_import = bool(re.search(r"from\s+.*ethics\s+import|import\s+.*ethics", text))
-    has_call   = bool(re.search(r"ethics\.|constitution\.|check_ethics|ethics_check", text))
+    has_call = bool(re.search(r"ethics\.|constitution\.|check_ethics|ethics_check", text))
     # Check if it's just a comment
     comment_only = bool(re.search(r"#.*ethics|#.*constitutional|#.*governor", text, re.IGNORECASE))
     return {
@@ -80,9 +83,13 @@ def _check_runtime_pii_guard() -> dict:
         return {"status": "MISSING_RUNTIME", "has_pii_guard": False}
     text = RUNTIME_PY.read_text(encoding="utf-8")
     has_pii = bool(re.search(r"pii|personal.*data|privacy|redact|scrub", text, re.IGNORECASE))
-    has_align_check_at_memory = bool(re.search(
-        r"memory_store.*align|align.*memory_store|ALIGN.*MEMORY|memory.*pattern", text, re.IGNORECASE
-    ))
+    has_align_check_at_memory = bool(
+        re.search(
+            r"memory_store.*align|align.*memory_store|ALIGN.*MEMORY|memory.*pattern",
+            text,
+            re.IGNORECASE,
+        )
+    )
     return {
         "has_pii_guard": has_pii or has_align_check_at_memory,
         "has_pii_keyword": has_pii,
@@ -111,7 +118,9 @@ def build_summary(report: dict) -> str:
     lines = ["=== HLF Ethics Compliance Report ===\n"]
     stubs = report["ethics_stubs"]
     all_stubbed = all(v["is_stub"] for v in stubs.values())
-    lines.append(f"Ethics Modules: {'ALL STUBS - not yet implemented' if all_stubbed else 'PARTIALLY IMPLEMENTED'}")
+    lines.append(
+        f"Ethics Modules: {'ALL STUBS - not yet implemented' if all_stubbed else 'PARTIALLY IMPLEMENTED'}"
+    )
     for mod, info in stubs.items():
         lines.append(f"  {mod}: {info['status']}")
 
@@ -130,7 +139,9 @@ def build_summary(report: dict) -> str:
     for r in align.get("rules", []):
         lines.append(f"  • {r}")
 
-    lines.append(f"\nOverall Ethics Compliance: {'PARTIAL/SCAFFOLDED' if all_stubbed else 'IN PROGRESS'}")
+    lines.append(
+        f"\nOverall Ethics Compliance: {'PARTIAL/SCAFFOLDED' if all_stubbed else 'IN PROGRESS'}"
+    )
     return "\n".join(lines)
 
 

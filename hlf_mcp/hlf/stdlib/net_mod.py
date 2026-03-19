@@ -1,16 +1,19 @@
 """HLF stdlib: net module — HTTP helpers."""
+
 import ipaddress
 import urllib.parse
 import urllib.request
 
 # ── SSRF protection ───────────────────────────────────────────────────────────
 _BLOCKED_SCHEMES = frozenset({"file", "ftp", "gopher", "data", "ldap", "ldaps"})
-_BLOCKED_HOSTS = frozenset({
-    "169.254.169.254",        # AWS / GCP / Azure IMDS
-    "metadata.google.internal",
-    "metadata.google",
-    "fd00:ec2::254",          # AWS IPv6 IMDS
-})
+_BLOCKED_HOSTS = frozenset(
+    {
+        "169.254.169.254",  # AWS / GCP / Azure IMDS
+        "metadata.google.internal",
+        "metadata.google",
+        "fd00:ec2::254",  # AWS IPv6 IMDS
+    }
+)
 
 
 def _validate_url(url: str) -> None:
@@ -58,12 +61,14 @@ def HTTP_GET(url: str) -> str:
     with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310
         return r.read().decode("utf-8")
 
+
 def HTTP_POST(url: str, body: str) -> str:
     _validate_url(url)
     data = body.encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST")
     with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310
         return r.read().decode("utf-8")
+
 
 def HTTP_PUT(url: str, body: str) -> str:
     _validate_url(url)
@@ -72,14 +77,17 @@ def HTTP_PUT(url: str, body: str) -> str:
     with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310
         return r.read().decode("utf-8")
 
+
 def HTTP_DELETE(url: str) -> str:
     _validate_url(url)
     req = urllib.request.Request(url, method="DELETE")
     with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310
         return r.read().decode("utf-8")
 
+
 def URL_ENCODE(params: dict) -> str:
     return urllib.parse.urlencode(params)
+
 
 def URL_DECODE(query: str) -> dict:
     return dict(urllib.parse.parse_qsl(query))

@@ -26,13 +26,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .constitution import evaluate_constitution, violations_to_strings, Violation
-from .termination import terminate, should_terminate, TerminationResult, get_audit_log
-from .red_hat import declare_research_intent, get_attestations, latest_attestation
-from .rogue_detection import detect_rogue_signals, signals_require_termination, RogueSignal
-
+from .constitution import Violation, evaluate_constitution, violations_to_strings
+from .red_hat import declare_research_intent
+from .rogue_detection import RogueSignal, detect_rogue_signals, signals_require_termination
+from .termination import TerminationResult, get_audit_log, should_terminate, terminate
 
 # ── Result types ─────────────────────────────────────────────────────────────
+
 
 @dataclass
 class LayerResult:
@@ -47,8 +47,8 @@ class LayerResult:
 class GovernorResult:
     passed: bool
     layer_results: list[LayerResult] = field(default_factory=list)
-    blocks: list[str] = field(default_factory=list)         # human-readable block reasons
-    warnings: list[str] = field(default_factory=list)       # non-fatal advisories
+    blocks: list[str] = field(default_factory=list)  # human-readable block reasons
+    warnings: list[str] = field(default_factory=list)  # non-fatal advisories
     termination: TerminationResult | None = None
     audit_log: list[dict[str, Any]] = field(default_factory=list)
 
@@ -61,12 +61,14 @@ class GovernorResult:
 
 class GovernorError(Exception):
     """Raised by GovernorResult.raise_if_blocked() when execution must halt."""
+
     def __init__(self, message: str, result: GovernorResult | None = None) -> None:
         super().__init__(message)
         self.result = result
 
 
 # ── Main governor ─────────────────────────────────────────────────────────────
+
 
 class EthicalGovernor:
     """
@@ -139,8 +141,7 @@ class EthicalGovernor:
             if not rogue_layer.passed:
                 for sig in rogue_layer.signals:
                     block_msg = (
-                        f"[{sig.rule_id}] {sig.signal_id} ({sig.severity}): "
-                        f"{sig.description}"
+                        f"[{sig.rule_id}] {sig.signal_id} ({sig.severity}): {sig.description}"
                     )
                     if self.strict:
                         blocks.append(block_msg)
@@ -285,8 +286,10 @@ def check(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _first_rule_id(blocks: list[str]) -> str:
     """Extract the rule ID token from the first block message."""
     import re
+
     m = re.search(r"\[([A-Z0-9\-]+)\]", blocks[0]) if blocks else None
     return m.group(1) if m else "C-3"

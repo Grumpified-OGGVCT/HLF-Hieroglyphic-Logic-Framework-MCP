@@ -1,7 +1,8 @@
 """Tests for HLF compiler (parser + AST transformer)."""
 
 import pytest
-from hlf_mcp.hlf.compiler import HLFCompiler, CompileError
+
+from hlf_mcp.hlf.compiler import CompileError, HLFCompiler
 
 COMPILER = HLFCompiler()
 
@@ -134,7 +135,7 @@ def test_compile_spec_statements():
 
 
 def test_compile_float_value():
-    src = '[HLF-v3]\n∇ [PARAM] temperature=0.0\nΩ\n'
+    src = "[HLF-v3]\n∇ [PARAM] temperature=0.0\nΩ\n"
     result = COMPILER.compile(src)
     assert result["errors"] == []
     stmts = result["ast"]["statements"]
@@ -150,7 +151,7 @@ def test_compile_version_extracted():
 
 
 def test_compile_versioned_header():
-    src = '[HLF-v3.1]\nΔ test\nΩ\n'
+    src = "[HLF-v3.1]\nΔ test\nΩ\n"
     result = COMPILER.compile(src)
     assert result["version"] == "3.1"
 
@@ -209,18 +210,19 @@ def test_validate_invalid():
 def test_compile_all_fixtures():
     """Compile all fixture files successfully."""
     import os
+
     fixtures_dir = os.path.join(os.path.dirname(__file__), "..", "fixtures")
     hlf_files = [f for f in os.listdir(fixtures_dir) if f.endswith(".hlf")]
     assert len(hlf_files) > 0, "No fixture files found"
     for fname in hlf_files:
-        with open(os.path.join(fixtures_dir, fname), encoding='utf-8') as f:
+        with open(os.path.join(fixtures_dir, fname), encoding="utf-8") as f:
             source = f.read()
         result = COMPILER.compile(source)
         assert result["errors"] == [], f"Fixture {fname} failed: {result['errors']}"
 
 
 def test_compile_with_integer_param():
-    src = '[HLF-v3]\n∇ [PARAM] top_k=10\nΩ\n'
+    src = "[HLF-v3]\n∇ [PARAM] top_k=10\nΩ\n"
     result = COMPILER.compile(src)
     assert result["errors"] == []
     stmts = result["ast"]["statements"]

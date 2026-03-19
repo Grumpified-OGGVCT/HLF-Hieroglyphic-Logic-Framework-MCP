@@ -4,7 +4,6 @@ from hlf_mcp import server
 from hlf_mcp.hlf.compiler import HLFCompiler
 from hlf_mcp.hlf.entropy_anchor import evaluate_entropy_anchor
 
-
 COMPILER = HLFCompiler()
 
 

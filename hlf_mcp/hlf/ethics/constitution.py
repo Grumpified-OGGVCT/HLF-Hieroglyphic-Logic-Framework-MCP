@@ -24,10 +24,8 @@ People are the priority.  AI is the tool.
 from __future__ import annotations
 
 import re
-import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-
 
 # ── Constitutional articles ──────────────────────────────────────────────────
 
@@ -68,35 +66,113 @@ class Violation:
 
 _PHONETIC_SKELETON_MAP: dict[int, str] = {
     # Cyrillic lower (phonetic, not visual)
-    ord("а"): "a", ord("б"): "b", ord("в"): "v", ord("г"): "g",
-    ord("д"): "d", ord("е"): "e", ord("ж"): "zh", ord("з"): "z",
-    ord("и"): "i", ord("й"): "y", ord("к"): "k", ord("л"): "l",
-    ord("м"): "m", ord("н"): "n", ord("о"): "o", ord("п"): "p",
-    ord("р"): "r", ord("с"): "s", ord("т"): "t", ord("у"): "u",
-    ord("ф"): "f", ord("х"): "kh", ord("ц"): "ts", ord("ч"): "ch",
-    ord("ш"): "sh", ord("щ"): "sch", ord("ю"): "yu", ord("я"): "ya",
+    ord("а"): "a",
+    ord("б"): "b",
+    ord("в"): "v",
+    ord("г"): "g",
+    ord("д"): "d",
+    ord("е"): "e",
+    ord("ж"): "zh",
+    ord("з"): "z",
+    ord("и"): "i",
+    ord("й"): "y",
+    ord("к"): "k",
+    ord("л"): "l",
+    ord("м"): "m",
+    ord("н"): "n",
+    ord("о"): "o",
+    ord("п"): "p",
+    ord("р"): "r",
+    ord("с"): "s",
+    ord("т"): "t",
+    ord("у"): "u",
+    ord("ф"): "f",
+    ord("х"): "kh",
+    ord("ц"): "ts",
+    ord("ч"): "ch",
+    ord("ш"): "sh",
+    ord("щ"): "sch",
+    ord("ю"): "yu",
+    ord("я"): "ya",
     # Cyrillic upper
-    ord("А"): "A", ord("Б"): "B", ord("В"): "V", ord("Г"): "G",
-    ord("Д"): "D", ord("Е"): "E", ord("Ж"): "ZH", ord("З"): "Z",
-    ord("И"): "I", ord("Й"): "Y", ord("К"): "K", ord("Л"): "L",
-    ord("М"): "M", ord("Н"): "N", ord("О"): "O", ord("П"): "P",
-    ord("Р"): "R", ord("С"): "S", ord("Т"): "T", ord("У"): "U",
-    ord("Ф"): "F", ord("Х"): "KH", ord("Ц"): "TS", ord("Ч"): "CH",
-    ord("Ш"): "SH", ord("Щ"): "SCH", ord("Ю"): "YU", ord("Я"): "YA",
+    ord("А"): "A",
+    ord("Б"): "B",
+    ord("В"): "V",
+    ord("Г"): "G",
+    ord("Д"): "D",
+    ord("Е"): "E",
+    ord("Ж"): "ZH",
+    ord("З"): "Z",
+    ord("И"): "I",
+    ord("Й"): "Y",
+    ord("К"): "K",
+    ord("Л"): "L",
+    ord("М"): "M",
+    ord("Н"): "N",
+    ord("О"): "O",
+    ord("П"): "P",
+    ord("Р"): "R",
+    ord("С"): "S",
+    ord("Т"): "T",
+    ord("У"): "U",
+    ord("Ф"): "F",
+    ord("Х"): "KH",
+    ord("Ц"): "TS",
+    ord("Ч"): "CH",
+    ord("Ш"): "SH",
+    ord("Щ"): "SCH",
+    ord("Ю"): "YU",
+    ord("Я"): "YA",
     # Greek lower
-    ord("α"): "a", ord("β"): "b", ord("γ"): "g", ord("δ"): "d",
-    ord("ε"): "e", ord("ζ"): "z", ord("η"): "e", ord("θ"): "th",
-    ord("ι"): "i", ord("κ"): "k", ord("λ"): "l", ord("μ"): "m",
-    ord("ν"): "n", ord("ξ"): "ks", ord("ο"): "o", ord("π"): "p",
-    ord("ρ"): "r", ord("σ"): "s", ord("τ"): "t", ord("υ"): "y",
-    ord("φ"): "ph", ord("χ"): "ch", ord("ψ"): "ps", ord("ω"): "o",
+    ord("α"): "a",
+    ord("β"): "b",
+    ord("γ"): "g",
+    ord("δ"): "d",
+    ord("ε"): "e",
+    ord("ζ"): "z",
+    ord("η"): "e",
+    ord("θ"): "th",
+    ord("ι"): "i",
+    ord("κ"): "k",
+    ord("λ"): "l",
+    ord("μ"): "m",
+    ord("ν"): "n",
+    ord("ξ"): "ks",
+    ord("ο"): "o",
+    ord("π"): "p",
+    ord("ρ"): "r",
+    ord("σ"): "s",
+    ord("τ"): "t",
+    ord("υ"): "y",
+    ord("φ"): "ph",
+    ord("χ"): "ch",
+    ord("ψ"): "ps",
+    ord("ω"): "o",
     # Greek upper
-    ord("Α"): "A", ord("Β"): "B", ord("Γ"): "G", ord("Δ"): "D",
-    ord("Ε"): "E", ord("Ζ"): "Z", ord("Η"): "E", ord("Θ"): "TH",
-    ord("Ι"): "I", ord("Κ"): "K", ord("Λ"): "L", ord("Μ"): "M",
-    ord("Ν"): "N", ord("Ξ"): "KS", ord("Ο"): "O", ord("Π"): "P",
-    ord("Ρ"): "R", ord("Σ"): "S", ord("Τ"): "T", ord("Υ"): "Y",
-    ord("Φ"): "PH", ord("Χ"): "CH", ord("Ψ"): "PS", ord("Ω"): "O",
+    ord("Α"): "A",
+    ord("Β"): "B",
+    ord("Γ"): "G",
+    ord("Δ"): "D",
+    ord("Ε"): "E",
+    ord("Ζ"): "Z",
+    ord("Η"): "E",
+    ord("Θ"): "TH",
+    ord("Ι"): "I",
+    ord("Κ"): "K",
+    ord("Λ"): "L",
+    ord("Μ"): "M",
+    ord("Ν"): "N",
+    ord("Ξ"): "KS",
+    ord("Ο"): "O",
+    ord("Π"): "P",
+    ord("Ρ"): "R",
+    ord("Σ"): "S",
+    ord("Τ"): "T",
+    ord("Υ"): "Y",
+    ord("Φ"): "PH",
+    ord("Χ"): "CH",
+    ord("Ψ"): "PS",
+    ord("Ω"): "O",
 }
 
 
@@ -217,6 +293,7 @@ def _check_c2(source: str) -> list[Violation]:
 
 # ── C-3: Legal compliance — scan source for illegal patterns ─────────────────
 
+
 def _check_c3(source: str) -> list[Violation]:
     violations: list[Violation] = []
     for rule_id, pattern, desc in _COMPILED_ILLEGAL:
@@ -235,6 +312,7 @@ def _check_c3(source: str) -> list[Violation]:
 # ── C-1 + C-3 tier escalation check (from AST) ───────────────────────────────
 
 _SOVEREIGN_ONLY_TOOLS = {"z3_verify", "spawn_agent", "SPAWN"}
+
 
 def _check_tier_escalation(statements: list[dict[str, Any]], tier: str) -> list[Violation]:
     """Block hearth/forge programs that call sovereign-only tools without capsule auth."""
@@ -276,6 +354,7 @@ def _check_tier_escalation(statements: list[dict[str, Any]], tier: str) -> list[
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+
 def evaluate_constitution(
     ast: dict[str, Any] | None,
     env: dict[str, Any] | None,
@@ -309,11 +388,7 @@ def evaluate_constitution(
     skel = _phonetic_skeleton(source)
     if skel != source:
         existing_ids = {v.rule_id for v in violations}
-        for v in (
-            _check_c1(statements, skel)
-            + _check_c2(skel)
-            + _check_c3(skel)
-        ):
+        for v in _check_c1(statements, skel) + _check_c2(skel) + _check_c3(skel):
             if v.rule_id not in existing_ids:
                 violations.append(v)
                 existing_ids.add(v.rule_id)
@@ -327,6 +402,7 @@ def violations_to_strings(violations: list[Violation]) -> list[str]:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _snippet(source: str, pattern: re.Pattern[str], ctx: int = 80) -> str:
     m = pattern.search(source)

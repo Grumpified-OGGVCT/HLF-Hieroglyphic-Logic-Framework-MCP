@@ -23,7 +23,6 @@ from hlf_mcp.hlf.grammar import GLYPHS, TAGS
 from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.registry import HostFunctionRegistry
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TAG_PATTERN = re.compile(r"\[([A-Z_][A-Z0-9_]*)\]")
 VAR_PATTERN = re.compile(r"\$\{?(\w+)\}?")
@@ -47,7 +46,9 @@ def _load_stdlib_modules() -> list[dict[str, Any]]:
     import hlf_mcp.hlf.stdlib as stdlib_pkg
 
     modules: list[dict[str, Any]] = []
-    for module_info in sorted(pkgutil.iter_modules(stdlib_pkg.__path__), key=lambda item: item.name):
+    for module_info in sorted(
+        pkgutil.iter_modules(stdlib_pkg.__path__), key=lambda item: item.name
+    ):
         if module_info.name.startswith("__"):
             continue
         full_name = f"{stdlib_pkg.__name__}.{module_info.name}"
@@ -69,7 +70,11 @@ def _load_stdlib_modules() -> list[dict[str, Any]]:
 
 
 def _looks_legacy_only(source: str) -> bool:
-    lines = [line.strip() for line in source.splitlines() if line.strip() and not line.strip().startswith("#")]
+    lines = [
+        line.strip()
+        for line in source.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
     if not lines:
         return False
     if any(any(glyph in line for glyph in GLYPHS) for line in lines):
@@ -95,7 +100,8 @@ def _tag_description(tag_name: str, spec: dict[str, Any] | None) -> str:
         pieces = []
         if args:
             pieces.append(
-                "Args: " + ", ".join(
+                "Args: "
+                + ", ".join(
                     f"{arg['name']}:{arg.get('type', 'any')}{'[]' if arg.get('repeat') else ''}"
                     for arg in args
                 )
@@ -123,7 +129,9 @@ class HLFLanguageServer(LanguageServer):
         diagnostics: list[lsp.Diagnostic] = []
 
         if not HLF_HEADER_PATTERN.search(source):
-            diagnostics.append(_diag("Missing HLF header [HLF-vN]", severity=lsp.DiagnosticSeverity.Error))
+            diagnostics.append(
+                _diag("Missing HLF header [HLF-vN]", severity=lsp.DiagnosticSeverity.Error)
+            )
         if "Ω" not in source and "Omega" not in source:
             diagnostics.append(_diag("Missing terminator Ω", severity=lsp.DiagnosticSeverity.Error))
 
@@ -169,14 +177,18 @@ class HLFLanguageServer(LanguageServer):
                     )
                 )
             except Exception as exc:  # pragma: no cover - defensive
-                diagnostics.append(_diag(f"Syntax error: {exc}", severity=lsp.DiagnosticSeverity.Error, source="hlfc"))
+                diagnostics.append(
+                    _diag(
+                        f"Syntax error: {exc}", severity=lsp.DiagnosticSeverity.Error, source="hlfc"
+                    )
+                )
 
         return diagnostics
 
     def get_completions(self, source: str, position: lsp.Position) -> list[lsp.CompletionItem]:
         lines = source.splitlines() or [""]
         line_text = lines[position.line] if position.line < len(lines) else ""
-        prefix = line_text[:position.character]
+        prefix = line_text[: position.character]
         items: list[lsp.CompletionItem] = []
 
         if prefix.endswith("[") or re.fullmatch(r"\[?[A-Z_]*", prefix.strip()):
@@ -220,7 +232,8 @@ class HLFLanguageServer(LanguageServer):
         if "TOOL" in prefix or "τ" in prefix or "[TOOL]" in prefix:
             for host_function in self.host_functions:
                 args_text = ", ".join(
-                    f"{arg['name']}:{arg.get('type', 'any')}" for arg in host_function.get("args", [])
+                    f"{arg['name']}:{arg.get('type', 'any')}"
+                    for arg in host_function.get("args", [])
                 )
                 items.append(
                     lsp.CompletionItem(
@@ -231,7 +244,12 @@ class HLFLanguageServer(LanguageServer):
                 )
 
         variable_trigger_index = line_text.rfind("${", 0, max(position.character, 0) + 1)
-        if "${" in prefix or prefix.endswith("$") or variable_trigger_index >= 0 or "${" in line_text:
+        if (
+            "${" in prefix
+            or prefix.endswith("$")
+            or variable_trigger_index >= 0
+            or "${" in line_text
+        ):
             for var_name, value in _extract_set_bindings(source).items():
                 items.append(
                     lsp.CompletionItem(
@@ -297,10 +315,14 @@ class HLFLanguageServer(LanguageServer):
             if match.start() <= position.character <= match.end():
                 var_name = match.group(1)
                 for line_number, source_line in enumerate(lines):
-                    set_match = LEGACY_SET_PATTERN.match(source_line) or MODERN_SET_PATTERN.match(source_line)
+                    set_match = LEGACY_SET_PATTERN.match(source_line) or MODERN_SET_PATTERN.match(
+                        source_line
+                    )
                     if set_match and set_match.group(1) == var_name:
                         start = source_line.find(var_name)
-                        return lsp.Location(uri=uri, range=_range(line_number, start, start + len(var_name)))
+                        return lsp.Location(
+                            uri=uri, range=_range(line_number, start, start + len(var_name))
+                        )
 
         import_match = IMPORT_PATTERN.match(line_text)
         if import_match:
@@ -319,7 +341,9 @@ class HLFLanguageServer(LanguageServer):
                 function_match = FUNCTION_PATTERN.match(source_line)
                 if function_match and function_match.group(1) == function_name:
                     start = source_line.find(function_name)
-                    return lsp.Location(uri=uri, range=_range(line_number, start, start + len(function_name)))
+                    return lsp.Location(
+                        uri=uri, range=_range(line_number, start, start + len(function_name))
+                    )
         return None
 
     def get_symbols(self, source: str) -> list[lsp.DocumentSymbol]:
@@ -334,7 +358,9 @@ class HLFLanguageServer(LanguageServer):
                         kind=lsp.SymbolKind.Variable,
                         detail=f"= {set_match.group(2).strip() or '?'}",
                         range=_range(line_number, 0, len(line_text)),
-                        selection_range=_range(line_number, line_text.find(name), line_text.find(name) + len(name)),
+                        selection_range=_range(
+                            line_number, line_text.find(name), line_text.find(name) + len(name)
+                        ),
                     )
                 )
 
@@ -426,7 +452,9 @@ def did_save(params: lsp.DidSaveTextDocumentParams) -> None:
 @_server.feature(lsp.TEXT_DOCUMENT_COMPLETION)
 def completions(params: lsp.CompletionParams) -> lsp.CompletionList:
     doc = _server.workspace.get_text_document(params.text_document.uri)
-    return lsp.CompletionList(is_incomplete=False, items=_server.get_completions(doc.source, params.position))
+    return lsp.CompletionList(
+        is_incomplete=False, items=_server.get_completions(doc.source, params.position)
+    )
 
 
 @_server.feature(lsp.TEXT_DOCUMENT_HOVER)

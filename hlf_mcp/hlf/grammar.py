@@ -219,35 +219,35 @@ IDENT.1:   /[a-zA-Z_][a-zA-Z0-9_\-.:@]*/
 
 # Canonical glyph definitions for reference and documentation
 GLYPHS = {
-    "Δ": {"name": "DELTA",   "role": "analyze",    "ascii": "ANALYZE",  "opcode": 0x51},
-    "Ж": {"name": "ZHE",     "role": "enforce",    "ascii": "ENFORCE",  "opcode": 0x60},
-    "⨝": {"name": "JOIN",    "role": "consensus",  "ascii": "JOIN",     "opcode": 0x61},
-    "⌘": {"name": "COMMAND", "role": "delegate",   "ascii": "CMD",      "opcode": 0x52},
-    "∇": {"name": "NABLA",   "role": "source",     "ascii": "SOURCE",   "opcode": 0x01},
-    "⩕": {"name": "BOWTIE",  "role": "priority",   "ascii": "PRIORITY", "opcode": 0x11},
-    "⊎": {"name": "UNION",   "role": "branch",     "ascii": "BRANCH",   "opcode": 0x41},
+    "Δ": {"name": "DELTA", "role": "analyze", "ascii": "ANALYZE", "opcode": 0x51},
+    "Ж": {"name": "ZHE", "role": "enforce", "ascii": "ENFORCE", "opcode": 0x60},
+    "⨝": {"name": "JOIN", "role": "consensus", "ascii": "JOIN", "opcode": 0x61},
+    "⌘": {"name": "COMMAND", "role": "delegate", "ascii": "CMD", "opcode": 0x52},
+    "∇": {"name": "NABLA", "role": "source", "ascii": "SOURCE", "opcode": 0x01},
+    "⩕": {"name": "BOWTIE", "role": "priority", "ascii": "PRIORITY", "opcode": 0x11},
+    "⊎": {"name": "UNION", "role": "branch", "ascii": "BRANCH", "opcode": 0x41},
 }
 
 # Canonical tag definitions
 TAGS = {
-    "INTENT":      "Primary intent declaration",
-    "CONSTRAINT":  "Hard constraint enforcement",
-    "ASSERT":      "Assertion / precondition check",
-    "EXPECT":      "Expected output type or value",
-    "DELEGATE":    "Sub-agent delegation target",
-    "ROUTE":       "Model routing strategy",
-    "SOURCE":      "Data source reference",
-    "PARAM":       "Runtime parameter binding",
-    "PRIORITY":    "Execution priority level",
-    "VOTE":        "Consensus vote configuration",
-    "RESULT":      "Result capture binding",
-    "MEMORY":      "Memory node reference",
-    "RECALL":      "Memory retrieval query",
-    "GATE":        "Spec gate assertion",
-    "DEFINE":      "Spec definition block",
-    "MIGRATION":   "Database migration spec",
+    "INTENT": "Primary intent declaration",
+    "CONSTRAINT": "Hard constraint enforcement",
+    "ASSERT": "Assertion / precondition check",
+    "EXPECT": "Expected output type or value",
+    "DELEGATE": "Sub-agent delegation target",
+    "ROUTE": "Model routing strategy",
+    "SOURCE": "Data source reference",
+    "PARAM": "Runtime parameter binding",
+    "PRIORITY": "Execution priority level",
+    "VOTE": "Consensus vote configuration",
+    "RESULT": "Result capture binding",
+    "MEMORY": "Memory node reference",
+    "RECALL": "Memory retrieval query",
+    "GATE": "Spec gate assertion",
+    "DEFINE": "Spec definition block",
+    "MIGRATION": "Database migration spec",
     "MIGRATION_SPEC": "Database migration specification",
-    "ALIGN":       "ALIGN Ledger governance rule",
+    "ALIGN": "ALIGN Ledger governance rule",
 }
 
 # ASCII word-form aliases for Unicode glyphs (Pass 0 substitution, glyph-position only).
@@ -255,18 +255,18 @@ TAGS = {
 # containing these words (e.g. goal="ANALYZE_MODE") are NOT replaced.
 ASCII_ALIASES: dict[str, str] = {
     # DELTA Δ — analyze / reason
-    "ANALYZE":  "Δ",
-    "ANALYSE":  "Δ",  # British English
+    "ANALYZE": "Δ",
+    "ANALYSE": "Δ",  # British English
     "ANALYSER": "Δ",  # French
     "ANALIZAR": "Δ",  # Spanish
     # ZHE Ж — enforce / constrain
-    "ENFORCE":   "Ж",
+    "ENFORCE": "Ж",
     "CONSTRAIN": "Ж",
     # JOIN ⨝ — consensus / merge
-    "JOIN":      "⨝",
+    "JOIN": "⨝",
     "CONSENSUS": "⨝",
     # COMMAND ⌘ — delegate / execute
-    "CMD":     "⌘",
+    "CMD": "⌘",
     "COMMAND": "⌘",
     # NABLA ∇ — source / gradient
     "SOURCE": "∇",
@@ -274,22 +274,39 @@ ASCII_ALIASES: dict[str, str] = {
     "PRIORITY": "⩕",
     # UNION ⊎ — branch / fork
     "BRANCH": "⊎",
-    "UNION":  "⊎",
+    "UNION": "⊎",
     # OMEGA Ω — end / terminate
-    "END":   "Ω",
+    "END": "Ω",
     "OMEGA": "Ω",
 }
 
 # Homoglyph confusables map (Pass 0 normalization)
 CONFUSABLES: dict[str, str] = {
     # Cyrillic lookalikes (IDN homograph attack vector)
-    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y",
-    "А": "A", "Е": "E", "О": "O", "Р": "P", "С": "C", "Х": "X",
+    "а": "a",
+    "е": "e",
+    "о": "o",
+    "р": "p",
+    "с": "c",
+    "х": "x",
+    "у": "y",
+    "А": "A",
+    "Е": "E",
+    "О": "O",
+    "Р": "P",
+    "С": "C",
+    "Х": "X",
     # Greek lookalikes
-    "α": "a", "ε": "e", "ο": "o", "ρ": "p", "σ": "s",
+    "α": "a",
+    "ε": "e",
+    "ο": "o",
+    "ρ": "p",
+    "σ": "s",
     # Mathematical operator lookalikes
-    "−": "-", "×": "*", "÷": "/", "≠": "!=", "≤": "<=", "≥": ">=",
-    "\u2212": "-",   # MINUS SIGN
-    "\u00D7": "*",   # MULTIPLICATION SIGN
-    "\u00F7": "/",   # DIVISION SIGN
+    "−": "-",
+    "×": "*",
+    "÷": "/",
+    "≠": "!=",
+    "≤": "<=",
+    "≥": ">=",
 }

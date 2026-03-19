@@ -4,8 +4,15 @@ HLF Tool Dispatch — lazy-loading tool registry with HITL gate.
 Tools enter pending_hitl state when forged; require explicit approve_forged_tool()
 before becoming active. All dispatches are logged to trace.
 """
+
 from __future__ import annotations
-import dataclasses, importlib.util, json, logging, sys, time
+
+import dataclasses
+import importlib.util
+import json
+import logging
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -26,9 +33,9 @@ class ToolDispatchError(Exception):
 
 
 class ToolLifecycleState:
-    ACTIVE     = "active"
-    PENDING    = "pending_hitl"
-    DISABLED   = "disabled"
+    ACTIVE = "active"
+    PENDING = "pending_hitl"
+    DISABLED = "disabled"
     DEPRECATED = "deprecated"
 
 
@@ -65,6 +72,7 @@ class ToolRegistry:
     def register(self, name: str, entry: dict[str, Any]) -> None:
         """Register a new tool. Enters pending_hitl state."""
         import uuid
+
         entry["status"] = ToolLifecycleState.PENDING
         entry["step_id"] = self._next_step()
         # Per-tool approval token — approval must present this exact token.
@@ -89,14 +97,14 @@ class ToolRegistry:
         if entry.get("status") != ToolLifecycleState.PENDING:
             raise ToolDispatchError(f"Tool {name!r} is not pending HITL approval")
         if approval_token is not None and approval_token != entry.get("approval_token"):
-            raise ToolDispatchError(
-                f"Invalid approval token for {name!r}: token mismatch"
-            )
+            raise ToolDispatchError(f"Invalid approval token for {name!r}: token mismatch")
         step = self._next_step()
         entry["status"] = ToolLifecycleState.ACTIVE
         entry["approved_by"] = operator
         entry.pop("approval_token", None)
-        self._approval_log.append({"tool": name, "step": step, "operator": operator, "action": "approved"})
+        self._approval_log.append(
+            {"tool": name, "step": step, "operator": operator, "action": "approved"}
+        )
         return True
 
     def dispatch(self, tool_name: str, args: dict[str, Any]) -> ToolDispatchResult:
@@ -104,7 +112,9 @@ class ToolRegistry:
         if not entry:
             raise ToolDispatchError(f"Unknown tool: {tool_name}")
         if entry.get("status") != ToolLifecycleState.ACTIVE:
-            raise ToolDispatchError(f"Tool {tool_name!r} is not active (status={entry.get('status')})")
+            raise ToolDispatchError(
+                f"Tool {tool_name!r} is not active (status={entry.get('status')})"
+            )
         # Try dynamic load
         install_path = entry.get("install_path")
         if install_path:
@@ -116,7 +126,9 @@ class ToolRegistry:
             gas_used=entry.get("gas_cost", 1),
         )
 
-    def _dynamic_dispatch(self, name: str, entry: dict[str, Any], args: dict[str, Any]) -> ToolDispatchResult:
+    def _dynamic_dispatch(
+        self, name: str, entry: dict[str, Any], args: dict[str, Any]
+    ) -> ToolDispatchResult:
         start = time.monotonic()
         try:
             module = self._load_module(name, entry)
@@ -126,7 +138,8 @@ class ToolRegistry:
                 raise ToolDispatchError(f"Tool {name!r}: entrypoint {func_name!r} not callable")
             result = func(**args)
             return ToolDispatchResult(
-                success=True, result=result,
+                success=True,
+                result=result,
                 gas_used=entry.get("gas_cost", 1),
                 duration_ms=(time.monotonic() - start) * 1000,
             )
@@ -134,7 +147,8 @@ class ToolRegistry:
             raise
         except Exception as exc:
             return ToolDispatchResult(
-                success=False, error=str(exc),
+                success=False,
+                error=str(exc),
                 gas_used=entry.get("gas_cost", 1),
                 duration_ms=(time.monotonic() - start) * 1000,
             )
@@ -174,5 +188,7 @@ class ToolRegistry:
         return self._step_counter
 
     def list_tools(self) -> list[dict[str, Any]]:
-        return [{"name": n, **{k: v for k, v in e.items() if k != "install_path"}}
-                for n, e in self._registry.items()]
+        return [
+            {"name": n, **{k: v for k, v in e.items() if k != "install_path"}}
+            for n, e in self._registry.items()
+        ]

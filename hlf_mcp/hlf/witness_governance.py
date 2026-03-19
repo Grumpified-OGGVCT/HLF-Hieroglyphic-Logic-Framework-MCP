@@ -6,7 +6,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-
 WitnessSeverity = Literal["info", "warning", "critical"]
 WitnessRecommendedAction = Literal["observe", "review", "probation", "restrict"]
 TrustState = Literal["healthy", "watched", "probation", "restricted"]
@@ -60,9 +59,7 @@ class WitnessObservation:
             ).hexdigest()
         if not self.observation_id:
             self.observation_id = hashlib.sha256(
-                f"{self.witness_id}:{self.subject_agent_id}:{self.category}:{self.evidence_hash}:{int(self.observed_at * 1000)}".encode(
-                    "utf-8"
-                )
+                f"{self.witness_id}:{self.subject_agent_id}:{self.category}:{self.evidence_hash}:{int(self.observed_at * 1000)}".encode()
             ).hexdigest()[:16]
 
     def impact_score(self) -> float:
@@ -149,7 +146,10 @@ class WitnessGovernance:
             snapshots = [snapshot for snapshot in snapshots if snapshot.trust_state == trust_state]
         severity_order = {"restricted": 3, "probation": 2, "watched": 1, "healthy": 0}
         snapshots.sort(
-            key=lambda snapshot: (severity_order.get(snapshot.trust_state, -1), snapshot.last_observed_at),
+            key=lambda snapshot: (
+                severity_order.get(snapshot.trust_state, -1),
+                snapshot.last_observed_at,
+            ),
             reverse=True,
         )
         return [snapshot.to_dict() for snapshot in snapshots]
@@ -190,23 +190,40 @@ class WitnessGovernance:
         recommended_action: WitnessRecommendedAction = "observe"
         rationale: list[str] = []
 
-        if aggregate_score >= 4.0 and len(scored) >= 3 and corroborating_witness_count >= 2 and corroborating_category_count >= 2:
+        if (
+            aggregate_score >= 4.0
+            and len(scored) >= 3
+            and corroborating_witness_count >= 2
+            and corroborating_category_count >= 2
+        ):
             trust_state = "restricted"
             recommended_action = "restrict"
-            rationale.append("Multiple corroborating negative observations justify temporary restriction rather than silent continuation.")
-        elif aggregate_score >= 1.5 and len(scored) >= 2 and (corroborating_witness_count >= 2 or corroborating_category_count >= 2):
+            rationale.append(
+                "Multiple corroborating negative observations justify temporary restriction rather than silent continuation."
+            )
+        elif (
+            aggregate_score >= 1.5
+            and len(scored) >= 2
+            and (corroborating_witness_count >= 2 or corroborating_category_count >= 2)
+        ):
             trust_state = "probation"
             recommended_action = "probation"
-            rationale.append("Repeated negative evidence crossed the probation threshold and should constrain downstream routing or approval behavior.")
+            rationale.append(
+                "Repeated negative evidence crossed the probation threshold and should constrain downstream routing or approval behavior."
+            )
         elif aggregate_score >= 0.75:
             trust_state = "watched"
             recommended_action = "review"
-            rationale.append("Evidence is strong enough to keep the subject under watch, but not yet strong enough for probation.")
+            rationale.append(
+                "Evidence is strong enough to keep the subject under watch, but not yet strong enough for probation."
+            )
         else:
             rationale.append("Observed evidence has not crossed a trust degradation threshold.")
 
         if observations and not scored:
-            rationale.append("Only low-confidence or non-negative observations are present, so trust remains healthy.")
+            rationale.append(
+                "Only low-confidence or non-negative observations are present, so trust remains healthy."
+            )
 
         last_observation = observations[-1] if observations else None
         return TrustStateSnapshot(

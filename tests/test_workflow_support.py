@@ -4,7 +4,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -17,7 +16,9 @@ def _load_module(path: Path, name: str):
 
 
 def test_emit_weekly_artifact_writes_normalized_schema(monkeypatch, tmp_path: Path) -> None:
-    module = _load_module(REPO_ROOT / ".github" / "scripts" / "emit_weekly_artifact.py", "emit_weekly_artifact")
+    module = _load_module(
+        REPO_ROOT / ".github" / "scripts" / "emit_weekly_artifact.py", "emit_weekly_artifact"
+    )
 
     extra_path = tmp_path / "extra.json"
     extra_path.write_text(json.dumps({"status": "ok"}), encoding="utf-8")
@@ -33,11 +34,16 @@ def test_emit_weekly_artifact_writes_normalized_schema(monkeypatch, tmp_path: Pa
         },
     )
 
-    exit_code = module.main([
-        "--source", "weekly-spec-sentinel",
-        "--output", str(output_path),
-        "--extra-json", f"{extra_path}:spec",
-    ])
+    exit_code = module.main(
+        [
+            "--source",
+            "weekly-spec-sentinel",
+            "--output",
+            str(output_path),
+            "--extra-json",
+            f"{extra_path}:spec",
+        ]
+    )
 
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert exit_code == 0
@@ -46,12 +52,19 @@ def test_emit_weekly_artifact_writes_normalized_schema(monkeypatch, tmp_path: Pa
 
 
 def test_create_github_issue_skips_when_conflicting_pr_found(monkeypatch) -> None:
-    module = _load_module(REPO_ROOT / ".github" / "scripts" / "create_github_issue.py", "create_github_issue")
+    module = _load_module(
+        REPO_ROOT / ".github" / "scripts" / "create_github_issue.py", "create_github_issue"
+    )
 
     monkeypatch.setattr(
         module,
         "find_conflicting_pull_request",
-        lambda **kwargs: {"number": 17, "html_url": "https://example.test/pr/17", "title": "Spec drift fix", "_conflict_reasons": ["labels=spec-drift"]},
+        lambda **kwargs: {
+            "number": 17,
+            "html_url": "https://example.test/pr/17",
+            "title": "Spec drift fix",
+            "_conflict_reasons": ["labels=spec-drift"],
+        },
     )
 
     result = module.create_or_update_issue(

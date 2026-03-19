@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from hlf_mcp.server_context import build_server_context
 from hlf_mcp import server
+from hlf_mcp.server_context import build_server_context
 
 
 def test_server_context_emits_governance_event_with_traceable_ref() -> None:

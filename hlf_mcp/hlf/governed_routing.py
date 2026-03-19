@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-
 RoutingDecision = Literal[
     "deny",
     "deterministic_local_only",
@@ -79,7 +78,9 @@ def build_governed_route(
         )
 
     if align_status == "blocked":
-        rationale.append("ALIGN produced a blocking verdict, so routing is denied before any profile expansion.")
+        rationale.append(
+            "ALIGN produced a blocking verdict, so routing is denied before any profile expansion."
+        )
         return GovernedRouteVerdict(
             allowed=False,
             decision="deny",
@@ -95,7 +96,9 @@ def build_governed_route(
         )
 
     if normalized_trust_state not in {"trusted", "healthy", "approved"}:
-        rationale.append("Non-healthy trust posture forces deterministic local routing until witness governance is attached.")
+        rationale.append(
+            "Non-healthy trust posture forces deterministic local routing until witness governance is attached."
+        )
         return GovernedRouteVerdict(
             allowed=True,
             decision="deterministic_local_only",
@@ -111,7 +114,9 @@ def build_governed_route(
         )
 
     if align_status == "warning":
-        rationale.append("ALIGN warnings require reviewable local routing instead of silent promotion into broader execution lanes.")
+        rationale.append(
+            "ALIGN warnings require reviewable local routing instead of silent promotion into broader execution lanes."
+        )
         return GovernedRouteVerdict(
             allowed=True,
             decision="deterministic_local_only",
@@ -127,7 +132,9 @@ def build_governed_route(
         )
 
     if cpu_only or (not ollama_available and primary_access_mode != "remote-direct"):
-        rationale.append("Local runtime or hardware constraints keep routing inside the smallest deterministic lane.")
+        rationale.append(
+            "Local runtime or hardware constraints keep routing inside the smallest deterministic lane."
+        )
         return GovernedRouteVerdict(
             allowed=True,
             decision="deterministic_local_only",
@@ -143,10 +150,14 @@ def build_governed_route(
         )
 
     if primary_access_mode == "remote-direct":
-        rationale.append("An explicit remote-direct operator path is configured for this lane, so routing can proceed even when the local Ollama runtime is unavailable.")
+        rationale.append(
+            "An explicit remote-direct operator path is configured for this lane, so routing can proceed even when the local Ollama runtime is unavailable."
+        )
 
     if workload == "translation_memory" and gpu_vram_gb >= 10:
-        rationale.append("Multilingual translation memory can use the stronger governed GPU lane once policy is clean and local runtime is healthy.")
+        rationale.append(
+            "Multilingual translation memory can use the stronger governed GPU lane once policy is clean and local runtime is healthy."
+        )
         return GovernedRouteVerdict(
             allowed=True,
             decision="governed_multilingual_gpu",
@@ -162,7 +173,9 @@ def build_governed_route(
         )
 
     if workload == "long_form_standards_ingestion" and gpu_vram_gb >= 12:
-        rationale.append("Long-form standards ingestion can escalate to the governed long-context lane when hardware is sufficient.")
+        rationale.append(
+            "Long-form standards ingestion can escalate to the governed long-context lane when hardware is sufficient."
+        )
         return GovernedRouteVerdict(
             allowed=True,
             decision="governed_long_context_gpu",
@@ -177,7 +190,9 @@ def build_governed_route(
             policy_constraints=constraints,
         )
 
-    rationale.append("The request is safe but does not justify a heavier routing lane, so the advisory retrieval lane remains sufficient.")
+    rationale.append(
+        "The request is safe but does not justify a heavier routing lane, so the advisory retrieval lane remains sufficient."
+    )
     return GovernedRouteVerdict(
         allowed=True,
         decision="advisory_local_retrieval",

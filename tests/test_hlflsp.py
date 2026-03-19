@@ -27,7 +27,10 @@ def test_legacy_set_binding_gets_hint_when_unused() -> None:
     server = HLFLanguageServer("test-hlf-lsp", "v0.0.1-test")
     source = _prog('[SET] unused_var = "hello"')
     diags = server._build_diagnostics(source, "file:///test.hlf")
-    assert any(diag.severity == lsp.DiagnosticSeverity.Hint and "unused_var" in diag.message for diag in diags)
+    assert any(
+        diag.severity == lsp.DiagnosticSeverity.Hint and "unused_var" in diag.message
+        for diag in diags
+    )
 
 
 def test_tag_completions_include_intent() -> None:
@@ -48,7 +51,9 @@ def test_variable_completion_uses_set_bindings() -> None:
     server = HLFLanguageServer("test-hlf-lsp", "v0.0.1-test")
     source = 'SET name = "world"\nΔ [INTENT] goal="greet" target="${'
     items = server.get_completions(source, lsp.Position(line=1, character=31))
-    assert any(item.kind == lsp.CompletionItemKind.Variable and "name" in item.label for item in items)
+    assert any(
+        item.kind == lsp.CompletionItemKind.Variable and "name" in item.label for item in items
+    )
 
 
 def test_hover_on_tag_returns_markdown() -> None:
@@ -77,7 +82,7 @@ def test_definition_jumps_to_set_binding() -> None:
 
 def test_definition_jumps_to_function_binding() -> None:
     server = HLFLanguageServer("test-hlf-lsp", "v0.0.1-test")
-    source = 'FUNCTION deploy {}\nCALL deploy'
+    source = "FUNCTION deploy {}\nCALL deploy"
     location = server.get_definition(source, "file:///test.hlf", lsp.Position(line=1, character=7))
     assert location is not None
     assert location.range.start.line == 0
@@ -85,10 +90,16 @@ def test_definition_jumps_to_function_binding() -> None:
 
 def test_document_symbols_include_variables_and_functions() -> None:
     server = HLFLanguageServer("test-hlf-lsp", "v0.0.1-test")
-    symbols = server.get_symbols('SET port = 8080\nFUNCTION deploy {}\nIMPORT math')
-    assert any(symbol.kind == lsp.SymbolKind.Variable and symbol.name == "port" for symbol in symbols)
-    assert any(symbol.kind == lsp.SymbolKind.Function and symbol.name == "deploy" for symbol in symbols)
-    assert any(symbol.kind == lsp.SymbolKind.Package and symbol.name == "math" for symbol in symbols)
+    symbols = server.get_symbols("SET port = 8080\nFUNCTION deploy {}\nIMPORT math")
+    assert any(
+        symbol.kind == lsp.SymbolKind.Variable and symbol.name == "port" for symbol in symbols
+    )
+    assert any(
+        symbol.kind == lsp.SymbolKind.Function and symbol.name == "deploy" for symbol in symbols
+    )
+    assert any(
+        symbol.kind == lsp.SymbolKind.Package and symbol.name == "math" for symbol in symbols
+    )
 
 
 def test_extract_set_bindings_supports_legacy_and_modern_syntax() -> None:

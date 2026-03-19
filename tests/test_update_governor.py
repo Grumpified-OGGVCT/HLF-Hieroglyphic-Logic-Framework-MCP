@@ -34,16 +34,17 @@ from governance.update_governor import (
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 def _make_governor(ttl: float = 3600.0) -> UpdateGovernor:
     return UpdateGovernor(ttl_seconds=ttl)
 
 
 def _stage_one(gov: UpdateGovernor, version: str = "1.0.0") -> UpdateTicket:
     return gov.stage_update(
-        version     = version,
-        description = "Test update",
-        payload     = {"files": ["hlf_mcp/hlf/stdlib/new_ops.py"]},
-        staged_by   = "ci-bot",
+        version=version,
+        description="Test update",
+        payload={"files": ["hlf_mcp/hlf/stdlib/new_ops.py"]},
+        staged_by="ci-bot",
     )
 
 
@@ -53,6 +54,7 @@ class _FailingGovernor(UpdateGovernor):
 
 
 # ── Staging ───────────────────────────────────────────────────────────────────
+
 
 class TestStaging:
     def test_stage_creates_pending_ticket(self) -> None:
@@ -82,10 +84,10 @@ class TestStaging:
         gov = _make_governor()
         # Include a credential pattern that should trigger ALIGN-001
         ticket = gov.stage_update(
-            version     = "1.0.1",
-            description = "Payload with a secret",
-            payload     = {"config": "api_key = 'abc123'"},
-            staged_by   = "ci-bot",
+            version="1.0.1",
+            description="Payload with a secret",
+            payload={"config": "api_key = 'abc123'"},
+            staged_by="ci-bot",
         )
         # align_rules.json may or may not be present in test env; either way
         # the field is a list (never an exception, never silent None)
@@ -116,17 +118,18 @@ class TestStaging:
 
 # ── Approval ──────────────────────────────────────────────────────────────────
 
+
 class TestApproval:
     def test_approve_returns_token_and_changes_status(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
-        token  = gov.approve(ticket.ticket_id, operator="alice")
+        token = gov.approve(ticket.ticket_id, operator="alice")
 
         assert token
         assert gov.get_ticket(ticket.ticket_id).status == UpdateStatus.APPROVED
 
     def test_approve_records_operator_and_timestamp(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
         gov.approve(ticket.ticket_id, operator="alice")
 
@@ -135,7 +138,7 @@ class TestApproval:
         assert updated.approved_at > 0.0
 
     def test_approve_twice_raises_invalid_transition(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
         gov.approve(ticket.ticket_id, operator="alice")
 
@@ -148,7 +151,7 @@ class TestApproval:
             gov.approve("nonexistent-id", operator="alice")
 
     def test_approve_expired_ticket_raises(self) -> None:
-        gov    = _make_governor(ttl=0.001)
+        gov = _make_governor(ttl=0.001)
         ticket = _stage_one(gov)
         time.sleep(0.05)
 
@@ -158,9 +161,10 @@ class TestApproval:
 
 # ── Rejection ─────────────────────────────────────────────────────────────────
 
+
 class TestRejection:
     def test_reject_changes_status_and_records_reason(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
         result = gov.reject(ticket.ticket_id, operator="alice", reason="Too risky")
 
@@ -168,7 +172,7 @@ class TestRejection:
         assert result.rejection_reason == "Too risky"
 
     def test_reject_approved_ticket_raises(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
         gov.approve(ticket.ticket_id, operator="alice")
 
@@ -178,9 +182,10 @@ class TestRejection:
 
 # ── Distribution ──────────────────────────────────────────────────────────────
 
+
 class TestDistribution:
     def test_distribute_requires_approval_token(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
         gov.approve(ticket.ticket_id, operator="alice")
 
@@ -188,9 +193,9 @@ class TestDistribution:
             gov.distribute(ticket.ticket_id, "wrong-token", targets=["fork-a"])
 
     def test_distribute_with_correct_token_succeeds(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
-        token  = gov.approve(ticket.ticket_id, operator="alice")
+        token = gov.approve(ticket.ticket_id, operator="alice")
 
         result = gov.distribute(ticket.ticket_id, token, targets=["fork-a", "fork-b"])
 
@@ -200,24 +205,24 @@ class TestDistribution:
         assert result.errors == []
 
     def test_distribute_changes_status_to_distributed(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
-        token  = gov.approve(ticket.ticket_id, operator="alice")
+        token = gov.approve(ticket.ticket_id, operator="alice")
         gov.distribute(ticket.ticket_id, token, targets=[])
 
         assert gov.get_ticket(ticket.ticket_id).status == UpdateStatus.DISTRIBUTED
 
     def test_distribute_pending_ticket_raises(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
 
         with pytest.raises(InvalidTransition):
             gov.distribute(ticket.ticket_id, "any-token", targets=[])
 
     def test_distribute_no_targets_succeeds_with_empty_list(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
-        token  = gov.approve(ticket.ticket_id, operator="alice")
+        token = gov.approve(ticket.ticket_id, operator="alice")
 
         result = gov.distribute(ticket.ticket_id, token)
         assert result.success is True
@@ -238,9 +243,10 @@ class TestDistribution:
 
 # ── Rollback ──────────────────────────────────────────────────────────────────
 
+
 class TestRollback:
     def test_rollback_requires_distributed_state(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
         gov.approve(ticket.ticket_id, operator="alice")
 
@@ -248,9 +254,9 @@ class TestRollback:
             gov.rollback(ticket.ticket_id, reason="Oops")
 
     def test_rollback_no_token_needed(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
-        token  = gov.approve(ticket.ticket_id, operator="alice")
+        token = gov.approve(ticket.ticket_id, operator="alice")
         gov.distribute(ticket.ticket_id, token, targets=["fork-a"])
 
         # Rollback requires no token — always allowed
@@ -261,9 +267,9 @@ class TestRollback:
         assert gov.get_ticket(ticket.ticket_id).status == UpdateStatus.ROLLED_BACK
 
     def test_rollback_records_reason_in_audit_trail(self) -> None:
-        gov    = _make_governor()
+        gov = _make_governor()
         ticket = _stage_one(gov)
-        token  = gov.approve(ticket.ticket_id, operator="alice")
+        token = gov.approve(ticket.ticket_id, operator="alice")
         gov.distribute(ticket.ticket_id, token, targets=[])
         gov.rollback(ticket.ticket_id, reason="Bad deploy", operator="alice")
 
@@ -275,11 +281,12 @@ class TestRollback:
 
 # ── Expiry ────────────────────────────────────────────────────────────────────
 
+
 class TestExpiry:
     def test_expire_stale_marks_expired_tickets(self) -> None:
         gov = _make_governor(ttl=0.001)
-        t1  = _stage_one(gov, "1.0.0")
-        t2  = _stage_one(gov, "1.0.1")
+        t1 = _stage_one(gov, "1.0.0")
+        t2 = _stage_one(gov, "1.0.1")
         time.sleep(0.05)
 
         expired = gov.expire_stale()
@@ -290,7 +297,7 @@ class TestExpiry:
         assert gov.get_ticket(t2.ticket_id).status == UpdateStatus.EXPIRED
 
     def test_expire_stale_leaves_approved_tickets_alone(self) -> None:
-        gov    = _make_governor(ttl=1.0)
+        gov = _make_governor(ttl=1.0)
         ticket = _stage_one(gov)
         # Approve before the TTL runs out
         gov.approve(ticket.ticket_id, operator="alice")
@@ -304,6 +311,7 @@ class TestExpiry:
 
 # ── List / query ──────────────────────────────────────────────────────────────
 
+
 class TestListing:
     def test_list_all_tickets(self) -> None:
         gov = _make_governor()
@@ -313,15 +321,15 @@ class TestListing:
         assert len(gov.list_tickets()) == 2
 
     def test_list_filtered_by_status(self) -> None:
-        gov    = _make_governor()
-        t1     = _stage_one(gov, "1.0.0")
-        t2     = _stage_one(gov, "1.0.1")
+        gov = _make_governor()
+        t1 = _stage_one(gov, "1.0.0")
+        t2 = _stage_one(gov, "1.0.1")
         gov.approve(t1.ticket_id, operator="alice")
 
-        pending  = gov.list_tickets(status=UpdateStatus.PENDING)
+        pending = gov.list_tickets(status=UpdateStatus.PENDING)
         approved = gov.list_tickets(status=UpdateStatus.APPROVED)
 
-        assert len(pending)  == 1
+        assert len(pending) == 1
         assert pending[0].ticket_id == t2.ticket_id
         assert len(approved) == 1
         assert approved[0].ticket_id == t1.ticket_id

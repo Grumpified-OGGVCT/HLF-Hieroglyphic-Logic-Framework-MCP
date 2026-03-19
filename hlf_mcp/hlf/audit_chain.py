@@ -11,7 +11,6 @@ from typing import Any
 
 from hlf_mcp.hlf.governance_events import GovernanceEvent
 
-
 _ZERO_HASH = "0" * 64
 _DEFAULT_DIR = Path(__file__).resolve().parents[2] / "observability" / "openllmetry"
 
@@ -21,7 +20,7 @@ def _canonical_payload(event: str, data: dict[str, Any]) -> str:
 
 
 def _compute_trace_id(prev_hash: str, payload: str) -> str:
-    return hashlib.sha256(f"{prev_hash}{payload}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{prev_hash}{payload}".encode()).hexdigest()
 
 
 class AuditChain:
@@ -31,7 +30,9 @@ class AuditChain:
         default_log = _DEFAULT_DIR / "hlf_mcp.audit.jsonl"
         default_last_hash = _DEFAULT_DIR / "hlf_mcp.last_hash.txt"
         self._log_path = Path(configured_log) if configured_log else default_log
-        self._last_hash_path = Path(configured_last_hash) if configured_last_hash else default_last_hash
+        self._last_hash_path = (
+            Path(configured_last_hash) if configured_last_hash else default_last_hash
+        )
         self._lock = threading.Lock()
         self._recent: collections.deque[dict[str, Any]] = collections.deque(maxlen=200)
         self._log_path.parent.mkdir(parents=True, exist_ok=True)

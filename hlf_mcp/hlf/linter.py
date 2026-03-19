@@ -130,7 +130,9 @@ class HLFLinter:
             for tag in _TAG_RE.findall(line):
                 if tag not in TAGS and not tag.startswith("HLF"):
                     diagnostics.append(
-                        _diag("info", f"Unknown tag [{tag}] — not in canonical tag registry", lineno)
+                        _diag(
+                            "info", f"Unknown tag [{tag}] — not in canonical tag registry", lineno
+                        )
                     )
 
         # Post-analysis checks
@@ -153,15 +155,17 @@ class HLFLinter:
         undefined_vars = used_vars - set_vars
         for var in sorted(undefined_vars):
             diagnostics.append(
-                _diag("warning", f"Variable ${var} used but never SET (may be environment-injected)", 0)
+                _diag(
+                    "warning",
+                    f"Variable ${var} used but never SET (may be environment-injected)",
+                    0,
+                )
             )
 
         # Unused memory stores
         unused_memory = memory_stores - memory_recalls
         for key in sorted(unused_memory):
-            diagnostics.append(
-                _diag("info", f"MEMORY [{key}] stored but never RECALLed", 0)
-            )
+            diagnostics.append(_diag("info", f"MEMORY [{key}] stored but never RECALLed", 0))
 
         # SPEC_SEAL without SPEC_DEFINE
         sealed_without_define = spec_sealed_tags - spec_defined_tags
@@ -180,10 +184,24 @@ def _diag(level: str, message: str, line: int, col: int = 0) -> dict[str, Any]:
 def _gas_for_line(line: str) -> int:
     """Rough per-line gas estimate."""
     GAS_MAP = {
-        "MEMORY": 5, "RECALL": 5, "CALL": 3, "⌘": 3,
-        "SPEC_DEFINE": 4, "SPEC_GATE": 4, "SPEC_SEAL": 4, "SPEC_UPDATE": 3,
-        "Δ": 2, "Ж": 2, "⨝": 2, "∇": 2, "⩕": 2, "⊎": 2,
-        "SET": 1, "IF": 1, "LOG": 1, "IMPORT": 2,
+        "MEMORY": 5,
+        "RECALL": 5,
+        "CALL": 3,
+        "⌘": 3,
+        "SPEC_DEFINE": 4,
+        "SPEC_GATE": 4,
+        "SPEC_SEAL": 4,
+        "SPEC_UPDATE": 3,
+        "Δ": 2,
+        "Ж": 2,
+        "⨝": 2,
+        "∇": 2,
+        "⩕": 2,
+        "⊎": 2,
+        "SET": 1,
+        "IF": 1,
+        "LOG": 1,
+        "IMPORT": 2,
     }
     for prefix, cost in GAS_MAP.items():
         if line.startswith(prefix) or line.lstrip().startswith(prefix):
@@ -196,13 +214,15 @@ def _gas_for_line(line: str) -> int:
 
 def main() -> None:
     """CLI: hlflint <file.hlf>"""
-    import json
     import argparse
+    import json
 
     parser = argparse.ArgumentParser(description="Lint HLF source")
     parser.add_argument("file", help="HLF source file")
     parser.add_argument("--gas-limit", type=int, default=1000, help="Gas limit (default 1000)")
-    parser.add_argument("--token-limit", type=int, default=30, help="Per-line token limit (default 30)")
+    parser.add_argument(
+        "--token-limit", type=int, default=30, help="Per-line token limit (default 30)"
+    )
     parser.add_argument("--json", action="store_true", help="Output JSON")
     args = parser.parse_args()
 

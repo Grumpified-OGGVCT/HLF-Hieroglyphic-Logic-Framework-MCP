@@ -22,7 +22,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # ── Constitutional article map ────────────────────────────────────────────────
 
 _CONSTITUTION_FILE = "governance/constitution.md"
@@ -74,6 +73,7 @@ def get_audit_log() -> list[dict[str, Any]]:
 
 # ── Core termination function ─────────────────────────────────────────────────
 
+
 def terminate(
     trigger: str,
     context: dict[str, Any] | None = None,
@@ -98,6 +98,7 @@ def terminate(
     )
 
     import os
+
     audit_payload = {
         "trigger": trigger,
         "timestamp": time.time(),
@@ -106,15 +107,17 @@ def terminate(
     }
     audit_id = hashlib.sha256(str(audit_payload).encode()).hexdigest()[:16]
 
-    _audit_log.append({
-        "audit_id": audit_id,
-        "timestamp": time.time(),
-        "trigger": trigger,
-        "article": article_desc,
-        "documentation": doc,
-        "appealable": appealable,
-        "context": ctx,
-    })
+    _audit_log.append(
+        {
+            "audit_id": audit_id,
+            "timestamp": time.time(),
+            "trigger": trigger,
+            "article": article_desc,
+            "documentation": doc,
+            "appealable": appealable,
+            "context": ctx,
+        }
+    )
 
     return TerminationResult(
         terminated=True,

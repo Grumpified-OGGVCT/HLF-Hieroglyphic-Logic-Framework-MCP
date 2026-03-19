@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-
 AlignAction = Literal["ALLOW", "WARN", "DROP", "DROP_AND_QUARANTINE", "ROUTE_TO_HUMAN_APPROVAL"]
 AlignStatus = Literal["ok", "warning", "blocked"]
 
@@ -123,7 +122,11 @@ class AlignGovernor:
         }
 
     def evaluate(self, payload: str | dict[str, Any]) -> AlignVerdict:
-        text = json.dumps(payload, ensure_ascii=False, sort_keys=True) if isinstance(payload, dict) else str(payload)
+        text = (
+            json.dumps(payload, ensure_ascii=False, sort_keys=True)
+            if isinstance(payload, dict)
+            else str(payload)
+        )
         subject_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
 
         matches: list[AlignMatch] = []
@@ -195,10 +198,3 @@ class AlignGovernor:
             "quarantine": "DROP_AND_QUARANTINE",
         }
         return mapping.get(normalized, "ALLOW")
-
-
-
-
-
-
-

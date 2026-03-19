@@ -9,7 +9,6 @@ import pytest
 import hlf_mcp.hlf.stdlib as stdlib_pkg
 from hlf_mcp.hlf.stdlib import crypto_mod, io_mod, math_mod, net_mod, string_mod, system_mod
 
-
 EXPECTED_STDLIB_MODULES = {
     "agent",
     "collections_mod",
@@ -23,7 +22,11 @@ EXPECTED_STDLIB_MODULES = {
 
 
 def test_stdlib_module_inventory_matches_packaged_surface() -> None:
-    discovered = {module.name for module in pkgutil.iter_modules(stdlib_pkg.__path__) if not module.name.startswith("__")}
+    discovered = {
+        module.name
+        for module in pkgutil.iter_modules(stdlib_pkg.__path__)
+        if not module.name.startswith("__")
+    }
     assert discovered == EXPECTED_STDLIB_MODULES
 
 

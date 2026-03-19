@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from hlf_mcp.hlf.formal_verifier import ConstraintKind, FormalVerifier, VerificationReport, VerificationResult, VerificationStatus, normalize_ast
+from hlf_mcp.hlf.formal_verifier import (
+    ConstraintKind,
+    FormalVerifier,
+    VerificationReport,
+    VerificationResult,
+    VerificationStatus,
+    normalize_ast,
+)
 
 
 def test_verification_report_tracks_all_status_counts() -> None:
     report = VerificationReport()
     report.add(VerificationResult("proven", VerificationStatus.PROVEN, ConstraintKind.RANGE_CHECK))
-    report.add(VerificationResult("failed", VerificationStatus.COUNTEREXAMPLE, ConstraintKind.RANGE_CHECK))
+    report.add(
+        VerificationResult("failed", VerificationStatus.COUNTEREXAMPLE, ConstraintKind.RANGE_CHECK)
+    )
     report.add(VerificationResult("unknown", VerificationStatus.UNKNOWN, ConstraintKind.CUSTOM))
     report.add(VerificationResult("skipped", VerificationStatus.SKIPPED, ConstraintKind.SPEC_GATE))
     report.add(VerificationResult("error", VerificationStatus.ERROR, ConstraintKind.TYPE_INVARIANT))
@@ -82,7 +91,9 @@ def test_verify_type_returns_counterexample_for_invalid_invariant() -> None:
 def test_verify_gas_budget_returns_counterexample_when_budget_is_exceeded() -> None:
     verifier = FormalVerifier()
 
-    result = verifier.verify_gas_budget([4000, 4000, 4000], 10000, property_name="mission_gas_budget")
+    result = verifier.verify_gas_budget(
+        [4000, 4000, 4000], 10000, property_name="mission_gas_budget"
+    )
 
     assert result.status == VerificationStatus.COUNTEREXAMPLE
     assert result.counterexample == {"total_gas": 12000, "budget": 10000, "over_by": 2000}

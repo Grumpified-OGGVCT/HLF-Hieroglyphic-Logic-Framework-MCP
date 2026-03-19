@@ -70,11 +70,13 @@ def test_lint_token_budget_warning():
     src = f"[HLF-v3]\n{long_line}\nΩ\n"
     diags = LINTER.lint(src, token_limit=30)
     warnings = [d for d in diags if d["level"] == "warning"]
-    assert any("token" in d["message"].lower() or "budget" in d["message"].lower() for d in warnings)
+    assert any(
+        "token" in d["message"].lower() or "budget" in d["message"].lower() for d in warnings
+    )
 
 
 def test_lint_spec_seal_without_define():
-    src = '[HLF-v3]\nSPEC_SEAL [MY_SPEC]\nΔ test\nΩ\n'
+    src = "[HLF-v3]\nSPEC_SEAL [MY_SPEC]\nΔ test\nΩ\n"
     diags = LINTER.lint(src)
     warns = [d for d in diags if d["level"] in ("warning", "error")]
     assert any("MY_SPEC" in d["message"] or "SPEC_SEAL" in d["message"] for d in warns)
@@ -90,11 +92,12 @@ def test_lint_passed_clean():
 def test_lint_all_fixtures():
     """All fixture files should lint without errors."""
     import os
+
     fixtures_dir = os.path.join(os.path.dirname(__file__), "..", "fixtures")
     for fname in os.listdir(fixtures_dir):
         if not fname.endswith(".hlf"):
             continue
-        with open(os.path.join(fixtures_dir, fname), encoding='utf-8') as f:
+        with open(os.path.join(fixtures_dir, fname), encoding="utf-8") as f:
             source = f.read()
         diags = LINTER.lint(source)
         errors = [d for d in diags if d["level"] == "error"]

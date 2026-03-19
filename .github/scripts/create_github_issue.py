@@ -11,15 +11,15 @@ import argparse
 import json
 import os
 import sys
-import urllib.request
 import urllib.error
 import urllib.parse
+import urllib.request
 from typing import Any
 
 
 def _gh_api(method: str, path: str, payload: dict | None = None) -> dict[str, Any]:
     token = os.environ.get("GITHUB_TOKEN", "")
-    repo  = os.environ.get("GITHUB_REPOSITORY", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not token:
         raise RuntimeError("GITHUB_TOKEN not set")
     if not repo:
@@ -75,10 +75,12 @@ def find_conflicting_pull_request(
         head_ref = str(pr.get("head", {}).get("ref", ""))
         base_ref = str(pr.get("base", {}).get("ref", ""))
         pr_labels = {str(label.get("name", "")) for label in pr.get("labels", [])}
-        searchable = "\n".join([
-            str(pr.get("title", "")),
-            str(pr.get("body", "")),
-        ]).lower()
+        searchable = "\n".join(
+            [
+                str(pr.get("title", "")),
+                str(pr.get("body", "")),
+            ]
+        ).lower()
 
         if wanted_head and head_ref in wanted_head:
             reasons.append(f"head={head_ref}")
@@ -137,20 +139,40 @@ def create_or_update_issue(
         if assignees:
             payload["assignees"] = assignees
         result = _gh_api("POST", "issues", payload)
-        print(f"[create_github_issue] Created issue #{result.get('number')}: {title}", file=sys.stderr)
+        print(
+            f"[create_github_issue] Created issue #{result.get('number')}: {title}", file=sys.stderr
+        )
         return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--title", required=True)
-    parser.add_argument("--body", required=True, help="Issue body text or @file.md to read from file")
+    parser.add_argument(
+        "--body", required=True, help="Issue body text or @file.md to read from file"
+    )
     parser.add_argument("--labels", default="", help="Comma-separated label names")
     parser.add_argument("--assignees", default="", help="Comma-separated GitHub usernames")
-    parser.add_argument("--conflict-head-branches", default="", help="Comma-separated PR head branches that should block issue creation")
-    parser.add_argument("--conflict-base-branches", default="", help="Comma-separated PR base branches that should block issue creation")
-    parser.add_argument("--conflict-labels", default="", help="Comma-separated PR labels that should block issue creation")
-    parser.add_argument("--conflict-title-substrings", default="", help="Comma-separated lowercase/phrase substrings in PR title/body that should block issue creation")
+    parser.add_argument(
+        "--conflict-head-branches",
+        default="",
+        help="Comma-separated PR head branches that should block issue creation",
+    )
+    parser.add_argument(
+        "--conflict-base-branches",
+        default="",
+        help="Comma-separated PR base branches that should block issue creation",
+    )
+    parser.add_argument(
+        "--conflict-labels",
+        default="",
+        help="Comma-separated PR labels that should block issue creation",
+    )
+    parser.add_argument(
+        "--conflict-title-substrings",
+        default="",
+        help="Comma-separated lowercase/phrase substrings in PR title/body that should block issue creation",
+    )
     args = parser.parse_args()
 
     body = args.body
@@ -158,12 +180,18 @@ def main() -> None:
         with open(body[1:], encoding="utf-8") as f:
             body = f.read()
 
-    labels = [l.strip() for l in args.labels.split(",") if l.strip()]
+    labels = [label.strip() for label in args.labels.split(",") if label.strip()]
     assignees = [a.strip() for a in args.assignees.split(",") if a.strip()]
-    conflict_head_branches = [value.strip() for value in args.conflict_head_branches.split(",") if value.strip()]
-    conflict_base_branches = [value.strip() for value in args.conflict_base_branches.split(",") if value.strip()]
+    conflict_head_branches = [
+        value.strip() for value in args.conflict_head_branches.split(",") if value.strip()
+    ]
+    conflict_base_branches = [
+        value.strip() for value in args.conflict_base_branches.split(",") if value.strip()
+    ]
     conflict_labels = [value.strip() for value in args.conflict_labels.split(",") if value.strip()]
-    conflict_title_substrings = [value.strip() for value in args.conflict_title_substrings.split(",") if value.strip()]
+    conflict_title_substrings = [
+        value.strip() for value in args.conflict_title_substrings.split(",") if value.strip()
+    ]
 
     result = create_or_update_issue(
         title=args.title,

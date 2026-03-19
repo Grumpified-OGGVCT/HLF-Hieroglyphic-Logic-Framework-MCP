@@ -23,31 +23,31 @@ class HLFCodeGenerator:
         return self
 
     def intent(self, goal: str, target: str | None = None, **fields: Any) -> HLFCodeGenerator:
-        parts = ['Δ [INTENT]', f'goal={_format_value(goal)}']
+        parts = ["Δ [INTENT]", f"goal={_format_value(goal)}"]
         if target is not None:
-            parts.append(f'target={_format_value(target)}')
+            parts.append(f"target={_format_value(target)}")
         parts.extend(_format_fields(fields))
         self._lines.append(" ".join(parts))
         return self
 
     def constraint(self, **fields: Any) -> HLFCodeGenerator:
-        parts = ['Ж [CONSTRAINT]'] + _format_fields(fields)
+        parts = ["Ж [CONSTRAINT]"] + _format_fields(fields)
         self._lines.append(" ".join(parts))
         return self
 
     def expect(self, **fields: Any) -> HLFCodeGenerator:
-        parts = ['Ж [EXPECT]'] + _format_fields(fields)
+        parts = ["Ж [EXPECT]"] + _format_fields(fields)
         self._lines.append(" ".join(parts))
         return self
 
     def delegate(self, agent: str, goal: str, **fields: Any) -> HLFCodeGenerator:
-        parts = ['⌘ [DELEGATE]', f'agent={_format_value(agent)}', f'goal={_format_value(goal)}']
+        parts = ["⌘ [DELEGATE]", f"agent={_format_value(agent)}", f"goal={_format_value(goal)}"]
         parts.extend(_format_fields(fields))
         self._lines.append(" ".join(parts))
         return self
 
     def vote(self, **fields: Any) -> HLFCodeGenerator:
-        parts = ['⨝ [VOTE]'] + _format_fields(fields)
+        parts = ["⨝ [VOTE]"] + _format_fields(fields)
         self._lines.append(" ".join(parts))
         return self
 

@@ -7,13 +7,25 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hlf_mcp.test_runner import DEFAULT_METRICS_DIR
-from hlf_mcp.weekly_artifacts import build_weekly_artifact
+DEFAULT_METRICS_DIR: Path | None = None
+build_weekly_artifact: Any | None = None
+
+
+def _load_artifact_dependencies() -> tuple[Path, Any]:
+    global DEFAULT_METRICS_DIR, build_weekly_artifact
+
+    if DEFAULT_METRICS_DIR is None or build_weekly_artifact is None:
+        from hlf_mcp.test_runner import DEFAULT_METRICS_DIR as default_metrics_dir
+        from hlf_mcp.weekly_artifacts import build_weekly_artifact as artifact_builder
+
+        DEFAULT_METRICS_DIR = default_metrics_dir
+        build_weekly_artifact = artifact_builder
+
+    return DEFAULT_METRICS_DIR, build_weekly_artifact
 
 
 def _workflow_run_url() -> str | None:
@@ -55,10 +67,13 @@ def _load_extra_payload(entries: list[str]) -> dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Emit a normalized weekly artifact for GitHub workflows.")
+    default_metrics_dir, _ = _load_artifact_dependencies()
+    parser = argparse.ArgumentParser(
+        description="Emit a normalized weekly artifact for GitHub workflows."
+    )
     parser.add_argument("--source", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--metrics-dir", type=Path, default=DEFAULT_METRICS_DIR)
+    parser.add_argument("--metrics-dir", type=Path, default=default_metrics_dir)
     parser.add_argument("--repo-root", type=Path, default=ROOT)
     parser.add_argument("--workflow-run-url", default=None)
     parser.add_argument("--suite-summary-file", type=Path, default=None)
@@ -67,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _, build_weekly_artifact = _load_artifact_dependencies()
     args = build_parser().parse_args(argv)
     suite_summary = _load_json_file(args.suite_summary_file)
     workflow_payload = _load_extra_payload(args.extra_json)

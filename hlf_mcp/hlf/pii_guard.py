@@ -13,15 +13,16 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Optional
-from collections.abc import Sequence
+from typing import Any
 
 
 class PIICategory(Enum):
     """Categories of PII that can be detected."""
+
     EMAIL = auto()
     PHONE = auto()
     SSN = auto()
@@ -37,6 +38,7 @@ class PIICategory(Enum):
 @dataclass
 class PIIDetection:
     """Represents a detected PII instance."""
+
     category: PIICategory
     value: str
     start_index: int
@@ -58,6 +60,7 @@ class PIIDetection:
 @dataclass
 class PIIScanResult:
     """Result of a PII scan operation."""
+
     has_pii: bool
     detections: list[PIIDetection] = field(default_factory=list)
     redacted_text: str = ""
@@ -79,7 +82,9 @@ def _default_policy() -> dict[str, Any]:
     return {
         "strict_mode": False,
         "min_confidence": 0.7,
-        "enabled_categories": [category.name for category in PIICategory if category is not PIICategory.CUSTOM],
+        "enabled_categories": [
+            category.name for category in PIICategory if category is not PIICategory.CUSTOM
+        ],
         "context_indicators": {
             "EMAIL": ["email", "contact", "reach"],
             "PHONE": ["phone", "call", "tel", "mobile"],
@@ -130,48 +135,42 @@ class PIIGuard:
 
     # Precompiled regex patterns for PII detection
     PATTERNS: dict[PIICategory, re.Pattern[str]] = {
-        PIICategory.EMAIL: re.compile(
-            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
-        ),
+        PIICategory.EMAIL: re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
         PIICategory.PHONE: re.compile(
-            r'\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?)[-.\s]?\d{3}[-.\s]?\d{4}\b'
+            r"\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?)[-.\s]?\d{3}[-.\s]?\d{4}\b"
         ),
-        PIICategory.SSN: re.compile(
-            r'\b\d{3}[-]?\d{2}[-]?\d{4}\b'
-        ),
+        PIICategory.SSN: re.compile(r"\b\d{3}[-]?\d{2}[-]?\d{4}\b"),
         PIICategory.CREDIT_CARD: re.compile(
-            r'\b(?:4[0-9]{12}(?:[0-9]{3})?'
-            r'|5[1-5][0-9]{14}'
-            r'|3[47][0-9]{13}'
-            r'|6(?:011|5[0-9]{2})[0-9]{12})\b'
+            r"\b(?:4[0-9]{12}(?:[0-9]{3})?"
+            r"|5[1-5][0-9]{14}"
+            r"|3[47][0-9]{13}"
+            r"|6(?:011|5[0-9]{2})[0-9]{12})\b"
         ),
         PIICategory.IP_ADDRESS: re.compile(
-            r'\b(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.'
-            r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.'
-            r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.'
-            r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
+            r"\b(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\."
+            r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\."
+            r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\."
+            r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b"
         ),
         PIICategory.DATE_OF_BIRTH: re.compile(
-            r'\b(?:0?[1-9]|1[0-2])[/\-](?:0?[1-9]|[12][0-9]|3[01])[/\-](?:19|20)\d{2}\b'
+            r"\b(?:0?[1-9]|1[0-2])[/\-](?:0?[1-9]|[12][0-9]|3[01])[/\-](?:19|20)\d{2}\b"
         ),
         PIICategory.URL: re.compile(
-            r'https?://(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}'
-            r'\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)'
+            r"https?://(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}"
+            r"\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)"
         ),
     }
 
     # Additional patterns requiring context-aware detection
-    NAME_PATTERN: re.Pattern[str] = re.compile(
-        r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b'
-    )
+    NAME_PATTERN: re.Pattern[str] = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b")
     ADDRESS_PATTERN: re.Pattern[str] = re.compile(
-        r'\b\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln)\b'
+        r"\b\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln)\b"
     )
 
     def __init__(
         self,
         strict_mode: bool | None = None,
-        custom_patterns: Optional[dict[PIICategory, re.Pattern[str]]] = None,
+        custom_patterns: dict[PIICategory, re.Pattern[str]] | None = None,
         min_confidence: float | None = None,
         policy: dict[str, Any] | None = None,
         policy_path: str | Path | None = None,
@@ -191,13 +190,16 @@ class PIIGuard:
         self.policy = effective_policy
         self.strict_mode = effective_policy["strict_mode"] if strict_mode is None else strict_mode
         self.custom_patterns = custom_patterns or {}
-        self.min_confidence = float(effective_policy["min_confidence"] if min_confidence is None else min_confidence)
+        self.min_confidence = float(
+            effective_policy["min_confidence"] if min_confidence is None else min_confidence
+        )
 
         enabled_names = {
-            str(name).upper()
-            for name in effective_policy.get("enabled_categories", [])
+            str(name).upper() for name in effective_policy.get("enabled_categories", [])
         }
-        enabled_categories = {category for category in PIICategory if category.name in enabled_names}
+        enabled_categories = {
+            category for category in PIICategory if category.name in enabled_names
+        }
         self._patterns: dict[PIICategory, re.Pattern[str]] = {
             category: pattern
             for category, pattern in {**self.PATTERNS, **self.custom_patterns}.items()
@@ -208,8 +210,12 @@ class PIIGuard:
             for key, values in effective_policy.get("context_indicators", {}).items()
             if key in PIICategory.__members__ and isinstance(values, list)
         }
-        self._title_indicators = [str(value) for value in effective_policy.get("title_indicators", [])]
-        self._common_non_name_words = {str(value) for value in effective_policy.get("common_non_name_words", [])}
+        self._title_indicators = [
+            str(value) for value in effective_policy.get("title_indicators", [])
+        ]
+        self._common_non_name_words = {
+            str(value) for value in effective_policy.get("common_non_name_words", [])
+        }
 
     def scan(self, text: str) -> PIIScanResult:
         """
@@ -314,7 +320,7 @@ class PIIGuard:
         # Boost confidence when contextual keywords appear nearby
         if category in self._context_indicators:
             idx = full_text.find(value)
-            context_text = full_text[max(0, idx - 50): idx + 50].lower()
+            context_text = full_text[max(0, idx - 50) : idx + 50].lower()
             for indicator in self._context_indicators[category]:
                 if indicator in context_text:
                     base_confidence = min(1.0, base_confidence + 0.05)
@@ -341,7 +347,7 @@ class PIIGuard:
         """
         base_confidence = 0.65
 
-        preceding_text = full_text[max(0, position - 20): position]
+        preceding_text = full_text[max(0, position - 20) : position]
         for title in self._title_indicators:
             if title in preceding_text:
                 base_confidence = 0.85
@@ -417,6 +423,7 @@ class PIIGuard:
 
 
 # ── Module-level convenience helpers ─────────────────────────────────────────
+
 
 def scan_for_pii(text: str, strict_mode: bool = False) -> PIIScanResult:
     """

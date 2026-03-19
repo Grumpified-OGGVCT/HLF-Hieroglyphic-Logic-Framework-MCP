@@ -206,7 +206,8 @@ Current truth rule:
 
 ### Memory and lifecycle
 
-- `hlf_mcp/rag/memory.py` provides the repo's current Infinite RAG memory implementation surface.
+- `hlf_mcp/rag/memory.py` provides the repo's current packaged Infinite RAG memory subsystem.
+- HLF Knowledge Substrate (HKS)-facing governed knowledge surfaces also exist above that subsystem through `hlf_mcp/server_memory.py`, `hlf_mcp/server_context.py`, and `hlf_mcp/weekly_artifacts.py`.
 - `hlf_mcp/instinct/lifecycle.py` provides the current Instinct lifecycle state machine surface.
 
 ### Governance artifacts

@@ -251,7 +251,7 @@ Reading rule:
 7. [Intent Capsule Tier Model](#7-intent-capsule-tier-model)
 8. [Host Function Registry](#8-host-function-registry)
 9. [Stdlib — 8 Complete Modules](#9-stdlib--8-complete-modules)
-10. [Infinite RAG Memory](#10-infinite-rag-memory)
+10. [HLF Knowledge Substrate (HKS)](#10-hlf-knowledge-substrate-hks)
 11. [Instinct SDD Lifecycle](#11-instinct-sdd-lifecycle)
 12. [MCP Server & Transports](#12-mcp-server--transports)
 13. [MCP Tools Reference](#13-mcp-tools-reference)
@@ -464,7 +464,7 @@ flowchart TD
         V3 --> V2
     end
 
-    subgraph Memory["🧠 Infinite RAG Memory"]
+    subgraph Memory["🧠 HKS / Knowledge Substrate"]
         M1[SQLite WAL  fact_store]
         M2[Merkle Chain  Writer]
         M3[Cosine Dedup  0.98 threshold]
@@ -894,9 +894,21 @@ root   = crypto.MERKLE_ROOT(["leaf1", "leaf2", "leaf3"])
 
 ---
 
-## 10. Infinite RAG Memory
+## 10. HLF Knowledge Substrate (HKS)
 
-The Infinite RAG eliminates the context-window ceiling by persisting, deduplicating, and tiering agent knowledge across sessions.
+The HLF Knowledge Substrate, or HKS, is the repo's governed knowledge system.
+HKS can tap into Infinite RAG where persistent memory and retrieval are needed, but they are separate in scope.
+Infinite RAG is its own memory subsystem and engine.
+HKS is the broader governed knowledge layer for exemplars, provenance, weekly evidence, operator-reviewable recall, and knowledge-promotion contracts across sessions.
+
+Current packaged truth:
+
+- Infinite RAG persistence and recall are real
+- HKS exemplar capture and recall surfaces are real
+- Weekly HKS artifact-integration hooks are real
+- provenance-bearing memory nodes and Merkle-linked lineage are real
+- MCP memory-facing tools are real
+- broader freshness, trust-tier, supersession, weekly evidence, and fuller HKS contracts remain bridge work
 
 ```mermaid
 graph LR
@@ -920,6 +932,8 @@ graph LR
         TS[hlf_memory_store]
         TQ[hlf_memory_query]
         TT[hlf_memory_stats]
+        HC[hlf_hks_capture]
+        HR[hlf_hks_recall]
     end
 
     Integration --> Store
@@ -932,18 +946,33 @@ graph LR
     end
 ```
 
-### Memory Properties
+### HKS Properties
 
 | Property | Implementation |
 |---|---|
-| **Persistence** | SQLite WAL mode — survives restarts |
+| **Infinite RAG integration** | HKS can use the packaged Infinite RAG subsystem for persisted memory and retrieval |
 | **Cosine dedup** | Bag-of-words cosine similarity; nodes with similarity `>0.98` rejected as duplicates |
-| **Merkle chain** | Every write appends a SHA-256 chain link for forensic audit |
+| **Provenance lineage** | Every write appends a SHA-256 chain link for forensic audit and replayable evidence |
 | **TTL expiry** | `prune_decay()` removes entries past their TTL |
 | **Entity indexing** | Per-entity namespace; `query(entity, text, top_k)` returns ranked results |
 | **Tag indexing** | Entries tagged for cross-entity retrieval |
+| **Knowledge substrate role** | HKS governs exemplar capture, recall, provenance, and evidence promotion rather than acting as a generic memory bucket |
 
-### HLF ↔ Infinite RAG Synergy
+### HKS Scope
+
+HKS in this repo currently spans:
+
+- HKS exemplar capture and governed recall paths
+- weekly validated-artifact to HKS exemplar conversion hooks
+- provenance-bearing knowledge objects and evidence summaries
+- integration points with Infinite RAG persistence and retrieval
+- governed memory nodes with provenance fields and TTL behavior
+- memory-facing MCP tools for store, query, stats, and HKS exemplar flows
+- witness and audit-adjacent evidence flow in the broader memory/governance lane
+
+HKS is intended to converge toward a richer governed substrate carrying freshness, confidence, trust-tier semantics, supersession, revocation, weekly knowledge ingest, and operator-legible evidence contracts.
+
+### HLF ↔ HKS Synergy
 
 | Without HLF | With HLF |
 |---|---|
@@ -1090,9 +1119,11 @@ HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 
 | Tool | Description |
 |---|---|
-| `hlf_memory_store` | Store a fact in the Infinite RAG memory (with cosine dedup) |
-| `hlf_memory_query` | Semantic search over the Infinite RAG memory |
-| `hlf_memory_stats` | Node count, size, Merkle chain length |
+| `hlf_memory_store` | Store a fact in the Infinite RAG subsystem with pointer and audit metadata |
+| `hlf_memory_query` | Query the Infinite RAG subsystem with governed filters for provenance and entry kinds |
+| `hlf_hks_capture` | Capture a validated HKS exemplar with provenance, tests, and solution metadata |
+| `hlf_hks_recall` | Recall governed HKS exemplars by domain and solution pattern |
+| `hlf_memory_stats` | Inspect Infinite RAG stats, including HKS exemplar counts, Merkle chain depth, and topic/domain breakdowns |
 | `hlf_instinct_step` | Advance an Instinct SDD lifecycle mission |
 | `hlf_instinct_get` | Get current state of an Instinct mission |
 | `hlf_spec_lifecycle` | Full SPECIFY→PLAN→EXECUTE→VERIFY→MERGE orchestration |
@@ -1421,7 +1452,8 @@ uv run ruff format hlf_mcp/
 - [x] 28 host functions with tier/gas/backend enforcement
 - [x] Intent Capsules: hearth / forge / sovereign tiers
 - [x] 8 stdlib modules (no stubs — AES-256-GCM crypto, PBKDF2, HMAC-SHA256)
-- [x] Infinite RAG memory (SQLite WAL, Merkle chain, cosine dedup)
+- [x] Infinite RAG subsystem (SQLite WAL, Merkle lineage, cosine dedup)
+- [x] HKS bridge surfaces (validated exemplar capture/recall, weekly artifact hooks, governed knowledge contracts)
 - [x] Instinct SDD lifecycle (SPECIFY→PLAN→EXECUTE→VERIFY→MERGE, CoVE gate)
 - [x] FastMCP server with packaged tools, packaged resources, and stdio + SSE + streamable-HTTP transports
 - [x] Multi-stage Docker image + docker-compose with health check

@@ -148,7 +148,7 @@ class HLFTestMetrics:
         # Client test
         try:
             from hlf.mcp_client import HLFMCPClient
-            client = HLFMCPClient("http://localhost:8000")
+            client = HLFMCPClient("http://mcp.test")
             # Check that client has all expected methods
             methods = ["get_version", "get_grammar", "get_dictionaries", "compile", "execute", "friction_log"]
             missing = [m for m in methods if not hasattr(client, m)]

@@ -12,10 +12,10 @@ Transport is selected via the HLF_TRANSPORT environment variable.
   HLF_TRANSPORT=streamable-http   Streamable HTTP on HLF_HOST:HLF_PORT
 
 Quick start:
-  docker run -e HLF_TRANSPORT=sse -p 8000:8000 hlf-mcp
-  # → SSE endpoint:          GET  http://localhost:8000/sse
-  # → Messages endpoint:     POST http://localhost:8000/messages/
-  # → Streamable HTTP:       POST http://localhost:8000/mcp  (if transport=streamable-http)
+    docker run -e HLF_TRANSPORT=sse -e HLF_PORT=<explicit-port> -p <explicit-port>:<explicit-port> hlf-mcp
+    # → SSE endpoint:          GET  http://localhost:$HLF_PORT/sse
+    # → Messages endpoint:     POST http://localhost:$HLF_PORT/messages/
+    # → Streamable HTTP:       POST http://localhost:$HLF_PORT/mcp  (if transport=streamable-http)
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ from hlf_mcp.server_verifier import register_verifier_tools
 # ── Server instance ────────────────────────────────────────────────────────────
 
 _HOST = os.environ.get("HLF_HOST", "0.0.0.0")
-_PORT = int(os.environ.get("HLF_PORT", "8000"))
+_PORT = int(os.environ["HLF_PORT"]) if os.environ.get("HLF_PORT") else 0
 
 mcp = FastMCP(
     name="HLF Hieroglyphic Logic Framework",
@@ -150,33 +150,32 @@ mcp._mcp_server.instructions = _generated_instructions
 
 # ── Health endpoint (HTTP transports only) ────────────────────────────────────
 
-def _make_health_app(mcp_app: Any) -> Any:
-    """Wrap the MCP ASGI app with a /health liveness probe.
+@mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
+async def health_endpoint(request: Any) -> Any:
+    """Expose a plain HTTP liveness probe without bypassing FastMCP lifespan handling."""
+    from starlette.responses import JSONResponse
 
-    Docker and docker-compose health checks need a plain HTTP GET /health → 200
-    that can be queried before the MCP handshake completes.  We mount a tiny
-    Starlette route in front of the MCP ASGI application so both live under
-    the same uvicorn process.
-    """
+    return JSONResponse(
+        {
+            "status": "ok",
+            "transport": os.environ.get("HLF_TRANSPORT", "stdio"),
+        }
+    )
+
+
+def _get_http_bind() -> tuple[str, int]:
+    """Resolve the explicit host/port bind for HTTP transports."""
+    host = os.environ.get("HLF_HOST", "0.0.0.0")
+    raw_port = os.environ.get("HLF_PORT")
+    if raw_port is None or not raw_port.strip():
+        raise RuntimeError("HLF_PORT must be set explicitly when HLF_TRANSPORT uses an HTTP transport")
     try:
-        from starlette.applications import Starlette
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-        from starlette.routing import Mount, Route
-
-        async def health(request: Request) -> JSONResponse:
-            return JSONResponse({
-                "status": "ok",
-                "transport": os.environ.get("HLF_TRANSPORT", "stdio"),
-            })
-
-        return Starlette(routes=[
-            Route("/health", health),
-            Mount("/", app=mcp_app),
-        ])
-    except ImportError:
-        # Starlette not available (stdio-only installs) — skip health wrapper
-        return mcp_app
+        port = int(raw_port)
+    except ValueError as exc:
+        raise RuntimeError(f"HLF_PORT must be an integer, got {raw_port!r}") from exc
+    if port <= 0 or port > 65535:
+        raise RuntimeError(f"HLF_PORT must be between 1 and 65535, got {port}")
+    return host, port
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
@@ -185,19 +184,19 @@ def _make_health_app(mcp_app: Any) -> Any:
 def main() -> None:
     """Start the HLF MCP server with the configured transport."""
     transport = os.environ.get("HLF_TRANSPORT", "stdio").lower().strip()
-    host = os.environ.get("HLF_HOST", "0.0.0.0")
-    port = int(os.environ.get("HLF_PORT", "8000"))
 
     if transport == "stdio":
         mcp.run(transport="stdio")
     elif transport in ("sse", "http"):
-        import uvicorn
-        app = _make_health_app(mcp.sse_app())
-        uvicorn.run(app, host=host, port=port)
+        host, port = _get_http_bind()
+        mcp.settings.host = host
+        mcp.settings.port = port
+        mcp.run(transport="sse")
     elif transport == "streamable-http":
-        import uvicorn
-        app = _make_health_app(mcp.streamable_http_app())
-        uvicorn.run(app, host=host, port=port)
+        host, port = _get_http_bind()
+        mcp.settings.host = host
+        mcp.settings.port = port
+        mcp.run(transport="streamable-http")
     else:
         print(f"Unknown transport: {transport!r}. Use: stdio, sse, streamable-http", file=sys.stderr)
         sys.exit(1)

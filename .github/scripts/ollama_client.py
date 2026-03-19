@@ -12,33 +12,56 @@ Architecture:
 
 Model registry (exact Ollama names from ollama.com/library, March 2025):
 
-  nemotron-3-super    NVIDIA | 120B total params, ~12B active per forward pass
-                      (LatentMoE sparse activation — Mamba+Transformer hybrid)
-                      Best: agentic reasoning, long-horizon planning, tool use
-                      https://ollama.com/library/nemotron-3-super
+    glm-5:cloud         Z.ai | 744B total, 40B active, 198K ctx
+                                            Best: reasoning, complex systems engineering, long-horizon tasks
+                                            https://ollama.com/library/glm-5
 
-  kimi-k2:1t-cloud    Moonshot AI | 1T MoE (32B active), 256K ctx
-                      Best: large-context codebase, autonomous agents
-                      https://ollama.com/library/kimi-k2
+    nemotron-3-super    NVIDIA | 120B total params, ~12B active per forward pass
+                                            (LatentMoE sparse activation — Mamba+Transformer hybrid)
+                                            Best: efficient multi-agent reasoning, long-horizon tool use
+                                            https://ollama.com/library/nemotron-3-super
 
-  qwen3.5:cloud       Alibaba | 397B cloud, Text+Image, 256K ctx
-                      Best: structured output, multimodal, universal fallback
-                      https://ollama.com/library/qwen3.5
+    cogito-2.1:671b-cloud Deep Cogito | 671B, 160K ctx
+                                                Best: math-heavy planning, strategic decomposition, efficient reasoning
+                                                https://ollama.com/library/cogito-2.1
 
-  devstral:24b        Mistral x AllHands | 24B, 128K ctx, SWE-Bench 46.8%
-                      Best: multi-file coding, SWE tasks, code review
-                      https://ollama.com/library/devstral
+    kimi-k2-thinking:cloud Moonshot AI | 256K ctx
+                                                 Best: long-horizon thinking, deep tool-using planning, 200-300 sequential tool calls
+                                                 https://ollama.com/library/kimi-k2-thinking
 
-  deepseek-r1:14b     DeepSeek | 14B, 128K ctx, chain-of-thought + thinking traces
-                      Best: ethical reasoning, adversarial analysis, logic chains
+    kimi-k2.5:cloud     Moonshot AI | multimodal, 256K ctx
+                                            Best: vision-grounded planning, multimodal agent swarms, repo and UI synthesis
+                                            https://ollama.com/library/kimi-k2.5
 
-Pre-defined tiered chains — each tier is independently capable:
+    minimax-m2.7:cloud  MiniMax | 200K ctx
+                                            Best: professional software engineering, coding, agentic workflows, productivity execution
+                                            https://ollama.com/library/minimax-m2.7
 
-  REASONING_CHAIN   nemotron-3-super -> kimi-k2:1t-cloud -> qwen3.5:cloud -> deepseek-r1:14b
-  CODING_CHAIN      devstral:24b     -> nemotron-3-super  -> qwen3.5:cloud -> deepseek-r1:14b
-  ANALYSIS_CHAIN    qwen3.5:cloud    -> nemotron-3-super  -> devstral:24b  -> deepseek-r1:14b
-  ETHICS_CHAIN      deepseek-r1:14b  -> nemotron-3-super  -> qwen3.5:cloud -> devstral:24b
-  UNIVERSAL_CHAIN   nemotron-3-super -> qwen3.5:cloud     -> devstral:24b  -> deepseek-r1:14b
+    devstral-2:123b-cloud Mistral | 123B, 256K ctx
+                                                Best: software engineering agents, multi-file edits, codebase exploration, tool use
+                                                https://ollama.com/library/devstral-2
+
+    qwen3-coder-next:cloud Alibaba | 80B total, 3B active, 256K ctx
+                                                 Best: efficient agentic coding, repo-scale understanding, tool calling
+                                                 https://ollama.com/library/qwen3-coder-next
+
+    qwen3.5:cloud       Alibaba | multimodal, 256K ctx
+                                            Best: structured output, multimodal analysis, universal fallback
+                                            https://ollama.com/library/qwen3.5
+
+    deepseek-v3.2:cloud DeepSeek | 160K ctx
+                                            Best: high-efficiency reasoning, agent performance, adversarial and analytical backstop
+                                            https://ollama.com/library/deepseek-v3.2
+
+Pre-defined tiered chains — each tier is independently capable, and overrides are only valid if the substitute meets or exceeds the displaced role's capability floor and HLF proficiency requirements:
+
+        REASONING_CHAIN   glm-5:cloud -> nemotron-3-super -> cogito-2.1:671b-cloud -> qwen3.5:cloud
+        PLANNING_CHAIN    cogito-2.1:671b-cloud -> kimi-k2-thinking:cloud -> kimi-k2.5:cloud -> nemotron-3-super -> qwen3.5:cloud
+        DOER_CHAIN        minimax-m2.7:cloud -> devstral-2:123b-cloud -> qwen3-coder-next:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud
+        CODING_CHAIN      devstral-2:123b-cloud -> minimax-m2.7:cloud -> qwen3-coder-next:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud
+    ANALYSIS_CHAIN    qwen3.5:cloud -> kimi-k2.5:cloud -> glm-5:cloud -> nemotron-3-super -> deepseek-v3.2:cloud
+    ETHICS_CHAIN      deepseek-v3.2:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud
+    UNIVERSAL_CHAIN   nemotron-3-super -> qwen3.5:cloud -> glm-5:cloud -> deepseek-v3.2:cloud
 
 Usage:
     from ollama_client import FallbackOrchestrator, REASONING_CHAIN
@@ -122,34 +145,58 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
             "(MoE sparse activation), optimised for agentic reasoning and long-horizon planning"
         ),
     ),
-    "kimi-k2:1t-cloud": ModelSpec(
-        name="kimi-k2:1t-cloud", context_k=256,
-        description="Moonshot 1T MoE (32B active), autonomous coding agents, 256K ctx",
+    "glm-5:cloud": ModelSpec(
+        name="glm-5:cloud", context_k=198,
+        description="Z.ai 744B total / 40B active, strong reasoning, complex systems engineering, and long-horizon agentic work",
+    ),
+    "cogito-2.1:671b-cloud": ModelSpec(
+        name="cogito-2.1:671b-cloud", context_k=160,
+        description="Deep Cogito 671B cloud, strong math/planning/instruction-following with efficient reasoning",
+    ),
+    "kimi-k2-thinking:cloud": ModelSpec(
+        name="kimi-k2-thinking:cloud", context_k=256,
+        description="Moonshot thinking agent, strong long-horizon planning, search, and tool-using reasoning",
+    ),
+    "kimi-k2.5:cloud": ModelSpec(
+        name="kimi-k2.5:cloud", context_k=256,
+        description="Moonshot multimodal agentic model with vision-grounded planning, swarm execution, and UI/repo synthesis",
+    ),
+    "minimax-m2.7:cloud": ModelSpec(
+        name="minimax-m2.7:cloud", context_k=200,
+        description="MiniMax M2.7 cloud, professional software engineering, agentic workflows, and productivity execution",
+    ),
+    "devstral-2:123b-cloud": ModelSpec(
+        name="devstral-2:123b-cloud", context_k=256,
+        description="Devstral 2 123B cloud, top-tier software engineering agent for codebase exploration and multi-file edits",
+    ),
+    "qwen3-coder-next:cloud": ModelSpec(
+        name="qwen3-coder-next:cloud", context_k=256,
+        description="Qwen coding-focused cloud model with repo-scale context and agentic tool-calling efficiency",
     ),
     "qwen3.5:cloud": ModelSpec(
         name="qwen3.5:cloud", context_k=256,
         description="Alibaba 397B cloud, Text+Image multimodal, universal fallback",
     ),
-    "devstral:24b": ModelSpec(
-        name="devstral:24b", context_k=128,
-        description="Mistral x AllHands 24B, SWE-Bench 46.8%, coding agent, Apache 2.0",
-    ),
-    "deepseek-r1:14b": ModelSpec(
-        name="deepseek-r1:14b", context_k=128,
-        description="DeepSeek 14B, chain-of-thought with thinking traces",
-        supports_think=True, is_cloud=False,
+    "deepseek-v3.2:cloud": ModelSpec(
+        name="deepseek-v3.2:cloud", context_k=160,
+        description="DeepSeek v3.2 cloud, high-efficiency reasoning and agent performance backstop",
+        supports_think=True,
     ),
 }
 
 # Tiered chains — ordered strongest -> final safety net
-REASONING_CHAIN: list[str] = ["nemotron-3-super", "kimi-k2:1t-cloud", "qwen3.5:cloud", "deepseek-r1:14b"]
-CODING_CHAIN:    list[str] = ["devstral:24b",     "nemotron-3-super",  "qwen3.5:cloud", "deepseek-r1:14b"]
-ANALYSIS_CHAIN:  list[str] = ["qwen3.5:cloud",    "nemotron-3-super",  "devstral:24b",  "deepseek-r1:14b"]
-ETHICS_CHAIN:    list[str] = ["deepseek-r1:14b",  "nemotron-3-super",  "qwen3.5:cloud", "devstral:24b"]
-UNIVERSAL_CHAIN: list[str] = ["nemotron-3-super",  "qwen3.5:cloud",    "devstral:24b",  "deepseek-r1:14b"]
+REASONING_CHAIN: list[str] = ["glm-5:cloud", "nemotron-3-super", "cogito-2.1:671b-cloud", "qwen3.5:cloud"]
+PLANNING_CHAIN:  list[str] = ["cogito-2.1:671b-cloud", "kimi-k2-thinking:cloud", "kimi-k2.5:cloud", "nemotron-3-super", "qwen3.5:cloud"]
+DOER_CHAIN:      list[str] = ["minimax-m2.7:cloud", "devstral-2:123b-cloud", "qwen3-coder-next:cloud", "glm-5:cloud", "nemotron-3-super", "qwen3.5:cloud"]
+CODING_CHAIN:    list[str] = ["devstral-2:123b-cloud", "minimax-m2.7:cloud", "qwen3-coder-next:cloud", "glm-5:cloud", "nemotron-3-super", "qwen3.5:cloud"]
+ANALYSIS_CHAIN:  list[str] = ["qwen3.5:cloud", "kimi-k2.5:cloud", "glm-5:cloud", "nemotron-3-super", "deepseek-v3.2:cloud"]
+ETHICS_CHAIN:    list[str] = ["deepseek-v3.2:cloud", "glm-5:cloud", "nemotron-3-super", "qwen3.5:cloud"]
+UNIVERSAL_CHAIN: list[str] = ["nemotron-3-super", "qwen3.5:cloud", "glm-5:cloud", "deepseek-v3.2:cloud"]
 
 CHAIN_MAP: dict[str, list[str]] = {
     "reasoning": REASONING_CHAIN,
+    "planning":  PLANNING_CHAIN,
+    "doer":      DOER_CHAIN,
     "coding":    CODING_CHAIN,
     "analysis":  ANALYSIS_CHAIN,
     "ethics":    ETHICS_CHAIN,
@@ -889,11 +936,15 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Chains:\n"
-            "  reasoning   nemotron-3-super -> kimi-k2:1t-cloud -> qwen3.5:cloud -> deepseek-r1:14b\n"
-            "  coding      devstral:24b     -> nemotron-3-super  -> qwen3.5:cloud -> deepseek-r1:14b\n"
-            "  analysis    qwen3.5:cloud    -> nemotron-3-super  -> devstral:24b  -> deepseek-r1:14b\n"
-            "  ethics      deepseek-r1:14b  -> nemotron-3-super  -> qwen3.5:cloud -> devstral:24b\n"
-            "  universal   nemotron-3-super -> qwen3.5:cloud     -> devstral:24b  -> deepseek-r1:14b"
+            "  reasoning   glm-5:cloud -> nemotron-3-super -> cogito-2.1:671b-cloud -> qwen3.5:cloud\n"
+            "  planning    cogito-2.1:671b-cloud -> kimi-k2-thinking:cloud -> kimi-k2.5:cloud -> nemotron-3-super -> qwen3.5:cloud\n"
+            "  doer        minimax-m2.7:cloud -> devstral-2:123b-cloud -> qwen3-coder-next:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud\n"
+            "  coding      devstral-2:123b-cloud -> minimax-m2.7:cloud -> qwen3-coder-next:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud\n"
+            "  analysis    qwen3.5:cloud -> kimi-k2.5:cloud -> glm-5:cloud -> nemotron-3-super -> deepseek-v3.2:cloud\n"
+            "  ethics      deepseek-v3.2:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud\n"
+            "  universal   nemotron-3-super -> qwen3.5:cloud -> glm-5:cloud -> deepseek-v3.2:cloud\n\n"
+            "Overrides are allowed only when the replacement meets or exceeds the role capability floor,"
+            " context needs, tool competence, and HLF-specific proficiency required by the displaced model."
         ),
     )
     grp = parser.add_mutually_exclusive_group(required=True)

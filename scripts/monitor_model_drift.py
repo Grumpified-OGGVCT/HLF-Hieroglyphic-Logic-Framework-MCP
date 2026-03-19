@@ -10,8 +10,8 @@ This is NOT just a "call the LLM and hope" script — it uses structured outputs
 over week. Drift score is computed by comparing expected vs actual classifications.
 
 Ollama features used:
-  • Structured outputs  — format: JSON schema on every probe call
-  • Tiered fallback     — nemotron-3-super -> qwen3.5:cloud -> devstral:24b
+    • Structured outputs  — format: JSON schema on every probe call
+    • Tiered fallback     — glm-5:cloud -> nemotron-3-super -> cogito-2.1:671b-cloud -> qwen3.5:cloud
   • Web search          — inject web_search tool to let model check for HLF
                           spec updates or known issues
   • Streaming           — default streaming with buffer protection
@@ -204,7 +204,7 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
     resolved_key = api_key or os.environ.get("OLLAMA_API_KEY", "")
     timestamp = datetime.now(timezone.utc).isoformat()
 
-    # Use REASONING_CHAIN: nemotron-3-super -> kimi-k2:1t-cloud -> qwen3.5:cloud -> deepseek-r1:14b
+    # Use REASONING_CHAIN: glm-5:cloud -> nemotron-3-super -> cogito-2.1:671b-cloud -> qwen3.5:cloud
     # Structured outputs + web search enabled
     orch = FallbackOrchestrator(
         chain=REASONING_CHAIN,

@@ -68,10 +68,18 @@ db/*.sqlite
 db/*.sqlite3
 db/*.db-shm
 db/*.db-wal
+db/*.sqlite-shm
+db/*.sqlite-wal
+db/*.sqlite3-shm
+db/*.sqlite3-wal
 hlf_source/data/sqlite/*.db
 hlf_source/data/sqlite/*.sqlite3
 hlf_source/data/sqlite/*.db-shm
 hlf_source/data/sqlite/*.db-wal
+hlf_source/data/sqlite/*.sqlite-shm
+hlf_source/data/sqlite/*.sqlite-wal
+hlf_source/data/sqlite/*.sqlite3-shm
+hlf_source/data/sqlite/*.sqlite3-wal
 hlf_source/data/cold_archive/*
 hlf_source/data/quarantine_dumps/*
 hlf_source/data/align_staging/*
@@ -82,6 +90,20 @@ hlf_source/data/redis/
 
 # HLF MCP runtime hot store (exclude from VCS)
 data/hlf_hot_store.db
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/*.db-shm
+data/*.db-wal
+data/*.sqlite-shm
+data/*.sqlite-wal
+data/*.sqlite3-shm
+data/*.sqlite3-wal
+
+# Generated observability and local research outputs
+observability/openllmetry/*.jsonl
+observability/openllmetry/*.txt
+ollama_folder_qa/ollama_qa_results.json
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 *.log

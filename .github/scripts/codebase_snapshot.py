@@ -1,8 +1,8 @@
 """
 codebase_snapshot.py — Generate a structured codebase snapshot for LLM consumption.
 
-Used by the evolution-planner workflow to feed kimi-k2:1t-cloud (256K ctx)
-a complete view of the repo without exceeding context limits.
+Used by the evolution-planner workflow to feed the current planning lane
+without exceeding context limits.
 
 Outputs a single text file containing:
   - File tree

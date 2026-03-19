@@ -189,15 +189,23 @@ class TestModelRegistry:
 
     def test_reasoning_chain_primary_is_nemotron(self):
         from ollama_client import REASONING_CHAIN
-        assert REASONING_CHAIN[0] == "nemotron-3-super"
+        assert REASONING_CHAIN[0] == "glm-5:cloud"
+
+    def test_planning_chain_primary_is_cogito(self):
+        from ollama_client import PLANNING_CHAIN
+        assert PLANNING_CHAIN[0] == "cogito-2.1:671b-cloud"
+
+    def test_doer_chain_primary_is_minimax(self):
+        from ollama_client import DOER_CHAIN
+        assert DOER_CHAIN[0] == "minimax-m2.7:cloud"
 
     def test_coding_chain_primary_is_devstral(self):
         from ollama_client import CODING_CHAIN
-        assert CODING_CHAIN[0] == "devstral:24b"
+        assert CODING_CHAIN[0] == "devstral-2:123b-cloud"
 
     def test_ethics_chain_primary_is_deepseek(self):
         from ollama_client import ETHICS_CHAIN
-        assert ETHICS_CHAIN[0] == "deepseek-r1:14b"
+        assert ETHICS_CHAIN[0] == "deepseek-v3.2:cloud"
 
     def test_all_chains_contain_qwen_fallback(self):
         from ollama_client import CHAIN_MAP
@@ -208,6 +216,14 @@ class TestModelRegistry:
         from ollama_client import CHAIN_MAP
         for name, chain in CHAIN_MAP.items():
             assert "nemotron-3-super" in chain, f"nemotron-3-super missing from {name!r} chain"
+
+    def test_planning_and_doer_models_are_in_registry(self):
+        from ollama_client import MODEL_REGISTRY
+        assert "cogito-2.1:671b-cloud" in MODEL_REGISTRY
+        assert "minimax-m2.7:cloud" in MODEL_REGISTRY
+        assert "glm-5:cloud" in MODEL_REGISTRY
+        assert "kimi-k2.5:cloud" in MODEL_REGISTRY
+        assert "devstral-2:123b-cloud" in MODEL_REGISTRY
 
 
 # ============================================================
@@ -462,16 +478,16 @@ class TestFallbackOrchestrator:
 
     def test_falls_back_on_open_circuit(self):
         from ollama_client import FallbackOrchestrator, CircuitBreaker, CIRCUIT_FAIL_THRESHOLD
-        cb = CircuitBreaker("devstral:24b")
+        cb = CircuitBreaker("devstral-2:123b-cloud")
         for _ in range(CIRCUIT_FAIL_THRESHOLD):
             cb.record_failure()
         with patch("urllib.request.urlopen", return_value=self._streaming_ctx("fallback ok")):
             result = FallbackOrchestrator(
-                chain=["devstral:24b", "nemotron-3-super"],
+                chain=["devstral-2:123b-cloud", "nemotron-3-super"],
                 api_key="k",
             ).complete("sys", "p")
         assert result.tier_index >= 1
-        assert result.model_used != "devstral:24b"
+        assert result.model_used != "devstral-2:123b-cloud"
 
     def test_all_tiers_exhausted_raises(self):
         import urllib.error
@@ -481,7 +497,7 @@ class TestFallbackOrchestrator:
         with patch("urllib.request.urlopen", fail):
             with pytest.raises(RuntimeError, match="tiers exhausted"):
                 FallbackOrchestrator(
-                    chain=["devstral:24b", "qwen3.5:cloud"],
+                    chain=["devstral-2:123b-cloud", "qwen3.5:cloud"],
                     api_key="k", max_retries_per_tier=1,
                 ).complete("sys", "p")
 
@@ -496,7 +512,7 @@ class TestFallbackOrchestrator:
             return self._streaming_ctx("ok from tier 2")
         with patch("urllib.request.urlopen", mixed):
             result = FallbackOrchestrator(
-                chain=["devstral:24b", "nemotron-3-super"],
+                chain=["devstral-2:123b-cloud", "nemotron-3-super"],
                 api_key="k", max_retries_per_tier=1,
             ).complete("sys", "p")
         outcomes = [e["outcome"] for e in result.audit_trail]
@@ -513,7 +529,7 @@ class TestFallbackOrchestrator:
             return self._streaming_ctx("third tier wins")
         with patch("urllib.request.urlopen", fail_two_then_succeed):
             result = FallbackOrchestrator(
-                chain=["devstral:24b", "nemotron-3-super", "qwen3.5:cloud"],
+                chain=["devstral-2:123b-cloud", "nemotron-3-super", "qwen3.5:cloud"],
                 api_key="k", max_retries_per_tier=1,
             ).complete("sys", "p")
         assert result.tier_index == 2
@@ -536,7 +552,7 @@ class TestFallbackOrchestrator:
             return self._streaming_ctx("third tier succeeded successfully")
         with patch("urllib.request.urlopen", fail_then_ok):
             result = FallbackOrchestrator(
-                chain=["devstral:24b", "nemotron-3-super", "qwen3.5:cloud"],
+                chain=["devstral-2:123b-cloud", "nemotron-3-super", "qwen3.5:cloud"],
                 api_key="k", max_retries_per_tier=1,
             ).complete("sys", "p")
         assert result.attempts >= 3
@@ -582,12 +598,12 @@ class TestBackwardCompatShims:
             raise urllib.error.HTTPError("", 401, "Unauthorized", {}, io.BytesIO(b"Unauthorized"))
         with patch("urllib.request.urlopen", fake_401):
             with pytest.raises(RuntimeError, match="Auth failure"):
-                call_ollama("devstral:24b", "sys", "prompt", api_key="bad")
+                call_ollama("devstral-2:123b-cloud", "sys", "prompt", api_key="bad")
 
     def test_call_with_fallback_uses_fallback_on_primary_fail(self):
         import urllib.error
         from ollama_client import call_with_fallback, CircuitBreaker, CIRCUIT_FAIL_THRESHOLD
-        cb = CircuitBreaker("devstral:24b")
+        cb = CircuitBreaker("devstral-2:123b-cloud")
         for _ in range(CIRCUIT_FAIL_THRESHOLD):
             cb.record_failure()
 
@@ -605,6 +621,6 @@ class TestBackwardCompatShims:
 
         with patch("urllib.request.urlopen", return_value=ctx):
             _, model_used = call_with_fallback(
-                "devstral:24b", "nemotron-3-super", "sys", "prompt", api_key="k"
+                "devstral-2:123b-cloud", "nemotron-3-super", "sys", "prompt", api_key="k"
             )
         assert model_used == "nemotron-3-super"

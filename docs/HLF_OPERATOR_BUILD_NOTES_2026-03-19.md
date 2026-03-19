@@ -61,7 +61,7 @@ These surfaces are partially represented in packaged code or docs, but they are 
 | --- | --- | --- |
 | Governance control matrix | `governance/align_rules.json`, `governance/host_functions.json`, capsules | Controls exist, but the repo still lacks a full operator-facing control matrix and proof mapping |
 | Typed effect algebra | host-function registry and tool dispatch | Inputs, outputs, effects, and structured failures are not yet formalized as packaged contracts |
-| HLF knowledge substrate and memory governance | `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, `hlf_mcp/server_memory.py` | Infinite RAG as a subsystem and HKS-facing governed retrieval surfaces are real, but freshness, supersession, trust-tier, expiry, and one runtime schema still need to be locked down coherently |
+| HLF Knowledge Substrate (HKS) and memory governance | `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, `hlf_mcp/server_memory.py` | Infinite RAG as a subsystem and HKS-facing governed retrieval surfaces are real, but freshness, supersession, trust-tier, expiry, and one runtime schema still need to be locked down coherently |
 | Human trust surface | translator, audit chain, resources | Evidence exists, but policy, route, and verifier explanations are not yet complete operator products |
 | Real-code bridge | `hlf_mcp/hlf/codegen.py` | Code output exists, but proof of correctness and broader target coverage are not yet packaged proof surfaces |
 

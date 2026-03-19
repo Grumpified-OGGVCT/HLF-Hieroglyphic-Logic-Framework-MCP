@@ -121,8 +121,31 @@ class IntentCapsule:
             unique.append(item)
         return unique
 
-    def expected_approval_token(self, statements: list[dict[str, Any]]) -> str:
-        requirements = self.collect_approval_requirements(statements)
+    def _merged_requirements(
+        self,
+        statements: list[dict[str, Any]],
+        extra_requirements: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, str]]:
+        requirements = list(self.collect_approval_requirements(statements))
+        for item in extra_requirements or []:
+            normalized = {
+                "type": str(item.get("type", "") or ""),
+                "scope": str(item.get("scope", "") or ""),
+                "value": str(item.get("value", "") or ""),
+            }
+            if not normalized["type"] or not normalized["scope"] or not normalized["value"]:
+                continue
+            if normalized in requirements:
+                continue
+            requirements.append(normalized)
+        return requirements
+
+    def expected_approval_token(
+        self,
+        statements: list[dict[str, Any]],
+        extra_requirements: list[dict[str, Any]] | None = None,
+    ) -> str:
+        requirements = self._merged_requirements(statements, extra_requirements)
         if not requirements:
             return ""
         return build_capsule_approval_token(
@@ -132,13 +155,17 @@ class IntentCapsule:
             requirements,
         )
 
-    def approval_granted(self, statements: list[dict[str, Any]]) -> bool:
-        requirements = self.collect_approval_requirements(statements)
+    def approval_granted(
+        self,
+        statements: list[dict[str, Any]],
+        extra_requirements: list[dict[str, Any]] | None = None,
+    ) -> bool:
+        requirements = self._merged_requirements(statements, extra_requirements)
         if not requirements:
             return True
         if not self.approved_by or not self.approval_token:
             return False
-        return self.approval_token == self.expected_approval_token(statements)
+        return self.approval_token == self.expected_approval_token(statements, extra_requirements)
 
     def validate_host_function(self, function_name: str) -> list[str]:
         violations: list[str] = []
@@ -148,11 +175,15 @@ class IntentCapsule:
             violations.append(f"Tool/function not in allowed list: {function_name}")
         return violations
 
-    def approval_violations(self, statements: list[dict[str, Any]]) -> list[str]:
-        requirements = self.collect_approval_requirements(statements)
+    def approval_violations(
+        self,
+        statements: list[dict[str, Any]],
+        extra_requirements: list[dict[str, Any]] | None = None,
+    ) -> list[str]:
+        requirements = self._merged_requirements(statements, extra_requirements)
         if not requirements:
             return []
-        if self.approval_granted(statements):
+        if self.approval_granted(statements, extra_requirements):
             return []
         violations: list[str] = []
         for item in requirements:
@@ -164,6 +195,10 @@ class IntentCapsule:
                 violations.append(f"Tag requires higher-order approval: [{item['value']}]")
             elif item["type"] == "tool":
                 violations.append(f"Tool/function requires higher-order approval: {item['value']}")
+            elif item["type"] == "verification_review":
+                violations.append(
+                    f"Verifier review requires higher-order approval: {item['value']}"
+                )
         return violations
 
     def _validate_pointer_string(self, value: str) -> list[str]:
@@ -196,9 +231,13 @@ class IntentCapsule:
                 violations.extend(self._validate_pointer_literals(nested))
         return violations
 
-    def validate_ast(self, statements: list[dict[str, Any]]) -> list[str]:
+    def validate_ast(
+        self,
+        statements: list[dict[str, Any]],
+        extra_requirements: list[dict[str, Any]] | None = None,
+    ) -> list[str]:
         """Pre-flight check. Returns list of violation messages."""
-        violations = self.approval_violations(statements)
+        violations = self.approval_violations(statements, extra_requirements)
         for node in statements:
             if not isinstance(node, dict):
                 continue
@@ -219,9 +258,9 @@ class IntentCapsule:
             for key in ("body", "statements"):
                 sub = node.get(key)
                 if isinstance(sub, dict):
-                    violations.extend(self.validate_ast(sub.get("statements", [])))
+                    violations.extend(self.validate_ast(sub.get("statements", []), extra_requirements))
                 elif isinstance(sub, list):
-                    violations.extend(self.validate_ast(sub))
+                    violations.extend(self.validate_ast(sub, extra_requirements))
         return violations
 
     def check_var_write(self, name: str) -> None:

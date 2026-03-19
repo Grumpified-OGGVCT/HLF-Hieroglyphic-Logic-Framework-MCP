@@ -1106,10 +1106,12 @@ class HLFRuntime:
         tier: str | None = None,
         red_hat_metadata: dict[str, Any] | None = None,
         audit_logger: Any | None = None,
+        verification_admission: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         effective_variables = variables or {}
         effective_tier = tier or str(effective_variables.get("DEPLOYMENT_TIER", "hearth"))
         effective_audit_logger = audit_logger or effective_variables.get("_audit_logger")
+        effective_verification_admission = verification_admission or effective_variables.get("_verification_admission")
 
         def _emit_audit(event: str, data: dict[str, Any]) -> dict[str, Any] | None:
             if effective_audit_logger is None or not hasattr(effective_audit_logger, "log"):
@@ -1175,6 +1177,33 @@ class HLFRuntime:
                     ),
                 }
 
+        if isinstance(effective_verification_admission, dict) and not bool(
+            effective_verification_admission.get("admitted", False)
+        ):
+            return {
+                "status": "verification_blocked",
+                "result": None,
+                "gas_used": 0,
+                "trace": [],
+                "side_effects": [],
+                "error": "; ".join(
+                    str(reason) for reason in effective_verification_admission.get("reasons", []) if reason
+                )
+                or "Formal verifier denied execution admission.",
+                "verification": effective_verification_admission,
+                "audit": _emit_audit(
+                    "hlf_execution_blocked",
+                    {
+                        "tier": effective_tier,
+                        "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest() if source else "",
+                        "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
+                        "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
+                        "verification_verdict": str(effective_verification_admission.get("verdict", "")),
+                        "verification_reasons": list(effective_verification_admission.get("reasons", [])),
+                    },
+                ),
+            }
+
         vm = HlfVM(max_gas=gas_limit)
         if effective_variables:
             vm.scope.update(effective_variables)
@@ -1219,6 +1248,7 @@ class HLFRuntime:
             "trace":        result.trace,
             "side_effects": result.side_effects,
             "error":        result.error,
+            "verification": effective_verification_admission if isinstance(effective_verification_admission, dict) else None,
             "audit": {
                 "execution": execution_audit,
                 "side_effects": sealed_side_effects,

@@ -9,6 +9,7 @@ from hlf_mcp.hlf import insaits
 from hlf_mcp.hlf.memory_node import verify_pointer_ref
 from hlf_mcp.hlf.capsules import capsule_for_tier
 from hlf_mcp.hlf.compiler import CompileError
+from hlf_mcp.hlf.execution_admission import evaluate_verifier_admission
 from hlf_mcp.server_context import ServerContext
 
 
@@ -43,8 +44,9 @@ def _resolve_approval_request(
     statements: list[dict[str, Any]],
     approved_by: str,
     approval_token: str,
+    extra_requirements: list[dict[str, Any]] | None = None,
 ) -> tuple[Any, dict[str, Any] | None]:
-    requirements = capsule.collect_approval_requirements(statements)
+    requirements = capsule._merged_requirements(statements, extra_requirements)
     if not requirements:
         return capsule, None
 
@@ -54,7 +56,7 @@ def _resolve_approval_request(
         base_tier=capsule.base_tier,
         requested_tier=capsule.requested_tier,
         requirements=requirements,
-        approval_token=capsule.expected_approval_token(statements),
+        approval_token=capsule.expected_approval_token(statements, extra_requirements),
     )
 
     if approved_by and approval_token and request.status == "pending":
@@ -80,6 +82,22 @@ def _resolve_approval_request(
         )
 
     return capsule, request.to_dict()
+
+
+def _effective_verification_admission(
+    verification_admission: dict[str, Any],
+    *,
+    approval_granted: bool,
+) -> dict[str, Any]:
+    effective = dict(verification_admission)
+    if approval_granted and verification_admission.get("requires_operator_review"):
+        effective["admitted"] = True
+        effective["verdict"] = "verification_review_approved"
+        effective["operator_review_approved"] = True
+        reasons = [str(reason) for reason in effective.get("reasons", []) if reason]
+        reasons.append("Operator review approved execution after incomplete proof coverage.")
+        effective["reasons"] = reasons
+    return effective
 
 
 def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
@@ -122,27 +140,47 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 approval_token=approval_token,
             )
             stmts = result["ast"].get("statements", [])
+            verification_admission = evaluate_verifier_admission(
+                {"statements": stmts},
+                verifier=ctx.formal_verifier,
+                tier=tier,
+                requested_tier=capsule.requested_tier,
+            ).to_dict()
+            verification_requirements = list(verification_admission.get("approval_requirements", []))
             capsule, approval_request = _resolve_approval_request(
                 ctx,
                 capsule=capsule,
                 statements=stmts,
                 approved_by=approved_by,
                 approval_token=approval_token,
+                extra_requirements=verification_requirements,
             )
-            violations = capsule.validate_ast(stmts)
-            approval_requirements = capsule.collect_approval_requirements(stmts)
+            approval_requirements = capsule._merged_requirements(stmts, verification_requirements)
+            approval_granted = capsule.approval_granted(stmts, verification_requirements)
+            effective_verification = _effective_verification_admission(
+                verification_admission,
+                approval_granted=approval_granted,
+            )
+            violations = capsule.validate_ast(stmts, verification_requirements)
+            if not effective_verification.get("admitted", False) and not effective_verification.get("requires_operator_review", False):
+                violations = [
+                    f"Verifier admission denied: {reason}"
+                    for reason in effective_verification.get("reasons", [])
+                    if reason
+                ] + violations
             return {
                 "status": "ok",
                 "tier": tier,
                 "requested_tier": capsule.requested_tier,
                 "agent_id": agent_id,
                 "violations": violations,
-                "approval_required": bool(approval_requirements) and not capsule.approval_granted(stmts),
-                "approval_granted": capsule.approval_granted(stmts),
+                "approval_required": bool(approval_requirements) and not approval_granted,
+                "approval_granted": approval_granted,
                 "approval_requirements": approval_requirements,
-                "approval_token": capsule.expected_approval_token(stmts),
+                "approval_token": capsule.expected_approval_token(stmts, verification_requirements),
                 "approval_request": approval_request,
                 "passed": len(violations) == 0,
+                "verification": effective_verification,
                 "capsule": capsule.to_dict(),
             }
         except ValueError as exc:
@@ -194,16 +232,29 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 approval_token=approval_token,
             )
             stmts = result["ast"].get("statements", [])
+            verification_admission = evaluate_verifier_admission(
+                {"statements": stmts},
+                verifier=ctx.formal_verifier,
+                tier=tier,
+                requested_tier=capsule.requested_tier,
+            ).to_dict()
+            verification_requirements = list(verification_admission.get("approval_requirements", []))
             capsule, approval_request = _resolve_approval_request(
                 ctx,
                 capsule=capsule,
                 statements=stmts,
                 approved_by=approved_by,
                 approval_token=approval_token,
+                extra_requirements=verification_requirements,
             )
-            approval_requirements = capsule.collect_approval_requirements(stmts)
-            approval_token_value = capsule.expected_approval_token(stmts)
-            if approval_requirements and not capsule.approval_granted(stmts):
+            approval_requirements = capsule._merged_requirements(stmts, verification_requirements)
+            approval_granted = capsule.approval_granted(stmts, verification_requirements)
+            effective_verification = _effective_verification_admission(
+                verification_admission,
+                approval_granted=approval_granted,
+            )
+            approval_token_value = capsule.expected_approval_token(stmts, verification_requirements)
+            if approval_requirements and not approval_granted:
                 return {
                     "status": "approval_required",
                     "tier": tier,
@@ -211,9 +262,19 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     "approval_requirements": approval_requirements,
                     "approval_token": approval_token_value,
                     "approval_request": approval_request,
+                    "verification": effective_verification,
                     "capsule": capsule.to_dict(),
                 }
-            violations = capsule.validate_ast(stmts)
+            if not effective_verification.get("admitted", False):
+                return {
+                    "status": "verification_denied",
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                    "verification": effective_verification,
+                    "approval_requirements": approval_requirements,
+                    "capsule": capsule.to_dict(),
+                }
+            violations = capsule.validate_ast(stmts, verification_requirements)
             if violations:
                 return {
                     "status": "capsule_violation",
@@ -221,6 +282,7 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     "requested_tier": capsule.requested_tier,
                     "violations": violations,
                     "approval_requirements": approval_requirements,
+                    "verification": effective_verification,
                     "capsule": capsule.to_dict(),
                 }
             effective_gas = min(gas_limit, capsule.max_gas)
@@ -230,6 +292,7 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             runtime_variables["_trusted_pointers"] = trusted_pointers
             runtime_variables["_pointer_trust_mode"] = pointer_trust_mode
             runtime_variables["_capsule"] = capsule.to_dict()
+            runtime_variables["_verification_admission"] = effective_verification
             if approval_request is not None:
                 runtime_variables["_capsule_request_id"] = approval_request.get("request_id")
             run_result = ctx.runtime.run(
@@ -240,10 +303,12 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 source=source,
                 tier=capsule.requested_tier,
                 audit_logger=ctx.audit_chain,
+                verification_admission=effective_verification,
             )
             run_result["tier"] = tier
             run_result["requested_tier"] = capsule.requested_tier
             run_result["approval_request"] = approval_request
+            run_result["verification"] = effective_verification
             run_result["capsule"] = capsule.to_dict()
             return run_result
         except ValueError as exc:

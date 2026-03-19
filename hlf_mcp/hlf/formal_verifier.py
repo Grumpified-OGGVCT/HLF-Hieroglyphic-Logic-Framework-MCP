@@ -82,6 +82,18 @@ class VerificationReport:
         return len(self.results)
 
     @property
+    def unknown_count(self) -> int:
+        return sum(1 for result in self.results if result.status == VerificationStatus.UNKNOWN)
+
+    @property
+    def skipped_count(self) -> int:
+        return sum(1 for result in self.results if result.status == VerificationStatus.SKIPPED)
+
+    @property
+    def error_count(self) -> int:
+        return sum(1 for result in self.results if result.status == VerificationStatus.ERROR)
+
+    @property
     def all_proven(self) -> bool:
         return self.total_count > 0 and self.failed_count == 0 and self.proven_count == self.total_count
 
@@ -94,12 +106,13 @@ class VerificationReport:
             "total": self.total_count,
             "proven": self.proven_count,
             "failed": self.failed_count,
-            "unknown": sum(1 for result in self.results if result.status == VerificationStatus.UNKNOWN),
-            "skipped": sum(1 for result in self.results if result.status == VerificationStatus.SKIPPED),
-            "errors": sum(1 for result in self.results if result.status == VerificationStatus.ERROR),
+            "unknown": self.unknown_count,
+            "skipped": self.skipped_count,
+            "errors": self.error_count,
             "all_proven": self.all_proven,
             "total_duration_ms": round(self.total_duration_ms, 2),
             "z3_available": self.z3_enabled,
+            "operator_summary": self.summary(),
             "results": [result.to_dict() for result in self.results],
         }
 
@@ -112,12 +125,30 @@ class VerificationReport:
 
 
 def extract_constraints(ast: dict[str, Any]) -> list[dict[str, Any]]:
+    ast = normalize_ast(ast)
     constraints: list[dict[str, Any]] = []
     for node in ast.get("program", []):
         if node is None:
             continue
         _extract_from_node(node, constraints)
     return constraints
+
+
+def normalize_ast(ast: Any) -> dict[str, Any]:
+    if isinstance(ast, dict):
+        if isinstance(ast.get("program"), list):
+            return {"program": list(ast.get("program", []))}
+        if isinstance(ast.get("statements"), list):
+            return {"program": list(ast.get("statements", []))}
+        nested_ast = ast.get("ast")
+        if nested_ast is not None:
+            return normalize_ast(nested_ast)
+        if isinstance(ast.get("body"), list):
+            return {"program": list(ast.get("body", []))}
+        return {"program": []}
+    if isinstance(ast, list):
+        return {"program": list(ast)}
+    return {"program": []}
 
 
 def _extract_from_node(node: Any, constraints: list[dict[str, Any]]) -> None:
@@ -310,6 +341,7 @@ class FormalVerifier:
         return {
             "solver_name": self.solver_name,
             "z3_available": _HAS_Z3,
+            "supported_statuses": [status.value for status in VerificationStatus],
             "supported_checks": [
                 ConstraintKind.TYPE_INVARIANT.value,
                 ConstraintKind.RANGE_CHECK.value,
@@ -317,6 +349,9 @@ class FormalVerifier:
                 ConstraintKind.SPEC_GATE.value,
             ],
         }
+
+    def verify_constraints(self, ast: dict[str, Any], *, gas_budget: int = 10_000) -> VerificationReport:
+        return self.verify_ast(ast, gas_budget=gas_budget)
 
     def verify_type(self, value: Any, expected_type: str, *, property_name: str = "") -> VerificationResult:
         return self._fallback.check_type(value, expected_type, name=property_name)
@@ -341,6 +376,7 @@ class FormalVerifier:
         return self._fallback.check_gas_budget(task_costs, budget, name=property_name)
 
     def verify_ast(self, ast: dict[str, Any], *, gas_budget: int = 10_000) -> VerificationReport:
+        ast = normalize_ast(ast)
         report = VerificationReport(z3_enabled=_HAS_Z3)
         for constraint in extract_constraints(ast):
             kind = str(constraint.get("kind", ""))
@@ -401,6 +437,16 @@ class FormalVerifier:
                     status=VerificationStatus.UNKNOWN,
                     kind=ConstraintKind.CUSTOM,
                     message=f"Unsupported constraint kind '{kind}'",
+                    solver=self.solver_name,
+                )
+            )
+        if report.total_count == 0:
+            report.add(
+                VerificationResult(
+                    property_name="ast_constraints",
+                    status=VerificationStatus.SKIPPED,
+                    kind=ConstraintKind.CUSTOM,
+                    message="No verifiable constraints were extracted from the packaged AST.",
                     solver=self.solver_name,
                 )
             )

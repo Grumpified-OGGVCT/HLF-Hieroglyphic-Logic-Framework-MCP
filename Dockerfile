@@ -1,6 +1,6 @@
 # HLF MCP Server — official image
 # Build:  docker build -t hlf-mcp .
-# Run:    docker run -e HLF_TRANSPORT=sse -p 8000:8000 hlf-mcp
+# Run:    docker run -e HLF_TRANSPORT=sse -e HLF_PORT=8000 -p 8000:8000 hlf-mcp
 #
 # With hot tier (Valkey):
 #   docker compose --profile hot up
@@ -39,13 +39,10 @@ RUN if [ -n "$HLF_INSTALL_EXTRAS" ]; then \
 
 ENV HLF_TRANSPORT=sse
 ENV HLF_HOST=0.0.0.0
-ENV HLF_PORT=8000
 ENV HLF_STRICT=1
 ENV HLF_HOT_TIER=none
 
-EXPOSE 8000
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ['HLF_PORT'] + '/health')" || exit 1
 
 CMD ["hlf-mcp"]

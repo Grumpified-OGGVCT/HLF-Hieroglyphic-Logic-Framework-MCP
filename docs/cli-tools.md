@@ -26,8 +26,8 @@ Start the packaged FastMCP server.
 
 ```bash
 uv run hlf-mcp
-HLF_TRANSPORT=sse uv run hlf-mcp
-HLF_TRANSPORT=streamable-http HLF_PORT=8000 uv run hlf-mcp
+HLF_TRANSPORT=sse HLF_PORT=<explicit-port> uv run hlf-mcp
+HLF_TRANSPORT=streamable-http HLF_PORT=<explicit-port> uv run hlf-mcp
 ```
 
 Notes:
@@ -35,6 +35,7 @@ Notes:
 - Transport is controlled by `HLF_TRANSPORT`.
 - Supported values are `stdio`, `sse`, and `streamable-http`.
 - `HLF_HOST` and `HLF_PORT` configure the HTTP transports.
+- `HLF_PORT` must be set explicitly for `sse` and `streamable-http`; do not assume a default HTTP port in wrapper docs or launch commands.
 - The HTTP wrapper exposes `/health` in addition to the MCP endpoints.
 
 ## `hlfc`

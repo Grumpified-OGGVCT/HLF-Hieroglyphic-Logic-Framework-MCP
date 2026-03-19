@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
 
@@ -88,3 +89,86 @@ def test_hlf_token_lint_discovers_files_in_directory(tmp_path: Path) -> None:
 
     discovered = module.discover_hlf_files([str(tmp_path)])
     assert discovered == [fixture]
+
+
+def test_run_pipeline_scheduled_writes_latest_and_history(monkeypatch, tmp_path: Path) -> None:
+    module = _load_script_module("run_pipeline_scheduled")
+
+    metrics_dir = tmp_path / "metrics"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    class Summary:
+        exit_code = 0
+
+    monkeypatch.setattr(module, "run_pytest_suite", lambda **kwargs: Summary())
+    monkeypatch.setattr(
+        module,
+        "build_weekly_artifact",
+        lambda **kwargs: {
+            "latest_suite_summary": {"passed": True},
+            "server_surface": {"registered_tool_count": 34, "registered_resource_count": 9},
+            "governance": {"drift": []},
+        },
+    )
+
+    exit_code, payload, written_path = module.run_pipeline(
+        repo_root=repo_root,
+        metrics_dir=metrics_dir,
+        run_tests=True,
+        toolkit_command="status",
+        workflow_run_url=None,
+        output_path=None,
+    )
+
+    assert exit_code == 0
+    assert payload["scheduled_pipeline"]["tests_triggered"] is True
+    assert payload["scheduled_pipeline"]["toolkit_command"] == "status"
+    assert written_path.exists()
+    assert (metrics_dir / module.HISTORY_ARTIFACT).exists()
+
+
+def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(monkeypatch, tmp_path: Path) -> None:
+    module = _load_script_module("run_pipeline_scheduled")
+
+    metrics_dir = tmp_path / "metrics"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    memory_db = tmp_path / "memory.sqlite3"
+
+    class Summary:
+        exit_code = 0
+
+    monkeypatch.setattr(module, "run_pytest_suite", lambda **kwargs: Summary())
+    monkeypatch.setattr(
+        module,
+        "build_weekly_artifact",
+        lambda **kwargs: {
+            "generated_at": "2026-03-18T00:00:00+00:00",
+            "source": "local-scheduled",
+            "workflow_run_url": None,
+            "git": {"branch": "main", "commit_sha": "abc123"},
+            "server_surface": {"registered_tool_count": 39, "registered_resource_count": 9},
+            "governance": {"drift": []},
+            "latest_suite_summary": {
+                "passed": True,
+                "exit_code": 0,
+                "duration_ms": 50.0,
+                "counts": {"passed": 3, "failed": 0, "errors": 0, "skipped": 0, "xfailed": 0, "xpassed": 0},
+            },
+        },
+    )
+    monkeypatch.setenv("HLF_MEMORY_DB", str(memory_db))
+
+    exit_code, payload, _ = module.run_pipeline(
+        repo_root=repo_root,
+        metrics_dir=metrics_dir,
+        run_tests=True,
+        toolkit_command="status",
+        workflow_run_url=None,
+        output_path=None,
+    )
+
+    assert exit_code == 0
+    assert payload["hks_capture"]["attempted"] is True
+    assert payload["hks_capture"]["db_path"] == str(memory_db)

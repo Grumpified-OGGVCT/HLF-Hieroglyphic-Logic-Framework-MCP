@@ -1,328 +1,240 @@
 # HLF MCP Build Guide
 
-## Test Results
+## Scope
 
-All 6 basic tests pass:
+This guide is for the current packaged product surface in `hlf_mcp/`.
 
-```
-Test 1: MCP Resources... PASS
-  - 5 resources available (grammar, bytecode, dictionaries, version, ast-schema)
-  - Resource templates for programs and profiles
+- `hlf_mcp/` is the active MCP server, runtime, and test surface.
+- `hlf/` remains a compatibility layer and source of legacy probes, not the default build target.
+- `scripts/legacy_probes/` contains manual checks for the older stack and is not part of the default automated suite.
 
-Test 2: MCP Tools... PASS
-  - 10 tools available (compile, execute, validate, friction_log, etc.)
-  - Tool schemas validated
+## Environment Setup
 
-Test 3: MCP Prompts... PASS
-  - 7 prompts available (initialize_agent, express_intent, etc.)
-  - Init prompt: 3017 characters
-
-Test 4: MCP Server... PASS
-  - Protocol version: 2024-11-05
-  - Capabilities: resources, tools, prompts, logging, roots
-
-Test 5: MCP Client... PASS
-  - Base URL: configurable
-  - Cache TTL: 3600 seconds
-
-Test 6: MCP Metrics... PASS
-  - Metrics stored in: ~/.sovereign/mcp_metrics/stats.json
-  - Tracks: total_uses, tool_calls, errors, compilations, executions
-```
-
----
-
-## Quick Start
+Preferred local setup uses `uv` and the repo virtual environment.
 
 ```bash
-# Navigate to project
 cd C:\Users\gerry\generic_workspace\HLF_MCP
-
-# Run tests
-python run_tests.py
-
-# Start MCP server (HTTP mode)
-python -m hlf.mcp_server_complete
-
-# Start MCP server (stdio mode)
-python -m hlf.mcp_server_complete --stdio
+uv sync
 ```
 
----
+If you are already inside the repo `.venv`, the commands below also work with plain `python`.
 
-## Integration for Existing Agents
+## Canonical Test Entry Points
 
-### Option 1: MCP Client (Recommended)
+The default automated suite is the pytest tree under `tests/`.
 
-```python
-from hlf.mcp_client import HLFMCPClient
-
-# Connect to MCP server
-client = HLFMCPClient("http://localhost:8000")
-
-# Get system prompt with full grammar
-system_prompt = client.get_system_prompt(tier="forge", profile="P0")
-
-# Inject into your agent
-your_agent.set_system_message(system_prompt)
-
-# Compile HLF source
-result = client.compile(
-    source="module test { fn main() { ret 0 } }",
-    profile="P0",
-    tier="forge"
-)
-
-# Execute bytecode
-execution = client.execute(
-    bytecode=result['bytecode'],
-    gas_limit=100000
-)
-
-# Validate HLF
-validation = client.validate(source="...")
-
-# Log friction (optional)
-client.friction_log(
-    source_snippet="...",
-    failure_type="expression",
-    attempted_intent="I wanted to express X"
-)
-```
-
-### Option 2: Direct Import
-
-```python
-# Import directly (no MCP server needed)
-from hlf.mcp_resources import HLFResourceProvider
-from hlf.mcp_tools import HLFToolProvider
-from hlf.mcp_prompts import HLFPromptProvider
-
-# Use locally
-resources = HLFResourceProvider(repo_root=Path("."))
-grammar = resources.read_resource("hlf://grammar")
-dictionaries = resources.read_resource("hlf://dictionaries")
-```
-
-### Option 3: HTTP API
+Use one of these entry points:
 
 ```bash
-# Get grammar
-curl http://localhost:8000/resource/grammar
-
-# Get dictionaries
-curl http://localhost:8000/resource/dictionaries
-
-# Compile HLF
-curl -X POST http://localhost:8000/tool/compile \
-  -H "Content-Type: application/json" \
-  -d '{"source": "module test { fn main() { ret 0 } }"}'
-
-# Execute bytecode
-curl -X POST http://localhost:8000/tool/execute \
-  -H "Content-Type: application/json" \
-  -d '{"bytecode": "...", "gas_limit": 100000}'
+python run_tests.py
+python -m hlf_mcp.test_runner
+hlf-test-runner
+uv run pytest tests/ -q --tb=short
 ```
 
----
+The packaged test runner persists metrics to:
 
-## File Structure
+- `~/.sovereign/mcp_metrics/tests.jsonl`
+- `~/.sovereign/mcp_metrics/pytest_last_run.json`
+- `~/.sovereign/mcp_metrics/pytest_history.jsonl`
 
-```
-HLF_MCP/
-├── hlf/
-│   ├── __init__.py              # Package init (minimal imports)
-│   ├── mcp_resources.py         # MCP Resources implementation
-│   ├── mcp_tools.py             # MCP Tools implementation
-│   ├── mcp_prompts.py           # MCP Prompts implementation
-│   ├── mcp_server_complete.py   # Complete MCP server
-│   ├── mcp_client.py            # HTTP client for agents
-│   ├── mcp_metrics.py           # Usage metrics tracking
-│   ├── forge_agent.py           # Friction watcher
-│   ├── lexer.py                 # (pre-existing)
-│   ├── parser.py                # (pre-existing)
-│   ├── ast_nodes.py             # (pre-existing, fixed forward ref)
-│   └── ...
-├── scripts/
-│   ├── gen_dictionary.py        # (TODO) Dictionary generator
-│   └── generate_token.py        # (TODO) CI token generator
-├── mcp_resources/               # (TODO) Generated resources
-│   ├── dictionaries.json
-│   └── grammar.md
-├── TODO.md                      # Task checklist
-├── BUILD_GUIDE.md               # This file
-└── run_tests.py                 # Basic test runner
-```
-
----
-
-## MCP Protocol Support
-
-The HLF MCP server implements MCP 2024-11-05 with these capabilities:
-
-| Capability | Status | Description |
-|------------|--------|-------------|
-| `resources` | ✅ | List/read resources (grammar, dictionaries, etc.) |
-| `resources/subscribe` | ✅ | Subscribe to resource changes |
-| `tools` | ✅ | List/call tools (compile, execute, etc.) |
-| `prompts` | ✅ | List/get prompts (initialize_agent, etc.) |
-| `logging` | ✅ | Structured logging |
-| `roots` | ✅ | List accessible directories |
-
-### Resources
-
-| URI | Description |
-|-----|-------------|
-| `hlf://grammar` | Canonical grammar specification |
-| `hlf://bytecode` | VM opcode definitions |
-| `hlf://dictionaries` | Compression dictionaries |
-| `hlf://version` | Version info with SHA256 |
-| `hlf://ast-schema` | JSON Schema for AST |
-
-### Tools
-
-| Tool | Description |
-|------|-------------|
-| `hlf_compile` | Compile HLF source to bytecode |
-| `hlf_execute` | Execute bytecode on VM |
-| `hlf_validate` | Validate HLF source |
-| `hlf_friction_log` | Log friction event |
-| `hlf_self_observe` | Emit meta-intent |
-| `hlf_get_version` | Get grammar version |
-| `hlf_compose` | Compose multiple programs |
-| `hlf_decompose` | Decompose program into components |
-
-### Prompts
-
-| Prompt | Description |
-|--------|-------------|
-| `hlf_initialize_agent` | Initialize agent with grammar |
-| `hlf_express_intent` | Compress intent to HLF |
-| `hlf_troubleshoot` | Diagnose HLF issues |
-| `hlf_propose_extension` | Propose grammar extension |
-| `hlf_compose_agents` | Compose multi-agent system |
-
----
-
-## Metrics and Improvement Suggestions
-
-The MCP tracks usage metrics that agents can query:
-
-```python
-from hlf.mcp_metrics import get_metrics, record_tool_call
-
-# Get current metrics
-metrics = get_metrics()
-print(f"Total uses: {metrics.total_uses}")
-print(f"Tool calls: {metrics.tool_calls}")
-print(f"Errors: {metrics.errors}")
-
-# Record usage
-record_tool_call('hlf_compile', success=True, duration_ms=150)
-```
-
-### Improvement Suggestions
-
-Agents can analyze metrics to suggest improvements:
-
-```python
-metrics = get_metrics()
-
-# High error rate on compile?
-if metrics.errors.get('compile', 0) > metrics.total_uses * 0.1:
-    print("SUGGESTION: Review grammar for ambiguity")
-
-# Many friction reports?
-if metrics.friction_reports > 5:
-    print("SUGGESTION: Review grammar gaps")
-
-# Most-used tools
-for tool, count in sorted(metrics.tool_calls.items(), key=lambda x: -x[1])[:5]:
-    print(f"TOP TOOL: {tool} ({count} calls)")
-```
-
----
-
-## Remaining Work
-
-See `TODO.md` for the complete task list. Key remaining items:
-
-1. **Dictionary Generator** (`scripts/gen_dictionary.py`)
-2. **CI Integration** (GitHub Actions workflows)
-3. **Docker** (Dockerfile.mcp, Dockerfile.forge)
-4. **Documentation** (Integration docs)
-
----
-
-## Testing
+Helpful repo-local commands:
 
 ```bash
-# Run all tests
-python run_tests.py
-
-# Test specific components
-python -c "from hlf.mcp_resources import HLFResourceProvider; print('Resources OK')"
-python -c "from hlf.mcp_tools import HLFToolProvider; print('Tools OK')"
-python -c "from hlf.mcp_prompts import HLFPromptProvider; print('Prompts OK')"
-python -c "from hlf.mcp_server_complete import MCPServer; print('Server OK')"
-python -c "from hlf.mcp_client import HLFMCPClient; print('Client OK')"
-python -c "from hlf.mcp_metrics import get_metrics; print('Metrics OK')"
+python _toolkit.py status
+python _toolkit.py test
 ```
 
----
+## Current Build-Assist Truth
 
-## Ethical Governor Architecture
+The current packaged repo already supports a local, bounded, governed build-assist loop.
 
-HLF includes a **core ethical governor** that differentiates it from corporate AI systems:
+Use this as the first credible recursive-build milestone:
 
-| Corporate AI | HLF Approach |
-|--------------|--------------|
-| "We know better than you" | "You're the human, you decide within law" |
-| Blocks are mysterious, no appeal | Constraints are documented, transparent |
-| We protect you from yourself | We enable you to work safely |
-| Research is suspicious | Research is valuable, declare it |
-| Trust the AI | Trust the human, verify the AI |
+- `python _toolkit.py status` for repo/build-health observation
+- `hlf_do` for intent-to-HLF front-door build actions
+- `hlf_test_suite_summary` for latest packaged regression summaries
+- witness, memory, and audit surfaces for recording build evidence and operator review state
 
-### Core Principles
+Current transport stance:
 
-1. **Language-level safety** — Constraints built into grammar, not external filters
-2. **Transparent rules** — No black-box moderation
-3. **Human priority** — No "AI nanny"
-4. **Legitimate research support** — Red-hat with declarations, not hostility
-5. **Self-termination** — System shuts down rather than cause harm
+- `stdio` is the preferred first transport for this recursive build workflow
+- `sse` and `streamable-http` health endpoints are still useful for transport bring-up
+- do not center the self-build story on remote `streamable-http` until MCP `initialize` succeeds end to end
 
-### Implementation Files
+Health is not the same as full MCP readiness.
 
+## Why Outside Readers Should Care
+
+This build-assist loop is not just an internal convenience.
+
+It is part of the product evidence.
+
+If HLF is meant to become a governed layer between intent and action, one of the strongest bounded proofs of that claim is that the packaged system can already assist with:
+
+- understanding build intent
+- inspecting the state of the repo
+- summarizing regressions and evidence
+- preserving audit trails about what the build learned
+
+That makes the current workflow useful to two audiences at once:
+
+- operators building and recovering HLF now
+- future users evaluating whether HLF is actually a trustworthy governed interface
+
+The important distinction is that this repo does not claim full self-hosting.
+It claims a staged recursive-build path where stronger claims remain gated by explicit proof.
+
+For the canonical explanation of that claim, read `docs/HLF_RECURSIVE_BUILD_STORY.md`.
+For the audience-specific phrasing guide, read `docs/HLF_MESSAGING_LADDER.md`.
+
+## Running the Packaged MCP Server
+
+Primary server entry points:
+
+```bash
+uv run hlf-mcp
+python -m hlf_mcp.server
 ```
-hlf/ethics/
-├── constitution.py      # Constitutional constraints layer
-├── termination.py       # Self-termination protocol
-├── red_hat.py          # Legitimate security research declarations
-├── rogue_detection.py  # Compromised/hallucinating agent detection
-└── compliance.py       # Transparent governance interaction
+
+Transport selection is controlled with environment variables:
+
+- `HLF_TRANSPORT`: `stdio`, `sse`, or `streamable-http`
+- `HLF_HOST`: bind host for HTTP transports, default `0.0.0.0`
+- `HLF_PORT`: bind port for HTTP transports; required when `HLF_TRANSPORT` is `sse` or `streamable-http`
+- `HLF_REMOTE_MODEL_ENDPOINTS`: JSON list of explicit `remote-direct` model endpoints for governed routing and catalog sync
+
+Examples:
+
+```bash
+# stdio transport
+HLF_TRANSPORT=stdio uv run hlf-mcp
+
+# SSE transport on an explicit chosen port
+HLF_TRANSPORT=sse HLF_PORT=<explicit-port> uv run hlf-mcp
+
+# streamable HTTP transport on an explicit chosen port
+HLF_TRANSPORT=streamable-http HLF_PORT=<explicit-port> uv run hlf-mcp
+
+# remote-direct operator path
+HLF_REMOTE_MODEL_ENDPOINTS='[{"name":"gpt-4.1","endpoint":"https://api.example.test/v1/chat/completions","lanes":["explainer","code-generation"],"capabilities":["reasoning","remote-direct"],"reachable":true}]' uv run hlf-mcp
 ```
 
-### Intent Capsule Tiers
+The `HLF_REMOTE_MODEL_ENDPOINTS` contract is consumed by the packaged tools `hlf_sync_model_catalog` and `hlf_route_governed_request`. Use it when you want governed routing to consider explicit remote-direct endpoints in addition to local and cloud-via-ollama candidates. Required-local embedding lanes remain locality constrained unless policy changes upstream.
 
-| Tier | Capsabilities | Authorization |
-|------|---------------|---------------|
-| `sovereign` | Full capability | User-authorized |
-| `hearth` | Standard operations | Agent-authorized |
-| `forge` | Limited, sandboxed | Program-authorized |
+### Model-role rule
 
-An agent declared as "forge" tier **cannot** perform operations reserved for "sovereign", even if compromised.
+Keep these two layers separate:
 
-### Self-Termination Triggers
+- packaged MCP runtime and governed routing defaults under `hlf_mcp/`
+- stronger cloud user-agent guidance and controller chains under `.github/scripts/ollama_client.py`
 
-- Constitutional violation detected
-- Illegal intent detected
-- Unauthorized escalation attempt
-- Rogue agent signature detected
+The packaged MCP surface may use local Ollama models and explicit remote-direct endpoints when admitted by policy.
+That is not the same thing as the repo's stronger cloud guidance for planner, doer, or controller roles.
 
-**See:** `HLF_ETHICAL_GOVERNOR_ARCHITECTURE.md` for full specification.
+Current packaged MCP-local priorities:
 
----
+- local embedding and retrieval lanes should prefer admitted local models such as `nomic-embed-text-v2-moe`, `bge-m3`, `mxbai-embed-large`, `embeddinggemma`, and `qwen3-embedding:4b`
+- packaged local reasoning lanes may still use local models such as `qwen3:8b` or `devstral:24b` when they fit the governed workload
+- cloud models are not implicit packaged MCP dependencies just because they are recommended for user-agent guidance
 
-## License
+Current cloud user-agent guidance roles:
 
-Same as HLF_MCP project.
+- `planning`: `cogito-2.1:671b-cloud` first for math-heavy decomposition, then `kimi-k2-thinking:cloud`, then `kimi-k2.5:cloud`, then `nemotron-3-super`, then `qwen3.5:cloud`
+- `doer`: `minimax-m2.7:cloud` first for full-strength execution, then `devstral-2:123b-cloud`, then `qwen3-coder-next:cloud`, then `glm-5:cloud`, then `nemotron-3-super`, then `qwen3.5:cloud`
+- `coding`: `devstral-2:123b-cloud` first for software-engineering-agent work, with `minimax-m2.7:cloud` and `qwen3-coder-next:cloud` directly behind it for stronger end-to-end coding and repair loops
+- `reasoning`: `glm-5:cloud` first for complex systems engineering and long-horizon reasoning, then `nemotron-3-super`, then `cogito-2.1:671b-cloud`, then `qwen3.5:cloud`
+- `controller / structured fallback`: `qwen3.5:cloud` remains the clean structured-output and universal-fallback lane
+
+Current role notes:
+
+- `cogito-2.1:671b-cloud` is treated as a planning and math-heavy specialist, not a packaged MCP runtime default
+- `kimi-k2-thinking:cloud` is treated as the deep thinking planner for long tool chains, while `kimi-k2.5:cloud` is treated as the multimodal planner and vision-grounded agent-swarm model
+- `minimax-m2.7:cloud` is treated as the stronger cloud doer for coding-run-fix, multi-file edits, professional productivity, and agentic tool loops
+- `devstral-2:123b-cloud` and `qwen3-coder-next:cloud` are the stronger cloud coding specialists; the packaged MCP may still separately admit smaller local coding models when policy and hardware require it
+- local MCP admission should stay governed by runtime fit, embedding/privacy requirements, and policy, not by cloud leaderboard enthusiasm
+
+Override rule:
+
+- users may override recommended defaults, but only with deliberate substitutions that meet or exceed the displaced role on context window, tool competence, reasoning or coding strength, multimodal needs, and HLF-specific proficiency
+- HLF-specific proficiency includes governed instruction following, symbolic and protocol discipline, long-horizon decomposition, structured output reliability, and operator-safe tool behavior
+- if a replacement cannot demonstrably satisfy those floors, it should be treated as an experiment or local exception, not as a new recommended default
+
+When using an HTTP transport, the health endpoint is:
+
+- `http://localhost:$HLF_PORT/health`
+
+Port rule:
+
+- do not rely on an implicit default port for HTTP transports
+- set `HLF_PORT` explicitly for every `sse` or `streamable-http` launch
+- if you publish a command or script, show the port as a caller choice rather than as a baked-in `8000` assumption
+
+Current caution for bridge work:
+
+- `streamable-http` should still be treated as a repair target for real MCP session initialization, not as a finished self-hosting surface
+- rerun the smoke harness after dependency/runtime fixes before promoting HTTP self-build claims into current truth
+
+## Docker
+
+```bash
+docker compose up -d
+```
+
+The compose stack uses the packaged MCP surface and exposes the same HTTP health endpoint.
+
+## Local Scheduled Evidence Pipeline
+
+For local scheduled collection and weekly evidence snapshots, run:
+
+```bash
+python scripts/run_pipeline_scheduled.py
+```
+
+This pipeline reuses the packaged pytest runner, captures git and governance state, records packaged server surface counts, optionally runs `_toolkit.py status`, and writes:
+
+- `~/.sovereign/mcp_metrics/weekly_pipeline_latest.json`
+- `~/.sovereign/mcp_metrics/weekly_pipeline_history.jsonl`
+
+Local scheduler status can be inspected with:
+
+```bash
+python scripts/run_pipeline_scheduled.py --print-status
+```
+
+## Weekly GitHub Automation
+
+Current weekly workflow inventory in `.github/workflows/`:
+
+- `weekly-code-quality.yml`
+- `weekly-doc-security.yml`
+- `weekly-ethics-review.yml`
+- `weekly-evolution-planner.yml`
+- `weekly-model-drift-detect.yml`
+- `weekly-spec-sentinel.yml`
+- `weekly-test-health.yml`
+
+These workflows are being normalized to emit a shared weekly artifact schema through `.github/scripts/emit_weekly_artifact.py` so scheduled evidence stays machine-readable and comparable with the local scheduled pipeline.
+
+## Current Build Surface
+
+Main packaged files relevant to build and automation:
+
+- `hlf_mcp/server.py`
+- `hlf_mcp/server_core.py`
+- `hlf_mcp/server_resources.py`
+- `hlf_mcp/test_runner.py`
+- `hlf_mcp/weekly_artifacts.py`
+- `hlf_mcp/local_scheduler.py`
+- `.github/scripts/emit_weekly_artifact.py`
+- `.github/scripts/create_github_issue.py`
+- `scripts/run_pipeline_scheduled.py`
+
+## Legacy Surface
+
+Legacy compatibility and manual probes still exist, but they are not the default build story:
+
+- `hlf/`
+- `scripts/legacy_probes/`
+
+Use them only when you are intentionally validating the older MCP surface or migration behavior.

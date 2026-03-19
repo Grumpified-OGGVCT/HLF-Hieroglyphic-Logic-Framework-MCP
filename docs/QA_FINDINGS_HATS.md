@@ -33,7 +33,7 @@
 - **AES-256-GCM crypto** via `cryptography` library — not simulated
 - **SQLite WAL-mode RAG memory**: Merkle-chained writes, cosine dedup >0.98, TTL expiry
 - **Instinct SDD state machine**: phase-lock, CoVE gate, deep-copy isolation (fixed this pass)
-- **FastMCP server**: 26 tools, 9 resources, stdio/SSE/streamable-HTTP transports
+- **FastMCP server**: 34 tools, 9 resources, stdio/SSE/streamable-HTTP transports
 - **Docker**: multi-stage Dockerfile, docker-compose with `/health` check
 - **Ethical Governor scaffolding**: `hlf_mcp/hlf/ethics/` package with placeholder modules
 

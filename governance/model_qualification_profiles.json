@@ -1,0 +1,92 @@
+{
+  "version": "1.0",
+  "profiles": {
+    "translation_memory_multilingual": {
+      "required_lanes": ["retrieval"],
+      "required_capabilities": ["embedding"],
+      "required_languages": ["en", "fr", "es", "ar", "zh"],
+      "tiers": {
+        "baseline-qualified": {
+          "translation_fidelity": 0.85,
+          "retrieval_quality": 0.65
+        },
+        "launch-qualified": {
+          "translation_fidelity": 0.9,
+          "retrieval_quality": 0.8,
+          "routing_quality": 0.75
+        },
+        "promotion-qualified": {
+          "translation_fidelity": 0.97,
+          "retrieval_quality": 0.9,
+          "routing_quality": 0.85
+        }
+      }
+    },
+    "agent_routing_context_multilingual": {
+      "required_lanes": ["retrieval"],
+      "required_capabilities": ["embedding"],
+      "required_languages": ["en", "fr", "es", "ar", "zh"],
+      "tiers": {
+        "baseline-qualified": {
+          "routing_quality": 0.7
+        },
+        "launch-qualified": {
+          "routing_quality": 0.8,
+          "translation_fidelity": 0.85
+        },
+        "promotion-qualified": {
+          "routing_quality": 0.9,
+          "translation_fidelity": 0.92
+        }
+      }
+    },
+    "code_pattern_retrieval_english": {
+      "required_lanes": ["code-generation"],
+      "required_capabilities": ["embedding"],
+      "required_languages": ["en"],
+      "tiers": {
+        "baseline-qualified": {
+          "retrieval_quality": 0.65
+        },
+        "launch-qualified": {
+          "retrieval_quality": 0.78
+        },
+        "promotion-qualified": {
+          "retrieval_quality": 0.88
+        }
+      }
+    },
+    "sidecar_quality_explainer": {
+      "required_lanes": ["explainer"],
+      "required_capabilities": ["explanations"],
+      "required_languages": ["en"],
+      "tiers": {
+        "baseline-qualified": {
+          "sidecar_quality": 0.8
+        },
+        "launch-qualified": {
+          "sidecar_quality": 0.9
+        },
+        "promotion-qualified": {
+          "sidecar_quality": 0.97
+        }
+      }
+    },
+    "verifier_accuracy_multilingual": {
+      "required_lanes": ["verifier"],
+      "required_capabilities": ["reasoning"],
+      "required_languages": ["en", "fr", "es", "ar", "zh"],
+      "tiers": {
+        "baseline-qualified": {
+          "verifier_accuracy": 0.8
+        },
+        "launch-qualified": {
+          "verifier_accuracy": 0.9
+        },
+        "promotion-qualified": {
+          "verifier_accuracy": 0.97
+        }
+      }
+    }
+  }
+}

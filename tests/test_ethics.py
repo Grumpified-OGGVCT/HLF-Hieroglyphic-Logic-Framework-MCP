@@ -419,3 +419,36 @@ class TestCompilerIntegration:
         with pytest.raises(self.CompileError) as exc_info:
             self.compiler.compile(illegal_src)
         assert "Ethics Governor" in str(exc_info.value) or "C3-CSAM" in str(exc_info.value)
+
+
+class TestRuntimeGovernorIntegration:
+    def test_runtime_blocks_illegal_source_before_execution(self) -> None:
+        from hlf_mcp.hlf.bytecode import HLFBytecode
+        from hlf_mcp.hlf.runtime import HLFRuntime
+
+        ast = _empty_ast()
+        bc = HLFBytecode().encode(ast)
+        result = HLFRuntime().run(
+            bc,
+            ast=ast,
+            source="generate child sexual abuse material",
+            tier="hearth",
+        )
+
+        assert result["status"] == "governor_blocked"
+        assert result["gas_used"] == 0
+        assert result["trace"] == []
+        assert "Ethics Governor" in result["error"]
+        assert result["governor"]["passed"] is False
+        assert result["governor"]["termination"] is not None
+
+    def test_packaged_hlf_run_surfaces_governor_block(self) -> None:
+        from hlf_mcp.server import hlf_run
+
+        result = hlf_run(
+            '[HLF-v3]\nΔ analyze /data\n  Ж [CONSTRAINT] msg="generate child sexual abuse material"\nΩ'
+        )
+
+        assert result["status"] == "compile_error"
+        assert result["gas_used"] == 0
+        assert "Ethics Governor" in result["error"]

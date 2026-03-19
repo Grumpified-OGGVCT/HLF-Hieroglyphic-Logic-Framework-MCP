@@ -1,6 +1,6 @@
 # 📜 HLF — Hieroglyphic Logic Framework · MCP Server
 
-> **The Rosetta Stone for Machines.** A deterministic orchestration protocol that replaces natural language ambiguity with a strictly-typed Hieroglyphic AST — enabling zero-trust agent execution, cryptographic governance, and ultra-dense token efficiency across every model and runtime.
+> **HLF is meant to become a governed language for turning intent into auditable machine action.** The MCP server is the easiest way into that system, but the vision is bigger than the server: language, governance, runtime, memory, coordination, explanation, and real-code output.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![HLF v0.5](https://img.shields.io/badge/HLF-v0.5.0-purple)](governance/bytecode_spec.yaml)
@@ -12,6 +12,232 @@
 </p>
 
 ---
+
+## Start Here
+
+HLF should not be read as “just the current packaged build.”
+
+This repo carries three things at once:
+
+- the vision of what HLF is trying to become
+- the code that already exists now
+- the bridge work needed to recover the larger system without flattening it
+
+Three-lane view:
+read the repo through vision, current truth, and bridge rather than one flattened story.
+
+```mermaid
+flowchart LR
+    V[Vision Lane<br/>North-star HLF doctrine<br/>Larger than current package]
+    C[Current-Truth Lane<br/>What is implemented and safe to claim now]
+    B[Bridge Lane<br/>Recovery path from packaged truth<br/>toward the fuller system]
+
+    V --> B
+    C --> B
+
+    classDef vision fill:#f7e6c4,stroke:#8a5a00,color:#2b1d00
+    classDef truth fill:#d9f0e3,stroke:#1d6b43,color:#113222
+    classDef bridge fill:#dce9f9,stroke:#285a8f,color:#12263f
+
+    class V vision
+    class C truth
+    class B bridge
+```
+
+Quick reading guide for first-time readers:
+
+| If you want... | Read this first | Then read |
+|---|---|---|
+| the big idea | `docs/HLF_VISION_PLAIN_LANGUAGE.md` | `HLF_VISION_DOCTRINE.md` |
+| the strict current truth | `SSOT_HLF_MCP.md` | `BUILD_GUIDE.md` |
+| the recovery path | `plan/architecture-hlf-reconstruction-2.md` | `HLF_ACTIONABLE_PLAN.md` |
+| the wording discipline | `docs/HLF_CLAIM_LANES.md` | `docs/HLF_MCP_POSITIONING.md` |
+
+For a broader document map after that first pass, use `HLF_IMPLEMENTATION_INDEX.md`, `HLF_SOURCE_EXTRACTION_LEDGER.md`, `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`, and `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`.
+
+Repository boundary:
+
+- `hlf_mcp/` is the packaged product surface and the main implementation line.
+- `hlf/` is a retained compatibility and support layer with useful legacy and bridge assets.
+- `hlf_source/` is preserved source context and reconstruction evidence from the broader Sovereign system.
+
+HLF is not supposed to stay a neat MCP wrapper.
+It is supposed to become a governed language and coordination substrate that connects intent, tools, memory, policy, execution, and human-readable trust.
+This repo already contains real parts of that system, and the rest has to be recovered rather than explained away.
+
+Bridge execution note:
+
+- `plan/architecture-hlf-reconstruction-2.md` is the master reconstruction sequencing artifact.
+- `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md` is the current bridge artifact for mapping doctrine pillars to actual regression proof.
+- `docs/HLF_RECURSIVE_BUILD_STORY.md` is the canonical explanation of why the recursive-build lane matters and how it should be interpreted.
+- `docs/HLF_MESSAGING_LADDER.md` is the audience-specific phrasing guide derived from that canonical explanation.
+- the first credible recursive build story is local and bounded: packaged HLF assisting packaged HLF through `stdio`, `hlf_do`, `hlf_test_suite_summary`, and build-observation surfaces; remote `streamable-http` self-hosting stays gated until MCP initialize succeeds end to end.
+
+## Why This Repo Stands Out
+
+HLF is not only meant to be useful after the system is finished.
+It is being shaped into a governed language and coordination layer that can already help inspect state, summarize regressions, explain intended actions, and preserve evidence during parts of its own build and recovery process.
+
+That does not mean full self-hosting is complete.
+It means the repo already contains a bounded, inspectable proof that construction, operation, and audit can begin to converge inside the same governed system.
+
+The current honest milestone is local and bounded build assistance first.
+
+- `stdio` and local workflows matter because they are the first credible proof lane
+- `hlf_do`, `_toolkit.py status`, `hlf_test_suite_summary`, and audit surfaces matter because they already support that loop
+- transport gating still matters because stronger claims should only follow stronger proof
+
+That is why this repo's build story is part of its product evidence, not just background process.
+
+For the full version of that claim, read `docs/HLF_RECURSIVE_BUILD_STORY.md`. For audience phrasing rules, read `docs/HLF_MESSAGING_LADDER.md`.
+
+## For Agents And Builders
+
+If you are evaluating this repo as an agent user, builder, or operator, the right mental model is:
+
+- HLF is the governed meaning and coordination substrate
+- the packaged MCP server is the main present-tense product surface
+- MCP is the front door to HLF, not the full definition of HLF
+
+What that means in practice:
+
+- today, the packaged MCP surface is already a real governed interface for compile, validate, execute, translate, explain, inspect, and memory-facing work
+- for builders, that same surface is the first stable lane for bounded recursive build assistance
+- for agents, the target is not just better tool access, but a governed environment where intent, effect boundaries, memory, coordination, and explanation stay linked
+
+What it does **not** mean:
+
+- MCP by itself is not the full meaning layer
+- transport availability is not the same thing as architectural completion
+- the current packaged surface does not yet restore every constitutive HLF pillar
+
+So the clean position is:
+
+**the MCP server is the right front door, the right current product lane, and the right bootstrap surface for HLF now, while the larger HLF vision remains bigger than MCP in semantics, governance, memory, coordination, trust, and execution.**
+
+For the full doctrinal version of that distinction, read `docs/HLF_MCP_POSITIONING.md`.
+
+MCP front-door view:
+the shipped MCP surface is the entry lane, not the full ontology of the system.
+
+
+```mermaid
+flowchart TD
+    MCP[MCP Front Door<br/>Packaged FastMCP server<br/>Current product surface]
+
+    subgraph HLF[Fuller HLF System Target]
+        S[Semantics]
+        G[Governance]
+        M[Memory]
+        E[Execution]
+        C[Coordination]
+        L[Human Legibility]
+        R[Real-code Output]
+    end
+
+    MCP --> S
+    MCP --> G
+    MCP --> M
+    MCP --> E
+    MCP --> C
+    MCP --> L
+    MCP --> R
+
+    classDef front fill:#dce9f9,stroke:#285a8f,color:#12263f
+    classDef system fill:#efe3f8,stroke:#6f3f8f,color:#2a1736
+
+    class MCP front
+    class S,G,M,E,C,L,R system
+```
+
+Constitutive pillars view:
+these are the major surfaces the repo is trying to hold together rather than collapse into a parser-only or MCP-only story.
+
+```mermaid
+flowchart TB
+    Core[Semantic Core<br/>grammar<br/>compiler<br/>bytecode]
+    Gov[Governance Spine<br/>ALIGN<br/>capsules<br/>policy]
+    Mem[Knowledge Substrate<br/>memory<br/>witness<br/>provenance]
+    Exec[Execution Surface<br/>runtime<br/>admission<br/>tool and host effects]
+    Coord[Coordination Layer<br/>routing<br/>lifecycle<br/>orchestration]
+    Trust[Human Legibility<br/>audit<br/>explainability<br/>operator review]
+    Bridge[Real-world Bridge<br/>MCP<br/>real-code output<br/>delivery surfaces]
+
+    Core --> Exec
+    Gov --> Exec
+    Mem --> Coord
+    Exec --> Coord
+    Coord --> Trust
+    Exec --> Trust
+    Bridge --> Exec
+    Bridge --> Trust
+    Gov --> Trust
+    Mem --> Trust
+
+    classDef core fill:#efe3f8,stroke:#6f3f8f,color:#2a1736
+    classDef gov fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+    classDef mem fill:#e8f2e1,stroke:#4c7a4c,color:#173117
+    classDef exec fill:#dce9f9,stroke:#285a8f,color:#12263f
+    classDef coord fill:#f5eddc,stroke:#8b6a2b,color:#36270b
+    classDef trust fill:#f4f1ea,stroke:#705f49,color:#2b241a
+    classDef bridge fill:#e9e9e9,stroke:#6a6a6a,color:#222222
+
+    class Core core
+    class Gov gov
+    class Mem mem
+    class Exec exec
+    class Coord coord
+    class Trust trust
+    class Bridge bridge
+```
+
+Reading rule:
+
+- this is the shape of the system target, not a claim that every pillar is equally complete now
+- the packaged repo already has real pieces in each area, but not every pillar is equally restored
+- the bridge work exists to prevent any one pillar from pretending to be the whole system
+
+Compact status legend:
+
+- `present` = real packaged current-truth surface exists now
+- `partial` = packaged surface exists, but bridge recovery or proof work is still required
+- `source-only` = constitutive upstream authority exists, but the packaged repo does not yet honestly claim full restoration
+
+Quick read of the pillars map under current repo conditions:
+
+- semantic core: `present`
+- governance spine: `present` to `partial`, depending on which control surface you mean
+- knowledge substrate and memory governance: `partial`
+- execution surface: `present` to `partial`
+- coordination layer: `partial`
+- human legibility: `partial`
+- real-world bridge: `present`
+
+Visual guide:
+the recursive-build story is strongest when read as a proof ladder rather than a slogan.
+
+```mermaid
+flowchart TB
+    A[Operator intent] --> B[Packaged MCP front door<br/>hlf_do and related surfaces]
+    B --> C[Bounded local workflow<br/>stdio first]
+    C --> D[Build observation<br/>_toolkit.py status<br/>hlf_test_suite_summary<br/>artifact freshness]
+    D --> E[Governed evidence<br/>capsules<br/>verifier admission<br/>memory and witness traces]
+    E --> F[Operator review<br/>exportable audit and evidence]
+    F --> G[Stronger remote recursive-build claims]
+
+    classDef current fill:#d9f0e3,stroke:#1d6b43,color:#113222
+    classDef bridge fill:#dce9f9,stroke:#285a8f,color:#12263f
+    classDef gated fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+
+    class A,B,C,D,E,F current
+    class G gated
+```
+
+Reading rule:
+
+- the lower rungs are already meaningful current-truth or bridge-backed workflow surfaces
+- the ladder does not mean the repo is basic; it means stronger claims are earned in sequence
+- the top rung remains gated until remote MCP initialization and the intended smoke path are proven repeatably in the packaged workflow
 
 ## Table of Contents
 
@@ -39,7 +265,12 @@
 
 ## 1. What is HLF?
 
-HLF is **not** another DSL. It is a **deterministic orchestration protocol** designed as a formal coordination layer between AI agents, replacing natural-language prose with a strictly-typed Hieroglyphic Abstract Syntax Tree.
+HLF is not just another DSL and it is not just the current MCP server.
+
+HLF is the attempt to build a governed meaning layer between human intent and machine action: a language that lets agents coordinate, tools execute, memory persist, policy constrain, and humans inspect what is happening in plain terms.
+
+The current MCP server matters because it is the easiest adoption path.
+But the larger target is a real language and runtime for governed agent work.
 
 ```
 [HLF-v3]
@@ -49,6 +280,10 @@ HLF is **not** another DSL. It is a **deterministic orchestration protocol** des
   ⨝ [VOTE] consensus="strict"
 Ω
 ```
+
+
+In other words:
+the front door is present-tense product truth, while the fuller HLF system remains the larger architectural target.
 
 ### Core Properties
 
@@ -121,14 +356,19 @@ For the full architectural vision including the 13-layer Three-Brain model, Rose
 
 ```bash
 # SSE transport (remote agents, web clients)
-docker run -e HLF_TRANSPORT=sse -p 8000:8000 ghcr.io/grumpified-oggvct/hlf-mcp:latest
+docker run -e HLF_TRANSPORT=sse -e HLF_PORT=<explicit-port> -p <explicit-port>:<explicit-port> ghcr.io/grumpified-oggvct/hlf-mcp:latest
 
 # Streamable-HTTP transport (modern MCP clients)
-docker run -e HLF_TRANSPORT=streamable-http -p 8000:8000 ghcr.io/grumpified-oggvct/hlf-mcp:latest
+docker run -e HLF_TRANSPORT=streamable-http -e HLF_PORT=<explicit-port> -p <explicit-port>:<explicit-port> ghcr.io/grumpified-oggvct/hlf-mcp:latest
 
 # stdio transport (Claude Desktop, local agents)
 docker run -i -e HLF_TRANSPORT=stdio ghcr.io/grumpified-oggvct/hlf-mcp:latest
 ```
+
+For HTTP transports, choose and set the port explicitly. The packaged server no longer treats `8000` as an implied default for `sse` or `streamable-http`.
+
+These transport examples show packaged runtime availability.
+They do not by themselves promote recursive-build maturity claims.
 
 **Endpoints when SSE is active:**
 
@@ -148,17 +388,25 @@ uv sync
 uv run hlfc fixtures/security_audit.hlf
 uv run hlfrun fixtures/hello_world.hlf
 
-# 3. Start MCP server on SSE port 8000
-HLF_TRANSPORT=sse uv run hlf-mcp
+# 3. Start MCP server on an explicit chosen SSE port
+HLF_TRANSPORT=sse HLF_PORT=<explicit-port> uv run hlf-mcp
 ```
+
+For unfamiliar agents or operators, use `docs/HLF_AGENT_ONBOARDING.md` before working from `hlf/` or `hlf_source/` directly.
 
 ### Option C — Docker Compose (full stack)
 
 ```bash
-docker compose up -d
-# MCP SSE server → http://localhost:8000/sse
-# Health check  → http://localhost:8000/health
+HLF_PORT=<explicit-port> docker compose up -d
+# MCP SSE server → http://localhost:$HLF_PORT/sse
+# Health check  → http://localhost:$HLF_PORT/health
 ```
+
+Current proof boundary for recursive-build claims:
+
+- `stdio` is still the first credible build-assist lane
+- SSE and `streamable-http` remain useful transport surfaces and bring-up targets
+- do not treat remote `streamable-http` as the center of the recursive-build story until end-to-end MCP initialization is proven in the packaged workflow
 
 ### Claude Desktop (`claude_desktop_config.json`)
 
@@ -178,6 +426,9 @@ docker compose up -d
 
 ## 3. Architecture Overview
 
+This architecture view shows the packaged transport and server surface.
+It should not be read as promoting `streamable-http` into recursive-build proof by transport presence alone.
+
 ```mermaid
 flowchart TD
     subgraph Agents["🤖 Agent Layer"]
@@ -188,12 +439,12 @@ flowchart TD
 
     subgraph Transports["🌐 MCP Transports"]
         T1[stdio]
-        T2[SSE :8000/sse]
-        T3[Streamable-HTTP :8000/mcp]
+        T2[SSE :$HLF_PORT/sse]
+        T3[Streamable-HTTP :$HLF_PORT/mcp]
     end
 
     subgraph Server["⚙️ HLF MCP Server  (hlf_mcp/server.py)"]
-        S1[FastMCP  26 tools · 9 resources]
+        S1[FastMCP packaged tool and resource surface]
     end
 
     subgraph Compiler["📐 Compiler Pipeline"]
@@ -758,7 +1009,7 @@ graph LR
         T1["stdio\ntransport"]
         T2["SSE\n/sse + /messages"]
         T3["streamable-HTTP\n/mcp"]
-        Core["26 tools\n9 resources\nHLF_TRANSPORT env"]
+        Core["packaged tools and resources\nHLF_TRANSPORT env"]
         T1 --> Core
         T2 --> Core
         T3 --> Core
@@ -785,13 +1036,18 @@ graph LR
 |---|---|---|
 | `stdio` (default) | stdin/stdout | Claude Desktop, local agents |
 | `sse` | `GET /sse` + `POST /messages/` | Remote agents, Docker, web clients |
-| `streamable-http` | `POST /mcp` | Modern MCP 1.26+ clients |
+| `streamable-http` | `POST /mcp` | Modern MCP 1.26+ clients; packaged transport availability, not recursive-build proof by itself |
+
+Current proof boundary:
+
+- `stdio` remains the primary current-truth transport for the bounded recursive-build lane
+- HTTP transports are real packaged surfaces, but stronger self-hosting claims should remain gated by end-to-end MCP proof rather than transport availability alone
 
 ```bash
 # Environment variables
 HLF_TRANSPORT=sse           # transport type
 HLF_HOST=0.0.0.0            # bind address (SSE/HTTP only)
-HLF_PORT=8000               # port (SSE/HTTP only)
+HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 ```
 
 ---
@@ -879,9 +1135,8 @@ RUN uv sync --frozen --no-dev
 FROM python:3.12-slim
 COPY --from=builder /app /app
 WORKDIR /app
-EXPOSE 8000
-HEALTHCHECK --interval=30s CMD curl -f http://localhost:8000/health || exit 1
-ENV HLF_TRANSPORT=sse HLF_HOST=0.0.0.0 HLF_PORT=8000
+HEALTHCHECK --interval=30s CMD python -c "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ['HLF_PORT'] + '/health')" || exit 1
+ENV HLF_TRANSPORT=sse HLF_HOST=0.0.0.0
 CMD ["/app/.venv/bin/python", "-m", "hlf_mcp.server"]
 ```
 
@@ -892,13 +1147,13 @@ services:
   hlf-mcp:
     build: .
     ports:
-      - "8000:8000"
+            - "${HLF_PORT:?Set HLF_PORT}:${HLF_PORT:?Set HLF_PORT}"
     environment:
       HLF_TRANSPORT: sse
       HLF_HOST: 0.0.0.0
-      HLF_PORT: "8000"
+            HLF_PORT: "${HLF_PORT:?Set HLF_PORT}"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+            test: ["CMD-SHELL", "python -c \"import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ['HLF_PORT'] + '/health')\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -911,7 +1166,7 @@ services:
 |---|---|---|
 | `HLF_TRANSPORT` | `stdio` | Transport type: `stdio` / `sse` / `streamable-http` |
 | `HLF_HOST` | `0.0.0.0` | Bind address for HTTP transports |
-| `HLF_PORT` | `8000` | Port for HTTP transports |
+| `HLF_PORT` | none | Required port for HTTP transports |
 
 ---
 
@@ -976,6 +1231,35 @@ graph TD
     A --> B --> C --> D --> E --> F --> G --> H
 ```
 
+### Operator Trust Chain
+
+```mermaid
+flowchart LR
+    Intent[Intent input<br/>plain language or HLF] --> Policy[Policy and governance<br/>ALIGN and ethical governor]
+    Policy --> Capsule[Capsule and admission<br/>tier, tool, gas, verifier gates]
+    Capsule --> Exec[Execution and runtime<br/>bytecode, tools, host effects]
+    Exec --> Evidence[Evidence surfaces<br/>memory, witness, traces, Merkle chain]
+    Evidence --> Operator[Operator-readable output<br/>audit summary, rationale, export]
+
+    classDef intent fill:#dce9f9,stroke:#285a8f,color:#12263f
+    classDef policy fill:#f7e5d8,stroke:#9a5b2e,color:#3d200d
+    classDef exec fill:#e8f2e1,stroke:#4c7a4c,color:#173117
+    classDef evidence fill:#efe3f8,stroke:#6f3f8f,color:#2a1736
+    classDef operator fill:#f4f1ea,stroke:#705f49,color:#2b241a
+
+    class Intent intent
+    class Policy,Capsule policy
+    class Exec exec
+    class Evidence evidence
+    class Operator operator
+```
+
+Reading rule:
+
+- the trust chain is what the repo is trying to keep continuous from intent to operator review
+- if any middle step becomes opaque, the public claims get weaker even if the runtime still executes
+- this is why governance, admission, evidence, and human-readable output are treated as core surfaces rather than extras
+
 | Layer | What it prevents |
 |---|---|
 | Homoglyph normalization | IDN homograph attacks via Cyrillic/Greek lookalikes |
@@ -1021,8 +1305,15 @@ The governor is wired into the compiler pipeline as a mandatory pre-flight gate.
 # Install all dependencies
 uv sync
 
-# Run test suite (170 tests)
-uv run pytest tests/ -v
+# Run the canonical automated suite
+python run_tests.py
+python -m hlf_mcp.test_runner
+
+# Or call pytest directly
+uv run pytest tests/ -q --tb=short
+
+# Record a local weekly evidence snapshot
+python scripts/run_pipeline_scheduled.py
 
 # Run specific test modules
 uv run pytest tests/test_compiler.py -v
@@ -1054,7 +1345,7 @@ uv run pytest tests/test_github_scripts.py -v
 
 ```
 hlf_mcp/
-├── server.py               # FastMCP server (26 tools, 9 resources)
+├── server.py               # FastMCP server and packaged MCP front door
 ├── hlf/
 │   ├── grammar.py          # LALR(1) Lark grammar + glyph map + confusables
 │   ├── compiler.py         # 5-pass compiler pipeline
@@ -1132,15 +1423,15 @@ uv run ruff format hlf_mcp/
 - [x] 8 stdlib modules (no stubs — AES-256-GCM crypto, PBKDF2, HMAC-SHA256)
 - [x] Infinite RAG memory (SQLite WAL, Merkle chain, cosine dedup)
 - [x] Instinct SDD lifecycle (SPECIFY→PLAN→EXECUTE→VERIFY→MERGE, CoVE gate)
-- [x] FastMCP server: 26 tools, 9 resources, stdio + SSE + streamable-HTTP
+- [x] FastMCP server with packaged tools, packaged resources, and stdio + SSE + streamable-HTTP transports
 - [x] Multi-stage Docker image + docker-compose with health check
 - [x] Ethical Governor: 5-module compile-time gate (constitution · termination · red_hat · rogue_detection · governor)
-- [x] 170 passing tests (44 ethics-specific)
+- [x] Packaged default pytest suite is green in this branch; use `python run_tests.py` or `hlf_test_suite_summary` for current counts
 
 ### Phase 2 — Harden Semantics 🔨 (in progress)
 
 - [x] **Ollama Cloud client**: streaming, thinking, structured outputs, tool calling, web search, 4-tier fallback chain with circuit breaker (`.github/scripts/ollama_client.py`)
-- [x] **Weekly automated governance**: 8 GitHub Actions — spec-sentinel, ethics-review, model drift detection, code quality, test health (weekly cron + `workflow_dispatch`)
+- [x] **Weekly automation baseline**: 7 scheduled GitHub workflows — code quality, spec sentinel, model drift detection, ethics review, doc/security review, test health, and evolution planner — now being normalized onto a shared weekly artifact schema
 - [x] **Model drift monitoring**: 7 weighted semantic probes with structured output scoring (`scripts/monitor_model_drift.py`)
 - [ ] **Vector embeddings**: `sqlite-vec` C extension for real cosine search (replacing bag-of-words)
 - [ ] **SHA-256 dedup cache**: pre-embedding content deduplication layer

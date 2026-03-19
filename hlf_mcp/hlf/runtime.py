@@ -12,6 +12,7 @@ Executes .hlb bytecode with:
 from __future__ import annotations
 
 import logging
+import hashlib
 import struct
 import sys
 from dataclasses import dataclass, field
@@ -35,7 +36,7 @@ from hlf_mcp.hlf.pii_guard import PIIGuard
 
 logger = logging.getLogger(__name__)
 
-# Module-level PII guard singleton — reuses precompiled regex patterns
+# Module-level PII guard singleton sourced from governed repo policy when present.
 _PII_GUARD = PIIGuard()
 
 
@@ -174,6 +175,123 @@ class HlfVM:
             stack=list(self.stack), scope=dict(self.scope),
             trace=self.trace[:50], side_effects=self._side_effects,
         )
+
+
+def _query_memory_context(
+    query_text: str,
+    scope: dict[str, Any],
+    side_effects: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Optionally retrieve semantic memory context for delegation or routing."""
+    normalized = str(query_text or "").strip()
+    if not normalized:
+        return None
+
+    retriever = scope.get("_memory_retriever")
+    source: str | None = None
+    topic = scope.get("_memory_context_topic")
+    try:
+        top_k = int(scope.get("_memory_context_top_k", 3))
+    except (TypeError, ValueError):
+        top_k = 3
+    top_k = max(1, min(top_k, 10))
+
+    try:
+        if callable(retriever):
+            try:
+                response = retriever(normalized, top_k=top_k, topic=topic)
+            except TypeError:
+                response = retriever(normalized)
+            source = "custom"
+        elif scope.get("_memory_context_enabled"):
+            from hlf_mcp.rag.memory import RAGMemory
+
+            response = RAGMemory().query(normalized, top_k=top_k, topic=topic)
+            source = "rag_memory"
+        else:
+            return None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Memory context lookup failed during runtime dispatch: %s", exc)
+        side_effects.append({
+            "type": "memory_context_error",
+            "source": source or "unknown",
+            "query_chars": len(normalized),
+        })
+        return None
+
+    results: list[Any]
+    if isinstance(response, dict):
+        raw_results = response.get("results", [])
+        results = list(raw_results) if isinstance(raw_results, list) else [raw_results]
+        count = int(response.get("count", len(results)))
+    elif isinstance(response, list):
+        results = response
+        count = len(results)
+    else:
+        results = [response]
+        count = 1
+
+    trimmed_results = results[:top_k]
+    side_effects.append({
+        "type": "memory_context_query",
+        "source": source or "unknown",
+        "query_chars": len(normalized),
+        "result_count": count,
+    })
+    return {
+        "source": source or "unknown",
+        "count": count,
+        "results": trimmed_results,
+    }
+
+
+def _embedding_profile_summary(scope: dict[str, Any]) -> dict[str, Any] | None:
+    profile = scope.get("_embedding_profile")
+    if not isinstance(profile, dict):
+        return None
+    return {
+        "profile_id": profile.get("profile_id"),
+        "agent_id": profile.get("agent_id"),
+        "workload": profile.get("workload_profile", {}).get("workload"),
+        "model": profile.get("embedding_recommendation", {}).get("model"),
+        "fallback_model": profile.get("fallback_recommendation", {}).get("model"),
+        "ollama_available": profile.get("runtime_status", {}).get("ollama_available", False),
+        "recommended_model_runnable": profile.get("runtime_status", {}).get("recommended_model_runnable", False),
+    }
+
+
+def _resolve_pointer_argument(
+    value: Any,
+    scope: dict[str, Any],
+    side_effects: list[dict[str, Any]],
+) -> Any:
+    if not isinstance(value, str):
+        return value
+
+    from hlf_mcp.hlf.memory_node import lookup_pointer_registry_entry, verify_pointer_ref
+
+    verification = verify_pointer_ref(
+        value,
+        registry_entry=lookup_pointer_registry_entry(value, scope.get("_trusted_pointers")),
+    )
+    if verification["status"] == "not_pointer":
+        return value
+
+    side_effects.append({
+        "type": "pointer_validation",
+        "pointer": value[:120],
+        "status": verification["status"],
+        "alias": verification.get("alias", ""),
+        "trust_tier": verification.get("trust_tier", "unknown"),
+    })
+    if verification["status"] != "ok":
+        if str(scope.get("_pointer_trust_mode", "enforce")) == "audit":
+            return value
+        raise HLFRuntimeError(
+            f"Pointer trust failed for {value}: {verification.get('reason', verification['status'])}"
+        )
+    resolved = verification.get("resolved_value")
+    return value if resolved in (None, "") else resolved
 
     def _execute_code(self, code: bytes, pool: ConstantPool) -> None:
         """Inner execution loop — fixed 3-byte instructions."""
@@ -794,6 +912,7 @@ def _dispatch_host(
         elif fn_name == "delegate":
             agent = str(args[0]) if args else "unknown"
             goal  = str(args[1]) if len(args) >= 2 else ""
+            memory_query = str(args[2]) if len(args) >= 3 else goal
             result = {
                 "delegated": True,
                 "agent":     agent,
@@ -801,6 +920,12 @@ def _dispatch_host(
                 "task_id":   _dispatch_builtin("generate_ulid", []),
                 "timestamp": int(_time.time()),
             }
+            profile_summary = _embedding_profile_summary(scope)
+            if profile_summary is not None:
+                result["embedding_profile"] = profile_summary
+            memory_context = _query_memory_context(memory_query, scope, side_effects)
+            if memory_context is not None:
+                result["memory_context"] = memory_context
 
         elif fn_name == "route":
             strategy = str(args[0]) if args else "auto"
@@ -812,17 +937,24 @@ def _dispatch_host(
                 "model":     _os.environ.get("HLF_MODEL", "llm-default"),
                 "timestamp": int(_time.time()),
             }
+            routing_query = str(args[1]) if len(args) >= 2 else str(scope.get("REQUEST_INTENT", ""))
+            profile_summary = _embedding_profile_summary(scope)
+            if profile_summary is not None:
+                result["embedding_profile"] = profile_summary
+            memory_context = _query_memory_context(routing_query, scope, side_effects)
+            if memory_context is not None:
+                result["memory_context"] = memory_context
 
         # ── Analysis ─────────────────────────────────────────────────────────
         elif fn_name == "analyze":
-            target = str(args[0]) if args else ""
+            target = str(_resolve_pointer_argument(str(args[0]), scope, side_effects)) if args else ""
             # Real analysis: try to read the target if it's a path
             content_preview = ""
             try:
                 from hlf_mcp.hlf.stdlib.io_mod import FILE_READ
                 content_preview = FILE_READ(target)[:200]
             except Exception:
-                content_preview = f"(target: {target})"
+                content_preview = target[:200]
             sha = _hashlib.sha256(content_preview.encode()).hexdigest()
             result = {
                 "analyzed":       target,
@@ -905,26 +1037,29 @@ def _dispatch_host(
         # ── File I/O (ACFS-confined) ──────────────────────────────────────────
         elif fn_name in ("READ", "FILE_READ"):
             from hlf_mcp.hlf.stdlib.io_mod import FILE_READ
-            result = FILE_READ(str(args[0])) if args else ""
+            result = FILE_READ(str(_resolve_pointer_argument(str(args[0]), scope, side_effects))) if args else ""
 
         elif fn_name in ("WRITE", "FILE_WRITE"):
             from hlf_mcp.hlf.stdlib.io_mod import FILE_WRITE
             if len(args) >= 2:
-                result = FILE_WRITE(str(args[0]), str(args[1]))
+                result = FILE_WRITE(
+                    str(_resolve_pointer_argument(str(args[0]), scope, side_effects)),
+                    str(_resolve_pointer_argument(str(args[1]), scope, side_effects)),
+                )
             else:
                 result = False
 
         # ── HTTP (network-gated) ─────────────────────────────────────────────
         elif fn_name in ("HTTP_GET", "http_get"):
             import urllib.request as _req
-            url = str(args[0]) if args else ""
+            url = str(_resolve_pointer_argument(str(args[0]), scope, side_effects)) if args else ""
             with _req.urlopen(url, timeout=10) as resp:  # noqa: S310
                 result = resp.read().decode("utf-8")[:4096]
 
         elif fn_name in ("HTTP_POST", "http_post"):
             import urllib.request as _req
-            url  = str(args[0]) if args else ""
-            body = str(args[1]) if len(args) >= 2 else ""
+            url  = str(_resolve_pointer_argument(str(args[0]), scope, side_effects)) if args else ""
+            body = str(_resolve_pointer_argument(str(args[1]), scope, side_effects)) if len(args) >= 2 else ""
             req  = _req.Request(url, data=body.encode("utf-8"), method="POST")
             with _req.urlopen(req, timeout=10) as resp:  # noqa: S310
                 result = resp.read().decode("utf-8")[:4096]
@@ -965,13 +1100,147 @@ class HLFRuntime:
         bytecode: bytes,
         gas_limit: int = 1000,
         variables: dict[str, Any] | None = None,
+        *,
+        ast: dict[str, Any] | None = None,
+        source: str = "",
+        tier: str | None = None,
+        red_hat_metadata: dict[str, Any] | None = None,
+        audit_logger: Any | None = None,
+        verification_admission: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        effective_variables = variables or {}
+        effective_tier = tier or str(effective_variables.get("DEPLOYMENT_TIER", "hearth"))
+        effective_audit_logger = audit_logger or effective_variables.get("_audit_logger")
+        effective_verification_admission = verification_admission or effective_variables.get("_verification_admission")
+
+        def _emit_audit(event: str, data: dict[str, Any]) -> dict[str, Any] | None:
+            if effective_audit_logger is None or not hasattr(effective_audit_logger, "log"):
+                return None
+            return effective_audit_logger.log(
+                event,
+                data,
+                agent_role="runtime",
+                goal_id=str(effective_variables.get("AGENT_ID", "")),
+            )
+
+        if ast is not None or source or red_hat_metadata is not None:
+            from hlf_mcp.hlf.ethics.governor import check as ethics_check
+
+            governor_result = ethics_check(
+                ast=ast,
+                env=effective_variables,
+                source=source,
+                tier=effective_tier,
+                red_hat_metadata=red_hat_metadata,
+            )
+            if not governor_result.passed:
+                termination = governor_result.termination
+                if termination is not None:
+                    error = (
+                        f"Ethics Governor [{termination.trigger}]: {termination.message} "
+                        f"(Audit ID: {termination.audit_id})"
+                    )
+                else:
+                    error = "Ethics Governor blocked execution: " + "; ".join(governor_result.blocks)
+                return {
+                    "status": "governor_blocked",
+                    "result": None,
+                    "gas_used": 0,
+                    "trace": [],
+                    "side_effects": [],
+                    "error": error,
+                    "governor": {
+                        "passed": governor_result.passed,
+                        "blocks": governor_result.blocks,
+                        "warnings": governor_result.warnings,
+                        "termination": (
+                            {
+                                "trigger": termination.trigger,
+                                "message": termination.message,
+                                "documentation": termination.documentation,
+                                "audit_id": termination.audit_id,
+                                "appealable": termination.appealable,
+                            }
+                            if termination is not None
+                            else None
+                        ),
+                    },
+                    "audit": _emit_audit(
+                        "hlf_execution_blocked",
+                        {
+                            "tier": effective_tier,
+                            "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest() if source else "",
+                            "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
+                            "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
+                            "blocks": governor_result.blocks,
+                        },
+                    ),
+                }
+
+        if isinstance(effective_verification_admission, dict) and not bool(
+            effective_verification_admission.get("admitted", False)
+        ):
+            return {
+                "status": "verification_blocked",
+                "result": None,
+                "gas_used": 0,
+                "trace": [],
+                "side_effects": [],
+                "error": "; ".join(
+                    str(reason) for reason in effective_verification_admission.get("reasons", []) if reason
+                )
+                or "Formal verifier denied execution admission.",
+                "verification": effective_verification_admission,
+                "audit": _emit_audit(
+                    "hlf_execution_blocked",
+                    {
+                        "tier": effective_tier,
+                        "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest() if source else "",
+                        "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
+                        "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
+                        "verification_verdict": str(effective_verification_admission.get("verdict", "")),
+                        "verification_reasons": list(effective_verification_admission.get("reasons", [])),
+                    },
+                ),
+            }
+
         vm = HlfVM(max_gas=gas_limit)
-        if variables:
-            vm.scope.update(variables)
+        if effective_variables:
+            vm.scope.update(effective_variables)
         result = vm.execute(bytecode)
         status = "ok" if result.code == 0 else "error"
         top    = result.stack[-1] if result.stack else None
+        execution_audit = _emit_audit(
+            "hlf_execution",
+            {
+                "tier": effective_tier,
+                "status": status,
+                "gas_used": result.gas_used,
+                "trace_length": len(result.trace),
+                "side_effect_count": len(result.side_effects),
+                "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest() if source else "",
+                "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
+                "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
+                "error": result.error or "",
+                "result_preview": str(top)[:160],
+            },
+        )
+        sealed_side_effects: list[dict[str, Any]] = []
+        for effect in result.side_effects:
+            if effect.get("type") not in {"memory_write", "memory_read", "host_error", "pointer_validation", "pii_redacted"}:
+                continue
+            entry = _emit_audit(
+                "hlf_side_effect",
+                {
+                    "tier": effective_tier,
+                    "capsule_id": str(effective_variables.get("_capsule", {}).get("capsule_id", "")),
+                    "capsule_request_id": str(effective_variables.get("_capsule_request_id", "")),
+                    "execution_trace_id": execution_audit.get("trace_id", "") if execution_audit else "",
+                    "effect": effect,
+                },
+            )
+            if entry is not None:
+                sealed_side_effects.append(entry)
         return {
             "status":       status,
             "result":       top,
@@ -979,9 +1248,196 @@ class HLFRuntime:
             "trace":        result.trace,
             "side_effects": result.side_effects,
             "error":        result.error,
+            "verification": effective_verification_admission if isinstance(effective_verification_admission, dict) else None,
+            "audit": {
+                "execution": execution_audit,
+                "side_effects": sealed_side_effects,
+            },
         }
 
 
+
+def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> None:
+    """Explicitly bound VM execution loop used by fresh interpreter imports."""
+    pc = 0
+    while pc < len(code):
+        op_byte = code[pc]
+        op = _CODE_TO_OP.get(op_byte)
+        if op is None:
+            raise HLFRuntimeError(f"Unknown opcode 0x{op_byte:02X} at pc={pc}")
+
+        operand = struct.unpack("<H", code[pc + 1: pc + 3])[0] if pc + 2 < len(code) else 0
+        cost = GAS_COSTS.get(op, 1)
+        if self.gas_used + cost > self.max_gas:
+            raise HlfVMGasExhausted(f"Gas exhausted at pc={pc}: {self.gas_used}+{cost} > {self.max_gas}")
+        self.gas_used += cost
+
+        trace_entry: dict[str, Any] = {"pc": pc, "op": op.name, "gas": self.gas_used}
+
+        if op == Op.NOP:
+            pass
+        elif op == Op.PUSH_CONST:
+            val = pool.get(operand)
+            self.stack.append(val)
+            trace_entry["push"] = val
+        elif op == Op.STORE:
+            val = self.stack[-1] if self.stack else None
+            name = pool.get(operand)
+            if name in self.immutables:
+                raise HLFRuntimeError(f"Cannot reassign immutable variable '{name}'")
+            self.scope[name] = val
+        elif op == Op.LOAD:
+            name = pool.get(operand)
+            self.stack.append(self.scope.get(name))
+        elif op == Op.STORE_IMMUT:
+            val = self.stack[-1] if self.stack else None
+            name = pool.get(operand)
+            if name in self.immutables:
+                raise HLFRuntimeError(f"Cannot reassign immutable variable '{name}'")
+            self.scope[name] = val
+            self.immutables.add(name)
+        elif op == Op.ADD:
+            b = self.stack.pop() if self.stack else 0
+            a = self.stack.pop() if self.stack else 0
+            self.stack.append(_to_num(a) + _to_num(b))
+        elif op == Op.SUB:
+            b = self.stack.pop() if self.stack else 0
+            a = self.stack.pop() if self.stack else 0
+            self.stack.append(_to_num(a) - _to_num(b))
+        elif op == Op.MUL:
+            b = self.stack.pop() if self.stack else 0
+            a = self.stack.pop() if self.stack else 0
+            self.stack.append(_to_num(a) * _to_num(b))
+        elif op == Op.DIV:
+            b = self.stack.pop() if self.stack else 1
+            a = self.stack.pop() if self.stack else 0
+            bn = _to_num(b)
+            if bn == 0:
+                raise HLFRuntimeError('Division by zero')
+            result = _to_num(a) / bn
+            self.stack.append(int(result) if result == int(result) else result)
+        elif op == Op.MOD:
+            b = self.stack.pop() if self.stack else 1
+            a = self.stack.pop() if self.stack else 0
+            bn = _to_num(b)
+            if bn == 0:
+                raise HLFRuntimeError('Modulo by zero')
+            self.stack.append(_to_num(a) % bn)
+        elif op == Op.NEG:
+            a = self.stack.pop() if self.stack else 0
+            self.stack.append(-_to_num(a))
+        elif op == Op.AND:
+            b = self.stack.pop() if self.stack else False
+            a = self.stack.pop() if self.stack else False
+            self.stack.append(bool(a) and bool(b))
+        elif op == Op.OR:
+            b = self.stack.pop() if self.stack else False
+            a = self.stack.pop() if self.stack else False
+            self.stack.append(bool(a) or bool(b))
+        elif op == Op.NOT:
+            a = self.stack.pop() if self.stack else False
+            self.stack.append(not bool(a))
+        elif op == Op.CMP_EQ:
+            b = self.stack.pop() if self.stack else None
+            a = self.stack.pop() if self.stack else None
+            self.stack.append(a == b)
+        elif op == Op.CMP_NE:
+            b = self.stack.pop() if self.stack else None
+            a = self.stack.pop() if self.stack else None
+            self.stack.append(a != b)
+        elif op == Op.CMP_LT:
+            b = self.stack.pop() if self.stack else 0
+            a = self.stack.pop() if self.stack else 0
+            self.stack.append(_to_num(a) < _to_num(b))
+        elif op == Op.CMP_LE:
+            b = self.stack.pop() if self.stack else 0
+            a = self.stack.pop() if self.stack else 0
+            self.stack.append(_to_num(a) <= _to_num(b))
+        elif op == Op.CMP_GT:
+            b = self.stack.pop() if self.stack else 0
+            a = self.stack.pop() if self.stack else 0
+            self.stack.append(_to_num(a) > _to_num(b))
+        elif op == Op.CMP_GE:
+            b = self.stack.pop() if self.stack else 0
+            a = self.stack.pop() if self.stack else 0
+            self.stack.append(_to_num(a) >= _to_num(b))
+        elif op == Op.JMP:
+            trace_entry["jump_to"] = operand
+            self.trace.append(trace_entry)
+            pc = operand
+            continue
+        elif op == Op.JZ:
+            cond = self.stack.pop() if self.stack else False
+            if not bool(cond):
+                trace_entry["jump_to"] = operand
+                self.trace.append(trace_entry)
+                pc = operand
+                continue
+        elif op == Op.JNZ:
+            cond = self.stack.pop() if self.stack else False
+            if bool(cond):
+                trace_entry["jump_to"] = operand
+                self.trace.append(trace_entry)
+                pc = operand
+                continue
+        elif op == Op.CALL_BUILTIN:
+            name = pool.get(operand)
+            args = [self.stack.pop()] if self.stack else []
+            self.stack.append(_dispatch_builtin(name, args))
+        elif op == Op.CALL_HOST:
+            fn_key: str = pool.get(operand) or ""
+            fn_args: list[Any] = []
+            while self.stack and len(fn_args) < 4:
+                fn_args.insert(0, self.stack.pop())
+            self.stack.append(_dispatch_host(fn_key, fn_args, self.scope, self._side_effects))
+        elif op == Op.CALL_TOOL:
+            tool_name = pool.get(operand) or ""
+            self._side_effects.append({"type": "tool_call", "name": tool_name})
+            self.stack.append({"tool_called": tool_name, "status": "simulated"})
+        elif op == Op.OPENCLAW_TOOL:
+            tool = pool.get(operand) or ""
+            self._side_effects.append({"type": "openclaw_tool", "tool": tool})
+            self.stack.append({"openclaw": tool, "status": "sandboxed"})
+        elif op == Op.TAG:
+            tag = pool.get(operand) or ""
+            self._side_effects.append({"type": "tag", "value": tag})
+        elif op == Op.INTENT:
+            intent = pool.get(operand) or ""
+            self._side_effects.append({"type": "intent", "value": intent})
+        elif op == Op.RESULT:
+            val = self.stack[-1] if self.stack else None
+            self._result_message = str(val)
+        elif op == Op.MEMORY_STORE:
+            key = self.stack.pop() if self.stack else "unknown"
+            val = self.stack.pop() if self.stack else None
+            self._side_effects.append({"type": "memory_write", "key": key, "value": str(val)})
+        elif op == Op.MEMORY_RECALL:
+            key = self.stack.pop() if self.stack else "unknown"
+            self.stack.append({"recalled": key, "value": None})
+            self._side_effects.append({"type": "memory_read", "key": key})
+        elif op == Op.SPEC_DEFINE:
+            tag = pool.get(operand) or ""
+            self._side_effects.append({"type": "spec_lifecycle", "op": "SPEC_DEFINE", "tag": tag})
+        elif op == Op.SPEC_GATE:
+            tag = pool.get(operand) or ""
+            self._side_effects.append({"type": "spec_lifecycle", "op": "SPEC_GATE", "tag": tag})
+        elif op == Op.SPEC_UPDATE:
+            tag = pool.get(operand) or ""
+            self._side_effects.append({"type": "spec_lifecycle", "op": "SPEC_UPDATE", "tag": tag})
+        elif op == Op.SPEC_SEAL:
+            tag = pool.get(operand) or ""
+            self._side_effects.append({"type": "spec_lifecycle", "op": "SPEC_SEAL", "tag": tag})
+        elif op == Op.HALT:
+            self._halted = True
+            trace_entry["halted"] = True
+            self.trace.append(trace_entry)
+            break
+
+        self.trace.append({**trace_entry, "stack_depth": len(self.stack)})
+        pc += 3
+
+
+HlfVM._execute_code = _hlfvm_execute_code_bound
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -1020,3 +1476,5 @@ def main() -> None:
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         sys.exit(1)
+
+

@@ -8,7 +8,7 @@ This client allows any agent to connect to an HLF MCP server and:
 - Check for grammar updates
 
 Usage:
-    client = HLFMCPClient("http://localhost:8000")
+    client = HLFMCPClient("http://127.0.0.1:8000")
     
     # Initialize agent with grammar
     init_prompt = client.get_init_prompt(tier="forge", profile="P0")
@@ -24,11 +24,22 @@ For STDIO mode, use HLFMCPClientStdio.
 
 import json
 import hashlib
+import os
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 import httpx
+
+
+def resolve_mcp_url(base_url: Optional[str] = None) -> str:
+    """Resolve the MCP URL from an explicit value or environment."""
+    if base_url:
+        return base_url
+    env_url = os.environ.get("HLF_MCP_URL") or os.environ.get("MCP_URL")
+    if env_url:
+        return env_url
+    raise ValueError("MCP URL must be provided explicitly or via HLF_MCP_URL/MCP_URL")
 
 
 # ========================================
@@ -83,7 +94,7 @@ class HLFMCPClient:
     For MCP integration, use the tools and prompts directly.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8000", cache_ttl: int = 3600):
+    def __init__(self, base_url: Optional[str] = None, cache_ttl: int = 3600):
         """
         Initialize the MCP client.
         
@@ -91,7 +102,7 @@ class HLFMCPClient:
             base_url: MCP server URL
             cache_ttl: Cache TTL in seconds (default: 1 hour)
         """
-        self.base_url = base_url
+        self.base_url = resolve_mcp_url(base_url)
         self.cache_ttl = cache_ttl
         
         # Caches
@@ -601,7 +612,7 @@ def cli_main():
     import argparse
     
     parser = argparse.ArgumentParser(description="HLF MCP Client")
-    parser.add_argument("--url", default="http://localhost:8000", help="MCP server URL")
+    parser.add_argument("--url", default=None, help="MCP server URL (or set HLF_MCP_URL / MCP_URL)")
     parser.add_argument("command", choices=["version", "grammar", "dicts", "init", "compile", "execute"])
     parser.add_argument("--tier", default="forge", help="Execution tier")
     parser.add_argument("--profile", default="P0", help="Resource profile")

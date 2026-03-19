@@ -99,7 +99,7 @@ def test_tiered_fallback():
         ConnectionMonitor._instances.clear()
 
         # Trip the primary model's circuit breaker
-        primary = CODING_CHAIN[0]  # devstral:24b
+        primary = CODING_CHAIN[0]  # devstral-2:123b-cloud
         cb = CircuitBreaker(primary)
         for _ in range(4):   # CIRCUIT_FAIL_THRESHOLD
             cb.record_failure()
@@ -128,10 +128,10 @@ def test_tiered_fallback():
         return None
 
 # ---------------------------------------------------------------------------
-# Test 3: Thinking mode (deepseek-r1 chain)
+# Test 3: Thinking mode (ethics chain)
 # ---------------------------------------------------------------------------
 def test_thinking_mode():
-    print("\n=== Test 3: Thinking mode (deepseek-r1) ===")
+    print("\n=== Test 3: Thinking mode (ethics chain) ===")
     try:
         orch = FallbackOrchestrator(
             chain=ETHICS_CHAIN, api_key=API_KEY,

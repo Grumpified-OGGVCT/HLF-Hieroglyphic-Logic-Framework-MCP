@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
-HLF MCP Metrics module.
+Legacy HLF MCP metrics module.
 
-Provides test metrics and verification results for both users and agents.
+This module is preserved for compatibility with the older MCP stack and related
+reporting surfaces.
+
+Treat packaged metrics behavior as belonging to the current `hlf_mcp` product
+surface first.
 """
 
 from dataclasses import dataclass, field
@@ -41,7 +45,7 @@ class TestMetric:
 
 
 class HLFTestMetrics:
-    """Provides test metrics for MCP reporting."""
+    """Provides legacy test metrics for MCP reporting."""
     
     def __init__(self, repo_root: Path = None):
         self.repo_root = repo_root or Path.cwd()
@@ -144,7 +148,7 @@ class HLFTestMetrics:
         # Client test
         try:
             from hlf.mcp_client import HLFMCPClient
-            client = HLFMCPClient("http://localhost:8000")
+            client = HLFMCPClient("http://mcp.test")
             # Check that client has all expected methods
             methods = ["get_version", "get_grammar", "get_dictionaries", "compile", "execute", "friction_log"]
             missing = [m for m in methods if not hasattr(client, m)]

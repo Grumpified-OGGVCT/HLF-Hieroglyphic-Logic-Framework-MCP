@@ -46,6 +46,11 @@ jobs:
     name: "Lint + SAST + Tests + Coverage + SonarCloud"
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CODECOV_CONFIGURED: ${{ secrets.CODECOV_TOKEN != '' }}
+      SONAR_CONFIGURED: ${{ secrets.SONAR_TOKEN != '' }}
+      SONAR_PROJECT_KEY_PRESENT: ${{ secrets.SONAR_PROJECT_KEY != '' }}
+      SONAR_ORGANIZATION_PRESENT: ${{ secrets.SONAR_ORGANIZATION != '' }}
 
     steps:
       - name: Checkout repository
@@ -104,7 +109,7 @@ jobs:
             --cov-report=html:/tmp/coverage-html \
             --tb=short \
             -q
-        # All 160+ tests must pass. Coverage XML is used by both Codecov and SonarCloud.
+        # The default automated tests/ suite must pass. Coverage XML is used by both Codecov and SonarCloud.
 
       # ── Step 4: Codecov upload ────────────────────────────────────────────
       - name: Upload coverage to Codecov
@@ -134,7 +139,7 @@ jobs:
             -Dsonar.python.version=3.12
         # SONAR_TOKEN, SONAR_PROJECT_KEY, SONAR_ORGANIZATION must be set as
         # org secrets scoped to this repo. Steps skips if secrets are absent.
-        if: ${{ secrets.SONAR_TOKEN != '' }}
+        if: env.SONAR_CONFIGURED == 'true'
         continue-on-error: true   # SonarCloud is advisory; doesn't block merge
 
       - name: SonarCloud Quality Gate check
@@ -142,13 +147,54 @@ jobs:
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        if: ${{ secrets.SONAR_TOKEN != '' }}
+        if: env.SONAR_CONFIGURED == 'true'
         continue-on-error: true   # Gate result is reported but not blocking until
                                   # baseline is established (Phase 2)
+
+      - name: Build code quality summary payload
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import platform
+          from pathlib import Path
+
+          payload = {
+              "python_version": platform.python_version(),
+              "coverage_xml_present": Path("/tmp/coverage.xml").exists(),
+              "coverage_html_present": Path("/tmp/coverage-html").exists(),
+              "codecov_configured": os.environ.get("CODECOV_CONFIGURED", "false") == "true",
+              "sonar_configured": os.environ.get("SONAR_CONFIGURED", "false") == "true",
+              "sonar_project_key_present": os.environ.get("SONAR_PROJECT_KEY_PRESENT", "false") == "true",
+              "sonar_organization_present": os.environ.get("SONAR_ORGANIZATION_PRESENT", "false") == "true",
+              "codeql_category": "python-security",
+          }
+
+          Path("/tmp/code-quality-summary.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+          PY
+
+      - name: Emit normalized weekly artifact
+        if: always()
+        run: |
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-code-quality" \
+            --output /tmp/weekly-code-quality-artifact.json \
+            --extra-json "/tmp/code-quality-summary.json:code_quality"
+
+      - name: Upload normalized weekly artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "weekly-code-quality-${{ github.run_id }}"
+          path: /tmp/weekly-code-quality-artifact.json
+          retention-days: 90
 
       # ── Summary ───────────────────────────────────────────────────────────
       - name: Print quality summary
         if: always()
+        env:
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
           echo "=== HLF Code Quality Summary ==="
           echo "Python: $(python --version)"
@@ -157,4 +203,4 @@ jobs:
           echo ""
           echo "Coverage XML: $([ -f /tmp/coverage.xml ] && echo 'generated' || echo 'missing')"
           echo "CodeQL: see Security tab in GitHub"
-          echo "SonarCloud: https://sonarcloud.io/project/overview?id=${{ secrets.SONAR_PROJECT_KEY }}"
+          echo "SonarCloud: https://sonarcloud.io/project/overview?id=$SONAR_PROJECT_KEY"

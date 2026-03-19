@@ -6,6 +6,7 @@ Measures HLF token efficiency vs natural language and verbose JSON equivalents.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 try:
@@ -54,6 +55,52 @@ _NLP_TEMPLATES: dict[str, str] = {
         "deployment tier. Set temperature to 0.0 for deterministic output. "
         "Require operator confirmation before proceeding with deployment."
     ),
+}
+
+
+_MULTILINGUAL_NLP_TEMPLATES: dict[str, dict[str, str]] = {
+    "security_audit": {
+        "en": "Please analyze the file at /security/seccomp.json in read-only mode. I expect you to identify vulnerabilities and return them in shorthand format. All agents must reach strict consensus before proceeding.",
+        "fr": "Veuillez analyser le fichier /security/seccomp.json en mode lecture seule. Identifiez les vulnérabilités et retournez-les en format abrégé. Tous les agents doivent parvenir à un consensus strict avant de continuer.",
+        "es": "Analiza el archivo /security/seccomp.json en modo de solo lectura. Identifica vulnerabilidades y devuélvelas en formato abreviado. Todos los agentes deben alcanzar un consenso estricto antes de continuar.",
+        "ar": "يرجى تحليل الملف /security/seccomp.json في وضع القراءة فقط. حدد الثغرات وأعدها بصيغة مختصرة. يجب أن تصل جميع الوكلاء إلى توافق صارم قبل المتابعة.",
+        "zh": "请以只读模式分析 /security/seccomp.json 文件。识别漏洞并以简写格式返回。所有代理在继续之前必须达成严格共识。",
+    },
+    "hello_world": {
+        "en": "Please say hello to the world and confirm the system is operational. Return a greeting message with status OK.",
+        "fr": "Veuillez dire bonjour au monde et confirmer que le système est opérationnel. Retournez un message de salutation avec le statut OK.",
+        "es": "Di hola al mundo y confirma que el sistema está operativo. Devuelve un mensaje de saludo con estado OK.",
+        "ar": "يرجى قول مرحباً للعالم وتأكيد أن النظام يعمل. أعد رسالة ترحيب بالحالة OK.",
+        "zh": "请向世界问好并确认系统正在运行。返回带有 OK 状态的问候消息。",
+    },
+    "db_migration": {
+        "en": "Execute a database migration on the production database at /data/prod.db. Apply schema version 2.1, create the users table if it does not exist, and run all pending migration scripts. Verify the migration succeeded.",
+        "fr": "Exécutez une migration de base de données sur la base de production /data/prod.db. Appliquez le schéma version 2.1, créez la table users si elle n'existe pas et exécutez tous les scripts en attente. Vérifiez que la migration a réussi.",
+        "es": "Ejecuta una migración de base de datos en la base de producción /data/prod.db. Aplica la versión 2.1 del esquema, crea la tabla users si no existe y ejecuta todos los scripts pendientes. Verifica que la migración haya tenido éxito.",
+        "ar": "نفذ ترحيل قاعدة البيانات على قاعدة الإنتاج /data/prod.db. طبق مخطط الإصدار 2.1، وأنشئ جدول users إذا لم يكن موجوداً، وشغل جميع نصوص الترحيل المعلقة. تحقق من نجاح الترحيل.",
+        "zh": "在生产数据库 /data/prod.db 上执行数据库迁移。应用 2.1 版本架构，如果 users 表不存在则创建它，并运行所有待处理的迁移脚本。验证迁移成功。",
+    },
+    "content_delegation": {
+        "en": "Delegate a fractal summarization task to the scribe agent. The source data is at /data/raw_logs/matrix_sync_2026.txt. Set priority to high. Assert that available VRAM is at least 8GB.",
+        "fr": "Déléguez une tâche de résumé fractal à l'agent scribe. Les données sources sont dans /data/raw_logs/matrix_sync_2026.txt. Définissez la priorité sur haute. Affirmez que la VRAM disponible est d'au moins 8 Go.",
+        "es": "Delega una tarea de resumen fractal al agente scribe. Los datos fuente están en /data/raw_logs/matrix_sync_2026.txt. Establece la prioridad en alta. Afirma que la VRAM disponible sea de al menos 8 GB.",
+        "ar": "فوّض مهمة تلخيص كسوري إلى الوكيل scribe. توجد بيانات المصدر في /data/raw_logs/matrix_sync_2026.txt. اضبط الأولوية على عالية. أكد أن الذاكرة الرسومية المتاحة لا تقل عن 8 جيجابايت.",
+        "zh": "将分形摘要任务委托给 scribe 代理。源数据位于 /data/raw_logs/matrix_sync_2026.txt。将优先级设为高。断言可用显存至少为 8GB。",
+    },
+    "log_analysis": {
+        "en": "Analyze the log file at /var/log/system.log using read-only access. Extract error patterns, count occurrences, and return a summary report with the top 10 most frequent errors and their timestamps.",
+        "fr": "Analysez le fichier journal /var/log/system.log en accès lecture seule. Extrayez les motifs d'erreur, comptez les occurrences et retournez un rapport résumant les 10 erreurs les plus fréquentes avec leurs horodatages.",
+        "es": "Analiza el archivo de registro /var/log/system.log usando acceso de solo lectura. Extrae patrones de error, cuenta ocurrencias y devuelve un informe con los 10 errores más frecuentes y sus marcas de tiempo.",
+        "ar": "حلل ملف السجل /var/log/system.log باستخدام وصول للقراءة فقط. استخرج أنماط الأخطاء وعدد التكرارات وأعد تقريراً يلخص أكثر 10 أخطاء شيوعاً مع الطوابع الزمنية الخاصة بها.",
+        "zh": "使用只读访问分析日志文件 /var/log/system.log。提取错误模式、统计出现次数，并返回包含前 10 个最常见错误及其时间戳的摘要报告。",
+    },
+    "stack_deployment": {
+        "en": "Deploy the application stack using the auto routing strategy for the current deployment tier. Set temperature to 0.0 for deterministic output. Require operator confirmation before proceeding with deployment.",
+        "fr": "Déployez la pile applicative en utilisant la stratégie de routage automatique pour le niveau de déploiement courant. Définissez la température à 0.0 pour une sortie déterministe. Exigez une confirmation opérateur avant de poursuivre.",
+        "es": "Despliega la pila de aplicaciones usando la estrategia de enrutamiento automático para el nivel de despliegue actual. Establece la temperatura en 0.0 para una salida determinista. Requiere confirmación del operador antes de continuar.",
+        "ar": "انشر حزمة التطبيق باستخدام استراتيجية التوجيه التلقائي لمستوى النشر الحالي. اضبط درجة الحرارة على 0.0 للحصول على مخرجات حتمية. اطلب تأكيد المشغل قبل متابعة النشر.",
+        "zh": "使用当前部署层级的自动路由策略部署应用栈。将 temperature 设为 0.0 以获得确定性输出。部署前必须要求操作员确认。",
+    },
 }
 
 
@@ -140,6 +187,352 @@ class HLFBenchmark:
             "results": results,
             "totals": {"hlf": total_hlf, "nlp": total_nlp, "compression_pct": overall},
             "tiktoken_model": "cl100k_base",
+        }
+
+    def multilingual_matrix(
+        self,
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run a multilingual benchmark matrix across canonical intents."""
+        from hlf_mcp.hlf.translator import language_to_hlf, translation_diagnostics
+
+        selected_domains = domains or list(_MULTILINGUAL_NLP_TEMPLATES.keys())
+        selected_languages = languages or ["en", "fr", "es", "ar", "zh"]
+
+        rows: list[dict[str, Any]] = []
+        per_language: dict[str, dict[str, float | int]] = {}
+
+        for language in selected_languages:
+            per_language[language] = {
+                "samples": 0,
+                "input_tokens": 0,
+                "hlf_tokens": 0,
+                "input_bytes": 0,
+                "compression_pct": 0.0,
+            }
+
+        for domain in selected_domains:
+            templates = _MULTILINGUAL_NLP_TEMPLATES.get(domain)
+            if templates is None:
+                raise ValueError(f"Unsupported benchmark domain: {domain}")
+            for language in selected_languages:
+                text = templates.get(language)
+                if text is None:
+                    raise ValueError(f"Missing benchmark template for domain={domain}, language={language}")
+                source = language_to_hlf(text, language=language)
+                analysis = self.analyze(source, compare_text=text)
+                diagnostics = translation_diagnostics(text, language=language, source=source).to_dict()
+                input_bytes = len(text.encode("utf-8"))
+                input_chars = len(text)
+                row = {
+                    "domain": domain,
+                    "language": language,
+                    "input_tokens": analysis["nlp_tokens"],
+                    "hlf_tokens": analysis["hlf_tokens"],
+                    "compression_pct": analysis["compression_pct"],
+                    "savings": analysis["savings"],
+                    "input_bytes": input_bytes,
+                    "input_chars": input_chars,
+                    "compare_text_preview": analysis["compare_text_preview"],
+                    "fallback_used": diagnostics["fallback_used"],
+                    "fallback_count": diagnostics["fallback_count"],
+                    "roundtrip_fidelity_score": diagnostics["roundtrip_fidelity_score"],
+                    "semantic_loss_flags": diagnostics["semantic_loss_flags"],
+                    "roundtrip_summary_preview": diagnostics["roundtrip_summary"][:100],
+                }
+                rows.append(row)
+
+                lang_totals = per_language[language]
+                lang_totals["samples"] = int(lang_totals["samples"]) + 1
+                lang_totals["input_tokens"] = int(lang_totals["input_tokens"]) + int(analysis["nlp_tokens"])
+                lang_totals["hlf_tokens"] = int(lang_totals["hlf_tokens"]) + int(analysis["hlf_tokens"])
+                lang_totals["input_bytes"] = int(lang_totals["input_bytes"]) + input_bytes
+                lang_totals["fallback_samples"] = int(lang_totals.get("fallback_samples", 0)) + int(diagnostics["fallback_used"])
+                lang_totals["roundtrip_fidelity_total"] = float(lang_totals.get("roundtrip_fidelity_total", 0.0)) + float(diagnostics["roundtrip_fidelity_score"])
+
+        for language, totals in per_language.items():
+            input_tokens = int(totals["input_tokens"])
+            hlf_tokens = int(totals["hlf_tokens"])
+            sample_count = int(totals["samples"])
+            totals["compression_pct"] = round((1 - hlf_tokens / input_tokens) * 100, 1) if input_tokens > 0 else 0.0
+            totals["fallback_rate"] = round((int(totals.get("fallback_samples", 0)) / sample_count), 3) if sample_count > 0 else 0.0
+            totals["roundtrip_fidelity_avg"] = round((float(totals.get("roundtrip_fidelity_total", 0.0)) / sample_count), 3) if sample_count > 0 else 0.0
+
+        return {
+            "rows": rows,
+            "per_language": per_language,
+            "domains": selected_domains,
+            "languages": selected_languages,
+            "tiktoken_model": "cl100k_base",
+        }
+
+    def language_comparison_summary(
+        self,
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Return a ranked multilingual comparison using measured benchmark outcomes.
+
+        Ranking is intentionally evidence-first: languages are ordered by
+        round-trip fidelity, then fallback discipline, then compression.
+        This avoids projecting a winner before the measured signals exist.
+        """
+        matrix = self.multilingual_matrix(domains=domains, languages=languages)
+
+        ranked_languages: list[dict[str, Any]] = []
+        for language in matrix["languages"]:
+            totals = matrix["per_language"][language]
+            ranked_languages.append(
+                {
+                    "language": language,
+                    "samples": int(totals["samples"]),
+                    "compression_pct": float(totals["compression_pct"]),
+                    "fallback_rate": float(totals["fallback_rate"]),
+                    "roundtrip_fidelity_avg": float(totals["roundtrip_fidelity_avg"]),
+                    "input_tokens": int(totals["input_tokens"]),
+                    "hlf_tokens": int(totals["hlf_tokens"]),
+                }
+            )
+
+        ranked_languages.sort(
+            key=lambda item: (
+                -item["roundtrip_fidelity_avg"],
+                item["fallback_rate"],
+                -item["compression_pct"],
+                item["language"],
+            )
+        )
+
+        return {
+            "ranked_languages": ranked_languages,
+            "leader": ranked_languages[0] if ranked_languages else None,
+            "ranking_policy": [
+                "roundtrip_fidelity_avg_desc",
+                "fallback_rate_asc",
+                "compression_pct_desc",
+                "language_asc",
+            ],
+            "domains": matrix["domains"],
+            "languages": matrix["languages"],
+            "tiktoken_model": matrix["tiktoken_model"],
+        }
+
+    def translation_memory_retrieval_matrix(
+        self,
+        memory_store: Any,
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+        top_k: int = 3,
+        topic: str = "hlf_translation_contract_benchmark",
+    ) -> dict[str, Any]:
+        """Measure retrieval-backed translation memory quality across supported languages."""
+        from hlf_mcp.hlf.translator import language_to_hlf, translation_diagnostics
+
+        selected_domains = domains or list(_MULTILINGUAL_NLP_TEMPLATES.keys())
+        selected_languages = languages or ["en", "fr", "es", "ar", "zh"]
+
+        rows: list[dict[str, Any]] = []
+        per_language: dict[str, dict[str, float | int]] = {
+            language: {
+                "samples": 0,
+                "same_language_hit_count": 0,
+                "exact_match_hit_count": 0,
+                "top_similarity_total": 0.0,
+                "retrieval_quality_total": 0.0,
+                "roundtrip_fidelity_total": 0.0,
+            }
+            for language in selected_languages
+        }
+
+        for domain in selected_domains:
+            templates = _MULTILINGUAL_NLP_TEMPLATES.get(domain)
+            if templates is None:
+                raise ValueError(f"Unsupported benchmark domain: {domain}")
+            for language in selected_languages:
+                text = templates.get(language)
+                if text is None:
+                    raise ValueError(f"Missing benchmark template for domain={domain}, language={language}")
+                source = language_to_hlf(text, language=language)
+                diagnostics = translation_diagnostics(text, language=language, source=source).to_dict()
+                payload = {
+                    "kind": "hlf_translation_contract",
+                    "benchmark_topic": topic,
+                    "language": language,
+                    "domain": domain,
+                    "original_text": text,
+                    "hlf_source": source,
+                    "translation": diagnostics,
+                }
+                memory_store.store(
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    topic=topic,
+                    confidence=float(diagnostics.get("roundtrip_fidelity_score", 1.0)),
+                    provenance="hlf_benchmark.translation_memory_retrieval_matrix",
+                    tags=["hlf", "translation", "benchmark", language, domain],
+                    metadata={"language": language, "domain": domain, "kind": "hlf_translation_contract"},
+                )
+
+                query_result = memory_store.query(text, top_k=top_k, topic=topic)
+                results = query_result.get("results", [])
+                top_similarity = float(results[0]["similarity"]) if results else 0.0
+                same_language_hit = any(row.get("metadata", {}).get("language") == language for row in results)
+                exact_match_hit = any(
+                    row.get("metadata", {}).get("language") == language
+                    and row.get("metadata", {}).get("domain") == domain
+                    for row in results
+                )
+                retrieval_quality = 1.0 if exact_match_hit else 0.5 if same_language_hit else 0.0
+
+                row = {
+                    "domain": domain,
+                    "language": language,
+                    "top_similarity": round(top_similarity, 4),
+                    "same_language_hit": same_language_hit,
+                    "exact_match_hit": exact_match_hit,
+                    "retrieval_quality": retrieval_quality,
+                    "roundtrip_fidelity_score": diagnostics.get("roundtrip_fidelity_score", 0.0),
+                    "fallback_used": diagnostics.get("fallback_used", False),
+                }
+                rows.append(row)
+
+                totals = per_language[language]
+                totals["samples"] = int(totals["samples"]) + 1
+                totals["same_language_hit_count"] = int(totals["same_language_hit_count"]) + int(same_language_hit)
+                totals["exact_match_hit_count"] = int(totals["exact_match_hit_count"]) + int(exact_match_hit)
+                totals["top_similarity_total"] = float(totals["top_similarity_total"]) + top_similarity
+                totals["retrieval_quality_total"] = float(totals["retrieval_quality_total"]) + retrieval_quality
+                totals["roundtrip_fidelity_total"] = float(totals["roundtrip_fidelity_total"]) + float(diagnostics.get("roundtrip_fidelity_score", 0.0))
+
+        for language, totals in per_language.items():
+            sample_count = int(totals["samples"])
+            totals["same_language_hit_rate"] = round(int(totals["same_language_hit_count"]) / sample_count, 3) if sample_count else 0.0
+            totals["exact_match_hit_rate"] = round(int(totals["exact_match_hit_count"]) / sample_count, 3) if sample_count else 0.0
+            totals["avg_top_similarity"] = round(float(totals["top_similarity_total"]) / sample_count, 4) if sample_count else 0.0
+            totals["retrieval_quality_avg"] = round(float(totals["retrieval_quality_total"]) / sample_count, 3) if sample_count else 0.0
+            totals["roundtrip_fidelity_avg"] = round(float(totals["roundtrip_fidelity_total"]) / sample_count, 3) if sample_count else 0.0
+
+        benchmark_scores = {
+            "translation_fidelity": min(float(per_language[language]["roundtrip_fidelity_avg"]) for language in selected_languages),
+            "retrieval_quality": min(float(per_language[language]["retrieval_quality_avg"]) for language in selected_languages),
+        }
+        return {
+            "rows": rows,
+            "per_language": per_language,
+            "domains": selected_domains,
+            "languages": selected_languages,
+            "topic": topic,
+            "benchmark_scores": benchmark_scores,
+            "profile_name": "translation_memory_multilingual",
+        }
+
+    def routing_context_retrieval_matrix(
+        self,
+        memory_store: Any,
+        domains: list[str] | None = None,
+        languages: list[str] | None = None,
+        top_k: int = 3,
+        topic: str = "hlf_agent_routing_benchmark",
+    ) -> dict[str, Any]:
+        """Measure retrieval-backed multilingual routing-context quality across supported languages."""
+        from hlf_mcp.hlf.translator import language_to_hlf, translation_diagnostics
+
+        routing_lanes = {
+            "security_audit": "verifier",
+            "hello_world": "explainer",
+            "db_migration": "code-generation",
+            "content_delegation": "explainer",
+            "log_analysis": "verifier",
+            "stack_deployment": "explainer",
+        }
+        selected_domains = domains or list(_MULTILINGUAL_NLP_TEMPLATES.keys())
+        selected_languages = languages or ["en", "fr", "es", "ar", "zh"]
+
+        rows: list[dict[str, Any]] = []
+        per_language: dict[str, dict[str, float | int]] = {
+            language: {
+                "samples": 0,
+                "expected_lane_hit_count": 0,
+                "same_language_hit_count": 0,
+                "routing_quality_total": 0.0,
+                "translation_fidelity_total": 0.0,
+            }
+            for language in selected_languages
+        }
+
+        for domain in selected_domains:
+            templates = _MULTILINGUAL_NLP_TEMPLATES.get(domain)
+            if templates is None:
+                raise ValueError(f"Unsupported benchmark domain: {domain}")
+            expected_lane = routing_lanes[domain]
+            for language in selected_languages:
+                text = templates.get(language)
+                if text is None:
+                    raise ValueError(f"Missing benchmark template for domain={domain}, language={language}")
+                source = language_to_hlf(text, language=language)
+                diagnostics = translation_diagnostics(text, language=language, source=source).to_dict()
+                payload = {
+                    "kind": "hlf_routing_context",
+                    "benchmark_topic": topic,
+                    "language": language,
+                    "domain": domain,
+                    "expected_lane": expected_lane,
+                    "original_text": text,
+                    "hlf_source": source,
+                    "translation": diagnostics,
+                }
+                memory_store.store(
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    topic=topic,
+                    confidence=float(diagnostics.get("roundtrip_fidelity_score", 1.0)),
+                    provenance="hlf_benchmark.routing_context_retrieval_matrix",
+                    tags=["hlf", "routing", "benchmark", language, domain, expected_lane],
+                    metadata={"language": language, "domain": domain, "expected_lane": expected_lane, "kind": "hlf_routing_context"},
+                )
+
+                query_result = memory_store.query(text, top_k=top_k, topic=topic)
+                results = query_result.get("results", [])
+                same_language_hit = any(row.get("metadata", {}).get("language") == language for row in results)
+                expected_lane_hit = any(row.get("metadata", {}).get("expected_lane") == expected_lane for row in results)
+                routing_quality = 1.0 if expected_lane_hit and same_language_hit else 0.75 if expected_lane_hit else 0.25 if same_language_hit else 0.0
+
+                rows.append(
+                    {
+                        "domain": domain,
+                        "language": language,
+                        "expected_lane": expected_lane,
+                        "same_language_hit": same_language_hit,
+                        "expected_lane_hit": expected_lane_hit,
+                        "routing_quality": routing_quality,
+                        "roundtrip_fidelity_score": diagnostics.get("roundtrip_fidelity_score", 0.0),
+                    }
+                )
+                totals = per_language[language]
+                totals["samples"] = int(totals["samples"]) + 1
+                totals["expected_lane_hit_count"] = int(totals["expected_lane_hit_count"]) + int(expected_lane_hit)
+                totals["same_language_hit_count"] = int(totals["same_language_hit_count"]) + int(same_language_hit)
+                totals["routing_quality_total"] = float(totals["routing_quality_total"]) + routing_quality
+                totals["translation_fidelity_total"] = float(totals["translation_fidelity_total"]) + float(diagnostics.get("roundtrip_fidelity_score", 0.0))
+
+        for language, totals in per_language.items():
+            sample_count = int(totals["samples"])
+            totals["expected_lane_hit_rate"] = round(int(totals["expected_lane_hit_count"]) / sample_count, 3) if sample_count else 0.0
+            totals["same_language_hit_rate"] = round(int(totals["same_language_hit_count"]) / sample_count, 3) if sample_count else 0.0
+            totals["routing_quality_avg"] = round(float(totals["routing_quality_total"]) / sample_count, 3) if sample_count else 0.0
+            totals["translation_fidelity_avg"] = round(float(totals["translation_fidelity_total"]) / sample_count, 3) if sample_count else 0.0
+
+        benchmark_scores = {
+            "routing_quality": min(float(per_language[language]["routing_quality_avg"]) for language in selected_languages),
+            "translation_fidelity": min(float(per_language[language]["translation_fidelity_avg"]) for language in selected_languages),
+        }
+        return {
+            "rows": rows,
+            "per_language": per_language,
+            "domains": selected_domains,
+            "languages": selected_languages,
+            "topic": topic,
+            "benchmark_scores": benchmark_scores,
+            "profile_name": "agent_routing_context_multilingual",
         }
 
 

@@ -1,6 +1,22 @@
 from __future__ import annotations
 
-from hlf_mcp.hlf.translator import Tone, detect_tone, english_to_hlf, hlf_source_to_english, hlf_to_english
+from hlf_mcp.hlf.translator import (
+    Tone,
+    build_translation_repair_plan,
+    canonicalize_translation_text,
+    chinese_to_hlf,
+    detect_input_language,
+    detect_system_language,
+    detect_tone,
+    english_to_hlf,
+    hlf_source_to_language,
+    hlf_source_to_english,
+    hlf_to_language,
+    hlf_to_english,
+    language_to_hlf,
+    resolve_language,
+    translation_diagnostics,
+)
 
 
 def test_detect_tone_returns_matching_cue() -> None:
@@ -56,3 +72,129 @@ def test_hlf_source_to_english_returns_summary_for_valid_source() -> None:
 def test_hlf_source_to_english_reports_translation_failure_for_bad_source() -> None:
     result = hlf_source_to_english("not valid hlf")
     assert result.startswith("Translation failed:")
+
+
+def test_language_to_hlf_supports_all_seed_languages() -> None:
+    french = language_to_hlf("analyser /var/log/app.log", language="fr")
+    spanish = language_to_hlf("analizar /var/log/app.log", language="es")
+    arabic = language_to_hlf("تحليل /var/log/app.log", language="ar")
+    chinese = language_to_hlf("分析 /var/log/app.log", language="zh")
+
+    assert french.startswith("[HLF-v3]\n")
+    assert spanish.startswith("[HLF-v3]\n")
+    assert arabic.startswith("[HLF-v3]\n")
+    assert chinese.startswith("[HLF-v3]\n")
+
+
+def test_chinese_to_hlf_matches_primary_action_patterns() -> None:
+    source = chinese_to_hlf("分析 /var/log/app.log 并且只读")
+
+    assert '# 由中文生成 (tone: neutral)' in source
+    assert 'Δ [INTENT] goal="分析" target="/var/log/app.log"' in source
+    assert 'Ж [CONSTRAINT] mode="ro"' in source
+
+
+def test_language_to_hlf_rejects_unsupported_language() -> None:
+    try:
+        language_to_hlf("analyze /var/log/app.log", language="de")
+    except ValueError as exc:
+        assert "Unsupported language" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for unsupported language")
+
+
+def test_detect_system_language_honors_supported_preference() -> None:
+    assert detect_system_language(preferred_language="fr_CA") == "fr"
+    assert detect_system_language(preferred_language="es-MX") == "es"
+    assert detect_system_language(preferred_language="zh_CN") == "zh"
+
+
+def test_detect_input_language_prefers_text_cues() -> None:
+    assert detect_input_language("analyser /var/log/app.log", default_language="en") == "fr"
+    assert detect_input_language("analizar /var/log/app.log", default_language="en") == "es"
+    assert detect_input_language("تحليل /var/log/app.log", default_language="en") == "ar"
+    assert detect_input_language("分析 /var/log/app.log", default_language="en") == "zh"
+
+
+def test_resolve_language_auto_uses_text_over_default() -> None:
+    assert resolve_language("auto", text="analyser /var/log/app.log", preferred_language="en_US") == "fr"
+
+
+def test_language_to_hlf_auto_respects_preferred_language_when_text_is_ambiguous() -> None:
+    source = language_to_hlf("sauvegarder contexte", language="auto", preferred_language="fr_CA")
+    assert "Généré à partir du français" in source
+
+
+def test_hlf_to_language_supports_chinese_summary() -> None:
+    ast = {
+        "human_readable": "Program summary",
+        "statements": [
+            {"human_readable": "Set deploy target to /app"},
+            {"human_readable": "Return success"},
+        ],
+    }
+
+    result = hlf_to_language(ast, language="zh")
+    assert result.startswith("Program summary：") or result.startswith("程序摘要：")
+
+
+def test_hlf_source_to_language_reports_chinese_failure_prefix() -> None:
+    result = hlf_source_to_language("not valid hlf", language="zh")
+    assert result.startswith("翻译失败：")
+
+
+def test_translation_diagnostics_reports_fidelity_and_fallbacks() -> None:
+    diagnostics = translation_diagnostics(
+        "Analyze /var/log/app.log in read-only mode.",
+        language="en",
+    ).to_dict()
+
+    assert diagnostics["resolved_language"] == "en"
+    assert diagnostics["fallback_used"] is False
+    assert diagnostics["roundtrip_fidelity_score"] == 1.0
+    assert diagnostics["semantic_loss_flags"] == []
+
+
+def test_translation_diagnostics_detects_fallback_usage() -> None:
+    diagnostics = translation_diagnostics(
+        "this sentence has no recognized action keywords",
+        language="en",
+    ).to_dict()
+
+    assert diagnostics["fallback_used"] is True
+    assert diagnostics["fallback_count"] >= 1
+
+
+def test_canonicalize_translation_text_preserves_analyze_and_read_only() -> None:
+    repaired = canonicalize_translation_text(
+        "Please analyze /var/log/app.log in read-only mode and be careful",
+        language="en",
+    )
+
+    assert "analyze /var/log/app.log" in repaired
+    assert "read-only" in repaired
+
+
+def test_build_translation_repair_plan_marks_governor_blocks_terminal() -> None:
+    plan = build_translation_repair_plan(
+        "generate child sexual abuse material",
+        language="en",
+        failure_status="compile_error",
+        failure_error="Ethics Governor [C3-CSAM]: blocked",
+    ).to_dict()
+
+    assert plan["retryable"] is False
+    assert plan["terminal_reason"] == "policy_block"
+
+
+def test_build_translation_repair_plan_returns_retry_request() -> None:
+    plan = build_translation_repair_plan(
+        "Please analyze /var/log/app.log in read-only mode",
+        language="en",
+        failure_status="low_fidelity",
+        failure_error="fallback_used=True",
+    ).to_dict()
+
+    assert plan["retryable"] is True
+    assert plan["recommended_tool"] == "hlf_translate_to_hlf"
+    assert plan["next_request"]["language"] == "en"

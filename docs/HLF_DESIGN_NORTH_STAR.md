@@ -164,7 +164,9 @@ When HLF ships as a high-quality MCP server:
 - The user gains: governed execution, English audit, real-code output
 - The ecosystem gains: a shared coordination layer that works across every agent and every model
 
-**The MCP server IS the product for most users.** They will never write HLF by hand. They will connect an agent to the MCP server and gain capability amplification automatically.
+**For most present-tense users, the packaged MCP server is the main product surface.** They will never write HLF by hand. They will connect an agent to the MCP server and gain capability amplification automatically.
+
+That is a product-surface statement, not a total-ontology statement. For the lane-aware positioning of that distinction, read `docs/HLF_MCP_POSITIONING.md` and `docs/HLF_CLAIM_LANES.md`.
 
 This means the MCP tool surface must be:
 - complete (every core HLF capability exposed)
@@ -326,3 +328,42 @@ The result is:
 - every safety boundary is enforced by the language itself, not by bolted-on middleware
 
 That is the north star. Everything else is implementation detail.
+
+---
+
+## XIII. Recursive Build Path
+
+The north star includes a recursive build story: HLF should eventually help finish HLF.
+
+But the correct path is gated adoption, not a theatrical self-hosting claim made too early.
+
+### First credible milestone
+
+The first credible milestone is:
+
+- packaged HLF used locally for bounded build assistance
+- `stdio` used as the most reliable first transport for agent-facing build work
+- build-observation and audit surfaces used to inspect tests, fixtures, proofs, and implementation drift
+
+That means the first real recursive loop is not "HLF already self-hosts the whole system remotely."
+
+It is:
+
+- `hlf_do` turns operator intent into governed HLF actions
+- `hlf_test_suite_summary` reports the latest regression state
+- witness, memory, and audit surfaces preserve what the build learned
+- packaged build helpers such as `_toolkit.py status` keep the loop honest
+
+### Gating rule
+
+The north star does not flatten transport readiness.
+
+- health endpoints are not enough
+- HTTP surfaces are valuable adoption targets
+- but remote self-build over `streamable-http` is not part of the credible present story until full MCP initialization and smoke validation succeed end to end
+
+The right architectural story is therefore:
+
+1. local bounded build assistance first
+2. repaired and verified remote transport second
+3. broader recursive HLF-assisted completion after those gates are real

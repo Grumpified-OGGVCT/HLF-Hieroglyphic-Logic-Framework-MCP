@@ -129,6 +129,22 @@ jobs:
           path: /tmp/drift_output.json
           retention-days: 90
 
+      - name: Emit normalized weekly artifact
+        if: always()
+        run: |
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-model-drift-detect" \
+            --output /tmp/weekly-model-drift-artifact.json \
+            --extra-json "/tmp/drift_output.json:drift_output"
+
+      - name: Upload normalized weekly artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "weekly-model-drift-${{ github.run_id }}"
+          path: /tmp/weekly-model-drift-artifact.json
+          retention-days: 90
+
       - name: Build detailed issue body
         if: env.DRIFT_STATUS != 'OK' && github.event.inputs.dry_run != 'true'
         run: |
@@ -190,25 +206,24 @@ jobs:
         if: >
           (env.DRIFT_STATUS == 'WARN' || env.DRIFT_STATUS == 'ALERT') &&
           github.event.inputs.dry_run != 'true'
-        uses: peter-evans/create-or-update-comment@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: 1
-          body-path: /tmp/drift_issue.md
-        continue-on-error: true   # Don't fail if issue 1 doesn't exist
-
-      - name: Create new issue if ALERT
-        if: env.DRIFT_STATUS == 'ALERT' && github.event.inputs.dry_run != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           WEEK=$(date -u +"%Y-W%V")
-          gh issue create \
-            --title "🚨 Model Drift ALERT — ${WEEK} (score=${{ env.DRIFT_SCORE }})" \
-            --body-file /tmp/drift_issue.md \
-            --label "model-drift,priority:high" \
-            --repo "${{ github.repository }}" \
-            || echo "::warning::Issue creation failed (labels may not exist yet — create 'model-drift' and 'priority:high' labels)"
+          if [ "${{ env.DRIFT_STATUS }}" = "ALERT" ]; then
+            TITLE="🚨 [Model Drift] ALERT — ${WEEK} (score=${{ env.DRIFT_SCORE }})"
+            LABELS="model-drift,automated,priority-high"
+          else
+            TITLE="⚠️ [Model Drift] Warning — ${WEEK} (score=${{ env.DRIFT_SCORE }})"
+            LABELS="model-drift,automated"
+          fi
+          python .github/scripts/create_github_issue.py \
+            --title "$TITLE" \
+            --body "@/tmp/drift_issue.md" \
+            --labels "$LABELS" \
+            --conflict-labels "model-drift" \
+            --conflict-title-substrings "model drift,drift alert"
 
       - name: Fail CI on ALERT status
         if: env.DRIFT_STATUS == 'ALERT'

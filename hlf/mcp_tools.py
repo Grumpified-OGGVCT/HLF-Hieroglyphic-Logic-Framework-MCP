@@ -1,8 +1,13 @@
 """
-MCP 2024-2025 Tools implementation for HLF.
+Legacy MCP 2024-2025 tools implementation for HLF.
 
-Tools are callable functions with JSON Schema input validation.
-Each tool has defined inputs, outputs, and error handling.
+This module is preserved as a compatibility and migration surface.
+
+Canonical product-facing tool behavior now belongs in `hlf_mcp/server.py` and
+`hlf_mcp/hlf/*`.
+
+Use this module to support legacy tests, compare behavior, or mine still-useful
+semantics for forward ports into the packaged line.
 """
 
 from dataclasses import dataclass
@@ -58,7 +63,11 @@ class ToolResult:
 
 class HLFToolProvider:
     """
-    Provides HLF compilation, execution, and friction logging as MCP Tools.
+    Provides legacy HLF compilation, execution, and friction logging as MCP
+    tools.
+
+    This is no longer the default product authority. New product-truth behavior
+    should land in the packaged `hlf_mcp` surface first.
     
     Tools:
     - hlf_compile: Compile HLF source to bytecode
@@ -69,6 +78,7 @@ class HLFToolProvider:
     - hlf_get_version: Get grammar version
     - hlf_compose: Compose multiple HLF programs
     - hlf_decompose: Decompose an HLF program
+
     - hlf_analyze: Analyze HLF program structure
     - hlf_optimize: Optimize HLF for gas efficiency
     """

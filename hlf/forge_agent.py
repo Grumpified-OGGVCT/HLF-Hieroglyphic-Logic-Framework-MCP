@@ -12,7 +12,8 @@ USAGE:
 
 CONFIGURATION:
     Environment variables:
-    - MCP_URL: MCP server URL (default: http://localhost:8000)
+    - MCP_URL: MCP server URL
+    - HLF_MCP_URL: namespaced MCP server URL override
     - FORGE_VALIDATION_TOKEN: Token from CI after successful test run
     - GITHUB_TOKEN: GitHub PAT for creating PRs
     - GH_REPO: Target repository (default: owner/repo)
@@ -29,6 +30,8 @@ from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+
+from hlf.mcp_client import resolve_mcp_url
 
 # ========================================
 # Data Classes
@@ -94,10 +97,10 @@ class ForgeAgent:
         
         Args:
             repo_root: Path to HLF repository root
-            mcp_url: MCP server URL (default: http://localhost:8000)
+            mcp_url: MCP server URL
         """
         self.repo_root = Path(repo_root).resolve()
-        self.mcp_url = mcp_url or os.environ.get("MCP_URL", "http://localhost:8000")
+        self.mcp_url = mcp_url or os.environ.get("HLF_MCP_URL") or os.environ.get("MCP_URL")
         
         # Directories
         self.friction_drop = Path.home() / ".sovereign" / "friction"
@@ -415,6 +418,10 @@ class ForgeAgent:
             "head": f"forge/proposal-{proposal.id}",
             "validation_token": proposal.validation_token
         }
+
+        if not self.mcp_url:
+            print("Failed to submit proposal: set HLF_MCP_URL or MCP_URL before using Forge MCP submission")
+            return None
         
         try:
             response = httpx.post(

@@ -49,8 +49,29 @@ The `math` block shows Shannon entropy, confidence, and gas metering — the
 information-theoretic engine running underneath.
 
 The packaged FastMCP server now exposes `hlf_do` directly, so this quick start
-matches the default install path in `pyproject.toml` instead of the older
-legacy `hlf.mcp_server_complete` entry path.
+matches the default install path in `pyproject.toml`.
+
+The older `hlf.mcp_server_complete` entry path is retained only for
+compatibility and manual legacy probes. It is not the normal install path, the
+default runtime surface, or the right basis for present-tense product claims.
+
+## Why This Matters
+
+The same packaged MCP surface you can install is already used in a bounded build-assist loop inside this repo.
+
+Today that means HLF can help with:
+
+- expressing build intent in plain language through `hlf_do`
+- observing repo health through `_toolkit.py status`
+- reading regression state through `hlf_test_suite_summary`
+- preserving build evidence through witness, memory, and audit surfaces
+
+That is the current honest milestone: local, bounded, governed build assistance first.
+
+It is already useful, already demonstrable, and already relevant to the finished product story.
+
+For the fuller explanation, read `docs/HLF_RECURSIVE_BUILD_STORY.md`.
+For the audience-specific phrasing guide, read `docs/HLF_MESSAGING_LADDER.md`.
 
 ## Options
 
@@ -91,4 +112,4 @@ symbols, and the math guarantees the meaning survives the translation.
 - `hlf_translate_to_hlf` — write HLF manually from English
 - `hlf_compile` / `hlf_execute` — full compiler control
 - `hlf_validate` — validate HLF source directly
-- See [README.md](README.md) for the packaged 26-tool FastMCP reference and the broader repo context
+- See [README.md](README.md) for the packaged 34-tool FastMCP reference and the broader repo context

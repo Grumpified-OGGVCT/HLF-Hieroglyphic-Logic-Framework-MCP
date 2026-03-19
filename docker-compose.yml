@@ -6,14 +6,15 @@
 #   --profile full  HLF + Valkey + future sqlite-vec sidecar (reserved)
 #
 # Usage:
-#   docker compose up                   # stdio / sse on :8000
+#   HLF_PORT=8000 docker compose up     # stdio / sse on explicit HLF_PORT
 #   docker compose --profile hot up     # + Valkey on :6379
 #   docker compose --profile full up    # + hot + full extras
 #
-# Environment overrides (all have safe defaults):
+# Environment overrides:
 #   HLF_TRANSPORT   sse | streamable-http | stdio   (default: sse)
 #   HLF_STRICT      1 | 0                           (default: 1)
 #   HLF_HOT_TIER    none | valkey                   (default: none; hot profile sets valkey)
+#   HLF_PORT        required for HLF HTTP transports and host publishing
 #   VALKEY_URL      redis://valkey:6379              (set automatically by hot profile)
 
 version: "3.9"
@@ -31,17 +32,16 @@ services:
     container_name: hlf-mcp
     restart: unless-stopped
     ports:
-      - "${HLF_PORT:-8000}:8000"
+      - "${HLF_PORT:?Set HLF_PORT to the HLF listener port}:${HLF_PORT:?Set HLF_PORT to the HLF listener port}"
     environment:
       HLF_TRANSPORT: "${HLF_TRANSPORT:-sse}"
       HLF_HOST: "0.0.0.0"
-      HLF_PORT: "8000"
+      HLF_PORT: "${HLF_PORT:?Set HLF_PORT to the HLF listener port}"
       HLF_STRICT: "${HLF_STRICT:-1}"
       HLF_HOT_TIER: "${HLF_HOT_TIER:-none}"
       VALKEY_URL: "${VALKEY_URL:-redis://valkey:6379}"
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD-SHELL", "python -c \"import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ['HLF_PORT'] + '/health')\""]
       interval: 30s
       timeout: 10s
       start_period: 20s

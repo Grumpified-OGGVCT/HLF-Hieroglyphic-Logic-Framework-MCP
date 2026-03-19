@@ -21,8 +21,6 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-UTC = UTC
-
 
 @dataclasses.dataclass
 class MemoryNode:

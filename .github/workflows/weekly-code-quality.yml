@@ -99,6 +99,12 @@ jobs:
         with:
           category: "python-security"
 
+      - name: Fetch Code Scanning summary
+        if: always()
+        run: |
+          python .github/scripts/fetch_code_scanning_summary.py \
+            --output /tmp/security-findings-summary.json
+
       # ── Step 3: pytest + coverage ─────────────────────────────────────────
       - name: "pytest — full test suite with coverage"
         run: |
@@ -158,6 +164,7 @@ jobs:
           import json
           import os
           import platform
+          from datetime import datetime, timezone
           from pathlib import Path
 
           payload = {
@@ -174,13 +181,24 @@ jobs:
           Path("/tmp/code-quality-summary.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
           PY
 
+      - name: Build governed review contract
+        if: always()
+        run: |
+          python .github/scripts/governed_review_contract.py \
+            build-code-quality \
+            --code-quality /tmp/code-quality-summary.json \
+            --security-findings /tmp/security-findings-summary.json \
+            --output /tmp/governed_review.json
+
       - name: Emit normalized weekly artifact
         if: always()
         run: |
           python .github/scripts/emit_weekly_artifact.py \
             --source "weekly-code-quality" \
             --output /tmp/weekly-code-quality-artifact.json \
-            --extra-json "/tmp/code-quality-summary.json:code_quality"
+            --extra-json "/tmp/code-quality-summary.json:code_quality" \
+            --extra-json "/tmp/security-findings-summary.json:security_findings" \
+            --extra-json "/tmp/governed_review.json:governed_review"
 
       - name: Upload normalized weekly artifact
         if: always()

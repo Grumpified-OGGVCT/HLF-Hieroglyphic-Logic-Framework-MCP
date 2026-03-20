@@ -140,13 +140,22 @@ jobs:
             --conflict-labels "documentation" \
             --conflict-title-substrings "doc audit,documentation accuracy"
 
+      - name: Build governed review contract
+        if: always()
+        run: |
+          python .github/scripts/governed_review_contract.py \
+            build-doc-accuracy \
+            --doc-drift /tmp/doc_drift.json \
+            --output /tmp/governed_review.json
+
       - name: Emit normalized doc artifact
         if: always()
         run: |
           python .github/scripts/emit_weekly_artifact.py \
             --source "weekly-doc-accuracy" \
             --output /tmp/weekly-doc-accuracy-artifact.json \
-            --extra-json "/tmp/doc_drift.json:doc_drift"
+            --extra-json "/tmp/doc_drift.json:doc_drift" \
+            --extra-json "/tmp/governed_review.json:governed_review"
 
       - name: Upload doc accuracy artifact
         if: always()
@@ -287,13 +296,22 @@ jobs:
             --conflict-labels "security,adversarial" \
             --conflict-title-substrings "security review,adversarial pattern analysis"
 
+      - name: Build governed review contract
+        if: always()
+        run: |
+          python .github/scripts/governed_review_contract.py \
+            build-security-patterns \
+            --security-review /tmp/security_review.json \
+            --output /tmp/governed_review.json
+
       - name: Emit normalized security artifact
         if: always()
         run: |
           python .github/scripts/emit_weekly_artifact.py \
             --source "weekly-security-patterns" \
             --output /tmp/weekly-security-patterns-artifact.json \
-            --extra-json "/tmp/security_review.json:security_review"
+            --extra-json "/tmp/security_review.json:security_review" \
+            --extra-json "/tmp/governed_review.json:governed_review"
 
       - name: Upload security patterns artifact
         if: always()

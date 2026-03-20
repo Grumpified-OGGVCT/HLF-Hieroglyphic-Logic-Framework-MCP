@@ -298,6 +298,7 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
         "probes":      probe_results,
         "modelUsed":   model_used,
         "tier":        tier_used,
+        "chainUsed":   list(REASONING_CHAIN),
         "timestamp":   timestamp,
         "summary":     summary,
         "correct":     correct_count,

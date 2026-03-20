@@ -101,6 +101,13 @@ jobs:
           echo "TIER_USED=$TIER_USED" >> $GITHUB_ENV
           echo "CORRECT=$CORRECT" >> $GITHUB_ENV
           echo "TOTAL=$TOTAL" >> $GITHUB_ENV
+          echo "drift_score=$DRIFT_SCORE" >> $GITHUB_OUTPUT
+          echo "drift_status=$DRIFT_STATUS" >> $GITHUB_OUTPUT
+          echo "drift_summary=$DRIFT_SUMMARY" >> $GITHUB_OUTPUT
+          echo "model_used=$MODEL_USED" >> $GITHUB_OUTPUT
+          echo "tier_used=$TIER_USED" >> $GITHUB_OUTPUT
+          echo "correct=$CORRECT" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
 
           echo ""
           echo "=== DRIFT RESULTS ==="
@@ -129,13 +136,22 @@ jobs:
           path: /tmp/drift_output.json
           retention-days: 90
 
+      - name: Build governed review contract
+        if: always()
+        run: |
+          python .github/scripts/governed_review_contract.py \
+            build-drift \
+            --drift-report /tmp/drift_output.json \
+            --output /tmp/governed_review.json
+
       - name: Emit normalized weekly artifact
         if: always()
         run: |
           python .github/scripts/emit_weekly_artifact.py \
             --source "weekly-model-drift-detect" \
             --output /tmp/weekly-model-drift-artifact.json \
-            --extra-json "/tmp/drift_output.json:drift_output"
+            --extra-json "/tmp/drift_output.json:drift_output" \
+            --extra-json "/tmp/governed_review.json:governed_review"
 
       - name: Upload normalized weekly artifact
         if: always()
@@ -146,7 +162,7 @@ jobs:
           retention-days: 90
 
       - name: Build detailed issue body
-        if: env.DRIFT_STATUS != 'OK' && github.event.inputs.dry_run != 'true'
+        if: steps.drift.outputs.drift_status != 'OK' && github.event.inputs.dry_run != 'true'
         run: |
           WEEK=$(date -u +"%Y-W%V")
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -166,10 +182,10 @@ jobs:
           cat > /tmp/drift_issue.md << ISSUE_EOF
           ## 🔬 HLF Model Drift Report — ${WEEK}
 
-          **Drift Score:** \`${{ env.DRIFT_SCORE }}\` (0=perfect, 1=full regression)
-          **Status:** ${{ env.DRIFT_STATUS == 'ALERT' && '🚨 **ALERT** — significant semantic drift detected' || '⚠️ **WARN** — minor drift detected' }}
-          **Model Used:** \`${{ env.MODEL_USED }}\` (fallback tier ${{ env.TIER_USED }})
-          **Probes:** ${{ env.CORRECT }}/${{ env.TOTAL }} correct
+          **Drift Score:** \`${{ steps.drift.outputs.drift_score }}\` (0=perfect, 1=full regression)
+          **Status:** ${{ steps.drift.outputs.drift_status == 'ALERT' && '🚨 **ALERT** — significant semantic drift detected' || '⚠️ **WARN** — minor drift detected' }}
+          **Model Used:** \`${{ steps.drift.outputs.model_used }}\` (fallback tier ${{ steps.drift.outputs.tier_used }})
+          **Probes:** ${{ steps.drift.outputs.correct }}/${{ steps.drift.outputs.total }} correct
 
           **Run:** [$RUN_URL]($RUN_URL)
 
@@ -204,18 +220,18 @@ jobs:
 
       - name: Create or update GitHub issue on WARN/ALERT
         if: >
-          (env.DRIFT_STATUS == 'WARN' || env.DRIFT_STATUS == 'ALERT') &&
+          (steps.drift.outputs.drift_status == 'WARN' || steps.drift.outputs.drift_status == 'ALERT') &&
           github.event.inputs.dry_run != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           WEEK=$(date -u +"%Y-W%V")
-          if [ "${{ env.DRIFT_STATUS }}" = "ALERT" ]; then
-            TITLE="🚨 [Model Drift] ALERT — ${WEEK} (score=${{ env.DRIFT_SCORE }})"
+          if [ "${{ steps.drift.outputs.drift_status }}" = "ALERT" ]; then
+            TITLE="🚨 [Model Drift] ALERT — ${WEEK} (score=${{ steps.drift.outputs.drift_score }})"
             LABELS="model-drift,automated,priority-high"
           else
-            TITLE="⚠️ [Model Drift] Warning — ${WEEK} (score=${{ env.DRIFT_SCORE }})"
+            TITLE="⚠️ [Model Drift] Warning — ${WEEK} (score=${{ steps.drift.outputs.drift_score }})"
             LABELS="model-drift,automated"
           fi
           python .github/scripts/create_github_issue.py \
@@ -226,14 +242,14 @@ jobs:
             --conflict-title-substrings "model drift,drift alert"
 
       - name: Fail CI on ALERT status
-        if: env.DRIFT_STATUS == 'ALERT'
+        if: steps.drift.outputs.drift_status == 'ALERT'
         run: |
-          echo "::error::Model drift score ${{ env.DRIFT_SCORE }} exceeds ALERT threshold (0.40)."
-          echo "::error::${{ env.DRIFT_SUMMARY }}"
+          echo "::error::Model drift score ${{ steps.drift.outputs.drift_score }} exceeds ALERT threshold (0.40)."
+          echo "::error::${{ steps.drift.outputs.drift_summary }}"
           exit 1
 
       - name: Success summary
-        if: env.DRIFT_STATUS == 'OK'
+        if: steps.drift.outputs.drift_status == 'OK'
         run: |
-          echo "::notice::✅ Model drift score ${{ env.DRIFT_SCORE }} — all within OK threshold (<0.15)"
-          echo "::notice::${{ env.DRIFT_SUMMARY }}"
+          echo "::notice::✅ Model drift score ${{ steps.drift.outputs.drift_score }} — all within OK threshold (<0.15)"
+          echo "::notice::${{ steps.drift.outputs.drift_summary }}"

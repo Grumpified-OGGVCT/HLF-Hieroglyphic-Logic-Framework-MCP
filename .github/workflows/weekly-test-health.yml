@@ -9,10 +9,10 @@
 # ║        including identifying under-tested code paths.                        ║
 # ║                                                                              ║
 # ║  Stage 1: pytest + coverage (deterministic, no AI)                          ║
-# ║  Stage 2: devstral:24b — analyze gaps, write missing test code              ║
+# ║  Stage 2: devstral:24b — analyze gaps, draft advisory test candidates       ║
 # ║                                                                              ║
 # ║  Triggers: Weekly Thursday 02:00 UTC                                        ║
-# ║  Output: GitHub Issue with coverage report + generated test starters         ║
+# ║  Output: GitHub Issue with deterministic coverage + advisory AI candidates   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 name: "Weekly — Test Health + Coverage (devstral:24b)"
 
@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   test-health:
-    name: "Test coverage analysis + AI test generation"
+    name: "Test coverage analysis + advisory AI test candidates"
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -170,19 +170,91 @@ jobs:
           print(f"Uncovered code excerpt: {len(result)} chars")
           PYEOF
 
-      - name: "devstral:24b — Test gap analysis + test generation"
+          - name: Gather existing test context for dedupe review
+          run: |
+            python << 'PYEOF'
+            import json
+            from pathlib import Path
+
+            cov_path = Path("/tmp/coverage.json")
+            if not cov_path.exists():
+              payload = {
+                "status": "coverage_unavailable",
+                "target_stems": [],
+                "matched_test_files": [],
+                "excerpt": "Coverage data unavailable; no existing test context gathered.\n",
+              }
+              Path("/tmp/existing_test_context.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+              Path("/tmp/existing_test_context.txt").write_text(payload["excerpt"], encoding="utf-8")
+              raise SystemExit(0)
+
+            data = json.loads(cov_path.read_text())
+            files = data.get("files", {})
+            ranked = sorted(
+              files.items(),
+              key=lambda item: item[1].get("summary", {}).get("percent_covered", 100),
+            )
+            target_stems = []
+            for path, info in ranked:
+              pct = info.get("summary", {}).get("percent_covered", 100)
+              if pct > 70:
+                continue
+              stem = Path(path).stem
+              if stem not in target_stems:
+                target_stems.append(stem)
+              if len(target_stems) >= 8:
+                break
+
+            matched = []
+            excerpt_lines = []
+            tests_root = Path("tests")
+            for test_path in sorted(tests_root.rglob("test*.py")):
+              try:
+                text = test_path.read_text(encoding="utf-8")
+              except Exception:
+                continue
+              if not any(stem in text or stem in test_path.stem for stem in target_stems):
+                continue
+              matched.append(str(test_path).replace('\\', '/'))
+              excerpt_lines.append(f"## {test_path.as_posix()}\n")
+              captured = 0
+              for line in text.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("def test_") or stripped.startswith("class Test") or stripped.startswith("from ") or stripped.startswith("import "):
+                  excerpt_lines.append(f"{line}\n")
+                  captured += 1
+                if captured >= 20:
+                  break
+              excerpt_lines.append("\n")
+              if len(matched) >= 8 or sum(len(line) for line in excerpt_lines) > 12000:
+                break
+
+            excerpt = "".join(excerpt_lines) or "No matching existing test context found for low-coverage modules.\n"
+            payload = {
+              "status": "ok",
+              "target_stems": target_stems,
+              "matched_test_files": matched,
+              "excerpt": excerpt,
+            }
+            Path("/tmp/existing_test_context.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            Path("/tmp/existing_test_context.txt").write_text(excerpt, encoding="utf-8")
+            print(f"Existing test context: {len(matched)} files, {len(excerpt)} chars")
+            PYEOF
+
+      - name: "devstral:24b — Test gap analysis + advisory test drafting"
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           COVERAGE_SUMMARY=$(cat /tmp/coverage_summary.txt)
           UNCOVERED_CODE=$(cat /tmp/uncovered_code.txt)
+          EXISTING_TEST_CONTEXT=$(cat /tmp/existing_test_context.txt)
           TEST_OUTPUT=$(tail -30 /tmp/test_output.txt)
 
           python .github/scripts/ollama_client.py \
             --model "devstral:24b" \
             --fallback-model "qwen3.5:cloud" \
-            --system "You are an HLF test engineer. You write complete, non-stubbed pytest tests for the HLF Python codebase. You understand the HLF architecture (compiler, bytecode VM, RAG memory, Instinct lifecycle, MCP server). Your tests are specific, readable, and actually exercise the logic — not just import-check." \
-            --prompt "Analyze the HLF test coverage and write missing tests for the highest-risk uncovered code paths.
+            --system "You are an HLF test engineer producing governed advisory pytest recommendations for the HLF Python codebase. Deterministic coverage data is authoritative; your output is never merge-ready by itself. You must prefer extending existing suites over inventing new umbrella files, and you must call out duplicate-risk or fixture assumptions explicitly." \
+            --prompt "Analyze the HLF test coverage and produce advisory test candidates for the highest-risk uncovered code paths.
 
           COVERAGE SUMMARY:
           ${COVERAGE_SUMMARY}
@@ -193,20 +265,48 @@ jobs:
           UNCOVERED CODE (excerpts of lines not hit by any test):
           ${UNCOVERED_CODE}
 
+          EXISTING TEST CONTEXT (use this to avoid duplicating coverage already present):
+          ${EXISTING_TEST_CONTEXT}
+
           Tasks:
-          1. Identify the 3 most DANGEROUS uncovered paths (paths where a bug would cause silent data corruption, security bypass, or incorrect behavior)
-          2. For each, explain why it is dangerous if uncovered
-          3. Write a complete pytest test function (not a stub — the full test with assertions) for each
-          4. Follow these conventions:
+          1. Identify the 3 highest-risk uncovered or weakly exercised paths (paths where a bug would cause silent data corruption, security bypass, or incorrect behavior)
+          2. For each, explain why it is risky and whether the provided EXISTING TEST CONTEXT appears to overlap already
+          3. For each, name the best destination test file. Prefer an existing test file whenever possible; only propose a new file when no suitable existing suite is visible
+          4. Write a candidate pytest test function for each path. It should be concrete and assertion-heavy, but presented as advisory draft material that still requires local verification
+          5. Follow these conventions:
              - Use the existing test patterns from the repo (see fixture-based tests in tests/)
              - Each test function starts with test_
              - Use descriptive names like test_set_stmt_emits_store_immut_not_mutable_store
              - Include edge cases, not just happy paths
              - Note which file the test belongs in
+             - Call out any fixture or setup assumptions
+             - Avoid duplicating behaviors that already appear covered in the EXISTING TEST CONTEXT
 
-          Write the actual test code now. Complete functions only." \
+          Output format:
+          - Risk summary
+          - Candidate placement and overlap note for each item
+          - Candidate test code blocks
+          - Final caution note saying operator review and dedupe are required before commit." \
             --output /tmp/test_suggestions.json \
             --temperature 0.05
+
+          python << 'PYEOF'
+          import json
+          from pathlib import Path
+
+          suggestions_path = Path('/tmp/test_suggestions.json')
+          context = json.loads(Path('/tmp/existing_test_context.json').read_text(encoding='utf-8'))
+          payload = json.loads(suggestions_path.read_text(encoding='utf-8'))
+          payload['existing_test_context'] = {
+              'matched_test_files': context.get('matched_test_files', []),
+              'target_stems': context.get('target_stems', []),
+          }
+          payload['context_digest'] = {
+              'matched_test_file_count': len(context.get('matched_test_files', [])),
+              'target_stem_count': len(context.get('target_stems', [])),
+          }
+          suggestions_path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+          PYEOF
 
           python -c "import json; d=json.load(open('/tmp/test_suggestions.json')); print(d['content'])" > /tmp/test_suggestions.md
           echo "Test suggestions generated ($(wc -c < /tmp/test_suggestions.md) chars)"
@@ -223,7 +323,7 @@ jobs:
           ## 🧪 HLF Test Health Report — ${WEEK}
 
           **Coverage analysis**: deterministic (pytest-cov)
-          **Test gap analysis + generation**: \`devstral:24b\` (Mistral × AllHands AI, SWE-Bench 46.8%)
+          **Test gap analysis + advisory drafting**: \`devstral:24b\` (Mistral × AllHands AI, SWE-Bench 46.8%)
           **Workflow**: [Weekly Test Health]($RUN_URL)
 
           ---
@@ -244,16 +344,26 @@ jobs:
 
           ---
 
-          ## AI-Generated Test Starters (devstral:24b)
+          ## AI Advisory Test Candidates (devstral:24b)
 
-          > These are complete test functions ready to be pasted into the appropriate test file.
-          > Review, adjust for local fixtures, then commit.
+          > Deterministic coverage numbers above are authoritative.
+          > The AI material below is advisory candidate code only, not merge-ready truth.
+          > Review against existing tests first, prefer extending current suites, verify fixtures locally, then decide what actually belongs in a commit.
 
           ${TEST_SUGGESTIONS}
 
           ---
-          _Auto-generated weekly. Close when the generated tests are committed and coverage improves._
+          _Auto-generated weekly. Close when reviewed test changes are committed and measured coverage improves._
           ISSUE_EOF
+
+      - name: Build governed review contract
+        if: always()
+        run: |
+          python .github/scripts/governed_review_contract.py \
+            build-test-health \
+            --coverage /tmp/coverage.json \
+            --test-suggestions /tmp/test_suggestions.json \
+            --output /tmp/governed_review.json
 
       - name: Emit normalized weekly artifact
         if: always()
@@ -262,7 +372,9 @@ jobs:
             --source "weekly-test-health" \
             --output /tmp/weekly-test-health-artifact.json \
             --extra-json "/tmp/coverage.json:coverage" \
-            --extra-json "/tmp/test_suggestions.json:test_suggestions"
+            --extra-json "/tmp/existing_test_context.json:existing_test_context" \
+            --extra-json "/tmp/test_suggestions.json:test_suggestions" \
+            --extra-json "/tmp/governed_review.json:governed_review"
 
       - name: Upload normalized weekly artifact
         if: always()

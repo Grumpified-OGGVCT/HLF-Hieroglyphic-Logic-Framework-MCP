@@ -1082,6 +1082,7 @@ def main() -> None:
     parser.add_argument("--system", required=True)
     parser.add_argument("--prompt", required=True, help="Prompt text or @file.txt")
     parser.add_argument("--output", default="-")
+    parser.add_argument("--format-schema-file", default=None, help="Path to a JSON schema file for structured output")
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--think", action="store_true")
     parser.add_argument("--no-stream", action="store_true")
@@ -1101,12 +1102,19 @@ def main() -> None:
             prompt = f.read()
         log.info("Prompt loaded from file (%d chars)", len(prompt))
 
+    format_schema = None
+    if args.format_schema_file:
+        with open(args.format_schema_file, encoding="utf-8") as f:
+            format_schema = json.load(f)
+        log.info("Format schema loaded from %s", args.format_schema_file)
+
     orch = FallbackOrchestrator(
         chain=chain,
         temperature=args.temperature,
         think=args.think,
         use_streaming=not args.no_stream,
         max_retries_per_tier=args.retries,
+        format_schema=format_schema,
     )
 
     try:

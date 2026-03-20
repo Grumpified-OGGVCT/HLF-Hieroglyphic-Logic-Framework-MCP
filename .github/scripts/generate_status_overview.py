@@ -21,6 +21,13 @@ HTML_OUTPUT = DOCS_DIR / "index.html"
 MERGE_HTML_OUTPUT = DOCS_DIR / "merge-readiness.html"
 CLAIMS_HTML_OUTPUT = DOCS_DIR / "claims-ledger.html"
 CSS_PATH = "assets/status-site.css"
+DOCS_BLOB_BASE = (
+    "https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP/blob/main/docs"
+)
+
+
+def _docs_blob_href(filename: str) -> str:
+    return f"{DOCS_BLOB_BASE}/{filename}"
 
 
 def _read_text(path: Path) -> str:
@@ -666,11 +673,11 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
 
 def _render_nav_links() -> str:
     links = [
-        ("Status Overview", "HLF_STATUS_OVERVIEW.md"),
+        ("Status Overview", "index.html"),
         ("Merge Readiness", "merge-readiness.html"),
         ("Claims Ledger", "claims-ledger.html"),
-        ("Vision", "HLF_VISION_PLAIN_LANGUAGE.md"),
-        ("MCP Positioning", "HLF_MCP_POSITIONING.md"),
+        ("Vision", _docs_blob_href("HLF_VISION_PLAIN_LANGUAGE.md")),
+        ("MCP Positioning", _docs_blob_href("HLF_MCP_POSITIONING.md")),
     ]
     return "\n".join(
         f'<a class="top-link" href="{html.escape(target)}">{html.escape(label)}</a>'
@@ -1177,7 +1184,7 @@ def render_status_index_html(data: dict[str, Any]) -> str:
         reading_key="name",
     )
     provenance = _render_source_provenance(
-        source_href="HLF_STATUS_OVERVIEW.md",
+        source_href=_docs_blob_href("HLF_STATUS_OVERVIEW.md"),
         source_label="HLF_STATUS_OVERVIEW.md",
         generated_at=data["generated_at"],
         authority_text="This page is rendered from the generated markdown status source, which is itself derived from the repo authorities listed inside that markdown file.",
@@ -1552,7 +1559,7 @@ def render_merge_readiness_html(data: dict[str, Any], merge_data: dict[str, Any]
     )
     section_map = _section_lookup(merge_data["sections"])
     provenance = _render_source_provenance(
-        source_href="HLF_MERGE_READINESS_SUMMARY_2026-03-20.md",
+        source_href=_docs_blob_href("HLF_MERGE_READINESS_SUMMARY_2026-03-20.md"),
         source_label="HLF_MERGE_READINESS_SUMMARY_2026-03-20.md",
         generated_at=data["generated_at"],
         authority_text="This page is rendered directly from the branch-aware merge-readiness markdown authority and should be read with claim-lane discipline intact.",
@@ -1838,7 +1845,7 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
         ],
     )
     provenance = _render_source_provenance(
-        source_href="HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md",
+        source_href=_docs_blob_href("HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md"),
         source_label="HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md",
         generated_at=data["generated_at"],
         authority_text="This page is rendered from the branch-aware claims-ledger markdown authority. Promote wording from it only with the claim-lane rules it references.",

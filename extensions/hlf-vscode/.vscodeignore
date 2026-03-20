@@ -1,0 +1,7 @@
+.github/**
+.vscode/**
+artifacts/**
+node_modules/**
+test/**
+*.vsix
+coverage/**

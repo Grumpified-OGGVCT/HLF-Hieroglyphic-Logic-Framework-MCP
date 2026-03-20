@@ -1,0 +1,41 @@
+name: vscode-extension-package
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'extensions/hlf-vscode/**'
+      - '.github/workflows/vscode-extension-package.yml'
+
+jobs:
+  package-extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extensions/hlf-vscode
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install extension packaging dependencies
+        run: npm install
+
+      - name: Run extension acceptance suite
+        run: npm test
+
+      - name: Prepare artifact directory
+        run: mkdir -p ../../artifacts
+
+      - name: Package VSIX
+        run: npm run package -- --out ../../artifacts/hlf-vscode.vsix
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hlf-vscode-vsix
+          path: artifacts/hlf-vscode.vsix

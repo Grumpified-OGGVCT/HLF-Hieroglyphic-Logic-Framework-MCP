@@ -1,0 +1,286 @@
+{
+  "name": "hlf-vscode",
+  "displayName": "HLF MCP Bridge",
+  "description": "VS Code bridge and operator shell scaffold for the packaged HLF MCP server.",
+  "version": "0.1.0",
+  "publisher": "grumpified-oggvct",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.2"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "validate": "npm run test",
+    "vscode:prepublish": "npm run validate",
+    "package": "npm run validate && vsce package"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "hlf.startServer",
+        "title": "HLF: Start Bridge",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.stopServer",
+        "title": "HLF: Stop Bridge",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.restartServer",
+        "title": "HLF: Restart Bridge",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.runDiagnostics",
+        "title": "HLF: Run Bridge Diagnostics",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.openHealthEndpoint",
+        "title": "HLF: Open Health Endpoint",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.copyConnectionDetails",
+        "title": "HLF: Copy Connection Details",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.openEvidencePath",
+        "title": "HLF: Open Evidence Path",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.copyResourceUri",
+        "title": "HLF: Copy Resource URI",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.refreshOperatorPanel",
+        "title": "HLF: Refresh Operator Panel",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.setHttpBearerToken",
+        "title": "HLF: Set HTTP Bearer Token",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.clearHttpBearerToken",
+        "title": "HLF: Clear HTTP Bearer Token",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.runFirstRunValidation",
+        "title": "HLF: Run First-Run Validation",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.runHlfDo",
+        "title": "HLF: Run HLF Do",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.showTestSuiteSummary",
+        "title": "HLF: Show Test Suite Summary",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.showWeeklyEvidenceSummary",
+        "title": "HLF: Show Weekly Evidence Summary",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.showProfileCapabilityCatalog",
+        "title": "HLF: Show Profile Capability Catalog",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.showClaimLanes",
+        "title": "HLF: Show Claim-Lane Context",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.openClaimLaneDoctrine",
+        "title": "HLF: Open Claim-Lane Doctrine",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.openTrustPanel",
+        "title": "HLF: Open Trust Panel",
+        "category": "HLF"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "hlf.operatorPanel",
+          "name": "HLF Operator"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "hlf.refreshOperatorPanel",
+          "when": "view == hlf.operatorPanel",
+          "group": "navigation"
+        }
+      ]
+    },
+    "walkthroughs": [
+      {
+        "id": "hlf.gettingStarted",
+        "title": "HLF Bridge Setup",
+        "description": "Validate the bridge, store any HTTP auth token, and open the first operator surfaces.",
+        "steps": [
+          {
+            "id": "hlf.validate",
+            "title": "Run First-Run Validation",
+            "description": "Check transport, evidence path, and current diagnostics.",
+            "completionEvents": [
+              "onCommand:hlf.runFirstRunValidation"
+            ]
+          },
+          {
+            "id": "hlf.secret",
+            "title": "Store HTTP Bearer Token",
+            "description": "Only needed when HTTP auth mode is set to bearer.",
+            "completionEvents": [
+              "onCommand:hlf.setHttpBearerToken"
+            ]
+          },
+          {
+            "id": "hlf.operator",
+            "title": "Open Trust Panel",
+            "description": "Inspect route, verifier, witness, and memory trust surfaces from packaged truth.",
+            "completionEvents": [
+              "onCommand:hlf.openTrustPanel"
+            ]
+          },
+          {
+            "id": "hlf.claimLanes",
+            "title": "Review Claim-Lane Context",
+            "description": "See what the extension treats as current truth, bridge truth, and north-star doctrine.",
+            "completionEvents": [
+              "onCommand:hlf.showClaimLanes"
+            ]
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "HLF MCP Bridge",
+      "properties": {
+        "hlf.transport": {
+          "type": "string",
+          "enum": [
+            "stdio",
+            "sse",
+            "streamable-http"
+          ],
+          "default": "stdio",
+          "markdownDescription": "Transport used by the bridge. HTTP transports are first-class modes for attach or managed launch."
+        },
+        "hlf.attachMode": {
+          "type": "string",
+          "enum": [
+            "launch",
+            "attach"
+          ],
+          "default": "launch",
+          "markdownDescription": "`launch` starts a managed HLF process. `attach` connects diagnostics and commands to an already running HTTP endpoint."
+        },
+        "hlf.server.command": {
+          "type": "string",
+          "default": "uv",
+          "markdownDescription": "Executable used to launch the packaged HLF MCP server when attach mode is `launch`."
+        },
+        "hlf.server.args": {
+          "type": "array",
+          "default": [
+            "run",
+            "python",
+            "-m",
+            "hlf_mcp.server"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "Arguments passed to the server command. Transport-specific values are injected through environment variables."
+        },
+        "hlf.server.cwd": {
+          "type": "string",
+          "default": "${workspaceFolder}",
+          "markdownDescription": "Working directory used when launching the packaged HLF server. `${workspaceFolder}` is resolved automatically."
+        },
+        "hlf.server.env": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Additional environment variables merged into the managed HLF process."
+        },
+        "hlf.http.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "markdownDescription": "Host used for SSE or streamable HTTP attach and managed launch."
+        },
+        "hlf.http.authMode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "bearer"
+          ],
+          "default": "none",
+          "markdownDescription": "HTTP authentication mode. Bearer tokens are stored in VS Code secret storage, not plain settings."
+        },
+        "hlf.http.port": {
+          "type": "number",
+          "default": 8000,
+          "minimum": 1,
+          "maximum": 65535,
+          "markdownDescription": "Port used for SSE or streamable HTTP attach and managed launch."
+        },
+        "hlf.http.endpoint": {
+          "type": "string",
+          "default": "/mcp",
+          "markdownDescription": "HTTP MCP endpoint. For SSE, diagnostics still track the host and health path while endpoint details are copied for operators."
+        },
+        "hlf.http.healthPath": {
+          "type": "string",
+          "default": "/health",
+          "markdownDescription": "Health endpoint path used for HTTP diagnostics."
+        },
+        "hlf.http.healthTimeoutMs": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 30000,
+          "markdownDescription": "Timeout used by bridge diagnostics when probing the configured health endpoint."
+        },
+        "hlf.evidence.path": {
+          "type": "string",
+          "default": "${workspaceFolder}/observability",
+          "markdownDescription": "Primary evidence or observability path surfaced to operators by the bridge scaffold."
+        }
+      }
+    }
+  }
+}

@@ -40,6 +40,264 @@ _ROUTE_READY_TIERS = {"launch-qualified", "promotion-qualified"}
 _QUALIFICATION_PROFILES = dict(load_model_qualification_profiles().get("profiles") or {})
 
 
+def _normalized_filter(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    normalized = raw.strip().lower()
+    return normalized or None
+
+
+def _resolve_profile_evidence_tier(
+    profile_name: str, benchmark_scores: dict[str, float] | None
+) -> str | None:
+    if not benchmark_scores:
+        return None
+    profile = _QUALIFICATION_PROFILES.get(profile_name)
+    if not isinstance(profile, dict):
+        return None
+
+    normalized_scores = {
+        str(metric): float(score) for metric, score in (benchmark_scores or {}).items()
+    }
+    tiers = profile.get("tiers") or {}
+    for tier_name in (
+        "promotion-qualified",
+        "launch-qualified",
+        "baseline-qualified",
+    ):
+        requirements = tiers.get(tier_name) or {}
+        if requirements and all(
+            normalized_scores.get(str(metric), float("-inf")) >= float(threshold)
+            for metric, threshold in requirements.items()
+        ):
+            return tier_name
+    return "evidence-present-not-qualified"
+
+
+def _qualification_profile_entry(ctx: ServerContext, profile_name: str) -> dict[str, Any]:
+    profile = dict(_QUALIFICATION_PROFILES.get(profile_name) or {})
+    artifact = ctx.get_benchmark_artifact(profile_name=profile_name)
+    benchmark_scores = {
+        str(metric): float(score)
+        for metric, score in ((artifact or {}).get("benchmark_scores") or {}).items()
+    }
+    latest_artifact = None
+    if artifact is not None:
+        latest_artifact = {
+            "artifact_id": artifact.get("artifact_id"),
+            "artifact_status": artifact.get("artifact_status"),
+            "decision_count": len(artifact.get("decision_records") or []),
+            "benchmark_scores": benchmark_scores,
+        }
+
+    return {
+        "profile_name": profile_name,
+        "source": "qualification_profile",
+        "required_lanes": [str(item) for item in profile.get("required_lanes", [])],
+        "required_capabilities": [
+            str(item) for item in profile.get("required_capabilities", [])
+        ],
+        "required_languages": [str(item) for item in profile.get("required_languages", [])],
+        "benchmark_metrics": sorted(_profile_metric_names(profile_name)),
+        "qualification_tiers": dict(profile.get("tiers") or {}),
+        "evidence_available": artifact is not None,
+        "evidence_tier": _resolve_profile_evidence_tier(profile_name, benchmark_scores),
+        "latest_artifact": latest_artifact,
+    }
+
+
+def _active_session_profile_entry(ctx: ServerContext, agent_id: str, profile: dict[str, Any]) -> dict[str, Any]:
+    workload_profile = dict(profile.get("workload_profile") or {})
+    workload = str(workload_profile.get("workload") or "")
+    multilingual_required = bool(workload_profile.get("multilingual_required", False))
+    selected_lane = _workload_to_catalog_lane(workload) if workload else None
+    route_candidates = (
+        _route_profile_candidates(workload, selected_lane, multilingual_required)
+        if selected_lane
+        else []
+    )
+
+    governed_capabilities: set[str] = set()
+    governed_languages: set[str] = set()
+    candidate_evidence: dict[str, dict[str, Any]] = {}
+    for candidate_profile in route_candidates:
+        candidate_definition = dict(_QUALIFICATION_PROFILES.get(candidate_profile) or {})
+        governed_capabilities.update(
+            str(item) for item in candidate_definition.get("required_capabilities", [])
+        )
+        governed_languages.update(
+            str(item) for item in candidate_definition.get("required_languages", [])
+        )
+        artifact = ctx.get_benchmark_artifact(profile_name=candidate_profile)
+        if artifact is None:
+            continue
+        candidate_evidence[candidate_profile] = {
+            "artifact_id": artifact.get("artifact_id"),
+            "artifact_status": artifact.get("artifact_status"),
+            "benchmark_scores": dict(artifact.get("benchmark_scores") or {}),
+        }
+
+    return {
+        "agent_id": agent_id,
+        "profile_id": profile.get("profile_id"),
+        "source": "active_session_profile",
+        "workload": workload,
+        "selected_lane": selected_lane,
+        "embedding_model": profile.get("embedding_recommendation", {}).get("model"),
+        "fallback_model": profile.get("fallback_recommendation", {}).get("model"),
+        "endpoint": profile.get("embedding_recommendation", {}).get("endpoint"),
+        "cpu_only": bool(profile.get("hardware_summary", {}).get("cpu_only", False)),
+        "gpu_vram_gb": profile.get("hardware_summary", {}).get("gpu_vram_gb"),
+        "multilingual_required": multilingual_required,
+        "long_context_required": bool(workload_profile.get("long_context_required", False)),
+        "latency_priority": workload_profile.get("latency_priority"),
+        "allowed_modes": dict(profile.get("allowed_modes") or {}),
+        "governed_profile_candidates": route_candidates,
+        "governed_capabilities": sorted(governed_capabilities),
+        "governed_languages": sorted(governed_languages),
+        "evidence_available": bool(candidate_evidence),
+        "candidate_evidence": candidate_evidence,
+    }
+
+
+def _profile_entry_matches_filters(
+    entry: dict[str, Any],
+    *,
+    search: str | None,
+    capability: str | None,
+    lane: str | None,
+    language: str | None,
+    evidence_only: bool,
+) -> bool:
+    if evidence_only and not bool(entry.get("evidence_available")):
+        return False
+
+    if capability:
+        capabilities = {
+            str(item).lower()
+            for item in entry.get("required_capabilities", entry.get("governed_capabilities", []))
+        }
+        if capability not in capabilities:
+            return False
+
+    if lane:
+        lanes = {
+            str(item).lower() for item in entry.get("required_lanes", [])
+        }
+        if entry.get("selected_lane"):
+            lanes.add(str(entry.get("selected_lane")).lower())
+        if lane not in lanes:
+            return False
+
+    if language:
+        languages = {
+            str(item).lower()
+            for item in entry.get("required_languages", entry.get("governed_languages", []))
+        }
+        if language not in languages:
+            return False
+
+    if search:
+        search_values: list[str] = []
+        for key in (
+            "profile_name",
+            "agent_id",
+            "workload",
+            "embedding_model",
+            "fallback_model",
+            "selected_lane",
+        ):
+            value = entry.get(key)
+            if value:
+                search_values.append(str(value).lower())
+        for key in (
+            "required_capabilities",
+            "governed_capabilities",
+            "required_lanes",
+            "required_languages",
+            "governed_languages",
+            "governed_profile_candidates",
+        ):
+            search_values.extend(str(item).lower() for item in entry.get(key, []))
+        if search not in " ".join(search_values):
+            return False
+
+    return True
+
+
+def build_profile_capability_catalog(
+    ctx: ServerContext | None,
+    *,
+    search: str | None = None,
+    capability: str | None = None,
+    lane: str | None = None,
+    language: str | None = None,
+    active_only: bool = False,
+    evidence_only: bool = False,
+) -> dict[str, Any]:
+    if ctx is None or not hasattr(ctx, "session_profiles"):
+        return {
+            "status": "error",
+            "error": "profile_catalog_unavailable",
+        }
+
+    normalized_search = _normalized_filter(search)
+    normalized_capability = _normalized_filter(capability)
+    normalized_lane = _normalized_filter(lane)
+    normalized_language = _normalized_filter(language)
+
+    qualification_profiles = []
+    if not active_only:
+        for profile_name in sorted(_QUALIFICATION_PROFILES):
+            entry = _qualification_profile_entry(ctx, profile_name)
+            if _profile_entry_matches_filters(
+                entry,
+                search=normalized_search,
+                capability=normalized_capability,
+                lane=normalized_lane,
+                language=normalized_language,
+                evidence_only=evidence_only,
+            ):
+                qualification_profiles.append(entry)
+
+    active_profiles = []
+    for agent_id, profile in sorted(ctx.session_profiles.items()):
+        entry = _active_session_profile_entry(ctx, agent_id, profile)
+        if _profile_entry_matches_filters(
+            entry,
+            search=normalized_search,
+            capability=normalized_capability,
+            lane=normalized_lane,
+            language=normalized_language,
+            evidence_only=evidence_only,
+        ):
+            active_profiles.append(entry)
+
+    return {
+        "status": "ok",
+        "filters": {
+            "search": normalized_search,
+            "capability": normalized_capability,
+            "lane": normalized_lane,
+            "language": normalized_language,
+            "active_only": active_only,
+            "evidence_only": evidence_only,
+        },
+        "summary": {
+            "qualification_profile_count": len(qualification_profiles),
+            "active_profile_count": len(active_profiles),
+            "evidence_backed_qualification_count": sum(
+                1 for entry in qualification_profiles if entry.get("evidence_available")
+            ),
+            "evidence_backed_active_count": sum(
+                1 for entry in active_profiles if entry.get("evidence_available")
+            ),
+        },
+        "qualification_profiles": qualification_profiles,
+        "active_profiles": active_profiles,
+    }
+
+
 def _qualification_profile_for(workload: Workload, multilingual_required: bool) -> str | None:
     if workload == "translation_memory" and multilingual_required:
         return "translation_memory_multilingual"
@@ -649,6 +907,26 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         return {"status": "ok", "catalog": catalog}
 
     @mcp.tool()
+    def hlf_query_profile_capabilities(
+        search: str = "",
+        capability: str | None = None,
+        lane: str | None = None,
+        language: str | None = None,
+        active_only: bool = False,
+        evidence_only: bool = False,
+    ) -> dict[str, Any]:
+        """Query governed qualification profiles and active session profiles by capability, lane, language, or free-text."""
+        return build_profile_capability_catalog(
+            ctx,
+            search=search,
+            capability=capability,
+            lane=lane,
+            language=language,
+            active_only=active_only,
+            evidence_only=evidence_only,
+        )
+
+    @mcp.tool()
     def hlf_align_check(
         payload: str,
         agent_id: str = "unknown-agent",
@@ -1219,6 +1497,7 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_probe_local_hardware": hlf_probe_local_hardware,
         "hlf_recommend_embedding_profile": hlf_recommend_embedding_profile,
         "hlf_sync_model_catalog": hlf_sync_model_catalog,
+        "hlf_query_profile_capabilities": hlf_query_profile_capabilities,
         "hlf_align_check": hlf_align_check,
         "hlf_route_governed_request": hlf_route_governed_request,
         "hlf_get_embedding_profile": hlf_get_embedding_profile,

@@ -1,0 +1,163 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from hlf_mcp.weekly_artifacts import (
+    ALLOWED_ARTIFACT_STATUSES,
+    ALLOWED_DECISION_TYPES,
+    ALLOWED_TRIAGE_LANES,
+    find_weekly_artifact,
+    load_verified_weekly_artifacts,
+    record_weekly_artifact_decision,
+    summarize_weekly_artifacts,
+)
+
+
+def _print_payload(payload: object, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    if isinstance(payload, str):
+        print(payload)
+        return
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="hlf-evidence",
+        description="Query governed weekly evidence artifacts and distribution eligibility.",
+    )
+    parser.add_argument("--metrics-dir", type=Path, default=None)
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    list_parser = subparsers.add_parser("list", help="List evidence artifacts")
+    list_parser.add_argument("--status", choices=sorted(ALLOWED_ARTIFACT_STATUSES), default=None)
+    list_parser.add_argument("--decision", choices=sorted(ALLOWED_DECISION_TYPES), default=None)
+    list_parser.add_argument("--source", default=None)
+    list_parser.add_argument("--limit", type=int, default=20)
+    list_parser.add_argument("--all", action="store_true", help="Include unverified artifacts")
+    list_parser.add_argument("--json", action="store_true")
+
+    show_parser = subparsers.add_parser("show", help="Show a single artifact")
+    show_parser.add_argument("artifact_id")
+    show_parser.add_argument("--json", action="store_true")
+
+    decide_parser = subparsers.add_parser("decide", help="Append a governed decision record to an artifact")
+    decide_parser.add_argument("artifact_id")
+    decide_parser.add_argument("--decision", required=True, choices=sorted(ALLOWED_DECISION_TYPES))
+    decide_parser.add_argument("--actor", required=True)
+    decide_parser.add_argument("--rationale", required=True)
+    decide_parser.add_argument("--triage-lane", choices=sorted(ALLOWED_TRIAGE_LANES), default=None)
+    decide_parser.add_argument("--evidence-ref", action="append", default=[])
+    decide_parser.add_argument("--policy-basis", action="append", default=[])
+    decide_parser.add_argument("--supersedes", default=None)
+    decide_parser.add_argument("--json", action="store_true")
+
+    summary_parser = subparsers.add_parser("summary", help="Summarize artifact history")
+    summary_parser.add_argument("--json", action="store_true")
+    return parser
+
+
+def _list_command(args: argparse.Namespace) -> int:
+    artifacts = load_verified_weekly_artifacts(
+        args.metrics_dir,
+        status=args.status,
+        source=args.source,
+        decision=args.decision,
+        verified_only=not args.all,
+        limit=args.limit,
+    )
+    if args.json:
+        _print_payload(artifacts, as_json=True)
+        return 0
+
+    if not artifacts:
+        print("No artifacts matched the requested filters.")
+        return 0
+
+    for artifact in artifacts:
+        distribution = artifact.get("distribution_contract") or {}
+        verification = artifact.get("verification") or {}
+        print(
+            " | ".join(
+                [
+                    str(artifact.get("artifact_id") or "unknown"),
+                    str(artifact.get("artifact_status") or "unknown"),
+                    str(artifact.get("source") or "unknown"),
+                    str(artifact.get("generated_at") or "unknown"),
+                    "verified" if verification.get("verified") else "unverified",
+                    "distribution-eligible"
+                    if distribution.get("eligible_for_governed_distribution")
+                    else "distribution-pending",
+                ]
+            )
+        )
+    return 0
+
+
+def _show_command(args: argparse.Namespace) -> int:
+    artifact = find_weekly_artifact(args.artifact_id, args.metrics_dir)
+    if artifact is None:
+        print(json.dumps({"status": "not_found", "artifact_id": args.artifact_id}, indent=2))
+        return 1
+    _print_payload(artifact, as_json=True if args.json else False)
+    return 0
+
+
+def _decide_command(args: argparse.Namespace) -> int:
+    try:
+        artifact = record_weekly_artifact_decision(
+            artifact_id=args.artifact_id,
+            metrics_dir=args.metrics_dir,
+            decision=args.decision,
+            actor=args.actor,
+            rationale=args.rationale,
+            triage_lane=args.triage_lane,
+            evidence_refs=list(args.evidence_ref or []),
+            supersedes=args.supersedes,
+            policy_basis=list(args.policy_basis or []),
+        )
+    except FileNotFoundError:
+        print(json.dumps({"status": "not_found", "artifact_id": args.artifact_id}, indent=2))
+        return 1
+
+    _print_payload(artifact, as_json=True if args.json else False)
+    return 0
+
+
+def _summary_command(args: argparse.Namespace) -> int:
+    summary = summarize_weekly_artifacts(args.metrics_dir)
+    if args.json:
+        _print_payload(summary, as_json=True)
+        return 0
+
+    print(f"Artifacts: {summary['artifact_count']}")
+    print(f"Verified: {summary['verified_count']}")
+    print(f"Distribution eligible: {summary['distribution_eligible_count']}")
+    print(f"History path: {summary['history_path']}")
+    print(json.dumps({"status_counts": summary["status_counts"], "source_counts": summary["source_counts"]}, indent=2))
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "list":
+        return _list_command(args)
+    if args.command == "show":
+        return _show_command(args)
+    if args.command == "decide":
+        return _decide_command(args)
+    if args.command == "summary":
+        return _summary_command(args)
+    parser.error(f"unknown command: {args.command}")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

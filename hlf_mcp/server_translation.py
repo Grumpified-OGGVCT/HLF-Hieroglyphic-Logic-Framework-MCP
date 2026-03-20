@@ -18,6 +18,158 @@ from hlf_mcp.hlf.translator import (
 from hlf_mcp.server_context import ServerContext
 
 
+def run_hlf_do(
+    ctx: ServerContext,
+    *,
+    intent: str,
+    tier: str = "forge",
+    dry_run: bool = False,
+    show_hlf: bool = False,
+    language: str = "auto",
+) -> dict[str, Any]:
+    """Execute the packaged governed natural-language front door outside the MCP server."""
+    normalized_intent = intent.strip()
+    normalized_tier = tier.lower().strip()
+    if not normalized_intent:
+        return {
+            "success": False,
+            "error": "intent is required",
+            "example": "Audit /var/log/system.log in read-only mode and summarize the top errors.",
+        }
+    if normalized_tier not in {"hearth", "forge", "sovereign"}:
+        return {
+            "success": False,
+            "error": f"Unsupported tier '{tier}'. Use hearth, forge, or sovereign.",
+        }
+
+    try:
+        resolved_language = language if language != "auto" else "auto"
+        source = language_to_hlf(normalized_intent, language=language, version="3")
+        if language == "auto":
+            resolved_language = resolve_language("auto", text=normalized_intent)
+        validation = ctx.compiler.validate(source)
+        if not validation.get("valid"):
+            response = {
+                "success": False,
+                "phase": "translation",
+                "you_said": normalized_intent,
+                "tier": normalized_tier,
+                "governed": False,
+                "language": resolved_language,
+                "error": validation.get("error", "Generated HLF did not validate."),
+            }
+            if show_hlf:
+                response["hlf_source"] = source
+            return response
+
+        compile_result = ctx.compiler.compile(source)
+        ast = compile_result["ast"]
+        capsule = capsule_for_tier(normalized_tier)
+        capsule_violations = capsule.validate_ast(ast.get("statements", []))
+        align_violations = compile_result.get("align_violations", [])
+        benchmark = ctx.benchmark.analyze(source, compare_text=normalized_intent)
+        localized_audit = hlf_to_language(ast, language=resolved_language)
+        english_audit = hlf_to_english(ast)
+        diagnostics = translation_diagnostics(
+            normalized_intent, language=resolved_language, source=source
+        ).to_dict()
+
+        response: dict[str, Any] = {
+            "success": len(capsule_violations) == 0 and len(align_violations) == 0,
+            "you_said": normalized_intent,
+            "what_hlf_did": localized_audit,
+            "what_hlf_did_en": english_audit,
+            "audit": (
+                f"Validated and compiled for tier '{normalized_tier}'. "
+                f"Estimated gas: {compile_result['gas_estimate']} / {capsule.max_gas}."
+            ),
+            "tier": normalized_tier,
+            "governed": len(capsule_violations) == 0 and len(align_violations) == 0,
+            "language": resolved_language,
+            "dry_run": dry_run,
+            "capsule_violations": capsule_violations,
+            "align_violations": align_violations,
+            "math": {
+                "english_tokens": benchmark["nlp_tokens"],
+                "hlf_tokens": benchmark["hlf_tokens"],
+                "compression_pct": benchmark["compression_pct"],
+                "token_savings": benchmark["savings"],
+                "gas_estimate": compile_result["gas_estimate"],
+                "gas_budget": capsule.max_gas,
+                "roundtrip_fidelity_score": diagnostics["roundtrip_fidelity_score"],
+                "fallback_used": diagnostics["fallback_used"],
+            },
+            "translation": diagnostics,
+        }
+        if show_hlf:
+            response["hlf_source"] = source
+
+        if capsule_violations or align_violations or dry_run:
+            if capsule_violations:
+                response["audit"] = (
+                    f"Blocked by capsule validation for tier '{normalized_tier}'. "
+                    f"{len(capsule_violations)} violation(s) detected."
+                )
+            elif align_violations:
+                response["audit"] = (
+                    f"Compiled with ALIGN warnings for tier '{normalized_tier}'. "
+                    f"{len(align_violations)} violation(s) reported."
+                )
+            elif dry_run:
+                response["audit"] = (
+                    f"Dry run only. Generated HLF validated for tier '{normalized_tier}' "
+                    f"with estimated gas {compile_result['gas_estimate']} / {capsule.max_gas}."
+                )
+            return response
+
+        bc = ctx.bytecoder.encode(ast)
+        run_result = ctx.runtime.run(
+            bc,
+            gas_limit=capsule.max_gas,
+            variables={"DEPLOYMENT_TIER": normalized_tier},
+            ast=ast,
+            source=source,
+            tier=normalized_tier,
+        )
+        response["execution"] = run_result
+        response["success"] = run_result.get("status") == "ok"
+        if run_result.get("status") == "ok":
+            response["audit"] = (
+                f"Executed at tier '{normalized_tier}'. "
+                f"Gas used: {run_result.get('gas_used', 0)} / {capsule.max_gas}."
+            )
+        else:
+            response["audit"] = (
+                f"Execution blocked at tier '{normalized_tier}'. "
+                f"{run_result.get('error', 'Unknown runtime governance error.')}"
+            )
+        return response
+    except CompileError as exc:
+        response = {
+            "success": False,
+            "phase": "compile",
+            "you_said": normalized_intent,
+            "tier": normalized_tier,
+            "governed": False,
+            "error": str(exc),
+        }
+        if show_hlf:
+            response["hlf_source"] = source
+        return response
+    except Exception as exc:
+        response = {
+            "success": False,
+            "phase": "internal",
+            "you_said": normalized_intent,
+            "tier": normalized_tier,
+            "governed": False,
+            "error": str(exc),
+        }
+        if show_hlf and "source" in locals():
+            response["hlf_source"] = source
+        return response
+
+
 def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_do(
@@ -28,146 +180,14 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         language: str = "auto",
     ) -> dict[str, Any]:
         """Translate natural-language intent into governed HLF and optionally execute it."""
-        normalized_intent = intent.strip()
-        normalized_tier = tier.lower().strip()
-        if not normalized_intent:
-            return {
-                "success": False,
-                "error": "intent is required",
-                "example": "Audit /var/log/system.log in read-only mode and summarize the top errors.",
-            }
-        if normalized_tier not in {"hearth", "forge", "sovereign"}:
-            return {
-                "success": False,
-                "error": f"Unsupported tier '{tier}'. Use hearth, forge, or sovereign.",
-            }
-
-        try:
-            resolved_language = language if language != "auto" else "auto"
-            source = language_to_hlf(normalized_intent, language=language, version="3")
-            if language == "auto":
-                resolved_language = resolve_language("auto", text=normalized_intent)
-            validation = ctx.compiler.validate(source)
-            if not validation.get("valid"):
-                response = {
-                    "success": False,
-                    "phase": "translation",
-                    "you_said": normalized_intent,
-                    "tier": normalized_tier,
-                    "governed": False,
-                    "language": resolved_language,
-                    "error": validation.get("error", "Generated HLF did not validate."),
-                }
-                if show_hlf:
-                    response["hlf_source"] = source
-                return response
-
-            compile_result = ctx.compiler.compile(source)
-            ast = compile_result["ast"]
-            capsule = capsule_for_tier(normalized_tier)
-            capsule_violations = capsule.validate_ast(ast.get("statements", []))
-            align_violations = compile_result.get("align_violations", [])
-            benchmark = ctx.benchmark.analyze(source, compare_text=normalized_intent)
-            localized_audit = hlf_to_language(ast, language=resolved_language)
-            english_audit = hlf_to_english(ast)
-            diagnostics = translation_diagnostics(
-                normalized_intent, language=resolved_language, source=source
-            ).to_dict()
-
-            response: dict[str, Any] = {
-                "success": len(capsule_violations) == 0 and len(align_violations) == 0,
-                "you_said": normalized_intent,
-                "what_hlf_did": localized_audit,
-                "what_hlf_did_en": english_audit,
-                "audit": (
-                    f"Validated and compiled for tier '{normalized_tier}'. "
-                    f"Estimated gas: {compile_result['gas_estimate']} / {capsule.max_gas}."
-                ),
-                "tier": normalized_tier,
-                "governed": len(capsule_violations) == 0 and len(align_violations) == 0,
-                "language": resolved_language,
-                "dry_run": dry_run,
-                "capsule_violations": capsule_violations,
-                "align_violations": align_violations,
-                "math": {
-                    "english_tokens": benchmark["nlp_tokens"],
-                    "hlf_tokens": benchmark["hlf_tokens"],
-                    "compression_pct": benchmark["compression_pct"],
-                    "token_savings": benchmark["savings"],
-                    "gas_estimate": compile_result["gas_estimate"],
-                    "gas_budget": capsule.max_gas,
-                    "roundtrip_fidelity_score": diagnostics["roundtrip_fidelity_score"],
-                    "fallback_used": diagnostics["fallback_used"],
-                },
-                "translation": diagnostics,
-            }
-            if show_hlf:
-                response["hlf_source"] = source
-
-            if capsule_violations or align_violations or dry_run:
-                if capsule_violations:
-                    response["audit"] = (
-                        f"Blocked by capsule validation for tier '{normalized_tier}'. "
-                        f"{len(capsule_violations)} violation(s) detected."
-                    )
-                elif align_violations:
-                    response["audit"] = (
-                        f"Compiled with ALIGN warnings for tier '{normalized_tier}'. "
-                        f"{len(align_violations)} violation(s) reported."
-                    )
-                elif dry_run:
-                    response["audit"] = (
-                        f"Dry run only. Generated HLF validated for tier '{normalized_tier}' "
-                        f"with estimated gas {compile_result['gas_estimate']} / {capsule.max_gas}."
-                    )
-                return response
-
-            bc = ctx.bytecoder.encode(ast)
-            run_result = ctx.runtime.run(
-                bc,
-                gas_limit=capsule.max_gas,
-                variables={"DEPLOYMENT_TIER": normalized_tier},
-                ast=ast,
-                source=source,
-                tier=normalized_tier,
-            )
-            response["execution"] = run_result
-            response["success"] = run_result.get("status") == "ok"
-            if run_result.get("status") == "ok":
-                response["audit"] = (
-                    f"Executed at tier '{normalized_tier}'. "
-                    f"Gas used: {run_result.get('gas_used', 0)} / {capsule.max_gas}."
-                )
-            else:
-                response["audit"] = (
-                    f"Execution blocked at tier '{normalized_tier}'. "
-                    f"{run_result.get('error', 'Unknown runtime governance error.')}"
-                )
-            return response
-        except CompileError as exc:
-            response = {
-                "success": False,
-                "phase": "compile",
-                "you_said": normalized_intent,
-                "tier": normalized_tier,
-                "governed": False,
-                "error": str(exc),
-            }
-            if show_hlf:
-                response["hlf_source"] = source
-            return response
-        except Exception as exc:
-            response = {
-                "success": False,
-                "phase": "internal",
-                "you_said": normalized_intent,
-                "tier": normalized_tier,
-                "governed": False,
-                "error": str(exc),
-            }
-            if show_hlf and "source" in locals():
-                response["hlf_source"] = source
-            return response
+        return run_hlf_do(
+            ctx,
+            intent=intent,
+            tier=tier,
+            dry_run=dry_run,
+            show_hlf=show_hlf,
+            language=language,
+        )
 
     @mcp.tool()
     def hlf_benchmark_matrix(

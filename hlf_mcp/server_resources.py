@@ -7,6 +7,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.bytecode import OPCODES
+from hlf_mcp.server_profiles import build_profile_capability_catalog
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _GOVERNANCE_DIR = _PACKAGE_DIR.parent / "governance"
@@ -136,6 +137,85 @@ def _render_witness_status(ctx: object | None, *, subject_agent_id: str | None =
     return json.dumps({"status": "ok", "witness_status": status}, indent=2)
 
 
+def render_resource_uri(ctx: object | None, resource_uri: str) -> str:
+    """Render a packaged resource URI outside the running MCP server."""
+    if resource_uri == "hlf://status/benchmark_artifacts":
+        if ctx is None or not hasattr(ctx, "memory_store"):
+            return json.dumps({"status": "error", "error": "memory_store_unavailable"}, indent=2)
+        memory = ctx.memory_store
+        try:
+            artifacts = memory.query_facts(entry_kind="benchmark_artifact")
+        except Exception:
+            artifacts = []
+            for fact in memory.all_facts():
+                if fact.get("entry_kind") == "benchmark_artifact":
+                    artifacts.append(fact)
+        return json.dumps({"status": "ok", "artifacts": artifacts}, indent=2)
+
+    if resource_uri == "hlf://status/active_profiles":
+        if ctx is None or not hasattr(ctx, "session_profiles"):
+            return json.dumps(
+                {"status": "error", "error": "session_profiles_unavailable"}, indent=2
+            )
+        evidence = {}
+        if hasattr(ctx, "session_benchmark_artifacts"):
+            evidence = ctx.session_benchmark_artifacts
+        return json.dumps(
+            {"status": "ok", "active_profiles": ctx.session_profiles, "evidence": evidence},
+            indent=2,
+        )
+
+    if resource_uri == "hlf://status/profile_capability_catalog":
+        return json.dumps(build_profile_capability_catalog(ctx), indent=2)
+
+    if resource_uri == "hlf://status/model_catalog":
+        return _render_model_catalog_status(ctx)
+
+    if resource_uri.startswith("hlf://status/model_catalog/"):
+        return _render_model_catalog_status(
+            ctx,
+            agent_id=resource_uri.removeprefix("hlf://status/model_catalog/") or None,
+        )
+
+    if resource_uri == "hlf://status/align":
+        return _render_align_status(ctx)
+
+    if resource_uri == "hlf://status/formal_verifier":
+        return _render_formal_verifier_status(ctx)
+
+    if resource_uri == "hlf://status/governed_route":
+        return _render_governed_route_status(ctx)
+
+    if resource_uri.startswith("hlf://status/governed_route/"):
+        return _render_governed_route_status(
+            ctx,
+            agent_id=resource_uri.removeprefix("hlf://status/governed_route/") or None,
+        )
+
+    if resource_uri == "hlf://status/instinct":
+        return _render_instinct_status(ctx)
+
+    if resource_uri.startswith("hlf://status/instinct/"):
+        return _render_instinct_status(
+            ctx,
+            mission_id=resource_uri.removeprefix("hlf://status/instinct/") or None,
+        )
+
+    if resource_uri == "hlf://status/witness_governance":
+        return _render_witness_status(ctx)
+
+    if resource_uri.startswith("hlf://status/witness_governance/"):
+        return _render_witness_status(
+            ctx,
+            subject_agent_id=resource_uri.removeprefix("hlf://status/witness_governance/") or None,
+        )
+
+    return json.dumps(
+        {"status": "error", "error": "unsupported_resource_uri", "resource_uri": resource_uri},
+        indent=2,
+    )
+
+
 def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, object]:
     @mcp.resource("hlf://status/benchmark_artifacts")
     def get_benchmark_artifacts() -> str:
@@ -185,6 +265,11 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
                     continue
                 evidence.append(fact)
         return json.dumps({"status": "ok", "profile": profile_name, "evidence": evidence}, indent=2)
+
+    @mcp.resource("hlf://status/profile_capability_catalog")
+    def get_profile_capability_catalog() -> str:
+        """Operator-facing governed profile catalog across qualification profiles and active session profiles."""
+        return json.dumps(build_profile_capability_catalog(ctx), indent=2)
 
     @mcp.resource("hlf://grammar")
     def get_grammar() -> str:
@@ -316,4 +401,5 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
         "hlf://status/benchmark_artifacts": get_benchmark_artifacts,
         "hlf://status/active_profiles": get_active_profiles,
         "hlf://status/profile_evidence/{profile_name}": get_profile_evidence,
+        "hlf://status/profile_capability_catalog": get_profile_capability_catalog,
     }

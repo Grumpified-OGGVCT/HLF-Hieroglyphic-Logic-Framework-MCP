@@ -170,76 +170,76 @@ jobs:
           print(f"Uncovered code excerpt: {len(result)} chars")
           PYEOF
 
-          - name: Gather existing test context for dedupe review
-          run: |
-            python << 'PYEOF'
-            import json
-            from pathlib import Path
+      - name: Gather existing test context for dedupe review
+        run: |
+          python << 'PYEOF'
+          import json
+          from pathlib import Path
 
-            cov_path = Path("/tmp/coverage.json")
-            if not cov_path.exists():
-              payload = {
-                "status": "coverage_unavailable",
-                "target_stems": [],
-                "matched_test_files": [],
-                "excerpt": "Coverage data unavailable; no existing test context gathered.\n",
-              }
-              Path("/tmp/existing_test_context.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-              Path("/tmp/existing_test_context.txt").write_text(payload["excerpt"], encoding="utf-8")
-              raise SystemExit(0)
-
-            data = json.loads(cov_path.read_text())
-            files = data.get("files", {})
-            ranked = sorted(
-              files.items(),
-              key=lambda item: item[1].get("summary", {}).get("percent_covered", 100),
-            )
-            target_stems = []
-            for path, info in ranked:
-              pct = info.get("summary", {}).get("percent_covered", 100)
-              if pct > 70:
-                continue
-              stem = Path(path).stem
-              if stem not in target_stems:
-                target_stems.append(stem)
-              if len(target_stems) >= 8:
-                break
-
-            matched = []
-            excerpt_lines = []
-            tests_root = Path("tests")
-            for test_path in sorted(tests_root.rglob("test*.py")):
-              try:
-                text = test_path.read_text(encoding="utf-8")
-              except Exception:
-                continue
-              if not any(stem in text or stem in test_path.stem for stem in target_stems):
-                continue
-              matched.append(str(test_path).replace('\\', '/'))
-              excerpt_lines.append(f"## {test_path.as_posix()}\n")
-              captured = 0
-              for line in text.splitlines():
-                stripped = line.strip()
-                if stripped.startswith("def test_") or stripped.startswith("class Test") or stripped.startswith("from ") or stripped.startswith("import "):
-                  excerpt_lines.append(f"{line}\n")
-                  captured += 1
-                if captured >= 20:
-                  break
-              excerpt_lines.append("\n")
-              if len(matched) >= 8 or sum(len(line) for line in excerpt_lines) > 12000:
-                break
-
-            excerpt = "".join(excerpt_lines) or "No matching existing test context found for low-coverage modules.\n"
+          cov_path = Path("/tmp/coverage.json")
+          if not cov_path.exists():
             payload = {
-              "status": "ok",
-              "target_stems": target_stems,
-              "matched_test_files": matched,
-              "excerpt": excerpt,
+              "status": "coverage_unavailable",
+              "target_stems": [],
+              "matched_test_files": [],
+              "excerpt": "Coverage data unavailable; no existing test context gathered.\n",
             }
             Path("/tmp/existing_test_context.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-            Path("/tmp/existing_test_context.txt").write_text(excerpt, encoding="utf-8")
-            print(f"Existing test context: {len(matched)} files, {len(excerpt)} chars")
-            PYEOF
+            Path("/tmp/existing_test_context.txt").write_text(payload["excerpt"], encoding="utf-8")
+            raise SystemExit(0)
+
+          data = json.loads(cov_path.read_text())
+          files = data.get("files", {})
+          ranked = sorted(
+            files.items(),
+            key=lambda item: item[1].get("summary", {}).get("percent_covered", 100),
+          )
+          target_stems = []
+          for path, info in ranked:
+            pct = info.get("summary", {}).get("percent_covered", 100)
+            if pct > 70:
+              continue
+            stem = Path(path).stem
+            if stem not in target_stems:
+              target_stems.append(stem)
+            if len(target_stems) >= 8:
+              break
+
+          matched = []
+          excerpt_lines = []
+          tests_root = Path("tests")
+          for test_path in sorted(tests_root.rglob("test*.py")):
+            try:
+              text = test_path.read_text(encoding="utf-8")
+            except Exception:
+              continue
+            if not any(stem in text or stem in test_path.stem for stem in target_stems):
+              continue
+            matched.append(str(test_path).replace('\\', '/'))
+            excerpt_lines.append(f"## {test_path.as_posix()}\n")
+            captured = 0
+            for line in text.splitlines():
+              stripped = line.strip()
+              if stripped.startswith("def test_") or stripped.startswith("class Test") or stripped.startswith("from ") or stripped.startswith("import "):
+                excerpt_lines.append(f"{line}\n")
+                captured += 1
+              if captured >= 20:
+                break
+            excerpt_lines.append("\n")
+            if len(matched) >= 8 or sum(len(line) for line in excerpt_lines) > 12000:
+              break
+
+          excerpt = "".join(excerpt_lines) or "No matching existing test context found for low-coverage modules.\n"
+          payload = {
+            "status": "ok",
+            "target_stems": target_stems,
+            "matched_test_files": matched,
+            "excerpt": excerpt,
+          }
+          Path("/tmp/existing_test_context.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+          Path("/tmp/existing_test_context.txt").write_text(excerpt, encoding="utf-8")
+          print(f"Existing test context: {len(matched)} files, {len(excerpt)} chars")
+          PYEOF
 
       - name: "devstral:24b — Test gap analysis + advisory test drafting"
         env:

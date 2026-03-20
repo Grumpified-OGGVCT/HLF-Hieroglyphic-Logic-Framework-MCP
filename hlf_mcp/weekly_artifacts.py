@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar
 from hlf_mcp.governed_review import normalize_governed_review, validate_governed_review
+from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
 
 WEEKLY_ARTIFACT_SCHEMA_VERSION = "1.3"

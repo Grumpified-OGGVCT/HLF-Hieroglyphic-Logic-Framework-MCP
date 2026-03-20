@@ -29,7 +29,11 @@ def _load_artifact_dependencies() -> tuple[Path, Any, Any, Any]:
         from hlf_mcp.test_runner import DEFAULT_METRICS_DIR as default_metrics_dir
         from hlf_mcp.weekly_artifacts import (
             attach_weekly_artifact_verification as verification_attacher,
+        )
+        from hlf_mcp.weekly_artifacts import (
             build_weekly_artifact as artifact_builder,
+        )
+        from hlf_mcp.weekly_artifacts import (
             validate_weekly_artifact as artifact_validator,
         )
 

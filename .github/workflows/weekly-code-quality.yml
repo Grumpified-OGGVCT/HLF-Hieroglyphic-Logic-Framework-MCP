@@ -101,6 +101,9 @@ jobs:
 
       - name: Fetch Code Scanning summary
         if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python .github/scripts/fetch_code_scanning_summary.py \
             --output /tmp/security-findings-summary.json

@@ -11,8 +11,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from hlf_mcp.governed_review import (  # noqa: E402
-    build_doc_accuracy_governed_review,
     build_code_quality_governed_review,
+    build_doc_accuracy_governed_review,
     build_ethics_review_governed_review,
     build_evolution_governed_review,
     build_model_drift_governed_review,
@@ -33,8 +33,17 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _coerce_plan_content(payload: dict[str, Any]) -> dict[str, Any]:
+    content = payload.get("content", {})
+    if isinstance(content, dict):
+        return content
+    if isinstance(content, str):
+        return json.loads(content)
+    return {}
+
+
 def _render_evolution_issue(plan_payload: dict[str, Any], code_starter_payload: dict[str, Any], run_url: str, focus_area: str | None = None) -> str:
-    plan = json.loads(plan_payload["content"])
+    plan = _coerce_plan_content(plan_payload)
     planner_model = plan_payload.get("model") or "unknown-model"
     code_model = code_starter_payload.get("model") or "unknown-model"
     top_priority_index = int(plan.get("top_priority_index", 0))

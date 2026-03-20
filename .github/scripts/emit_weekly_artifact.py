@@ -18,7 +18,11 @@ validate_weekly_artifact: Any | None = None
 
 
 def _load_artifact_dependencies() -> tuple[Path, Any, Any, Any]:
-    global DEFAULT_METRICS_DIR, build_weekly_artifact, attach_weekly_artifact_verification, validate_weekly_artifact
+    global \
+        DEFAULT_METRICS_DIR, \
+        build_weekly_artifact, \
+        attach_weekly_artifact_verification, \
+        validate_weekly_artifact
 
     if (
         DEFAULT_METRICS_DIR is None
@@ -42,7 +46,12 @@ def _load_artifact_dependencies() -> tuple[Path, Any, Any, Any]:
         attach_weekly_artifact_verification = verification_attacher
         validate_weekly_artifact = artifact_validator
 
-    return DEFAULT_METRICS_DIR, build_weekly_artifact, attach_weekly_artifact_verification, validate_weekly_artifact
+    return (
+        DEFAULT_METRICS_DIR,
+        build_weekly_artifact,
+        attach_weekly_artifact_verification,
+        validate_weekly_artifact,
+    )
 
 
 def _workflow_run_url() -> str | None:
@@ -99,7 +108,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    _, build_weekly_artifact, attach_weekly_artifact_verification, validate_weekly_artifact = _load_artifact_dependencies()
+    _, build_weekly_artifact, attach_weekly_artifact_verification, validate_weekly_artifact = (
+        _load_artifact_dependencies()
+    )
     args = build_parser().parse_args(argv)
     suite_summary = _load_json_file(args.suite_summary_file)
     workflow_payload = _load_extra_payload(args.extra_json)
@@ -116,7 +127,12 @@ def main(argv: list[str] | None = None) -> int:
     verified_payload = json.loads(args.output.read_text(encoding="utf-8"))
     verification_report = validate_weekly_artifact(verified_payload)
     if not verification_report.get("verified"):
-        print(json.dumps({"artifact_path": str(args.output), "verification": verification_report}, indent=2), file=sys.stderr)
+        print(
+            json.dumps(
+                {"artifact_path": str(args.output), "verification": verification_report}, indent=2
+            ),
+            file=sys.stderr,
+        )
         return 2
     verified_payload = attach_weekly_artifact_verification(verified_payload, verification_report)
     args.output.write_text(json.dumps(verified_payload, indent=2), encoding="utf-8")

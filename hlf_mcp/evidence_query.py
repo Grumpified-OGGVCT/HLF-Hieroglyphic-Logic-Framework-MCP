@@ -46,7 +46,9 @@ def _build_parser() -> argparse.ArgumentParser:
     show_parser.add_argument("artifact_id")
     show_parser.add_argument("--json", action="store_true")
 
-    decide_parser = subparsers.add_parser("decide", help="Append a governed decision record to an artifact")
+    decide_parser = subparsers.add_parser(
+        "decide", help="Append a governed decision record to an artifact"
+    )
     decide_parser.add_argument("artifact_id")
     decide_parser.add_argument("--decision", required=True, choices=sorted(ALLOWED_DECISION_TYPES))
     decide_parser.add_argument("--actor", required=True)
@@ -139,7 +141,12 @@ def _summary_command(args: argparse.Namespace) -> int:
     print(f"Verified: {summary['verified_count']}")
     print(f"Distribution eligible: {summary['distribution_eligible_count']}")
     print(f"History path: {summary['history_path']}")
-    print(json.dumps({"status_counts": summary["status_counts"], "source_counts": summary["source_counts"]}, indent=2))
+    print(
+        json.dumps(
+            {"status_counts": summary["status_counts"], "source_counts": summary["source_counts"]},
+            indent=2,
+        )
+    )
     return 0
 
 

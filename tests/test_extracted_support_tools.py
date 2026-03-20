@@ -195,8 +195,21 @@ def test_run_pipeline_scheduled_writes_latest_and_history(monkeypatch, tmp_path:
             "governed_review": _minimal_governed_review("local-scheduled"),
         },
     )
-    monkeypatch.setattr(module, "validate_weekly_artifact", lambda payload: {"verified": True, "errors": [], "warnings": [], "checked_schema_version": "1.3"})
-    monkeypatch.setattr(module, "attach_weekly_artifact_verification", lambda payload, report: payload | {"verification": report})
+    monkeypatch.setattr(
+        module,
+        "validate_weekly_artifact",
+        lambda payload: {
+            "verified": True,
+            "errors": [],
+            "warnings": [],
+            "checked_schema_version": "1.3",
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "attach_weekly_artifact_verification",
+        lambda payload, report: payload | {"verification": report},
+    )
 
     exit_code, payload, written_path = module.run_pipeline(
         repo_root=repo_root,
@@ -309,8 +322,21 @@ def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(
             "governed_review": _minimal_governed_review("local-scheduled"),
         },
     )
-    monkeypatch.setattr(module, "validate_weekly_artifact", lambda payload: {"verified": True, "errors": [], "warnings": [], "checked_schema_version": "1.3"})
-    monkeypatch.setattr(module, "attach_weekly_artifact_verification", lambda payload, report: payload | {"verification": report})
+    monkeypatch.setattr(
+        module,
+        "validate_weekly_artifact",
+        lambda payload: {
+            "verified": True,
+            "errors": [],
+            "warnings": [],
+            "checked_schema_version": "1.3",
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "attach_weekly_artifact_verification",
+        lambda payload, report: payload | {"verification": report},
+    )
     monkeypatch.setenv("HLF_MEMORY_DB", str(memory_db))
 
     exit_code, payload, _ = module.run_pipeline(

@@ -116,8 +116,21 @@ def test_emit_weekly_artifact_writes_normalized_schema(monkeypatch, tmp_path: Pa
             "workflow_payload": kwargs["workflow_payload"],
         },
     )
-    monkeypatch.setattr(module, "validate_weekly_artifact", lambda payload: {"verified": True, "errors": [], "warnings": [], "checked_schema_version": "1.3"})
-    monkeypatch.setattr(module, "attach_weekly_artifact_verification", lambda payload, report: payload | {"verification": report})
+    monkeypatch.setattr(
+        module,
+        "validate_weekly_artifact",
+        lambda payload: {
+            "verified": True,
+            "errors": [],
+            "warnings": [],
+            "checked_schema_version": "1.3",
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "attach_weekly_artifact_verification",
+        lambda payload, report: payload | {"verification": report},
+    )
 
     exit_code = module.main(
         [
@@ -167,7 +180,8 @@ def test_create_github_issue_skips_when_conflicting_pr_found(monkeypatch) -> Non
 
 def test_fetch_code_scanning_summary_writes_real_counts(monkeypatch, tmp_path: Path) -> None:
     module = _load_module(
-        REPO_ROOT / ".github" / "scripts" / "fetch_code_scanning_summary.py", "fetch_code_scanning_summary"
+        REPO_ROOT / ".github" / "scripts" / "fetch_code_scanning_summary.py",
+        "fetch_code_scanning_summary",
     )
 
     monkeypatch.setattr(
@@ -193,9 +207,12 @@ def test_fetch_code_scanning_summary_writes_real_counts(monkeypatch, tmp_path: P
     assert payload["summary"]["severity_counts"]["warning"] == 1
 
 
-def test_fetch_code_scanning_summary_falls_back_when_api_unavailable(monkeypatch, tmp_path: Path) -> None:
+def test_fetch_code_scanning_summary_falls_back_when_api_unavailable(
+    monkeypatch, tmp_path: Path
+) -> None:
     module = _load_module(
-        REPO_ROOT / ".github" / "scripts" / "fetch_code_scanning_summary.py", "fetch_code_scanning_summary"
+        REPO_ROOT / ".github" / "scripts" / "fetch_code_scanning_summary.py",
+        "fetch_code_scanning_summary",
     )
 
     def _boom(tool_name: str = "CodeQL") -> list[dict]:

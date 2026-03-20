@@ -20,7 +20,11 @@ def test_operator_cli_do_uses_packaged_helper(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         operator_cli,
         "run_hlf_do",
-        lambda ctx, **kwargs: {"success": True, "tier": kwargs["tier"], "you_said": kwargs["intent"]},
+        lambda ctx, **kwargs: {
+            "success": True,
+            "tier": kwargs["tier"],
+            "you_said": kwargs["intent"],
+        },
     )
 
     exit_code = operator_cli.main(["do", "--intent", "summarize logs", "--tier", "forge", "--json"])
@@ -36,7 +40,10 @@ def test_operator_cli_test_summary_uses_shared_loader(monkeypatch, capsys) -> No
     monkeypatch.setattr(
         operator_cli,
         "load_test_suite_summary",
-        lambda metrics_dir, include_output=False: {"status": "ok", "summary": {"counts": {"passed": 7}}},
+        lambda metrics_dir, include_output=False: {
+            "status": "ok",
+            "summary": {"counts": {"passed": 7}},
+        },
     )
 
     exit_code = operator_cli.main(["test-summary", "--json"])
@@ -71,7 +78,9 @@ def test_operator_cli_weekly_evidence_summary_reports_counts(capsys, tmp_path: P
         ],
     )
 
-    exit_code = operator_cli.main(["weekly-evidence-summary", "--metrics-dir", str(metrics_dir), "--json"])
+    exit_code = operator_cli.main(
+        ["weekly-evidence-summary", "--metrics-dir", str(metrics_dir), "--json"]
+    )
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["artifact_count"] == 2

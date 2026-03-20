@@ -63,6 +63,7 @@ Its immediate target is `ollama_folder_qa/`, but the real purpose is broader:
 | TASK-008 | Define a report path from scaffold output into `docs/HLF_REJECTED_EXTRACTION_AUDIT.md` and `docs/HLF_PILLAR_MAP.md`. |  |  |
 | TASK-009 | Define how multilingual and multi-script findings become new rows in `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`. |  |  |
 | TASK-010 | Define how routing findings become inputs to `docs/HLF_ROUTING_RECOVERY_SPEC.md`. |  |  |
+| TASK-010A | Define how symbolic-surface and semasiographic findings feed into `plan/feature-symbolic-semantic-surfaces-1.md` without bypassing canonical grammar or audit planning. |  |  |
 
 ### Implementation Phase 4
 
@@ -95,6 +96,7 @@ Its immediate target is `ollama_folder_qa/`, but the real purpose is broader:
 - **FILE-003**: `ollama_folder_qa/ollama_folder_qa.py`
 - **FILE-004**: `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`
 - **FILE-005**: future bridge note for missing external research artifacts
+- **FILE-006**: `plan/feature-symbolic-semantic-surfaces-1.md`
 
 ## 6. Testing
 
@@ -114,3 +116,4 @@ Its immediate target is `ollama_folder_qa/`, but the real purpose is broader:
 - `plan/architecture-hlf-reconstruction-2.md`
 - `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`
 - `docs/HLF_MISSING_PILLARS.md`
+- `plan/feature-symbolic-semantic-surfaces-1.md`

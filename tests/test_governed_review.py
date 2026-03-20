@@ -12,7 +12,10 @@ def test_build_spec_sentinel_governed_review_warns_on_drift() -> None:
                 {"check": "readme_count_accuracy", "drift": False},
             ],
         },
-        ai_analysis_payload={"model": "nemotron-3-super", "audit_trail": [{"model": "nemotron-3-super"}]},
+        ai_analysis_payload={
+            "model": "nemotron-3-super",
+            "audit_trail": [{"model": "nemotron-3-super"}],
+        },
     )
 
     assert review["automation_status"] == "generated"
@@ -37,7 +40,9 @@ def test_build_test_health_governed_review_escalates_low_coverage() -> None:
     assert review["backend"]["model"] == "devstral:24b"
     assert review["review_metadata"]["ai_suggestions_advisory_only"] is True
     assert review["review_metadata"]["requires_deduplication_against_existing_tests"] is True
-    assert review["review_metadata"]["preferred_integration_strategy"] == "extend_existing_test_suites"
+    assert (
+        review["review_metadata"]["preferred_integration_strategy"] == "extend_existing_test_suites"
+    )
     assert review["review_metadata"]["existing_test_context_present"] is True
     assert "advisory only" in review["summary"]
 

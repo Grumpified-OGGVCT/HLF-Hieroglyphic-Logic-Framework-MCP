@@ -83,11 +83,15 @@ def test_evidence_query_list_and_show_commands(capsys, tmp_path: Path) -> None:
     }
     _write_history(metrics_dir, [artifact])
 
-    exit_code = evidence_query.main(["--metrics-dir", str(metrics_dir), "list", "--status", "promoted"])
+    exit_code = evidence_query.main(
+        ["--metrics-dir", str(metrics_dir), "list", "--status", "promoted"]
+    )
     assert exit_code == 0
     assert "weekly_demo" in capsys.readouterr().out
 
-    exit_code = evidence_query.main(["--metrics-dir", str(metrics_dir), "show", "weekly_demo", "--json"])
+    exit_code = evidence_query.main(
+        ["--metrics-dir", str(metrics_dir), "show", "weekly_demo", "--json"]
+    )
     assert exit_code == 0
     assert '"artifact_id": "weekly_demo"' in capsys.readouterr().out
 
@@ -233,8 +237,12 @@ def test_evidence_query_decide_appends_decision_and_updates_latest(capsys, tmp_p
     assert output["distribution_contract"]["eligible_for_governed_distribution"] is True
     assert output["decision_records"][-1]["decision"] == "promoted"
 
-    latest_payload = json.loads((metrics_dir / "weekly_pipeline_latest.json").read_text(encoding="utf-8"))
+    latest_payload = json.loads(
+        (metrics_dir / "weekly_pipeline_latest.json").read_text(encoding="utf-8")
+    )
     assert latest_payload["artifact_status"] == "promoted"
 
-    history_lines = (metrics_dir / "weekly_pipeline_history.jsonl").read_text(encoding="utf-8").splitlines()
+    history_lines = (
+        (metrics_dir / "weekly_pipeline_history.jsonl").read_text(encoding="utf-8").splitlines()
+    )
     assert len(history_lines) == 2

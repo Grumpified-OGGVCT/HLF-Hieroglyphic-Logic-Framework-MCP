@@ -1082,7 +1082,11 @@ def main() -> None:
     parser.add_argument("--system", required=True)
     parser.add_argument("--prompt", required=True, help="Prompt text or @file.txt")
     parser.add_argument("--output", default="-")
-    parser.add_argument("--format-schema-file", default=None, help="Path to a JSON schema file for structured output")
+    parser.add_argument(
+        "--format-schema-file",
+        default=None,
+        help="Path to a JSON schema file for structured output",
+    )
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--think", action="store_true")
     parser.add_argument("--no-stream", action="store_true")

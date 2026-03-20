@@ -346,7 +346,8 @@ def test_hlf_weekly_evidence_summary_reads_history(tmp_path) -> None:
                     }
                 ),
             ]
-        ) + "\n",
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -721,9 +722,7 @@ def test_profile_capability_catalog_resource_surfaces_latest_governed_catalog() 
         entry["profile_name"] == "translation_memory_multilingual"
         for entry in resource["qualification_profiles"]
     )
-    assert any(
-        entry["agent_id"] == "profile-query-agent" for entry in resource["active_profiles"]
-    )
+    assert any(entry["agent_id"] == "profile-query-agent" for entry in resource["active_profiles"])
 
 
 def test_route_governed_request_requires_launch_qualified_model_for_multilingual_lane(

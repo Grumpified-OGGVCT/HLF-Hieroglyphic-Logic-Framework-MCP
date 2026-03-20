@@ -94,9 +94,7 @@ def _qualification_profile_entry(ctx: ServerContext, profile_name: str) -> dict[
         "profile_name": profile_name,
         "source": "qualification_profile",
         "required_lanes": [str(item) for item in profile.get("required_lanes", [])],
-        "required_capabilities": [
-            str(item) for item in profile.get("required_capabilities", [])
-        ],
+        "required_capabilities": [str(item) for item in profile.get("required_capabilities", [])],
         "required_languages": [str(item) for item in profile.get("required_languages", [])],
         "benchmark_metrics": sorted(_profile_metric_names(profile_name)),
         "qualification_tiers": dict(profile.get("tiers") or {}),
@@ -106,7 +104,9 @@ def _qualification_profile_entry(ctx: ServerContext, profile_name: str) -> dict[
     }
 
 
-def _active_session_profile_entry(ctx: ServerContext, agent_id: str, profile: dict[str, Any]) -> dict[str, Any]:
+def _active_session_profile_entry(
+    ctx: ServerContext, agent_id: str, profile: dict[str, Any]
+) -> dict[str, Any]:
     workload_profile = dict(profile.get("workload_profile") or {})
     workload = str(workload_profile.get("workload") or "")
     multilingual_required = bool(workload_profile.get("multilingual_required", False))
@@ -181,9 +181,7 @@ def _profile_entry_matches_filters(
             return False
 
     if lane:
-        lanes = {
-            str(item).lower() for item in entry.get("required_lanes", [])
-        }
+        lanes = {str(item).lower() for item in entry.get("required_lanes", [])}
         if entry.get("selected_lane"):
             lanes.add(str(entry.get("selected_lane")).lower())
         if lane not in lanes:

@@ -55,7 +55,9 @@ def _normalize_backend(value: Any) -> dict[str, Any]:
         tier_index = None
     return {
         "provider": backend.get("provider") if isinstance(backend.get("provider"), str) else None,
-        "access_mode": backend.get("access_mode") if isinstance(backend.get("access_mode"), str) else None,
+        "access_mode": backend.get("access_mode")
+        if isinstance(backend.get("access_mode"), str)
+        else None,
         "model": backend.get("model") if isinstance(backend.get("model"), str) else None,
         "tier_index": tier_index,
         "fallback_chain": fallback_chain,
@@ -114,7 +116,7 @@ def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
     return {
         "contract_version": REVIEW_CONTRACT_VERSION,
         "review_type": "weekly_artifact",
-        "summary": f"No governed review contract was attached for {source or 'this artifact' }.",
+        "summary": f"No governed review contract was attached for {source or 'this artifact'}.",
         "severity": "info",
         "automation_status": "not_collected",
         "operator_gate_required": True,
@@ -139,7 +141,11 @@ def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[
         return default_governed_review(source=source)
 
     normalized = default_governed_review(source=source)
-    normalized["contract_version"] = value.get("contract_version") if isinstance(value.get("contract_version"), str) else REVIEW_CONTRACT_VERSION
+    normalized["contract_version"] = (
+        value.get("contract_version")
+        if isinstance(value.get("contract_version"), str)
+        else REVIEW_CONTRACT_VERSION
+    )
 
     review_type = value.get("review_type")
     if isinstance(review_type, str) and review_type:
@@ -219,7 +225,9 @@ def validate_governed_review(review: Any, errors: list[str]) -> None:
         if tier_index is not None and not isinstance(tier_index, int):
             errors.append("governed_review_backend_tier_index_invalid")
         fallback_chain = backend.get("fallback_chain")
-        if not isinstance(fallback_chain, list) or any(not isinstance(item, str) or not item for item in fallback_chain):
+        if not isinstance(fallback_chain, list) or any(
+            not isinstance(item, str) or not item for item in fallback_chain
+        ):
             errors.append("governed_review_backend_fallback_chain_invalid")
 
     pillar_assessments = review.get("pillar_assessments")
@@ -240,14 +248,18 @@ def validate_governed_review(review: Any, errors: list[str]) -> None:
 
     for field_name in ("evidence_refs", "escalation_triggers"):
         field_value = review.get(field_name)
-        if not isinstance(field_value, list) or any(not isinstance(item, str) or not item for item in field_value):
+        if not isinstance(field_value, list) or any(
+            not isinstance(item, str) or not item for item in field_value
+        ):
             errors.append(f"governed_review_{field_name}_invalid")
 
     if not isinstance(review.get("review_metadata"), dict):
         errors.append("governed_review_review_metadata_invalid")
 
 
-def _backend_from_ollama_payload(payload: dict[str, Any], *, default_provider: str = "ollama_cloud") -> dict[str, Any]:
+def _backend_from_ollama_payload(
+    payload: dict[str, Any], *, default_provider: str = "ollama_cloud"
+) -> dict[str, Any]:
     fallback_chain: list[str] = []
     for entry in payload.get("audit_trail") or []:
         if isinstance(entry, dict):
@@ -262,7 +274,9 @@ def _backend_from_ollama_payload(payload: dict[str, Any], *, default_provider: s
         "provider": default_provider,
         "access_mode": "cloud-via-ollama",
         "model": payload.get("model") or payload.get("modelUsed"),
-        "tier_index": payload.get("tier_index") if isinstance(payload.get("tier_index"), int) else payload.get("tier"),
+        "tier_index": payload.get("tier_index")
+        if isinstance(payload.get("tier_index"), int)
+        else payload.get("tier"),
         "fallback_chain": fallback_chain,
     }
 
@@ -274,7 +288,10 @@ def evolution_plan_schema() -> dict[str, Any]:
         "properties": {
             "summary": {"type": "string"},
             "severity": {"type": "string", "enum": sorted(ALLOWED_REVIEW_SEVERITIES)},
-            "recommended_triage_lane": {"type": "string", "enum": sorted(ALLOWED_TRIAGE_LANES - {"ignore"})},
+            "recommended_triage_lane": {
+                "type": "string",
+                "enum": sorted(ALLOWED_TRIAGE_LANES - {"ignore"}),
+            },
             "top_priority_index": {"type": "integer", "minimum": 0, "maximum": 6},
             "pillar_assessments": {
                 "type": "array",
@@ -417,7 +434,9 @@ def build_evolution_governed_review(
 def build_model_drift_governed_review(drift_payload: dict[str, Any]) -> dict[str, Any]:
     status = drift_payload.get("status") or "ALERT"
     severity = {"OK": "info", "WARN": "warning", "ALERT": "critical"}.get(status, "critical")
-    recommended_triage_lane = {"OK": "ignore", "WARN": "backlog", "ALERT": "current_batch"}.get(status)
+    recommended_triage_lane = {"OK": "ignore", "WARN": "backlog", "ALERT": "current_batch"}.get(
+        status
+    )
 
     probes = list(drift_payload.get("probes") or [])
     pillar_rollup: dict[str, dict[str, Any]] = {}
@@ -451,8 +470,12 @@ def build_model_drift_governed_review(drift_payload: dict[str, Any]) -> dict[str
                 "priority": "P1" if status == "ALERT" else "P2",
                 "effort": "small",
                 "lane": "bridge",
-                "rationale": drift_payload.get("summary") or "Semantic drift requires operator review.",
-                "target_files": ["scripts/monitor_model_drift.py", ".github/workflows/weekly-model-drift-detect.yml"],
+                "rationale": drift_payload.get("summary")
+                or "Semantic drift requires operator review.",
+                "target_files": [
+                    "scripts/monitor_model_drift.py",
+                    ".github/workflows/weekly-model-drift-detect.yml",
+                ],
             }
         )
     if status == "ALERT":
@@ -463,7 +486,10 @@ def build_model_drift_governed_review(drift_payload: dict[str, Any]) -> dict[str
                 "effort": "medium",
                 "lane": "bridge",
                 "rationale": "ALERT-level drift means the current model understanding is no longer within acceptable bounds.",
-                "target_files": ["governance/model_qualification_profiles.json", "scripts/monitor_model_drift.py"],
+                "target_files": [
+                    "governance/model_qualification_profiles.json",
+                    "scripts/monitor_model_drift.py",
+                ],
             }
         )
 
@@ -524,7 +550,9 @@ def build_spec_sentinel_governed_review(
         "automation_status": "generated",
         "operator_gate_required": True,
         "recommended_triage_lane": "current_batch" if has_drift else "ignore",
-        "backend": _backend_from_ollama_payload(ai_analysis_payload or {}) if isinstance(ai_analysis_payload, dict) else _normalize_backend({}),
+        "backend": _backend_from_ollama_payload(ai_analysis_payload or {})
+        if isinstance(ai_analysis_payload, dict)
+        else _normalize_backend({}),
         "pillar_assessments": [
             {
                 "pillar": "Deterministic language core",
@@ -573,7 +601,9 @@ def build_test_health_governed_review(
     test_suggestions_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     coverage_payload = coverage_payload if isinstance(coverage_payload, dict) else {}
-    totals = coverage_payload.get("totals") if isinstance(coverage_payload.get("totals"), dict) else {}
+    totals = (
+        coverage_payload.get("totals") if isinstance(coverage_payload.get("totals"), dict) else {}
+    )
     percent_covered = totals.get("percent_covered")
     if not isinstance(percent_covered, (int, float)):
         percent_covered = None
@@ -599,11 +629,11 @@ def build_test_health_governed_review(
         status = "advance"
         summary = f"Test health reports acceptable coverage at {percent_covered:.1f}%."
 
-    has_ai_suggestions = isinstance(test_suggestions_payload, dict) and bool(test_suggestions_payload)
+    has_ai_suggestions = isinstance(test_suggestions_payload, dict) and bool(
+        test_suggestions_payload
+    )
     if has_ai_suggestions:
-        summary = (
-            f"{summary} Deterministic coverage data is authoritative; AI-generated test output is advisory only and requires operator review plus deduplication against existing suites."
-        )
+        summary = f"{summary} Deterministic coverage data is authoritative; AI-generated test output is advisory only and requires operator review plus deduplication against existing suites."
 
     review = {
         "contract_version": REVIEW_CONTRACT_VERSION,
@@ -613,7 +643,9 @@ def build_test_health_governed_review(
         "automation_status": "generated",
         "operator_gate_required": True,
         "recommended_triage_lane": lane,
-        "backend": _backend_from_ollama_payload(test_suggestions_payload or {}) if isinstance(test_suggestions_payload, dict) else _normalize_backend({}),
+        "backend": _backend_from_ollama_payload(test_suggestions_payload or {})
+        if isinstance(test_suggestions_payload, dict)
+        else _normalize_backend({}),
         "pillar_assessments": [
             {
                 "pillar": "Human-readable audit and trust layer",
@@ -645,7 +677,9 @@ def build_test_health_governed_review(
             "workflow_payload.test_suggestions",
             "workflow_payload.existing_test_context",
         ],
-        "escalation_triggers": ["coverage_below_threshold"] if severity in {"warning", "critical"} else [],
+        "escalation_triggers": ["coverage_below_threshold"]
+        if severity in {"warning", "critical"}
+        else [],
         "review_metadata": {
             "percent_covered": percent_covered,
             "ai_suggestions_advisory_only": has_ai_suggestions,
@@ -654,7 +688,10 @@ def build_test_health_governed_review(
             "preferred_integration_strategy": "extend_existing_test_suites",
             "existing_test_context_present": bool(
                 isinstance(test_suggestions_payload, dict)
-                and (test_suggestions_payload.get("existing_test_context") or test_suggestions_payload.get("context_digest"))
+                and (
+                    test_suggestions_payload.get("existing_test_context")
+                    or test_suggestions_payload.get("context_digest")
+                )
             ),
         },
     }
@@ -680,13 +717,18 @@ def build_ethics_review_governed_review(
         "summary": (
             "Ethics review found actionable changed-surface findings."
             if has_findings
-            else (ethics_report_payload.get("summary_text") or "Ethics review found no actionable changed-surface findings.")
+            else (
+                ethics_report_payload.get("summary_text")
+                or "Ethics review found no actionable changed-surface findings."
+            )
         ),
         "severity": "critical" if has_findings else "info",
         "automation_status": "generated",
         "operator_gate_required": True,
         "recommended_triage_lane": "current_batch" if has_findings else "ignore",
-        "backend": _backend_from_ollama_payload(ethics_review_payload or {}) if isinstance(ethics_review_payload, dict) else _normalize_backend({}),
+        "backend": _backend_from_ollama_payload(ethics_review_payload or {})
+        if isinstance(ethics_review_payload, dict)
+        else _normalize_backend({}),
         "pillar_assessments": [
             {
                 "pillar": "Governance-native execution",
@@ -696,7 +738,10 @@ def build_ethics_review_governed_review(
                     if has_findings
                     else "The current changed-surface ethics review did not report actionable regressions."
                 ),
-                "evidence_refs": ["workflow_payload.ethics_report", "workflow_payload.ethics_review"],
+                "evidence_refs": [
+                    "workflow_payload.ethics_report",
+                    "workflow_payload.ethics_review",
+                ],
             }
         ],
         "recommended_actions": (
@@ -707,7 +752,12 @@ def build_ethics_review_governed_review(
                     "effort": "medium",
                     "lane": "bridge",
                     "rationale": "Weekly ethics review reported a changed-surface governance or ethics regression.",
-                    "target_files": ["governance/", "hlf_mcp/hlf/ethics/", "hlf_mcp/hlf/compiler.py", "hlf_mcp/hlf/runtime.py"],
+                    "target_files": [
+                        "governance/",
+                        "hlf_mcp/hlf/ethics/",
+                        "hlf_mcp/hlf/compiler.py",
+                        "hlf_mcp/hlf/runtime.py",
+                    ],
                 }
             ]
             if has_findings
@@ -726,13 +776,21 @@ def build_code_quality_governed_review(
     security_findings_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     code_quality_payload = code_quality_payload if isinstance(code_quality_payload, dict) else {}
-    security_findings_payload = security_findings_payload if isinstance(security_findings_payload, dict) else {}
-    summary = security_findings_payload.get("summary") if isinstance(security_findings_payload.get("summary"), dict) else {}
+    security_findings_payload = (
+        security_findings_payload if isinstance(security_findings_payload, dict) else {}
+    )
+    summary = (
+        security_findings_payload.get("summary")
+        if isinstance(security_findings_payload.get("summary"), dict)
+        else {}
+    )
     open_alerts = summary.get("open_alerts")
     if not isinstance(open_alerts, int):
         open_alerts = None
     high_count = 0
-    severity_counts = summary.get("severity_counts") if isinstance(summary.get("severity_counts"), dict) else {}
+    severity_counts = (
+        summary.get("severity_counts") if isinstance(summary.get("severity_counts"), dict) else {}
+    )
     if isinstance(severity_counts.get("high"), int):
         high_count = severity_counts["high"]
 
@@ -766,7 +824,10 @@ def build_code_quality_governed_review(
                 "pillar": "Human-readable audit and trust layer",
                 "status": status,
                 "rationale": "Security and code-quality summaries directly affect whether the current surface can be trusted and promoted honestly.",
-                "evidence_refs": ["workflow_payload.code_quality", "workflow_payload.security_findings"],
+                "evidence_refs": [
+                    "workflow_payload.code_quality",
+                    "workflow_payload.security_findings",
+                ],
             }
         ],
         "recommended_actions": (
@@ -852,7 +913,9 @@ def build_doc_accuracy_governed_review(doc_drift_payload: dict[str, Any] | None)
 def build_security_patterns_governed_review(
     security_review_payload: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    security_review_payload = security_review_payload if isinstance(security_review_payload, dict) else {}
+    security_review_payload = (
+        security_review_payload if isinstance(security_review_payload, dict) else {}
+    )
     review_content = security_review_payload.get("content")
     if not isinstance(review_content, str):
         review_content = ""
@@ -896,7 +959,11 @@ def build_security_patterns_governed_review(
                     "effort": "medium",
                     "lane": "bridge",
                     "rationale": "Actionable adversarial findings should be triaged against current governance and runtime controls.",
-                    "target_files": ["governance/align_rules.json", "hlf_mcp/hlf/compiler.py", "hlf_mcp/hlf/runtime.py"],
+                    "target_files": [
+                        "governance/align_rules.json",
+                        "hlf_mcp/hlf/compiler.py",
+                        "hlf_mcp/hlf/runtime.py",
+                    ],
                 }
             ]
             if has_findings

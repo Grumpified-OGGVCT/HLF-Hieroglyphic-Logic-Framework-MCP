@@ -28,6 +28,7 @@ Read in this order:
 - [ ] Batch 3: persona/operator doctrine, gallery/operator-legibility surfaces, and code-output proof surfaces
 - [ ] VS Code extension bridge: package HLF as a sidecar extension and operator shell over the packaged MCP surface, with HTTP transports as must-have first-class modes, multi-transport configuration, and honest lane-qualified UI
 - [ ] Ecosystem compatibility bridge: keep HLF first-class across JS/TS, Java, Go, Rust, and adjacent MCP ecosystems through one canonical core, explicit bridge plans, transport parity targets, and ongoing SDK-drift review
+- [ ] Symbolic-surface bridge: execute `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md` after completing the research run and locking the ASCII-first relation-edge contract
 - [ ] Keep current-truth docs and operator build notes aligned as each bridge artifact lands
 - [ ] Keep public sustainability/monetization surfaces intentionally minimal until the system is built, tested, and ready for controlled beta evaluation; if exposed at all before then, use only a quiet footer-level support/sustainability link rather than front-and-center README positioning
 

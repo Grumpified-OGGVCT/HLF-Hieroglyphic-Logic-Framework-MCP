@@ -43,7 +43,9 @@ def _stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _compute_weekly_artifact_id(*, source: str, generated_at: str, git_context: dict[str, Any]) -> str:
+def _compute_weekly_artifact_id(
+    *, source: str, generated_at: str, git_context: dict[str, Any]
+) -> str:
     digest = hashlib.sha256(
         _stable_json(
             {
@@ -187,7 +189,9 @@ def _normalize_security_findings(workflow_payload: dict[str, Any] | None) -> dic
         normalized["source"] = "workflow_payload.security_findings"
         if isinstance(explicit_payload.get("tool"), str) and explicit_payload.get("tool"):
             normalized["tool"] = explicit_payload["tool"]
-        codeql_category = explicit_payload.get("codeql_category") or ((code_quality or {}).get("codeql_category"))
+        codeql_category = explicit_payload.get("codeql_category") or (
+            (code_quality or {}).get("codeql_category")
+        )
         if isinstance(codeql_category, str) and codeql_category:
             normalized["codeql_category"] = codeql_category
 
@@ -237,7 +241,9 @@ def _validate_security_findings(security_findings: Any, errors: list[str]) -> No
     if not isinstance(security_findings.get("tool"), str) or not security_findings.get("tool"):
         errors.append("security_findings_tool_invalid")
     codeql_category = security_findings.get("codeql_category")
-    if codeql_category is not None and (not isinstance(codeql_category, str) or not codeql_category):
+    if codeql_category is not None and (
+        not isinstance(codeql_category, str) or not codeql_category
+    ):
         errors.append("security_findings_codeql_category_invalid")
     if not isinstance(security_findings.get("alerts_available"), bool):
         errors.append("security_findings_alerts_available_invalid")
@@ -366,7 +372,9 @@ def load_verified_weekly_artifacts(
         if source is not None and artifact.get("source") != source:
             continue
         if decision is not None:
-            decisions = {record.get("decision") for record in artifact.get("decision_records") or []}
+            decisions = {
+                record.get("decision") for record in artifact.get("decision_records") or []
+            }
             if decision not in decisions:
                 continue
         filtered.append(artifact)
@@ -375,7 +383,9 @@ def load_verified_weekly_artifacts(
     return filtered
 
 
-def find_weekly_artifact(artifact_id: str, metrics_dir: Path | None = None) -> dict[str, Any] | None:
+def find_weekly_artifact(
+    artifact_id: str, metrics_dir: Path | None = None
+) -> dict[str, Any] | None:
     for artifact in load_verified_weekly_artifacts(metrics_dir, verified_only=False):
         if artifact.get("artifact_id") == artifact_id:
             return artifact
@@ -389,7 +399,9 @@ def read_latest_weekly_artifact(metrics_dir: Path | None = None) -> dict[str, An
     return json.loads(latest_path.read_text(encoding="utf-8"))
 
 
-def persist_weekly_artifact(artifact: dict[str, Any], metrics_dir: Path | None = None) -> dict[str, Any]:
+def persist_weekly_artifact(
+    artifact: dict[str, Any], metrics_dir: Path | None = None
+) -> dict[str, Any]:
     effective_metrics_dir = _coerce_metrics_dir(metrics_dir)
     effective_metrics_dir.mkdir(parents=True, exist_ok=True)
 
@@ -598,15 +610,25 @@ def validate_weekly_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
         errors.append("distribution_contract_requires_source_compliance_invalid")
     if not isinstance(distribution_contract.get("eligible_for_governed_distribution"), bool):
         errors.append("distribution_contract_eligible_invalid")
-    if not isinstance(distribution_contract.get("target_class"), str) or not distribution_contract.get("target_class"):
+    if not isinstance(
+        distribution_contract.get("target_class"), str
+    ) or not distribution_contract.get("target_class"):
         errors.append("distribution_contract_target_class_invalid")
-    if not isinstance(distribution_contract.get("governor_surface"), str) or not distribution_contract.get("governor_surface"):
+    if not isinstance(
+        distribution_contract.get("governor_surface"), str
+    ) or not distribution_contract.get("governor_surface"):
         errors.append("distribution_contract_governor_surface_invalid")
-    if not isinstance(distribution_contract.get("compliance_surface"), str) or not distribution_contract.get("compliance_surface"):
+    if not isinstance(
+        distribution_contract.get("compliance_surface"), str
+    ) or not distribution_contract.get("compliance_surface"):
         errors.append("distribution_contract_compliance_surface_invalid")
-    if not isinstance(distribution_contract.get("eligibility_reason"), str) or not distribution_contract.get("eligibility_reason"):
+    if not isinstance(
+        distribution_contract.get("eligibility_reason"), str
+    ) or not distribution_contract.get("eligibility_reason"):
         errors.append("distribution_contract_eligibility_reason_invalid")
-    if artifact_status != "promoted" and distribution_contract.get("eligible_for_governed_distribution"):
+    if artifact_status != "promoted" and distribution_contract.get(
+        "eligible_for_governed_distribution"
+    ):
         errors.append("distribution_contract_promoted_state_mismatch")
 
     _validate_security_findings(security_findings, errors)
@@ -905,10 +927,15 @@ def build_hks_exemplar_from_weekly_artifact(
         solution_kind="weekly-pipeline",
         provenance=HKSProvenance(
             source_type=str(provenance_payload.get("source_type") or "scheduled_pipeline"),
-            source=str(provenance_payload.get("source") or artifact.get("source") or "local-scheduled"),
+            source=str(
+                provenance_payload.get("source") or artifact.get("source") or "local-scheduled"
+            ),
             collector=str(provenance_payload.get("collector") or "scripts.run_pipeline_scheduled"),
-            collected_at=str(provenance_payload.get("collected_at") or artifact.get("generated_at") or _utc_now()),
-            workflow_run_url=provenance_payload.get("workflow_run_url") or artifact.get("workflow_run_url"),
+            collected_at=str(
+                provenance_payload.get("collected_at") or artifact.get("generated_at") or _utc_now()
+            ),
+            workflow_run_url=provenance_payload.get("workflow_run_url")
+            or artifact.get("workflow_run_url"),
             branch=provenance_payload.get("branch"),
             commit_sha=provenance_payload.get("commit_sha"),
             artifact_path=str(artifact_path) if artifact_path else None,

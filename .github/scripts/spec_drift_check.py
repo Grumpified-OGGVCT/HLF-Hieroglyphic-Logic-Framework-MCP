@@ -82,11 +82,7 @@ def _load_registered_host_functions() -> set[str]:
         from hlf_mcp.hlf.registry import HostFunctionRegistry
 
         registry = HostFunctionRegistry(str(HF_JSON) if HF_JSON.exists() else None)
-        return {
-            str(entry.get("name", ""))
-            for entry in registry.list_all()
-            if entry.get("name")
-        }
+        return {str(entry.get("name", "")) for entry in registry.list_all() if entry.get("name")}
     except Exception:
         return set()
 

@@ -39,7 +39,9 @@ def fetch_code_scanning_alerts(tool_name: str = "CodeQL") -> list[dict[str, Any]
     page = 1
     encoded_tool = urllib.parse.quote(tool_name)
     while True:
-        payload = _api_request(f"code-scanning/alerts?tool_name={encoded_tool}&per_page=100&page={page}")
+        payload = _api_request(
+            f"code-scanning/alerts?tool_name={encoded_tool}&per_page=100&page={page}"
+        )
         if not isinstance(payload, list):
             break
         alerts.extend(item for item in payload if isinstance(item, dict))
@@ -49,7 +51,9 @@ def fetch_code_scanning_alerts(tool_name: str = "CodeQL") -> list[dict[str, Any]
     return alerts
 
 
-def build_code_scanning_summary_payload(alerts: list[dict[str, Any]], *, tool_name: str = "CodeQL") -> dict[str, Any]:
+def build_code_scanning_summary_payload(
+    alerts: list[dict[str, Any]], *, tool_name: str = "CodeQL"
+) -> dict[str, Any]:
     severity_counts: dict[str, int] = {}
     state_counts: dict[str, int] = {}
     open_alerts = 0
@@ -106,7 +110,9 @@ def build_fallback_payload(*, reason: str, tool_name: str = "CodeQL") -> dict[st
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Fetch GitHub code scanning summary for weekly artifacts.")
+    parser = argparse.ArgumentParser(
+        description="Fetch GitHub code scanning summary for weekly artifacts."
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--tool-name", default="CodeQL")
     args = parser.parse_args(argv)
@@ -118,7 +124,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = build_fallback_payload(reason=exc.__class__.__name__, tool_name=args.tool_name)
 
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(json.dumps({"output": str(args.output), "collection_state": payload["collection_state"]}, indent=2))
+    print(
+        json.dumps(
+            {"output": str(args.output), "collection_state": payload["collection_state"]}, indent=2
+        )
+    )
     return 0
 
 

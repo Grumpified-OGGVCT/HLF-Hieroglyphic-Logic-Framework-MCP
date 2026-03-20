@@ -118,17 +118,31 @@ def test_build_weekly_artifact_normalizes_security_findings_from_workflow_payloa
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_git_context",
-        lambda repo_root: {"branch": "main", "commit_sha": "abc123", "commit_short_sha": "abc", "status_porcelain": []},
+        lambda repo_root: {
+            "branch": "main",
+            "commit_sha": "abc123",
+            "commit_short_sha": "abc",
+            "status_porcelain": [],
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_governance_manifest_snapshot",
-        lambda repo_root: {"manifest_present": True, "manifest_sha256": "deadbeef", "drift": [], "entry_count": 4},
+        lambda repo_root: {
+            "manifest_present": True,
+            "manifest_sha256": "deadbeef",
+            "drift": [],
+            "entry_count": 4,
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_server_surface",
-        lambda: {"registered_tool_count": 35, "registered_resource_count": 9, "exported_callable_count": 35},
+        lambda: {
+            "registered_tool_count": 35,
+            "registered_resource_count": 9,
+            "exported_callable_count": 35,
+        },
     )
 
     artifact = weekly_artifacts.build_weekly_artifact(
@@ -169,17 +183,31 @@ def test_validate_weekly_artifact_accepts_built_payload(monkeypatch, tmp_path: P
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_git_context",
-        lambda repo_root: {"branch": "main", "commit_sha": "abc123", "commit_short_sha": "abc", "status_porcelain": []},
+        lambda repo_root: {
+            "branch": "main",
+            "commit_sha": "abc123",
+            "commit_short_sha": "abc",
+            "status_porcelain": [],
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_governance_manifest_snapshot",
-        lambda repo_root: {"manifest_present": True, "manifest_sha256": "deadbeef", "drift": [], "entry_count": 4},
+        lambda repo_root: {
+            "manifest_present": True,
+            "manifest_sha256": "deadbeef",
+            "drift": [],
+            "entry_count": 4,
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_server_surface",
-        lambda: {"registered_tool_count": 35, "registered_resource_count": 9, "exported_callable_count": 35},
+        lambda: {
+            "registered_tool_count": 35,
+            "registered_resource_count": 9,
+            "exported_callable_count": 35,
+        },
     )
 
     artifact = weekly_artifacts.build_weekly_artifact(
@@ -282,23 +310,39 @@ def test_validate_weekly_artifact_rejects_cross_field_mismatch() -> None:
     assert "provenance_branch_mismatch" in report["errors"]
 
 
-def test_append_weekly_artifact_decision_promotes_distribution_eligibility(monkeypatch, tmp_path: Path) -> None:
+def test_append_weekly_artifact_decision_promotes_distribution_eligibility(
+    monkeypatch, tmp_path: Path
+) -> None:
     from hlf_mcp import weekly_artifacts
 
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_git_context",
-        lambda repo_root: {"branch": "main", "commit_sha": "abc123", "commit_short_sha": "abc", "status_porcelain": []},
+        lambda repo_root: {
+            "branch": "main",
+            "commit_sha": "abc123",
+            "commit_short_sha": "abc",
+            "status_porcelain": [],
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_governance_manifest_snapshot",
-        lambda repo_root: {"manifest_present": True, "manifest_sha256": "deadbeef", "drift": [], "entry_count": 4},
+        lambda repo_root: {
+            "manifest_present": True,
+            "manifest_sha256": "deadbeef",
+            "drift": [],
+            "entry_count": 4,
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_server_surface",
-        lambda: {"registered_tool_count": 35, "registered_resource_count": 9, "exported_callable_count": 35},
+        lambda: {
+            "registered_tool_count": 35,
+            "registered_resource_count": 9,
+            "exported_callable_count": 35,
+        },
     )
 
     artifact = weekly_artifacts.build_weekly_artifact(
@@ -323,23 +367,39 @@ def test_append_weekly_artifact_decision_promotes_distribution_eligibility(monke
     assert artifact["decision_records"][0]["decision"] == "promoted"
 
 
-def test_record_weekly_artifact_decision_persists_verified_update(monkeypatch, tmp_path: Path) -> None:
+def test_record_weekly_artifact_decision_persists_verified_update(
+    monkeypatch, tmp_path: Path
+) -> None:
     from hlf_mcp import weekly_artifacts
 
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_git_context",
-        lambda repo_root: {"branch": "main", "commit_sha": "abc123", "commit_short_sha": "abc", "status_porcelain": []},
+        lambda repo_root: {
+            "branch": "main",
+            "commit_sha": "abc123",
+            "commit_short_sha": "abc",
+            "status_porcelain": [],
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_governance_manifest_snapshot",
-        lambda repo_root: {"manifest_present": True, "manifest_sha256": "deadbeef", "drift": [], "entry_count": 4},
+        lambda repo_root: {
+            "manifest_present": True,
+            "manifest_sha256": "deadbeef",
+            "drift": [],
+            "entry_count": 4,
+        },
     )
     monkeypatch.setattr(
         weekly_artifacts,
         "collect_server_surface",
-        lambda: {"registered_tool_count": 35, "registered_resource_count": 9, "exported_callable_count": 35},
+        lambda: {
+            "registered_tool_count": 35,
+            "registered_resource_count": 9,
+            "exported_callable_count": 35,
+        },
     )
 
     metrics_dir = tmp_path / "metrics"

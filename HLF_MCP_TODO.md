@@ -108,6 +108,16 @@ Use these files as the planning authorities before editing code:
 - [ ] Document ecosystem surfaces as constitutive source evidence in planning docs without overstating packaged truth
 - [ ] Re-evaluate deeper ecosystem recovery only after Batch 1 and Batch 2 proof surfaces are in place
 
+#### Symbolic and semasiographic surfaces (`bridge_contract`)
+- [x] Create `plan/feature-symbolic-semantic-surfaces-1.md` so the Arrival-inspired symbolic-surface lane has its own governed bridge plan
+- [x] Run a dedicated research pass for semasiographic notation, non-linear intent objects, temporal relations, causal relations, and agent-relation encoding
+- [x] Define keyboard-safe ASCII syntax before any glyphic or rendered operator surface is promoted
+- [x] Define round-trip rules between ASCII authoring, canonical AST/IR, Unicode symbolic projection, and plain-language explanation
+- [x] Define which symbolic surfaces are plain-text safe, which are Unicode-only, and which require rendered operator or gallery views
+- [x] Bind symbolic-surface work into grammar, translation, audit, and operator-surface plans without granting glyph renderings semantic authority
+- [ ] Add relation-edge compilation, projection, and explanation tests from `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md`
+- [ ] Decide whether relation edges stay generic tagged glyph statements or earn a dedicated AST node after proof exists
+
 ### Working Rule
 
 - [ ] Do not start a recovery implementation slice unless the corresponding recovery spec exists
@@ -243,6 +253,28 @@ Use these files as the planning authorities before editing code:
 - [ ] Define benchmark tracks for cycle time, defect escape, audit completeness, replayability, and operator handoff speed
 - [ ] Require benchmark artifacts before claiming orders-of-magnitude delivery or reliability gains in public-facing docs
 - [ ] Add one governed-HLF-versus-NLP-only comparison lane for a representative workflow family
+
+---
+
+## Phase 0.7: Symbolic and Semasiographic Surface Research
+
+**Priority: HIGH - Research this lane explicitly before it mutates grammar, translation, or operator surfaces**
+
+### Canonical authority boundary
+- [x] Keep canonical semantics in AST, IR, bytecode, and governance contracts
+- [x] Keep ASCII as the baseline keyboard-safe authoring surface
+- [x] Treat Unicode symbolic projection and rendered glyph surfaces as secondary governed projections only
+
+### Dedicated research pass
+- [x] Run a dedicated action-research pass for semasiographic notation theory, symbolic surface analogues, and practical compiler constraints
+- [x] Define non-linear intent-object structures and relation operators for time, cause, dependency, and agent roles in machine-checkable terms
+- [x] Record which ideas belong to doctrine, which belong to bridge implementation, and which are speculative and must stay out of current-truth claims
+
+### Projection and trust rules
+- [x] Define exact round-trip rules for `ASCII -> canonical structure -> symbolic projection -> explanation`
+- [x] Add audit and translation requirements proving symbolic projections cannot drift from canonical meaning
+- [x] Define benchmark lanes for compression with fidelity, parse determinism, and operator legibility before promotion
+- [ ] Add the first regression tests for relation-edge round-trip and explanation fidelity
 
 ---
 

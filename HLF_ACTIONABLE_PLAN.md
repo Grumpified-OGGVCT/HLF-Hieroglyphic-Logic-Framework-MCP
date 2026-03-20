@@ -92,6 +92,30 @@ Immediate bridge tasks for this track:
 3. bind autonomous-improvement candidates to `VERIFY -> MERGE` gates and operator-review rules
 4. convert strong outcome claims such as faster shipping, lower defects, and greater reliability into benchmark work rather than present-tense assertions
 
+## Symbolic Surface Bridge Track
+
+Use `plan/feature-symbolic-semantic-surfaces-1.md` as the authoritative bridge plan for the new semasiographic and glyph-inspired HLF lane.
+
+Research authority for this track now lives in `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RESEARCH_2026-03-20.md`.
+
+Formal bridge contract for this track now lives in `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md`.
+
+This track exists to push the useful part of the Arrival or heptapod intuition without corrupting HLF into an unverifiable symbolic art project.
+
+Working rule:
+
+- canonical semantics stay in AST, IR, bytecode, and governance contracts
+- ASCII remains the primary keyboard-safe authoring surface
+- Unicode symbolic projection is a governed secondary surface
+- rendered glyphic or operator views are optional audit and legibility surfaces, not semantic authorities
+
+Immediate bridge tasks for this track:
+
+1. treat relation-edge ASCII authoring as the first bridge form for time, cause, dependency, scope, and agent-role structure
+2. keep new Unicode relation symbols in the projection-only lane until round-trip proof and explanation tests exist
+3. add round-trip, translation, and audit tests for `ASCII -> AST -> projection -> explanation`
+4. bind symbolic output into operator and gallery surfaces only after canonical-source side-by-side evidence exists
+
 ## Knowledge Substrate Refactor Baseline
 
 Use `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` as the active external research brief for the weekly knowledge substrate work.

@@ -42,7 +42,12 @@ def _coerce_plan_content(payload: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _render_evolution_issue(plan_payload: dict[str, Any], code_starter_payload: dict[str, Any], run_url: str, focus_area: str | None = None) -> str:
+def _render_evolution_issue(
+    plan_payload: dict[str, Any],
+    code_starter_payload: dict[str, Any],
+    run_url: str,
+    focus_area: str | None = None,
+) -> str:
     plan = _coerce_plan_content(plan_payload)
     planner_model = plan_payload.get("model") or "unknown-model"
     code_model = code_starter_payload.get("model") or "unknown-model"
@@ -66,7 +71,9 @@ def _render_evolution_issue(plan_payload: dict[str, Any], code_starter_payload: 
     lines.append("## Seven-Pillar Assessment")
     lines.append("")
     for assessment in plan.get("pillar_assessments") or []:
-        lines.append(f"- {assessment['pillar']}: {assessment['status']} — {assessment['rationale']}")
+        lines.append(
+            f"- {assessment['pillar']}: {assessment['status']} — {assessment['rationale']}"
+        )
     lines.append("")
     lines.append("## Recommended Actions")
     lines.append("")
@@ -81,7 +88,9 @@ def _render_evolution_issue(plan_payload: dict[str, Any], code_starter_payload: 
         lines.append(f"- Lane: {item['lane']}")
         lines.append(f"- Phase: {item['phase']}")
         lines.append(f"- Pillar: {item['pillar']}")
-        lines.append(f"- First step: `{item['first_step_file']}` :: `{item['first_step_function']}`")
+        lines.append(
+            f"- First step: `{item['first_step_file']}` :: `{item['first_step_function']}`"
+        )
         lines.append("")
     lines.append("---")
     lines.append("")
@@ -192,7 +201,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build-test-health":
         payload = build_test_health_governed_review(
             _load_json(args.coverage),
-            test_suggestions_payload=_load_json(args.test_suggestions) if args.test_suggestions else None,
+            test_suggestions_payload=_load_json(args.test_suggestions)
+            if args.test_suggestions
+            else None,
         )
         _write_json(args.output, payload)
         return 0
@@ -208,7 +219,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build-code-quality":
         payload = build_code_quality_governed_review(
             _load_json(args.code_quality),
-            security_findings_payload=_load_json(args.security_findings) if args.security_findings else None,
+            security_findings_payload=_load_json(args.security_findings)
+            if args.security_findings
+            else None,
         )
         _write_json(args.output, payload)
         return 0

@@ -38,8 +38,35 @@ def _coerce_plan_content(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(content, dict):
         return content
     if isinstance(content, str):
-        return json.loads(content)
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
     return {}
+
+
+def _comma_join(values: Any, *, default: str = "none") -> str:
+    if not isinstance(values, list):
+        return default
+    items = [str(item) for item in values if isinstance(item, str) and item]
+    return ", ".join(items) if items else default
+
+
+def _render_persona_handoff(review: dict[str, Any]) -> list[str]:
+    return [
+        "## Persona Handoff",
+        "",
+        f"- Change class: {review.get('change_class') or 'unknown'}",
+        f"- Lane: {review.get('lane') or 'unknown'}",
+        f"- Owner persona: {review.get('owner_persona') or 'unknown'}",
+        f"- Review personas: {_comma_join(review.get('review_personas'))}",
+        f"- Required gates: {_comma_join(review.get('required_gates'))}",
+        f"- Escalate to: {review.get('escalate_to_persona') or 'none'}",
+        f"- Operator summary: {review.get('operator_summary') or 'none'}",
+        f"- Handoff template: `{review.get('handoff_template_ref') or 'none'}`",
+        "",
+    ]
 
 
 def _render_evolution_issue(
@@ -49,10 +76,18 @@ def _render_evolution_issue(
     focus_area: str | None = None,
 ) -> str:
     plan = _coerce_plan_content(plan_payload)
+    governed_review = build_evolution_governed_review(
+        plan_payload,
+        code_starter_payload=code_starter_payload,
+        focus_area=focus_area,
+    )
     planner_model = plan_payload.get("model") or "unknown-model"
     code_model = code_starter_payload.get("model") or "unknown-model"
-    top_priority_index = int(plan.get("top_priority_index", 0))
-    items = plan.get("evolution_items") or []
+    try:
+        top_priority_index = int(plan.get("top_priority_index", 0))
+    except (TypeError, ValueError):
+        top_priority_index = 0
+    items = plan.get("evolution_items") if isinstance(plan.get("evolution_items"), list) else []
 
     lines = []
     focus_tag = f" — Focus: {focus_area}" if focus_area else ""
@@ -68,28 +103,40 @@ def _render_evolution_issue(
     lines.append("")
     lines.append(plan.get("summary") or "No summary provided.")
     lines.append("")
+    lines.extend(_render_persona_handoff(governed_review))
     lines.append("## Seven-Pillar Assessment")
     lines.append("")
     for assessment in plan.get("pillar_assessments") or []:
+        if not isinstance(assessment, dict):
+            continue
         lines.append(
-            f"- {assessment['pillar']}: {assessment['status']} — {assessment['rationale']}"
+            "- "
+            + f"{assessment.get('pillar') or 'unknown'}: "
+            + f"{assessment.get('status') or 'unknown'} — "
+            + f"{assessment.get('rationale') or 'No rationale provided.'}"
         )
     lines.append("")
     lines.append("## Recommended Actions")
     lines.append("")
     for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
         top = " (top priority)" if index - 1 == top_priority_index else ""
-        lines.append(f"### {index}. {item['title']}{top}")
+        lines.append(f"### {index}. {item.get('title') or 'Untitled item'}{top}")
         lines.append("")
-        lines.append(f"- Why: {item['why']}")
-        lines.append(f"- Impact: {item['impact']} ({item['impact_metric']})")
-        lines.append(f"- Effort: {item['effort']}")
-        lines.append(f"- Priority: {item['priority']}")
-        lines.append(f"- Lane: {item['lane']}")
-        lines.append(f"- Phase: {item['phase']}")
-        lines.append(f"- Pillar: {item['pillar']}")
+        lines.append(f"- Why: {item.get('why') or 'No rationale provided.'}")
         lines.append(
-            f"- First step: `{item['first_step_file']}` :: `{item['first_step_function']}`"
+            f"- Impact: {item.get('impact') or 'unknown'} ({item.get('impact_metric') or 'n/a'})"
+        )
+        lines.append(f"- Effort: {item.get('effort') or 'unknown'}")
+        lines.append(f"- Priority: {item.get('priority') or 'unknown'}")
+        lines.append(f"- Lane: {item.get('lane') or 'unknown'}")
+        lines.append(f"- Phase: {item.get('phase') or 'unknown'}")
+        lines.append(f"- Pillar: {item.get('pillar') or 'unknown'}")
+        lines.append(
+            "- First step: "
+            + f"`{item.get('first_step_file') or 'unknown'}` :: "
+            + f"`{item.get('first_step_function') or 'unknown'}`"
         )
         lines.append("")
     lines.append("---")

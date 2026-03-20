@@ -11,6 +11,131 @@ from typing import Any
 from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
 
+WEEKLY_ARTIFACT_SCHEMA_VERSION = "1.1"
+WEEKLY_ARTIFACT_COLLECTOR_VERSION = "2026-03-19"
+
+
+def _source_type_for_weekly_artifact(source: str) -> str:
+    if source == "local-scheduled":
+        return "scheduled_pipeline"
+    if source.startswith("weekly-"):
+        return "workflow_weekly"
+    return "manual_artifact"
+
+
+def _build_weekly_provenance(
+    *,
+    source: str,
+    generated_at: str,
+    workflow_run_url: str | None,
+    git_context: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "source_type": _source_type_for_weekly_artifact(source),
+        "source": source,
+        "collector": "hlf_mcp.weekly_artifacts",
+        "collected_at": generated_at,
+        "workflow_run_url": workflow_run_url,
+        "branch": git_context.get("branch"),
+        "commit_sha": git_context.get("commit_sha"),
+        "artifact_path": None,
+        "confidence": 1.0,
+    }
+
+
+def validate_weekly_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    expected_top_level = [
+        "schema_version",
+        "generated_at",
+        "source",
+        "collector",
+        "git",
+        "governance",
+        "server_surface",
+        "provenance",
+        "evidence_contract",
+    ]
+    for key in expected_top_level:
+        if key not in artifact:
+            errors.append(f"missing_top_level:{key}")
+
+    if artifact.get("schema_version") != WEEKLY_ARTIFACT_SCHEMA_VERSION:
+        errors.append(
+            f"schema_version_mismatch:{artifact.get('schema_version')}!={WEEKLY_ARTIFACT_SCHEMA_VERSION}"
+        )
+
+    collector = artifact.get("collector") or {}
+    if collector.get("name") != "hlf_mcp.weekly_artifacts":
+        errors.append("collector_name_invalid")
+    if collector.get("version") != WEEKLY_ARTIFACT_COLLECTOR_VERSION:
+        errors.append("collector_version_invalid")
+
+    git_context = artifact.get("git") or {}
+    provenance = artifact.get("provenance") or {}
+    governance = artifact.get("governance") or {}
+    evidence_contract = artifact.get("evidence_contract") or {}
+    server_surface = artifact.get("server_surface") or {}
+
+    if provenance.get("source") != artifact.get("source"):
+        errors.append("provenance_source_mismatch")
+    if provenance.get("collected_at") != artifact.get("generated_at"):
+        errors.append("provenance_collected_at_mismatch")
+    if provenance.get("branch") != git_context.get("branch"):
+        errors.append("provenance_branch_mismatch")
+    if provenance.get("commit_sha") != git_context.get("commit_sha"):
+        errors.append("provenance_commit_sha_mismatch")
+
+    confidence = provenance.get("confidence")
+    if not isinstance(confidence, (int, float)) or not 0.0 <= float(confidence) <= 1.0:
+        errors.append("provenance_confidence_invalid")
+
+    if evidence_contract.get("intake_state") != "advisory":
+        errors.append("evidence_contract_intake_state_invalid")
+    if evidence_contract.get("promotion_state") != "requires_verification":
+        errors.append("evidence_contract_promotion_state_invalid")
+    if evidence_contract.get("collector_version") != WEEKLY_ARTIFACT_COLLECTOR_VERSION:
+        errors.append("evidence_contract_collector_version_invalid")
+    if evidence_contract.get("manifest_sha256") != governance.get("manifest_sha256"):
+        errors.append("evidence_contract_manifest_sha256_mismatch")
+    if evidence_contract.get("confidence") != confidence:
+        errors.append("evidence_contract_confidence_mismatch")
+
+    if governance.get("manifest_present") and not governance.get("manifest_sha256"):
+        errors.append("manifest_present_without_sha256")
+
+    if server_surface.get("registered_tool_count") is None:
+        errors.append("registered_tool_count_missing")
+    if server_surface.get("registered_resource_count") is None:
+        errors.append("registered_resource_count_missing")
+
+    source_type = provenance.get("source_type")
+    if source_type == "workflow_weekly" and not provenance.get("workflow_run_url"):
+        warnings.append("workflow_artifact_missing_run_url")
+
+    return {
+        "verified": not errors,
+        "errors": errors,
+        "warnings": warnings,
+        "checked_schema_version": WEEKLY_ARTIFACT_SCHEMA_VERSION,
+    }
+
+
+def attach_weekly_artifact_verification(
+    artifact: dict[str, Any],
+    verification_report: dict[str, Any],
+) -> dict[str, Any]:
+    artifact["verification"] = {
+        "verified": bool(verification_report.get("verified")),
+        "checked_at": _utc_now(),
+        "errors": list(verification_report.get("errors") or []),
+        "warnings": list(verification_report.get("warnings") or []),
+        "checked_schema_version": verification_report.get("checked_schema_version"),
+    }
+    return artifact
+
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
@@ -145,20 +270,40 @@ def build_weekly_artifact(
     workflow_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     effective_metrics_dir = metrics_dir or DEFAULT_METRICS_DIR
+    generated_at = _utc_now()
+    git_context = collect_git_context(repo_root)
+    governance_snapshot = collect_governance_manifest_snapshot(repo_root)
+    provenance = _build_weekly_provenance(
+        source=source,
+        generated_at=generated_at,
+        workflow_run_url=workflow_run_url,
+        git_context=git_context,
+    )
     artifact = {
-        "schema_version": "1.0",
-        "generated_at": _utc_now(),
+        "schema_version": WEEKLY_ARTIFACT_SCHEMA_VERSION,
+        "generated_at": generated_at,
         "source": source,
         "workflow_run_url": workflow_run_url,
         "collector": {
             "name": "hlf_mcp.weekly_artifacts",
             "python": sys.version.split()[0],
+            "version": WEEKLY_ARTIFACT_COLLECTOR_VERSION,
         },
         "repo_root": str(repo_root),
         "metrics_dir": str(effective_metrics_dir),
-        "git": collect_git_context(repo_root),
-        "governance": collect_governance_manifest_snapshot(repo_root),
+        "git": git_context,
+        "governance": governance_snapshot,
         "server_surface": collect_server_surface(),
+        "provenance": provenance,
+        "evidence_contract": {
+            "intake_state": "advisory",
+            "promotion_state": "requires_verification",
+            "requires_operator_or_policy_gate": True,
+            "confidence": provenance["confidence"],
+            "manifest_sha256": governance_snapshot.get("manifest_sha256"),
+            "collector_version": WEEKLY_ARTIFACT_COLLECTOR_VERSION,
+            "supersedes": None,
+        },
         "latest_suite_summary": latest_suite_summary
         if latest_suite_summary is not None
         else read_latest_suite_summary(effective_metrics_dir),
@@ -175,11 +320,15 @@ def build_hks_exemplar_from_weekly_artifact(
     *,
     artifact_path: Path | None = None,
 ) -> HKSValidatedExemplar | None:
+    verification = artifact.get("verification") or {}
+    if verification and not verification.get("verified"):
+        return None
+
     latest_suite_summary = artifact.get("latest_suite_summary") or {}
     if not latest_suite_summary or not latest_suite_summary.get("passed"):
         return None
 
-    git = artifact.get("git") or {}
+    provenance_payload = artifact.get("provenance") or {}
     scheduled_pipeline = artifact.get("scheduled_pipeline") or {}
     server_surface = artifact.get("server_surface") or {}
     governance = artifact.get("governance") or {}
@@ -208,15 +357,15 @@ def build_hks_exemplar_from_weekly_artifact(
         domain="hlf-specific",
         solution_kind="weekly-pipeline",
         provenance=HKSProvenance(
-            source_type="scheduled_pipeline",
-            source=str(artifact.get("source") or "local-scheduled"),
-            collector="scripts.run_pipeline_scheduled",
-            collected_at=str(artifact.get("generated_at") or _utc_now()),
-            workflow_run_url=artifact.get("workflow_run_url"),
-            branch=git.get("branch"),
-            commit_sha=git.get("commit_sha"),
+            source_type=str(provenance_payload.get("source_type") or "scheduled_pipeline"),
+            source=str(provenance_payload.get("source") or artifact.get("source") or "local-scheduled"),
+            collector=str(provenance_payload.get("collector") or "scripts.run_pipeline_scheduled"),
+            collected_at=str(provenance_payload.get("collected_at") or artifact.get("generated_at") or _utc_now()),
+            workflow_run_url=provenance_payload.get("workflow_run_url") or artifact.get("workflow_run_url"),
+            branch=provenance_payload.get("branch"),
+            commit_sha=provenance_payload.get("commit_sha"),
             artifact_path=str(artifact_path) if artifact_path else None,
-            confidence=1.0,
+            confidence=float(provenance_payload.get("confidence") or 1.0),
         ),
         tests=[
             HKSTestEvidence(
@@ -233,5 +382,5 @@ def build_hks_exemplar_from_weekly_artifact(
         topic="hlf_weekly_validated_runs",
         tags=["weekly", "pipeline", "validated", "hks"],
         summary=summary,
-        confidence=1.0,
+        confidence=float(provenance_payload.get("confidence") or 1.0),
     )

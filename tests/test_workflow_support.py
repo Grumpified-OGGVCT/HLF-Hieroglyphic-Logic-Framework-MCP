@@ -28,11 +28,42 @@ def test_emit_weekly_artifact_writes_normalized_schema(monkeypatch, tmp_path: Pa
         module,
         "build_weekly_artifact",
         lambda **kwargs: {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "source": kwargs["source"],
+            "generated_at": "2026-03-19T00:00:00+00:00",
+            "collector": {
+                "name": "hlf_mcp.weekly_artifacts",
+                "python": "3.12.0",
+                "version": "2026-03-19",
+            },
+            "git": {"branch": "main", "commit_sha": "abc123"},
+            "governance": {"manifest_present": True, "manifest_sha256": "abc", "drift": []},
+            "server_surface": {"registered_tool_count": 35, "registered_resource_count": 9},
+            "provenance": {
+                "source_type": "workflow_weekly",
+                "source": kwargs["source"],
+                "collector": "hlf_mcp.weekly_artifacts",
+                "collected_at": "2026-03-19T00:00:00+00:00",
+                "workflow_run_url": None,
+                "branch": "main",
+                "commit_sha": "abc123",
+                "artifact_path": None,
+                "confidence": 1.0,
+            },
+            "evidence_contract": {
+                "intake_state": "advisory",
+                "promotion_state": "requires_verification",
+                "requires_operator_or_policy_gate": True,
+                "confidence": 1.0,
+                "manifest_sha256": "abc",
+                "collector_version": "2026-03-19",
+                "supersedes": None,
+            },
             "workflow_payload": kwargs["workflow_payload"],
         },
     )
+    monkeypatch.setattr(module, "validate_weekly_artifact", lambda payload: {"verified": True, "errors": [], "warnings": [], "checked_schema_version": "1.1"})
+    monkeypatch.setattr(module, "attach_weekly_artifact_verification", lambda payload, report: payload | {"verification": report})
 
     exit_code = module.main(
         [
@@ -49,6 +80,7 @@ def test_emit_weekly_artifact_writes_normalized_schema(monkeypatch, tmp_path: Pa
     assert exit_code == 0
     assert payload["source"] == "weekly-spec-sentinel"
     assert payload["workflow_payload"]["spec"]["status"] == "ok"
+    assert payload["verification"]["verified"] is True
 
 
 def test_create_github_issue_skips_when_conflicting_pr_found(monkeypatch) -> None:

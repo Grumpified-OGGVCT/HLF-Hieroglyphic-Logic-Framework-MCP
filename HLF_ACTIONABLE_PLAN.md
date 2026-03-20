@@ -72,6 +72,26 @@ Use these surfaces together first:
 3. add an explicit packaged build-assist workflow that documents how `hlf_do`, `hlf_test_suite_summary`, and build-observation surfaces are used together
 4. promote broader self-build claims only after those gates are green
 
+## Autonomous Evolution Bridge Track
+
+Use `plan/feature-autonomous-evolution-1.md` as the bounded bridge plan for turning autonomous evolution from doctrine into governed implementation work.
+
+This track is intentionally narrower than the vision claim.
+
+What counts here is not theatrical "self-improvement" language. What counts is a professional loop:
+
+- observe friction, regressions, and weekly evidence
+- propose bounded improvements with provenance and scope
+- verify those improvements against lifecycle, tests, governance, and audit rules
+- promote only what survives explicit gates
+
+Immediate bridge tasks for this track:
+
+1. normalize weekly evidence so automation outputs can support proposal generation without contaminating truth
+2. define the proposal schema and risk classes for docs, tests, schema, and runtime changes
+3. bind autonomous-improvement candidates to `VERIFY -> MERGE` gates and operator-review rules
+4. convert strong outcome claims such as faster shipping, lower defects, and greater reliability into benchmark work rather than present-tense assertions
+
 ## Knowledge Substrate Refactor Baseline
 
 Use `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` as the active external research brief for the weekly knowledge substrate work.

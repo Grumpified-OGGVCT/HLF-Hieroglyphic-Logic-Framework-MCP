@@ -75,6 +75,86 @@ def test_build_weekly_artifact_uses_latest_suite_summary(monkeypatch, tmp_path: 
     assert artifact["latest_suite_summary"]["counts"]["passed"] == 8
     assert artifact["server_surface"]["registered_tool_count"] == 34
     assert artifact["toolkit"]["command"] == "status"
+    assert artifact["schema_version"] == "1.1"
+    assert artifact["collector"]["version"] == "2026-03-19"
+    assert artifact["provenance"]["source_type"] == "scheduled_pipeline"
+    assert artifact["evidence_contract"]["intake_state"] == "advisory"
+
+
+def test_validate_weekly_artifact_accepts_built_payload(monkeypatch, tmp_path: Path) -> None:
+    from hlf_mcp import weekly_artifacts
+
+    monkeypatch.setattr(
+        weekly_artifacts,
+        "collect_git_context",
+        lambda repo_root: {"branch": "main", "commit_sha": "abc123", "commit_short_sha": "abc", "status_porcelain": []},
+    )
+    monkeypatch.setattr(
+        weekly_artifacts,
+        "collect_governance_manifest_snapshot",
+        lambda repo_root: {"manifest_present": True, "manifest_sha256": "deadbeef", "drift": [], "entry_count": 4},
+    )
+    monkeypatch.setattr(
+        weekly_artifacts,
+        "collect_server_surface",
+        lambda: {"registered_tool_count": 35, "registered_resource_count": 9, "exported_callable_count": 35},
+    )
+
+    artifact = weekly_artifacts.build_weekly_artifact(
+        repo_root=tmp_path,
+        metrics_dir=tmp_path,
+        source="weekly-code-quality",
+        workflow_run_url="https://example.test/run/99",
+        latest_suite_summary={"passed": True, "counts": {"passed": 1}},
+    )
+
+    report = weekly_artifacts.validate_weekly_artifact(artifact)
+
+    assert report["verified"] is True
+    assert report["errors"] == []
+
+
+def test_validate_weekly_artifact_rejects_cross_field_mismatch() -> None:
+    from hlf_mcp.weekly_artifacts import validate_weekly_artifact
+
+    artifact = {
+        "schema_version": "1.1",
+        "generated_at": "2026-03-19T00:00:00+00:00",
+        "source": "weekly-test-health",
+        "collector": {
+            "name": "hlf_mcp.weekly_artifacts",
+            "python": "3.12.0",
+            "version": "2026-03-19",
+        },
+        "git": {"branch": "main", "commit_sha": "abc123"},
+        "governance": {"manifest_present": True, "manifest_sha256": "aaa", "drift": []},
+        "server_surface": {"registered_tool_count": 35, "registered_resource_count": 9},
+        "provenance": {
+            "source_type": "workflow_weekly",
+            "source": "weekly-test-health",
+            "collector": "hlf_mcp.weekly_artifacts",
+            "collected_at": "2026-03-19T00:00:00+00:00",
+            "workflow_run_url": "https://example.test/run/1",
+            "branch": "wrong-branch",
+            "commit_sha": "abc123",
+            "artifact_path": None,
+            "confidence": 1.0,
+        },
+        "evidence_contract": {
+            "intake_state": "advisory",
+            "promotion_state": "requires_verification",
+            "requires_operator_or_policy_gate": True,
+            "confidence": 1.0,
+            "manifest_sha256": "aaa",
+            "collector_version": "2026-03-19",
+            "supersedes": None,
+        },
+    }
+
+    report = validate_weekly_artifact(artifact)
+
+    assert report["verified"] is False
+    assert "provenance_branch_mismatch" in report["errors"]
 
 
 def test_build_hks_exemplar_from_weekly_artifact_returns_validated_entry(tmp_path: Path) -> None:

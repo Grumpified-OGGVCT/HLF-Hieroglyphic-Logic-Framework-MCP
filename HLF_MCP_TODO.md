@@ -200,6 +200,33 @@ Use these files as the planning authorities before editing code:
 
 ---
 
+## Phase 0.6: Governed Autonomous Evolution Bridge
+
+**Priority: HIGH - Make self-improvement auditable, bounded, and real before expanding the claim surface**
+
+### Evolution loop contract
+- [ ] Publish the canonical bridge loop as `observe -> propose -> verify -> promote`
+- [ ] Map each loop stage to existing repo surfaces: weekly workflows, lifecycle guards, verifier outputs, memory/provenance work, and operator review
+- [ ] Add one operator-facing note that distinguishes current autonomous-evolution reality from target-state vision
+
+### Evidence substrate
+- [ ] Normalize weekly evidence records so every stored finding includes branch, commit SHA, workflow run URL, script version, manifest hash, collected time, and confidence
+- [ ] Add supersession, expiry, and branch-isolation rules so automation cannot silently pollute long-lived truth across branches
+- [ ] Add a deterministic second-pass verifier before weekly findings can create issues, update planning artifacts, or enter longer-lived memory
+
+### Proposal generation and promotion
+- [ ] Define a bounded proposal schema: source evidence, target files, intended gain, risk class, required tests, and governance-review requirement
+- [ ] Connect friction logging and self-observe surfaces to proposal generation without granting autonomous merge authority
+- [ ] Classify proposal types into docs sync, benchmark refresh, schema normalization, test augmentation, and runtime change requiring stronger review
+- [ ] Bind all promoted proposals to explicit `VERIFY -> MERGE` evidence, including test status, trace completeness, and control-matrix checks
+
+### Benchmark discipline
+- [ ] Define benchmark tracks for cycle time, defect escape, audit completeness, replayability, and operator handoff speed
+- [ ] Require benchmark artifacts before claiming orders-of-magnitude delivery or reliability gains in public-facing docs
+- [ ] Add one governed-HLF-versus-NLP-only comparison lane for a representative workflow family
+
+---
+
 ## Phase 1: Core MCP Layer
 
 **Priority: CRITICAL - Everything else depends on this**

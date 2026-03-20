@@ -106,11 +106,43 @@ def test_run_pipeline_scheduled_writes_latest_and_history(monkeypatch, tmp_path:
         module,
         "build_weekly_artifact",
         lambda **kwargs: {
+            "schema_version": "1.1",
+            "generated_at": "2026-03-18T00:00:00+00:00",
+            "source": "local-scheduled",
+            "workflow_run_url": None,
+            "collector": {
+                "name": "hlf_mcp.weekly_artifacts",
+                "python": "3.12.0",
+                "version": "2026-03-19",
+            },
+            "git": {"branch": "main", "commit_sha": "abc123"},
+            "provenance": {
+                "source_type": "scheduled_pipeline",
+                "source": "local-scheduled",
+                "collector": "hlf_mcp.weekly_artifacts",
+                "collected_at": "2026-03-18T00:00:00+00:00",
+                "workflow_run_url": None,
+                "branch": "main",
+                "commit_sha": "abc123",
+                "artifact_path": None,
+                "confidence": 1.0,
+            },
+            "evidence_contract": {
+                "intake_state": "advisory",
+                "promotion_state": "requires_verification",
+                "requires_operator_or_policy_gate": True,
+                "confidence": 1.0,
+                "manifest_sha256": None,
+                "collector_version": "2026-03-19",
+                "supersedes": None,
+            },
             "latest_suite_summary": {"passed": True},
             "server_surface": {"registered_tool_count": 34, "registered_resource_count": 9},
-            "governance": {"drift": []},
+            "governance": {"manifest_present": False, "manifest_sha256": None, "drift": []},
         },
     )
+    monkeypatch.setattr(module, "validate_weekly_artifact", lambda payload: {"verified": True, "errors": [], "warnings": [], "checked_schema_version": "1.1"})
+    monkeypatch.setattr(module, "attach_weekly_artifact_verification", lambda payload, report: payload | {"verification": report})
 
     exit_code, payload, written_path = module.run_pipeline(
         repo_root=repo_root,
@@ -146,12 +178,38 @@ def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(
         module,
         "build_weekly_artifact",
         lambda **kwargs: {
+            "schema_version": "1.1",
             "generated_at": "2026-03-18T00:00:00+00:00",
             "source": "local-scheduled",
             "workflow_run_url": None,
+            "collector": {
+                "name": "hlf_mcp.weekly_artifacts",
+                "python": "3.12.0",
+                "version": "2026-03-19",
+            },
             "git": {"branch": "main", "commit_sha": "abc123"},
+            "provenance": {
+                "source_type": "scheduled_pipeline",
+                "source": "local-scheduled",
+                "collector": "hlf_mcp.weekly_artifacts",
+                "collected_at": "2026-03-18T00:00:00+00:00",
+                "workflow_run_url": None,
+                "branch": "main",
+                "commit_sha": "abc123",
+                "artifact_path": None,
+                "confidence": 1.0,
+            },
+            "evidence_contract": {
+                "intake_state": "advisory",
+                "promotion_state": "requires_verification",
+                "requires_operator_or_policy_gate": True,
+                "confidence": 1.0,
+                "manifest_sha256": None,
+                "collector_version": "2026-03-19",
+                "supersedes": None,
+            },
             "server_surface": {"registered_tool_count": 39, "registered_resource_count": 9},
-            "governance": {"drift": []},
+            "governance": {"manifest_present": False, "manifest_sha256": None, "drift": []},
             "latest_suite_summary": {
                 "passed": True,
                 "exit_code": 0,
@@ -167,6 +225,8 @@ def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(
             },
         },
     )
+    monkeypatch.setattr(module, "validate_weekly_artifact", lambda payload: {"verified": True, "errors": [], "warnings": [], "checked_schema_version": "1.1"})
+    monkeypatch.setattr(module, "attach_weekly_artifact_verification", lambda payload, report: payload | {"verification": report})
     monkeypatch.setenv("HLF_MEMORY_DB", str(memory_db))
 
     exit_code, payload, _ = module.run_pipeline(

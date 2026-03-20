@@ -120,3 +120,83 @@ test('ui acceptance: operator panel exposes claim-lane section', async () => {
   assert.ok(claimLaneSection.children.some((item) => item.label === 'current-true'));
   assert.ok(claimLaneSection.children.some((item) => item.label === 'Show Claim-Lane Context'));
 });
+
+test('ui acceptance: operator panel resource entries inspect packaged resources', async () => {
+  class MockTreeItem {
+    constructor(label, collapsibleState) {
+      this.label = label;
+      this.collapsibleState = collapsibleState;
+    }
+  }
+
+  class MockThemeIcon {
+    constructor(id) {
+      this.id = id;
+    }
+  }
+
+  class MockEventEmitter {
+    constructor() {
+      this.event = () => {};
+    }
+
+    fire() {}
+  }
+
+  const vscodeMock = {
+    TreeItem: MockTreeItem,
+    ThemeIcon: MockThemeIcon,
+    EventEmitter: MockEventEmitter,
+    TreeItemCollapsibleState: {
+      None: 0,
+      Expanded: 2,
+    },
+    Uri: {
+      file(filePath) {
+        return { fsPath: filePath };
+      },
+    },
+    workspace: {
+      workspaceFolders: [{ uri: { fsPath: 'C:\\repo' } }],
+    },
+  };
+
+  const { OperatorPanelProvider } = loadWithMocks(path.join(__dirname, '..', 'src', 'operatorPanel.js'), {
+    vscode: vscodeMock,
+    './config': {
+      getSettings() {
+        return {
+          transport: 'stdio',
+          attachMode: 'launch',
+          httpAuthMode: 'none',
+          evidencePath: undefined,
+          serverCommand: 'uv',
+          serverArgs: ['run', 'python', '-m', 'hlf_mcp.server'],
+        };
+      },
+      getEndpointUrl() {
+        return 'http://127.0.0.1:8000/mcp';
+      },
+      getHealthUrl() {
+        return 'http://127.0.0.1:8000/health';
+      },
+    },
+    './resourceCatalog': {
+      getPackagedResourceCatalog() {
+        return [{ uri: 'hlf://status/formal_verifier', category: 'status' }];
+      },
+      getServerResourcesPath() {
+        return 'C:\\repo\\hlf_mcp\\server_resources.py';
+      },
+    },
+  });
+
+  const provider = new OperatorPanelProvider({ getState: () => ({ running: false }) }, async () => ({ hasBearerToken: false }));
+  const children = await provider.getChildren();
+  const resourceSection = children.find((item) => item.label === 'Packaged Status Resources');
+  const resourceItem = resourceSection.children.find((item) => item.label === 'hlf://status/formal_verifier');
+
+  assert.equal(resourceItem.command.command, 'hlf.inspectResource');
+  assert.deepEqual(resourceItem.command.arguments, ['hlf://status/formal_verifier']);
+  assert.equal(resourceItem.contextValue, 'hlfResource');
+});

@@ -74,6 +74,11 @@
         "category": "HLF"
       },
       {
+        "command": "hlf.inspectResource",
+        "title": "HLF: Inspect Packaged Resource",
+        "category": "HLF"
+      },
+      {
         "command": "hlf.refreshOperatorPanel",
         "title": "HLF: Refresh Operator Panel",
         "category": "HLF"
@@ -142,6 +147,18 @@
         {
           "command": "hlf.refreshOperatorPanel",
           "when": "view == hlf.operatorPanel",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "hlf.inspectResource",
+          "when": "view == hlf.operatorPanel && viewItem == hlfResource",
+          "group": "inline"
+        },
+        {
+          "command": "hlf.copyResourceUri",
+          "when": "view == hlf.operatorPanel && viewItem == hlfResource",
           "group": "navigation"
         }
       ]

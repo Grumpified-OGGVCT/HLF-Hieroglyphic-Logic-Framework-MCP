@@ -158,8 +158,8 @@ class OperatorPanelProvider {
         description: 'status resource',
         tooltip: `${resource.uri}\nDerived from packaged resource declarations in ${serverResourcesPath ?? 'workspace-unavailable'}.`,
         command: {
-          command: 'hlf.copyResourceUri',
-          title: 'Copy Resource URI',
+          command: 'hlf.inspectResource',
+          title: 'Inspect Packaged Resource',
           arguments: [resource.uri],
         },
         iconPath: new vscode.ThemeIcon('symbol-key'),

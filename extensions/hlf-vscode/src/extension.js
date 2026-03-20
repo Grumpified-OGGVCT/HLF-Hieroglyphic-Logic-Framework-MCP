@@ -7,6 +7,7 @@ const { HlfServerController } = require('./launcher');
 const { StreamableHttpMcpClient } = require('./mcpHttpClient');
 const { OperatorPanelProvider } = require('./operatorPanel');
 const { runOperatorAction } = require('./packagedActions');
+const { applyResourceUriValues, getResourceUriPlaceholders } = require('./resourceUriTemplate');
 const { buildHttpHeaders, deleteHttpBearerToken, hasHttpBearerToken, storeHttpBearerToken } = require('./secrets');
 const { TrustPanel } = require('./trustPanel');
 
@@ -200,6 +201,53 @@ async function openEvidencePath() {
 async function copyResourceUri(resourceUri) {
   await vscode.env.clipboard.writeText(String(resourceUri));
   vscode.window.showInformationMessage(`Copied ${resourceUri} to the clipboard.`);
+}
+
+async function resolveResourceUri(resourceUri) {
+  const placeholders = getResourceUriPlaceholders(resourceUri);
+  if (placeholders.length === 0) {
+    return resourceUri;
+  }
+
+  const values = {};
+  for (const placeholder of placeholders) {
+    const value = await vscode.window.showInputBox({
+      prompt: `Enter a value for ${placeholder}.`,
+      ignoreFocusOut: true,
+    });
+    if (!value) {
+      return undefined;
+    }
+    values[placeholder] = value.trim();
+  }
+
+  return applyResourceUriValues(resourceUri, values);
+}
+
+async function inspectResource(resourceUri) {
+  const resolvedUri = await resolveResourceUri(String(resourceUri));
+  if (!resolvedUri) {
+    return undefined;
+  }
+
+  const result = await runPackagedAction(
+    ['resource', '--uri', resolvedUri, '--json'],
+    'HLF Resource Inspector',
+    `Packaged resource payload for ${resolvedUri}.`,
+  );
+  if (!result) {
+    return undefined;
+  }
+
+  trustPanel.show(`HLF Resource: ${resolvedUri}`, [
+    {
+      title: resolvedUri,
+      subtitle: 'Packaged MCP resource payload grounded in current server resources.',
+      body: result.parsed ?? result.stdout,
+    },
+  ]);
+
+  return result;
 }
 
 function refreshOperatorPanel() {
@@ -503,6 +551,7 @@ function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('hlf.copyConnectionDetails', copyConnectionDetails));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.openEvidencePath', openEvidencePath));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.copyResourceUri', copyResourceUri));
+  context.subscriptions.push(vscode.commands.registerCommand('hlf.inspectResource', inspectResource));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.refreshOperatorPanel', refreshOperatorPanel));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.setHttpBearerToken', setHttpBearerToken));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.clearHttpBearerToken', clearHttpBearerToken));

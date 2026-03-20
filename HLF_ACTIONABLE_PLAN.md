@@ -129,6 +129,17 @@ Implementation work should prefer improvements that move one or more of those me
 
 **None of these require local GPU inference.**
 
+## Sustainability Disclosure Discipline
+
+Until HLF is built, tested, and ready for controlled beta evaluation, public repo positioning should stay focused on mission, doctrine, and validated build progress rather than monetization.
+
+Working rule:
+
+- keep detailed monetization architecture private for now
+- do not elevate sponsorship, pricing, or enterprise language into the main repo story during reconstruction
+- if any public support surface is added before beta, keep it minimal and non-intrusive, such as a footer-level support or sustainability link
+- revisit broader sustainability disclosure only after control-group usage and real operating data exist
+
 ---
 
 ## 📋 ACTIONABLE REFINEMENTS (Prioritized)
@@ -157,6 +168,58 @@ Implementation work should prefer improvements that move one or more of those me
 **Success condition**:
 
 HLF can be shown, with tracked metrics, to produce more reproducible and governable outcomes than equivalent NLP-only orchestration.
+
+### ✅ REFINEMENT 0B: VS Code Extension Bridge Track
+**Status**: HIGH PRIORITY - Broad adoption path without reducing HLF into a thin plugin story
+
+**Problem**: The repo has local MCP wiring, distribution metadata, and operator-GUI draft material, but it does not yet have a packaged VS Code extension surface that can launch or attach to HLF in a standard, configurable, distributable way.
+
+**Solution**: Treat a VS Code extension as a bridge-lane sidecar over the packaged MCP surface, not as a separate implementation line.
+
+**Implementation Direction**:
+
+- keep packaged HLF authority in `hlf_mcp/` and use the extension only as the operator shell, launch surface, and GUI host
+- support `stdio`, `sse`, and `streamable-http` honestly, with HTTP transports treated as must-have adoption surfaces and `stdio` still framed as the first credible local build-assist lane
+- expose settings, commands, views, and packaging metadata needed for wide adoption without hiding trust or governance surfaces
+- support both Marketplace publication and offline VSIX distribution
+
+**Immediate next implementation items**:
+
+1. use `plan/architecture-vscode-extension-bridge-1.md` as the authoritative scaffold plan
+2. define a dedicated extension boundary such as `extensions/hlf-vscode/`
+3. add typed settings for transport, launch command, cwd, env, and evidence paths
+4. define the first operator-facing views for audit, trust, evidence, and packaged MCP status resources
+5. keep SSE and streamable-HTTP in-scope as first-class extension launch or attach modes rather than letting the bridge collapse into stdio-only tooling
+
+**Success condition**:
+
+HLF can be installed and operated inside VS Code like a first-class extension while still preserving the packaged MCP server as the implementation authority and preserving claim-lane discipline around transport maturity.
+
+### ✅ REFINEMENT 0C: Ecosystem Compatibility Bridge Track
+**Status**: HIGH PRIORITY - Keep HLF natively compatible with major MCP ecosystems without fragmenting the core
+
+**Problem**: The repo now has a concrete VS Code bridge track, but the broader compatibility goal across JavaScript or TypeScript, Java, Go, Rust, and related MCP ecosystems is still only implied in scattered roadmap notes.
+
+**Solution**: Treat ecosystem compatibility as an explicit bridge program: one canonical HLF core, many first-class launch, attach, and integration bridges that stay current with upstream SDK and protocol evolution.
+
+**Implementation Direction**:
+
+- keep packaged HLF authority in `hlf_mcp/` and build reference bridges instead of parallel HLF runtimes in other languages
+- preserve transport parity expectations across bridges wherever honest support is possible: `stdio`, `sse`, and `streamable-http`
+- maintain a compatibility matrix and version-watch discipline so JS/TS, Java, Go, Rust, and adjacent bridges do not silently drift stale
+- let the VS Code extension serve as the first concrete JS/TS bridge while planning equally explicit lanes for Go, Java, and Rust
+
+**Immediate next implementation items**:
+
+1. use `plan/architecture-ecosystem-compatibility-1.md` as the authoritative bridge plan for cross-language compatibility
+2. add explicit backlog items for JS/TS, Java, Go, and Rust bridge surfaces
+3. define one shared bridge contract for transport selection, attach mode, endpoint semantics, health checks, and operator-visible diagnostics
+4. add a compatibility watch process so upstream MCP SDK changes feed back into bridge planning and validation
+5. keep all cross-language claims lane-qualified until code, tests, and transport proof exist in this repo
+
+**Success condition**:
+
+HLF has a maintained compatibility program for major MCP ecosystems, with one canonical core and explicit, testable bridge lanes rather than ad hoc one-off adapters.
 
 ### ✅ REFINEMENT 0A: Knowledge Substrate Refactor Track
 **Status**: HIGH PRIORITY - Required for cohesion before the weekly knowledge system scales out

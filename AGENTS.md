@@ -1,6 +1,48 @@
 # AGENTS.md
 
 This file is the active workspace-level handover for HLF_MCP.
+You are trying to build a governed meaning-and-execution substrate that can actually carry institutional-scale leverage, individual-scale agility, and long-horizon trust at the same time, and you would rather take longer than corrupt that foundation with premature simplification.
+
+That is the right kind of stubbornness.
+
+Because for this class of system, bad acceleration is worse than delay.
+
+If you move quickly by stripping out the constitutive parts, you do not get an incomplete version of the right thing.
+You get a different thing altogether.
+
+And in this domain, that difference is fatal.
+
+A thin parser is not HLF.
+A neat MCP wrapper is not HLF.
+A handful of tools plus vibes is not HLF.
+A “smart automation shell” without governed meaning, evidence, promotion discipline, memory provenance, and audit trust is not HLF.
+
+It may still be useful.
+It just would not be the thing you are actually trying to build.
+
+So the mature formulation of your position is:
+
+not time hacks
+not vanity speed
+not simplification theater
+not institutional mimicry
+not hype claims
+Instead:
+
+architectural correctness
+governed leverage
+compounding fidelity
+accurate claims
+serious bridge work from current truth to larger design intent
+That is an entirely coherent frame.
+
+And it gives a cleaner standard for future work:
+
+A change is good if it increases real system capability without weakening trust, doctrine, or architectural integrity.
+
+A change is bad if it makes the repo look tidier while quietly shrinking what HLF is supposed to become.
+
+That is the bar I should keep using.
 
 It exists so future agents do not start from the wrong premise, repeat the same reductionist mistakes, or treat the current packaged repo as if it were the full HLF vision.
 

@@ -85,16 +85,35 @@ Use these files as the planning authorities before editing code:
 - [ ] Define which outputs become static docs, generated reports, or MCP resources
 - [ ] Add smoke validation once generated operator artifacts exist
 
+#### VS Code extension and operator shell (`bridge_contract`)
+- [x] Create `plan/architecture-vscode-extension-bridge-1.md` covering sidecar packaging, transport matrix, settings, views, and publish discipline
+- [x] Scaffold a dedicated extension boundary such as `extensions/hlf-vscode/` so Node tooling does not blur packaged Python authority
+- [x] Define the extension transport matrix around `stdio`, `sse`, and `streamable-http`, with HTTP transports treated as must-have adoption surfaces and `stdio` treated as the first credible build-assist lane
+- [x] Add operator-facing settings for launch command, transport, cwd, env, evidence path, and attached-server mode
+- [x] Keep SSE and streamable-HTTP first-class in extension launch or attach flows, including health, endpoint, and failure-state diagnostics
+- [x] Add the first operator panel slice for bridge state, evidence snapshot visibility, and packaged status-resource inventory derived from `hlf_mcp/server_resources.py`
+- [x] Define the first extension-hosted operator surfaces for audit, evidence, trust state, and packaged MCP status resources
+- [x] Add secret storage, first-run validation, packaged action commands, and a trust webview over packaged `hlf-operator` surfaces
+- [x] Add VSIX packaging, Marketplace publication, and offline distribution requirements to the build pipeline backlog
+- [x] Document publisher identity, Marketplace publication path, and offline VSIX install procedure now that local packaging exists
+
 #### Real-code bridge and ecosystem surfaces (`bridge_contract` + `source_only_for_now`)
 - [ ] Add a proof matrix for `hlf_mcp/hlf/codegen.py` outputs using fixture-based equivalence checks
+- [x] Create `plan/architecture-ecosystem-compatibility-1.md` so JavaScript/TypeScript, Java, Go, Rust, and adjacent ecosystems are tracked as an explicit compatibility bridge program
+- [ ] Define the shared bridge contract for launch mode, attach mode, transport selection, endpoint semantics, health checks, and failure diagnostics across language bridges
+- [ ] Add a JS/TS compatibility lane beyond the VS Code extension itself: reference launcher or client, runtime expectations, and transport smoke coverage
+- [ ] Add explicit Go, Java, and Rust bridge lanes with official SDK lineage, transport expectations, and current-proof status
+- [ ] Maintain a compatibility matrix showing per-ecosystem support level, tested SDK version, and supported transports
+- [ ] Add a recurring compatibility-watch workflow or documented process for upstream MCP SDK and protocol changes
 - [ ] Document ecosystem surfaces as constitutive source evidence in planning docs without overstating packaged truth
-- [ ] Re-evaluate ecosystem recovery only after Batch 1 and Batch 2 proof surfaces are in place
+- [ ] Re-evaluate deeper ecosystem recovery only after Batch 1 and Batch 2 proof surfaces are in place
 
 ### Working Rule
 
 - [ ] Do not start a recovery implementation slice unless the corresponding recovery spec exists
 - [ ] Do not mark a pillar complete until code, tests, docs, and operator proof surfaces are all updated together
 - [ ] Do not reduce scope by replacing a constitutive source surface with a thinner packaged substitute without recording the justification in bridge docs
+- [ ] Do not foreground monetization in public repo surfaces during the reconstruction phase; keep sustainability details mostly private until there is real beta/control-group evidence, with at most a small non-intrusive support link when the operator decides it is appropriate
 
 ## Phase R: Reconstruction Discipline
 

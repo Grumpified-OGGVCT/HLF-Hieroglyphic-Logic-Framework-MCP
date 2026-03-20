@@ -14,6 +14,42 @@ from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
 _log = logging.getLogger(__name__)
 
 
+def load_test_suite_summary(
+    metrics_dir: str | Path | None = None,
+    *,
+    include_output: bool = False,
+) -> dict[str, Any]:
+    """Load the latest persisted pytest suite summary from the metrics store."""
+    base_dir = Path(metrics_dir).expanduser() if metrics_dir else DEFAULT_METRICS_DIR
+    summary_path = base_dir / LATEST_SUMMARY_FILE
+    if not summary_path.exists():
+        return {
+            "status": "not_found",
+            "metrics_dir": str(base_dir),
+            "summary_path": str(summary_path),
+        }
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {
+            "status": "error",
+            "metrics_dir": str(base_dir),
+            "summary_path": str(summary_path),
+            "error": str(exc),
+        }
+
+    summary = dict(payload)
+    if not include_output:
+        summary.pop("stdout", None)
+        summary.pop("stderr", None)
+    return {
+        "status": "ok",
+        "metrics_dir": str(base_dir),
+        "summary_path": str(summary_path),
+        "summary": summary,
+    }
+
+
 def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_compile(source: str) -> dict[str, Any]:
@@ -210,34 +246,17 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         include_output: bool = False,
     ) -> dict[str, Any]:
         """Return the latest persisted pytest suite summary from the metrics store."""
-        base_dir = Path(metrics_dir).expanduser() if metrics_dir else DEFAULT_METRICS_DIR
-        summary_path = base_dir / LATEST_SUMMARY_FILE
-        if not summary_path.exists():
-            return {
-                "status": "not_found",
-                "metrics_dir": str(base_dir),
-                "summary_path": str(summary_path),
-            }
-        try:
-            payload = json.loads(summary_path.read_text(encoding="utf-8"))
-        except Exception as exc:
-            return {
-                "status": "error",
-                "metrics_dir": str(base_dir),
-                "summary_path": str(summary_path),
-                "error": str(exc),
-            }
+        return load_test_suite_summary(metrics_dir, include_output=include_output)
 
-        summary = dict(payload)
-        if not include_output:
-            summary.pop("stdout", None)
-            summary.pop("stderr", None)
-        return {
-            "status": "ok",
-            "metrics_dir": str(base_dir),
-            "summary_path": str(summary_path),
-            "summary": summary,
-        }
+    @mcp.tool()
+    def hlf_weekly_evidence_summary(
+        metrics_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Return the governed weekly evidence history summary from the metrics store."""
+        from hlf_mcp.weekly_artifacts import summarize_weekly_artifacts
+
+        resolved_metrics_dir = Path(metrics_dir).expanduser() if metrics_dir else None
+        return summarize_weekly_artifacts(resolved_metrics_dir)
 
     return {
         "hlf_compile": hlf_compile,
@@ -250,4 +269,5 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_disassemble": hlf_disassemble,
         "hlf_submit_ast": hlf_submit_ast,
         "hlf_test_suite_summary": hlf_test_suite_summary,
+        "hlf_weekly_evidence_summary": hlf_weekly_evidence_summary,
     }

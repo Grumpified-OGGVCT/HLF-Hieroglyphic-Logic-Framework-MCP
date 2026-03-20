@@ -85,16 +85,45 @@ Use these files as the planning authorities before editing code:
 - [ ] Define which outputs become static docs, generated reports, or MCP resources
 - [ ] Add smoke validation once generated operator artifacts exist
 
+#### VS Code extension and operator shell (`bridge_contract`)
+- [x] Create `plan/architecture-vscode-extension-bridge-1.md` covering sidecar packaging, transport matrix, settings, views, and publish discipline
+- [x] Scaffold a dedicated extension boundary such as `extensions/hlf-vscode/` so Node tooling does not blur packaged Python authority
+- [x] Define the extension transport matrix around `stdio`, `sse`, and `streamable-http`, with HTTP transports treated as must-have adoption surfaces and `stdio` treated as the first credible build-assist lane
+- [x] Add operator-facing settings for launch command, transport, cwd, env, evidence path, and attached-server mode
+- [x] Keep SSE and streamable-HTTP first-class in extension launch or attach flows, including health, endpoint, and failure-state diagnostics
+- [x] Add the first operator panel slice for bridge state, evidence snapshot visibility, and packaged status-resource inventory derived from `hlf_mcp/server_resources.py`
+- [x] Define the first extension-hosted operator surfaces for audit, evidence, trust state, and packaged MCP status resources
+- [x] Add secret storage, first-run validation, packaged action commands, and a trust webview over packaged `hlf-operator` surfaces
+- [x] Add VSIX packaging, Marketplace publication, and offline distribution requirements to the build pipeline backlog
+- [x] Document publisher identity, Marketplace publication path, and offline VSIX install procedure now that local packaging exists
+
 #### Real-code bridge and ecosystem surfaces (`bridge_contract` + `source_only_for_now`)
 - [ ] Add a proof matrix for `hlf_mcp/hlf/codegen.py` outputs using fixture-based equivalence checks
+- [x] Create `plan/architecture-ecosystem-compatibility-1.md` so JavaScript/TypeScript, Java, Go, Rust, and adjacent ecosystems are tracked as an explicit compatibility bridge program
+- [ ] Define the shared bridge contract for launch mode, attach mode, transport selection, endpoint semantics, health checks, and failure diagnostics across language bridges
+- [ ] Add a JS/TS compatibility lane beyond the VS Code extension itself: reference launcher or client, runtime expectations, and transport smoke coverage
+- [ ] Add explicit Go, Java, and Rust bridge lanes with official SDK lineage, transport expectations, and current-proof status
+- [ ] Maintain a compatibility matrix showing per-ecosystem support level, tested SDK version, and supported transports
+- [ ] Add a recurring compatibility-watch workflow or documented process for upstream MCP SDK and protocol changes
 - [ ] Document ecosystem surfaces as constitutive source evidence in planning docs without overstating packaged truth
-- [ ] Re-evaluate ecosystem recovery only after Batch 1 and Batch 2 proof surfaces are in place
+- [ ] Re-evaluate deeper ecosystem recovery only after Batch 1 and Batch 2 proof surfaces are in place
+
+#### Symbolic and semasiographic surfaces (`bridge_contract`)
+- [x] Create `plan/feature-symbolic-semantic-surfaces-1.md` so the Arrival-inspired symbolic-surface lane has its own governed bridge plan
+- [x] Run a dedicated research pass for semasiographic notation, non-linear intent objects, temporal relations, causal relations, and agent-relation encoding
+- [x] Define keyboard-safe ASCII syntax before any glyphic or rendered operator surface is promoted
+- [x] Define round-trip rules between ASCII authoring, canonical AST/IR, Unicode symbolic projection, and plain-language explanation
+- [x] Define which symbolic surfaces are plain-text safe, which are Unicode-only, and which require rendered operator or gallery views
+- [x] Bind symbolic-surface work into grammar, translation, audit, and operator-surface plans without granting glyph renderings semantic authority
+- [ ] Add relation-edge compilation, projection, and explanation tests from `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md`
+- [ ] Decide whether relation edges stay generic tagged glyph statements or earn a dedicated AST node after proof exists
 
 ### Working Rule
 
 - [ ] Do not start a recovery implementation slice unless the corresponding recovery spec exists
 - [ ] Do not mark a pillar complete until code, tests, docs, and operator proof surfaces are all updated together
 - [ ] Do not reduce scope by replacing a constitutive source surface with a thinner packaged substitute without recording the justification in bridge docs
+- [ ] Do not foreground monetization in public repo surfaces during the reconstruction phase; keep sustainability details mostly private until there is real beta/control-group evidence, with at most a small non-intrusive support link when the operator decides it is appropriate
 
 ## Phase R: Reconstruction Discipline
 
@@ -197,6 +226,55 @@ Use these files as the planning authorities before editing code:
 - [ ] Add a docs-sync task so tool/resource counts and high-level server claims can be regenerated or checked automatically
 - [ ] Add a knowledge-sync task so weekly issue bodies and stored research summaries are generated from machine-readable artifacts first and LLM interpretation second
 - [ ] Add a provenance schema for weekly knowledge entries: source class, source path, line or artifact ID, branch, commit SHA, collected_at, collector version, confidence, and supersedes pointer
+
+---
+
+## Phase 0.6: Governed Autonomous Evolution Bridge
+
+**Priority: HIGH - Make self-improvement auditable, bounded, and real before expanding the claim surface**
+
+### Evolution loop contract
+- [ ] Publish the canonical bridge loop as `observe -> propose -> verify -> promote`
+- [ ] Map each loop stage to existing repo surfaces: weekly workflows, lifecycle guards, verifier outputs, memory/provenance work, and operator review
+- [ ] Add one operator-facing note that distinguishes current autonomous-evolution reality from target-state vision
+
+### Evidence substrate
+- [ ] Normalize weekly evidence records so every stored finding includes branch, commit SHA, workflow run URL, script version, manifest hash, collected time, and confidence
+- [ ] Add supersession, expiry, and branch-isolation rules so automation cannot silently pollute long-lived truth across branches
+- [ ] Add a deterministic second-pass verifier before weekly findings can create issues, update planning artifacts, or enter longer-lived memory
+
+### Proposal generation and promotion
+- [ ] Define a bounded proposal schema: source evidence, target files, intended gain, risk class, required tests, and governance-review requirement
+- [ ] Connect friction logging and self-observe surfaces to proposal generation without granting autonomous merge authority
+- [ ] Classify proposal types into docs sync, benchmark refresh, schema normalization, test augmentation, and runtime change requiring stronger review
+- [ ] Bind all promoted proposals to explicit `VERIFY -> MERGE` evidence, including test status, trace completeness, and control-matrix checks
+
+### Benchmark discipline
+- [ ] Define benchmark tracks for cycle time, defect escape, audit completeness, replayability, and operator handoff speed
+- [ ] Require benchmark artifacts before claiming orders-of-magnitude delivery or reliability gains in public-facing docs
+- [ ] Add one governed-HLF-versus-NLP-only comparison lane for a representative workflow family
+
+---
+
+## Phase 0.7: Symbolic and Semasiographic Surface Research
+
+**Priority: HIGH - Research this lane explicitly before it mutates grammar, translation, or operator surfaces**
+
+### Canonical authority boundary
+- [x] Keep canonical semantics in AST, IR, bytecode, and governance contracts
+- [x] Keep ASCII as the baseline keyboard-safe authoring surface
+- [x] Treat Unicode symbolic projection and rendered glyph surfaces as secondary governed projections only
+
+### Dedicated research pass
+- [x] Run a dedicated action-research pass for semasiographic notation theory, symbolic surface analogues, and practical compiler constraints
+- [x] Define non-linear intent-object structures and relation operators for time, cause, dependency, and agent roles in machine-checkable terms
+- [x] Record which ideas belong to doctrine, which belong to bridge implementation, and which are speculative and must stay out of current-truth claims
+
+### Projection and trust rules
+- [x] Define exact round-trip rules for `ASCII -> canonical structure -> symbolic projection -> explanation`
+- [x] Add audit and translation requirements proving symbolic projections cannot drift from canonical meaning
+- [x] Define benchmark lanes for compression with fidelity, parse determinism, and operator legibility before promotion
+- [ ] Add the first regression tests for relation-edge round-trip and explanation fidelity
 
 ---
 

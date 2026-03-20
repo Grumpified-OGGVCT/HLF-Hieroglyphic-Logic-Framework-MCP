@@ -354,6 +354,32 @@ It is:
 - witness, memory, and audit surfaces preserve what the build learned
 - packaged build helpers such as `_toolkit.py status` keep the loop honest
 
+### Autonomous evolution, properly scoped
+
+The larger target is not merely recursive build assistance.
+
+The larger target is governed autonomous evolution:
+
+- the system observes real friction, regressions, and production-adjacent evidence
+- it proposes bounded improvements instead of improvising open-ended self-modification
+- it verifies those improvements against tests, policy, effect contracts, and operator-trust surfaces
+- it promotes only changes that survive explicit gates
+
+That target matters because the real promise is not just writing code faster.
+
+It is building software more professionally:
+
+- faster because intent, validation, and delivery are compressed into one governed loop
+- better because proposals are evidence-backed and checked before promotion
+- more reliable because replay, audit, and verification are first-class
+- more durable because the system can evolve without abandoning its meaning layer
+
+But the north star stays honest:
+
+- benchmarked speed or defect-rate superiority is not claimed before measurement
+- provable correctness is a target attached to formal-verifier and governance work, not a blanket present-tense guarantee
+- autonomous evolution is only credible when observe/propose/verify/promote is implemented as a real control loop
+
 ### Gating rule
 
 The north star does not flatten transport readiness.

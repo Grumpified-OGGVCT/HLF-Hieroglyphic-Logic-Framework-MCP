@@ -48,6 +48,8 @@ hlfsh    = "hlf_mcp.hlf.hlfsh:main"
 hlflsp   = "hlf_mcp.hlf.hlflsp:main"
 hlftest  = "hlf_mcp.hlf.hlftest:main"
 hlf-test-runner = "hlf_mcp.test_runner:main"
+hlf-evidence = "hlf_mcp.evidence_query:main"
+hlf-operator = "hlf_mcp.operator_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hlf_mcp", "governance"]

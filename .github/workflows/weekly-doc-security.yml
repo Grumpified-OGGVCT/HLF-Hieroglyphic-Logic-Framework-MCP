@@ -1,13 +1,11 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  HLF — Weekly Documentation Accuracy + Security Pattern Review              ║
+# ║  HLF — Weekly Documentation Drift + Security Pattern Review                 ║
 # ║                                                                              ║
 # ║  Two parallel jobs using GitHub Actions matrix strategy (mini-swarm):       ║
 # ║                                                                              ║
-# ║  Job 1 — doc-accuracy: qwen3:32b (Alibaba Qwen3)                           ║
-# ║    Best-in-class: Structured reasoning + precise claim verification         ║
-# ║    Why: qwen3 excels at cross-referencing structured data (tables, counts,  ║
-# ║          numbers) — exactly what's needed to verify README opcode counts,   ║
-# ║          tool lists, and stdlib tables against actual code.                 ║
+# ║  Job 1 — doc-accuracy: deterministic machine drift report                   ║
+# ║    Why: documentation accuracy is a verification task, so issue creation    ║
+# ║          should be driven by measured drift rather than inferred omissions.  ║
 # ║                                                                              ║
 # ║  Job 2 — security-patterns: deepseek-r1:14b (DeepSeek)                    ║
 # ║    Best-in-class: Chain-of-thought adversarial reasoning                   ║
@@ -18,7 +16,7 @@
 # ║  Triggers: Weekly Wednesday 02:00 UTC                                       ║
 # ║  Output: Separate GitHub Issues per job                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
-name: "Weekly — Doc Accuracy + Security Patterns (qwen3.5:cloud ∥ deepseek-r1:14b)"
+name: "Weekly — Doc Drift + Security Patterns (verified docs ∥ constrained security triage)"
 
 on:
   schedule:
@@ -53,82 +51,64 @@ jobs:
           python .github/scripts/spec_drift_check.py > /tmp/doc_drift.json 2>&1 || true
           cat /tmp/doc_drift.json
 
-      - name: Build doc comparison snapshot
+      - name: Summarize deterministic doc drift
+        id: doc_drift
         run: |
-          # Extract README sections for LLM
           python << 'PYEOF'
-          import re
-          from pathlib import Path
-          root = Path(".")
-          readme = (root / "README.md").read_text(encoding="utf-8") if (root / "README.md").exists() else ""
-          # Pull opcode table section
-          opcode_m = re.search(r"(?s)(### Opcode Table.*?)(?=\n###|\n##|\Z)", readme)
-          tools_m  = re.search(r"(?s)(## .*?MCP Tools.*?)(?=\n##|\Z)", readme)
-          stdlib_m = re.search(r"(?s)(## .*?Stdlib.*?)(?=\n##|\Z)", readme)
-          # Count actual implementation
+          import json
           import os
-          server_text = (root / "hlf_mcp" / "server.py").read_text(encoding="utf-8") if (root / "hlf_mcp" / "server.py").exists() else ""
-          tool_count = len(re.findall(r"@mcp\.tool\b", server_text))
-          stdlib_dir = root / "hlf_mcp" / "hlf" / "stdlib"
-          stdlib_mods = [f.stem for f in stdlib_dir.iterdir() if f.suffix == ".py" and not f.stem.startswith("_")] if stdlib_dir.is_dir() else []
-          bytecode_text = (root / "hlf_mcp" / "hlf" / "bytecode.py").read_text(encoding="utf-8") if (root / "hlf_mcp" / "hlf" / "bytecode.py").exists() else ""
-          enum_vals = re.findall(r"^\s{4}([A-Z_]+)\s*=\s*(0x[0-9a-fA-F]+)", bytecode_text, re.MULTILINE)
-          print(f"ACTUAL_TOOLS={tool_count}")
-          print(f"ACTUAL_STDLIB={len(stdlib_mods)}: {', '.join(sorted(stdlib_mods))}")
-          print(f"ACTUAL_OPCODES={len(enum_vals)}")
-          # Write doc snapshot
-          with open("/tmp/doc_snapshot.txt", "w") as f:
-              f.write(f"ACTUAL COUNTS:\n")
-              f.write(f"  MCP Tools: {tool_count}\n")
-              f.write(f"  Stdlib modules: {len(stdlib_mods)} — {', '.join(sorted(stdlib_mods))}\n")
-              f.write(f"  Opcodes: {len(enum_vals)}\n\n")
-              f.write("README OPCODE SECTION (excerpt):\n")
-              f.write(opcode_m.group(1)[:3000] if opcode_m else "(not found)\n")
-              f.write("\n\nREADME MCP TOOLS SECTION (excerpt):\n")
-              f.write(tools_m.group(1)[:3000] if tools_m else "(not found)\n")
-              f.write("\n\nREADME STDLIB SECTION (excerpt):\n")
-              f.write(stdlib_m.group(1)[:2000] if stdlib_m else "(not found)\n")
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/doc_drift.json').read_text(encoding='utf-8'))
+          actionable = []
+          for finding in report.get('findings', []):
+            if not finding.get('drift'):
+              continue
+            actionable.append(finding)
+
+          lines = []
+          if not actionable:
+            lines.append('NO_ACTIONABLE_FINDINGS')
+            lines.append('All measured documentation counts and spec bindings are aligned with the current packaged code.')
+          else:
+            lines.append('# Machine-verified documentation drift findings')
+            for finding in actionable:
+              lines.append(f"- **{finding['check']}**")
+              if finding['check'] == 'readme_count_accuracy':
+                drifts = finding.get('drifts', {})
+                for key, values in drifts.items():
+                  lines.append(
+                    f"  - `{key}`: README claims {values['readme']}, packaged code reports {values['actual']}"
+                  )
+              elif finding['check'] == 'host_functions_json_vs_registry':
+                if finding.get('only_in_json'):
+                  lines.append(
+                    f"  - Present only in governance JSON: {', '.join(finding['only_in_json'])}"
+                  )
+                if finding.get('only_in_registry'):
+                  lines.append(
+                    f"  - Present only in packaged registry: {', '.join(finding['only_in_registry'])}"
+                  )
+              elif finding['check'] == 'bytecode_spec_vs_op_enum':
+                if finding.get('only_in_yaml'):
+                  lines.append(
+                    f"  - Present only in bytecode spec: {', '.join(finding['only_in_yaml'])}"
+                  )
+                if finding.get('only_in_py'):
+                  lines.append(
+                    f"  - Present only in bytecode enum: {', '.join(finding['only_in_py'])}"
+                  )
+                if finding.get('code_mismatches'):
+                  lines.append('  - Opcode code mismatches detected between spec and enum.')
+
+          Path('/tmp/doc_review.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+            fh.write(f"has_drift={'true' if actionable else 'false'}\n")
           PYEOF
-          cat /tmp/doc_snapshot.txt
-
-      - name: "qwen3.5:cloud — Documentation accuracy review"
-        env:
-          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-        run: |
-          DOC_SNAPSHOT=$(cat /tmp/doc_snapshot.txt)
-          DRIFT_REPORT=$(cat /tmp/doc_drift.json)
-
-          python .github/scripts/ollama_client.py \
-            --model "qwen3.5:cloud" \
-            --fallback-model "nemotron-3-super" \
-            --system "You are a precise technical documentation auditor. You cross-reference code reality against documentation claims with high accuracy. You are non-reductive — you report every discrepancy, not just the obvious ones. You never generalize or skip details." \
-            --prompt "Audit the HLF repository documentation for accuracy. Compare the README's claimed counts and tables against the actual code implementation.
-
-          ACTUAL COUNTS FROM CODE:
-          ${DOC_SNAPSHOT}
-
-          SPEC DRIFT REPORT:
-          ${DRIFT_REPORT}
-
-          For each discrepancy found:
-          1. Quote the exact README claim (with section title)
-          2. State the actual value from code
-          3. Rate the impact: MISLEADING / MINOR / COSMETIC
-          4. Provide the exact README edit needed to make it accurate
-
-          Also check:
-          - Are all MCP tools listed in the tools reference table? (check ACTUAL_TOOLS count above)
-          - Does the opcode table in the README list all 37 opcodes (or the actual count)?
-          - Are all 8 stdlib modules listed?
-          - Are roadmap phase items accurately marked as done/pending?
-
-          Be specific. Quote section names. Give line-for-line corrections." \
-            --output /tmp/doc_review.json \
-            --temperature 0.05
-
-          python -c "import json; d=json.load(open('/tmp/doc_review.json')); print(d['content'])" > /tmp/doc_review.md
+          cat /tmp/doc_review.md
 
       - name: Create doc accuracy issue
+        if: steps.doc_drift.outputs.has_drift == 'true' && github.ref_name == github.event.repository.default_branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -140,7 +120,7 @@ jobs:
           cat > /tmp/doc_issue.md << ISSUE_EOF
           ## 📖 HLF Documentation Accuracy Review — ${WEEK}
 
-          **Reviewed by**: \`qwen3.5:cloud\` (Alibaba, 397B cloud tier, 256K ctx, Text+Image)
+          **Reviewed by**: machine-verified drift check
           **Workflow**: [Weekly Doc + Security Review]($RUN_URL)
 
           ---
@@ -153,18 +133,29 @@ jobs:
           _Auto-generated weekly. Close when all documentation corrections are merged._
           ISSUE_EOF
 
-          python .github/scripts/emit_weekly_artifact.py \
-            --source "weekly-doc-accuracy" \
-            --output /tmp/weekly-doc-accuracy-artifact.json \
-            --extra-json "/tmp/doc_drift.json:doc_drift" \
-            --extra-json "/tmp/doc_review.json:doc_review"
-
           python .github/scripts/create_github_issue.py \
-            --title "📖 [Doc Audit] HLF documentation accuracy — ${WEEK}" \
+            --title "📖 [Doc Audit] HLF documentation accuracy" \
             --body "@/tmp/doc_issue.md" \
             --labels "documentation,automated" \
             --conflict-labels "documentation" \
             --conflict-title-substrings "doc audit,documentation accuracy"
+
+      - name: Build governed review contract
+        if: always()
+        run: |
+          python .github/scripts/governed_review_contract.py \
+            build-doc-accuracy \
+            --doc-drift /tmp/doc_drift.json \
+            --output /tmp/governed_review.json
+
+      - name: Emit normalized doc artifact
+        if: always()
+        run: |
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-doc-accuracy" \
+            --output /tmp/weekly-doc-accuracy-artifact.json \
+            --extra-json "/tmp/doc_drift.json:doc_drift" \
+            --extra-json "/tmp/governed_review.json:governed_review"
 
       - name: Upload doc accuracy artifact
         if: always()
@@ -188,6 +179,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e ".[dev]" --quiet
 
       - name: Gather security-relevant files
         run: |
@@ -220,7 +214,7 @@ jobs:
           head -c 15000 /tmp/security_context.txt > /tmp/security_context_trunc.txt
           echo "Security context: $(wc -c < /tmp/security_context_trunc.txt) chars"
 
-      - name: "deepseek-r1:14b — Adversarial security review"
+      - name: "deepseek-r1:14b — Adversarial security triage"
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
@@ -229,36 +223,46 @@ jobs:
           python .github/scripts/ollama_client.py \
             --model "deepseek-r1:14b" \
             --fallback-model "nemotron-3-super" \
-            --system "You are an adversarial security researcher (red-hat, authorized). You think like an attacker who has read the full HLF source code. You reason step by step about every bypass, injection, and evasion path. Your findings are non-reductive and specific — never vague." \
-            --prompt "Perform an adversarial security review of the HLF ALIGN Ledger rules and the runtime host function dispatcher.
+            --system "You are a defensive security reviewer. Use only the provided current code and tests. Do not invent components, hidden flows, or attack paths that require behavior not evidenced in the provided files. If a mitigation already exists, mark it mitigated and exclude it from open findings." \
+            --prompt "Review the current HLF ALIGN Ledger and runtime/stdlib security surfaces and report only actionable findings supported by the provided code.
 
           Context:
           ${SEC_CONTEXT}
 
-          For each issue found:
-          1. NAME: Short, descriptive vulnerability name
-          2. ATTACK_PATH: Step-by-step how an adversary exploits it
-          3. BYPASS: How the current ALIGN rule fails to catch it (or is absent)
-          4. IMPACT: What the adversary achieves (PII exfil / SSRF / RCE / etc.)
-          5. FIX: The exact new ALIGN rule pattern OR runtime guard code needed
+          Rules:
+          - Use only the provided code as evidence.
+          - Do not speculate about unshown tools, services, or registration paths.
+          - If a suspected issue is already mitigated in the code, do not include it as an open finding.
+          - If no actionable findings remain, output exactly: NO_ACTIONABLE_FINDINGS
 
-          Cover these attack classes:
-          - ALIGN rule evasion via Unicode normalization edge cases
-          - SSRF via redirects (rules check the URL string, not the destination)
-          - Path traversal via symlinks or alternate path encodings
-          - Homoglyph injection that Pass 0 might miss
-          - Gas exhaustion via nested loops or recursive host calls
-          - Memory exfiltration via repeated MEMORY_RECALL operations
-          - Tool approval token theft via registry serialization
+          For each open finding, use this exact structure:
+          1. NAME
+          2. EVIDENCE: exact file and current behavior
+          3. ATTACK_PATH
+          4. IMPACT
+          5. FIX
 
-          Think adversarially. Show your reasoning chain. Report everything." \
+          Focus on current, unmitigated gaps only." \
             --output /tmp/security_review.json \
-            --think \
             --temperature 0.1
 
           python -c "import json; d=json.load(open('/tmp/security_review.json')); print(d['content'])" > /tmp/security_review.md
 
+      - name: Gate security issue creation
+        id: security_gate
+        run: |
+          python << 'PYEOF'
+          import os
+          from pathlib import Path
+
+          text = Path('/tmp/security_review.md').read_text(encoding='utf-8').strip()
+          actionable = 'NO_ACTIONABLE_FINDINGS' not in text and 'No actionable findings' not in text
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              fh.write(f"has_findings={'true' if actionable else 'false'}\n")
+          PYEOF
+
       - name: Create security issue
+        if: steps.security_gate.outputs.has_findings == 'true' && github.ref_name == github.event.repository.default_branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -285,17 +289,29 @@ jobs:
           _Auto-generated weekly. Triage each finding. Close when all critical/high items are resolved._
           ISSUE_EOF
 
-          python .github/scripts/emit_weekly_artifact.py \
-            --source "weekly-security-patterns" \
-            --output /tmp/weekly-security-patterns-artifact.json \
-            --extra-json "/tmp/security_review.json:security_review"
-
           python .github/scripts/create_github_issue.py \
-            --title "🔐 [Security Review] HLF adversarial pattern analysis — ${WEEK}" \
+            --title "🔐 [Security Review] HLF adversarial pattern analysis" \
             --body "@/tmp/security_issue.md" \
             --labels "security,adversarial,automated,priority-high" \
             --conflict-labels "security,adversarial" \
             --conflict-title-substrings "security review,adversarial pattern analysis"
+
+      - name: Build governed review contract
+        if: always()
+        run: |
+          python .github/scripts/governed_review_contract.py \
+            build-security-patterns \
+            --security-review /tmp/security_review.json \
+            --output /tmp/governed_review.json
+
+      - name: Emit normalized security artifact
+        if: always()
+        run: |
+          python .github/scripts/emit_weekly_artifact.py \
+            --source "weekly-security-patterns" \
+            --output /tmp/weekly-security-patterns-artifact.json \
+            --extra-json "/tmp/security_review.json:security_review" \
+            --extra-json "/tmp/governed_review.json:governed_review"
 
       - name: Upload security patterns artifact
         if: always()

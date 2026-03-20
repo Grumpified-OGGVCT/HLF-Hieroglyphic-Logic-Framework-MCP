@@ -106,6 +106,15 @@ jobs:
           echo '---' >> /tmp/issue_body.md
           echo '_This issue is auto-managed by the Spec Sentinel workflow. It will be updated if drift persists next week._' >> /tmp/issue_body.md
 
+      - name: Build governed review contract
+        if: always()
+        run: |
+          python .github/scripts/governed_review_contract.py \
+            build-spec-sentinel \
+            --drift-report /tmp/drift_report.json \
+            --ai-analysis /tmp/ai_analysis.json \
+            --output /tmp/governed_review.json
+
       - name: Emit normalized weekly artifact
         if: always()
         run: |
@@ -113,7 +122,8 @@ jobs:
             --source "weekly-spec-sentinel" \
             --output /tmp/weekly-spec-sentinel-artifact.json \
             --extra-json "/tmp/drift_report.json:drift_report" \
-            --extra-json "/tmp/ai_analysis.json:ai_analysis"
+            --extra-json "/tmp/ai_analysis.json:ai_analysis" \
+            --extra-json "/tmp/governed_review.json:governed_review"
 
       - name: Upload normalized weekly artifact
         if: always()

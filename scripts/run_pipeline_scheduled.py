@@ -9,7 +9,12 @@ from typing import Any
 from hlf_mcp.local_scheduler import get_local_scheduler_status, load_local_scheduler_settings
 from hlf_mcp.rag.memory import RAGMemory
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, run_pytest_suite
-from hlf_mcp.weekly_artifacts import build_hks_exemplar_from_weekly_artifact, build_weekly_artifact
+from hlf_mcp.weekly_artifacts import (
+    attach_weekly_artifact_verification,
+    build_hks_exemplar_from_weekly_artifact,
+    build_weekly_artifact,
+    validate_weekly_artifact,
+)
 
 
 LATEST_ARTIFACT = "weekly_pipeline_latest.json"
@@ -25,6 +30,25 @@ def _write_artifacts(payload: dict[str, Any], metrics_dir: Path, output_path: Pa
     with history_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload) + "\n")
     return target
+
+
+def _write_verified_artifacts(payload: dict[str, Any], metrics_dir: Path, output_path: Path | None) -> tuple[dict[str, Any], Path]:
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    target = output_path or (metrics_dir / LATEST_ARTIFACT)
+    target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    serialized_payload = json.loads(target.read_text(encoding="utf-8"))
+    verification_report = validate_weekly_artifact(serialized_payload)
+    if not verification_report.get("verified"):
+        raise ValueError(f"weekly artifact verification failed: {verification_report['errors']}")
+
+    verified_payload = attach_weekly_artifact_verification(serialized_payload, verification_report)
+    target.write_text(json.dumps(verified_payload, indent=2), encoding="utf-8")
+
+    history_path = metrics_dir / HISTORY_ARTIFACT
+    with history_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(verified_payload) + "\n")
+    return verified_payload, target
 
 
 def run_pipeline(
@@ -81,7 +105,7 @@ def run_pipeline(
             "db_path": memory_db_path,
         }
 
-    written_path = _write_artifacts(payload, metrics_dir, target_path)
+    payload, written_path = _write_verified_artifacts(payload, metrics_dir, target_path)
     return suite_exit_code, payload, written_path
 
 

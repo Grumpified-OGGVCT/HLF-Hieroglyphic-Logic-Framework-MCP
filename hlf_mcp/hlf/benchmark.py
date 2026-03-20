@@ -9,20 +9,27 @@ from __future__ import annotations
 import json
 from typing import Any
 
-try:
-    import tiktoken
+_ENCODER: Any | None = None
+_TOKENIZER_UNAVAILABLE = False
 
-    _ENCODER = tiktoken.get_encoding("cl100k_base")
 
-    def _count(text: str) -> int:
+def _count(text: str) -> int:
+    global _ENCODER, _TOKENIZER_UNAVAILABLE
+
+    if not _TOKENIZER_UNAVAILABLE and _ENCODER is None:
+        try:
+            import tiktoken
+
+            _ENCODER = tiktoken.get_encoding("cl100k_base")
+        except ImportError:
+            _TOKENIZER_UNAVAILABLE = True
+
+    if _ENCODER is not None:
         return len(_ENCODER.encode(text))
 
-except ImportError:
-    # Fallback: rough word/token estimate
-    def _count(text: str) -> int:  # type: ignore[misc]
-        import re
+    import re
 
-        return len(re.findall(r"\S+", text))
+    return len(re.findall(r"\S+", text))
 
 
 # Reference NLP templates for standard HLF intent types

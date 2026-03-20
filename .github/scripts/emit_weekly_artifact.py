@@ -13,19 +13,45 @@ if str(ROOT) not in sys.path:
 
 DEFAULT_METRICS_DIR: Path | None = None
 build_weekly_artifact: Any | None = None
+attach_weekly_artifact_verification: Any | None = None
+validate_weekly_artifact: Any | None = None
 
 
-def _load_artifact_dependencies() -> tuple[Path, Any]:
-    global DEFAULT_METRICS_DIR, build_weekly_artifact
+def _load_artifact_dependencies() -> tuple[Path, Any, Any, Any]:
+    global \
+        DEFAULT_METRICS_DIR, \
+        build_weekly_artifact, \
+        attach_weekly_artifact_verification, \
+        validate_weekly_artifact
 
-    if DEFAULT_METRICS_DIR is None or build_weekly_artifact is None:
+    if (
+        DEFAULT_METRICS_DIR is None
+        or build_weekly_artifact is None
+        or attach_weekly_artifact_verification is None
+        or validate_weekly_artifact is None
+    ):
         from hlf_mcp.test_runner import DEFAULT_METRICS_DIR as default_metrics_dir
-        from hlf_mcp.weekly_artifacts import build_weekly_artifact as artifact_builder
+        from hlf_mcp.weekly_artifacts import (
+            attach_weekly_artifact_verification as verification_attacher,
+        )
+        from hlf_mcp.weekly_artifacts import (
+            build_weekly_artifact as artifact_builder,
+        )
+        from hlf_mcp.weekly_artifacts import (
+            validate_weekly_artifact as artifact_validator,
+        )
 
         DEFAULT_METRICS_DIR = default_metrics_dir
         build_weekly_artifact = artifact_builder
+        attach_weekly_artifact_verification = verification_attacher
+        validate_weekly_artifact = artifact_validator
 
-    return DEFAULT_METRICS_DIR, build_weekly_artifact
+    return (
+        DEFAULT_METRICS_DIR,
+        build_weekly_artifact,
+        attach_weekly_artifact_verification,
+        validate_weekly_artifact,
+    )
 
 
 def _workflow_run_url() -> str | None:
@@ -67,7 +93,7 @@ def _load_extra_payload(entries: list[str]) -> dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    default_metrics_dir, _ = _load_artifact_dependencies()
+    default_metrics_dir, _, _, _ = _load_artifact_dependencies()
     parser = argparse.ArgumentParser(
         description="Emit a normalized weekly artifact for GitHub workflows."
     )
@@ -82,7 +108,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    _, build_weekly_artifact = _load_artifact_dependencies()
+    _, build_weekly_artifact, attach_weekly_artifact_verification, validate_weekly_artifact = (
+        _load_artifact_dependencies()
+    )
     args = build_parser().parse_args(argv)
     suite_summary = _load_json_file(args.suite_summary_file)
     workflow_payload = _load_extra_payload(args.extra_json)
@@ -96,6 +124,18 @@ def main(argv: list[str] | None = None) -> int:
         workflow_payload=workflow_payload or None,
     )
     args.output.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+    verified_payload = json.loads(args.output.read_text(encoding="utf-8"))
+    verification_report = validate_weekly_artifact(verified_payload)
+    if not verification_report.get("verified"):
+        print(
+            json.dumps(
+                {"artifact_path": str(args.output), "verification": verification_report}, indent=2
+            ),
+            file=sys.stderr,
+        )
+        return 2
+    verified_payload = attach_weekly_artifact_verification(verified_payload, verification_report)
+    args.output.write_text(json.dumps(verified_payload, indent=2), encoding="utf-8")
     print(json.dumps({"artifact_path": str(args.output), "source": artifact["source"]}, indent=2))
     return 0
 

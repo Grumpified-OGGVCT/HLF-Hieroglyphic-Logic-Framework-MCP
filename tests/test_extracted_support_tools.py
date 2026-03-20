@@ -6,6 +6,30 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _minimal_governed_review(source: str) -> dict[str, object]:
+    return {
+        "contract_version": "1.0",
+        "review_type": "weekly_artifact",
+        "summary": f"No governed review contract was attached for {source}.",
+        "severity": "info",
+        "automation_status": "not_collected",
+        "operator_gate_required": True,
+        "recommended_triage_lane": None,
+        "backend": {
+            "provider": None,
+            "access_mode": None,
+            "model": None,
+            "tier_index": None,
+            "fallback_chain": [],
+        },
+        "pillar_assessments": [],
+        "recommended_actions": [],
+        "evidence_refs": [],
+        "escalation_triggers": [],
+        "review_metadata": {"source": source},
+    }
+
+
 def _load_script_module(name: str):
     script_path = REPO_ROOT / "scripts" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(name, script_path)
@@ -106,10 +130,85 @@ def test_run_pipeline_scheduled_writes_latest_and_history(monkeypatch, tmp_path:
         module,
         "build_weekly_artifact",
         lambda **kwargs: {
+            "artifact_id": "weekly_pipeline_demo",
+            "artifact_status": "advisory",
+            "schema_version": "1.3",
+            "generated_at": "2026-03-18T00:00:00+00:00",
+            "source": "local-scheduled",
+            "workflow_run_url": None,
+            "collector": {
+                "name": "hlf_mcp.weekly_artifacts",
+                "python": "3.12.0",
+                "version": "2026-03-19",
+            },
+            "git": {"branch": "main", "commit_sha": "abc123"},
+            "provenance": {
+                "source_type": "scheduled_pipeline",
+                "source": "local-scheduled",
+                "collector": "hlf_mcp.weekly_artifacts",
+                "collected_at": "2026-03-18T00:00:00+00:00",
+                "workflow_run_url": None,
+                "branch": "main",
+                "commit_sha": "abc123",
+                "artifact_path": None,
+                "confidence": 1.0,
+            },
+            "evidence_contract": {
+                "intake_state": "advisory",
+                "promotion_state": "requires_verification",
+                "requires_operator_or_policy_gate": True,
+                "confidence": 1.0,
+                "manifest_sha256": None,
+                "collector_version": "2026-03-19",
+                "current_status": "advisory",
+                "triage_lane": None,
+                "decision_count": 0,
+                "supersedes": None,
+            },
+            "decision_records": [],
+            "distribution_contract": {
+                "requires_source_compliance": True,
+                "eligible_for_governed_distribution": False,
+                "target_class": "source_compliant_forks_and_mcp_consumers",
+                "governor_surface": "governance.update_governor.UpdateGovernor",
+                "compliance_surface": "scripts.fork_compliance_check.run_compliance_check",
+                "eligibility_reason": "awaiting_promotion_or_operator_gate",
+            },
+            "security_findings": {
+                "collection_state": "not_collected",
+                "source": None,
+                "tool": "CodeQL",
+                "codeql_category": None,
+                "alerts_available": False,
+                "summary": {
+                    "total_alerts": None,
+                    "open_alerts": None,
+                    "closed_alerts": None,
+                    "severity_counts": {},
+                    "state_counts": {},
+                },
+                "evidence_refs": [],
+            },
             "latest_suite_summary": {"passed": True},
             "server_surface": {"registered_tool_count": 34, "registered_resource_count": 9},
-            "governance": {"drift": []},
+            "governance": {"manifest_present": False, "manifest_sha256": None, "drift": []},
+            "governed_review": _minimal_governed_review("local-scheduled"),
         },
+    )
+    monkeypatch.setattr(
+        module,
+        "validate_weekly_artifact",
+        lambda payload: {
+            "verified": True,
+            "errors": [],
+            "warnings": [],
+            "checked_schema_version": "1.3",
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "attach_weekly_artifact_verification",
+        lambda payload, report: payload | {"verification": report},
     )
 
     exit_code, payload, written_path = module.run_pipeline(
@@ -146,12 +245,67 @@ def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(
         module,
         "build_weekly_artifact",
         lambda **kwargs: {
+            "artifact_id": "weekly_pipeline_demo_hks",
+            "artifact_status": "advisory",
+            "schema_version": "1.3",
             "generated_at": "2026-03-18T00:00:00+00:00",
             "source": "local-scheduled",
             "workflow_run_url": None,
+            "collector": {
+                "name": "hlf_mcp.weekly_artifacts",
+                "python": "3.12.0",
+                "version": "2026-03-19",
+            },
             "git": {"branch": "main", "commit_sha": "abc123"},
+            "provenance": {
+                "source_type": "scheduled_pipeline",
+                "source": "local-scheduled",
+                "collector": "hlf_mcp.weekly_artifacts",
+                "collected_at": "2026-03-18T00:00:00+00:00",
+                "workflow_run_url": None,
+                "branch": "main",
+                "commit_sha": "abc123",
+                "artifact_path": None,
+                "confidence": 1.0,
+            },
+            "evidence_contract": {
+                "intake_state": "advisory",
+                "promotion_state": "requires_verification",
+                "requires_operator_or_policy_gate": True,
+                "confidence": 1.0,
+                "manifest_sha256": None,
+                "collector_version": "2026-03-19",
+                "current_status": "advisory",
+                "triage_lane": None,
+                "decision_count": 0,
+                "supersedes": None,
+            },
+            "decision_records": [],
+            "distribution_contract": {
+                "requires_source_compliance": True,
+                "eligible_for_governed_distribution": False,
+                "target_class": "source_compliant_forks_and_mcp_consumers",
+                "governor_surface": "governance.update_governor.UpdateGovernor",
+                "compliance_surface": "scripts.fork_compliance_check.run_compliance_check",
+                "eligibility_reason": "awaiting_promotion_or_operator_gate",
+            },
+            "security_findings": {
+                "collection_state": "not_collected",
+                "source": None,
+                "tool": "CodeQL",
+                "codeql_category": None,
+                "alerts_available": False,
+                "summary": {
+                    "total_alerts": None,
+                    "open_alerts": None,
+                    "closed_alerts": None,
+                    "severity_counts": {},
+                    "state_counts": {},
+                },
+                "evidence_refs": [],
+            },
             "server_surface": {"registered_tool_count": 39, "registered_resource_count": 9},
-            "governance": {"drift": []},
+            "governance": {"manifest_present": False, "manifest_sha256": None, "drift": []},
             "latest_suite_summary": {
                 "passed": True,
                 "exit_code": 0,
@@ -165,7 +319,23 @@ def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(
                     "xpassed": 0,
                 },
             },
+            "governed_review": _minimal_governed_review("local-scheduled"),
         },
+    )
+    monkeypatch.setattr(
+        module,
+        "validate_weekly_artifact",
+        lambda payload: {
+            "verified": True,
+            "errors": [],
+            "warnings": [],
+            "checked_schema_version": "1.3",
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "attach_weekly_artifact_verification",
+        lambda payload, report: payload | {"verification": report},
     )
     monkeypatch.setenv("HLF_MEMORY_DB", str(memory_db))
 

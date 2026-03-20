@@ -2,10 +2,10 @@
 spec_drift_check.py — Detect drift between governance spec files and implementation.
 
 Checks:
-  1. bytecode_spec.yaml opcode list vs bytecode.py Op enum
-  2. host_functions.json function names vs runtime.py HOST_FUNCTIONS / registry defaults
-  3. grammar.py HLF_GRAMMAR statement types vs compiler.py handler coverage
-  4. README opcode/tool/stdlib counts vs actual code counts
+    1. bytecode_spec.yaml opcode list vs bytecode.py Op enum
+    2. host_functions.json function names vs packaged HostFunctionRegistry
+    3. grammar.py HLF_GRAMMAR statement types vs compiler.py handler coverage
+    4. README opcode/tool/stdlib counts vs actual packaged code counts
 
 Exits 0 if no drift found, 1 if drift detected (to fail the workflow step).
 Prints a structured JSON report to stdout.
@@ -23,7 +23,6 @@ SPEC_YAML = ROOT / "governance" / "bytecode_spec.yaml"
 HF_JSON = ROOT / "governance" / "host_functions.json"
 BYTECODE_PY = ROOT / "hlf_mcp" / "hlf" / "bytecode.py"
 RUNTIME_PY = ROOT / "hlf_mcp" / "hlf" / "runtime.py"
-REGISTRY_PY = ROOT / "hlf_mcp" / "hlf" / "registry.py"
 SERVER_PY = ROOT / "hlf_mcp" / "server.py"
 README_MD = ROOT / "README.md"
 
@@ -77,24 +76,55 @@ def _load_host_function_names(path: Path) -> set[str]:
     return set()
 
 
-def _load_runtime_host_functions(path: Path) -> set[str]:
-    """Extract HOST_FUNCTIONS keys from runtime.py."""
-    if not path.exists():
+def _load_registered_host_functions() -> set[str]:
+    """Load packaged host function names from the registry authority."""
+    try:
+        from hlf_mcp.hlf.registry import HostFunctionRegistry
+
+        registry = HostFunctionRegistry(str(HF_JSON) if HF_JSON.exists() else None)
+        return {str(entry.get("name", "")) for entry in registry.list_all() if entry.get("name")}
+    except Exception:
         return set()
-    text = path.read_text(encoding="utf-8")
-    # Find HOST_FUNCTIONS = { "name": ... }
-    block_m = re.search(r"HOST_FUNCTIONS\s*=\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}", text, re.DOTALL)
-    if not block_m:
-        return set()
-    block = block_m.group(1)
-    return set(re.findall(r'"([a-z_][a-z0-9_]*)"', block))
 
 
 def _count_mcp_tools(path: Path) -> int:
-    """Count @mcp.tool decorators in server.py."""
+    """Count packaged MCP tools from source without importing the live server."""
     if not path.exists():
         return 0
-    return len(re.findall(r"@mcp\.tool\b", path.read_text(encoding="utf-8")))
+
+    effective_path = path
+    try:
+        if path.name == SERVER_PY.name and not path.resolve().is_relative_to(ROOT.resolve()):
+            effective_path = SERVER_PY
+    except ValueError:
+        effective_path = SERVER_PY if path.name == SERVER_PY.name else path
+
+    text = effective_path.read_text(encoding="utf-8")
+    total = len(re.findall(r"@mcp\.tool\b", text))
+
+    imported_registers: dict[str, Path] = {}
+    import_re = re.compile(r"^from\s+(hlf_mcp\.\w+)\s+import\s+(.+)$")
+    for line in text.splitlines():
+        match = import_re.match(line.strip())
+        if not match:
+            continue
+        module_name = match.group(1)
+        imported_names = [item.strip() for item in match.group(2).split(",")]
+        module_path = ROOT / (module_name.replace(".", "/") + ".py")
+        for imported_name in imported_names:
+            if imported_name.startswith("register_"):
+                imported_registers[imported_name] = module_path
+
+    update_re = re.compile(r"REGISTERED_TOOLS\.update\((register_\w+)\(mcp,\s*_ctx\)\)")
+    counted_modules: set[Path] = set()
+    for register_name in update_re.findall(text):
+        module_path = imported_registers.get(register_name)
+        if module_path is None or module_path in counted_modules or not module_path.exists():
+            continue
+        counted_modules.add(module_path)
+        total += len(re.findall(r"@mcp\.tool\b", module_path.read_text(encoding="utf-8")))
+
+    return total
 
 
 def _count_stdlib_modules(root: Path) -> int:
@@ -163,25 +193,25 @@ def run_checks() -> tuple[list[dict], bool]:
         }
     )
 
-    # ── Check 2: host_functions.json vs runtime HOST_FUNCTIONS ──────────────
+    # ── Check 2: host_functions.json vs packaged HostFunctionRegistry ───────
     json_hf = _load_host_function_names(HF_JSON)
-    runtime_hf = _load_runtime_host_functions(RUNTIME_PY)
+    registered_hf = _load_registered_host_functions()
 
-    only_json = json_hf - runtime_hf
-    only_runtime = runtime_hf - json_hf
+    only_json = json_hf - registered_hf
+    only_registered = registered_hf - json_hf
 
-    if json_hf and runtime_hf and (only_json or only_runtime):
+    if json_hf and registered_hf and (only_json or only_registered):
         has_drift = True
 
     findings.append(
         {
-            "check": "host_functions_json_vs_runtime",
-            "drift": bool(only_json or only_runtime),
+            "check": "host_functions_json_vs_registry",
+            "drift": bool(only_json or only_registered),
             "only_in_json": sorted(only_json),
-            "only_in_runtime": sorted(only_runtime),
+            "only_in_registry": sorted(only_registered),
             "json_total": len(json_hf),
-            "runtime_total": len(runtime_hf),
-            "note": "Empty sets are expected if governance file or runtime function list is not present",
+            "registry_total": len(registered_hf),
+            "note": "Empty sets are expected if governance file or packaged registry is not importable",
         }
     )
 

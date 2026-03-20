@@ -145,3 +145,7 @@ _toolkit.py
 _toolkit_report.md
 tk-*.bat
 __redhat_probe.py
+
+# ── Local discussion notes and packaged extension outputs ─────────────────────
+Cogito_Discussion.md
+artifacts/*.vsix

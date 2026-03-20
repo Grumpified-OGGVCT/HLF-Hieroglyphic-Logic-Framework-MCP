@@ -324,6 +324,42 @@ def test_hlf_test_suite_summary_can_include_output(tmp_path) -> None:
     assert result["summary"]["stderr"] == "AssertionError"
 
 
+def test_hlf_weekly_evidence_summary_reads_history(tmp_path) -> None:
+    history_path = tmp_path / "weekly_pipeline_history.jsonl"
+    history_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "artifact_status": "accepted",
+                        "source": "local-scheduled",
+                        "verification": {"verified": True},
+                        "distribution_contract": {"eligible_for_governed_distribution": True},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "artifact_status": "draft",
+                        "source": "weekly-code-quality",
+                        "verification": {"verified": False},
+                        "distribution_contract": {"eligible_for_governed_distribution": False},
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = server.hlf_weekly_evidence_summary(metrics_dir=str(tmp_path))
+
+    assert result["artifact_count"] == 2
+    assert result["verified_count"] == 1
+    assert result["distribution_eligible_count"] == 1
+    assert result["status_counts"]["accepted"] == 1
+    assert result["source_counts"]["local-scheduled"] == 1
+
+
 def test_server_instruction_summary_tracks_registered_surface() -> None:
     exported_tools = {
         name for name in dir(server) if name.startswith("hlf_") and callable(getattr(server, name))
@@ -343,6 +379,7 @@ def test_server_registers_model_catalog_tools() -> None:
     assert "hlf_sync_model_catalog" in server.REGISTERED_TOOLS
     assert "hlf_get_model_catalog" in server.REGISTERED_TOOLS
     assert "hlf_get_model_catalog_status" in server.REGISTERED_TOOLS
+    assert "hlf_query_profile_capabilities" in server.REGISTERED_TOOLS
     assert "hlf_record_benchmark_artifact" in server.REGISTERED_TOOLS
     assert "hlf_get_benchmark_artifact" in server.REGISTERED_TOOLS
     assert "hlf_evaluate_model_against_profile" in server.REGISTERED_TOOLS
@@ -356,6 +393,7 @@ def test_server_registers_model_catalog_tools() -> None:
     assert "hlf://status/formal_verifier" in server.REGISTERED_RESOURCES
     assert "hlf://status/governed_route" in server.REGISTERED_RESOURCES
     assert "hlf://status/governed_route/{agent_id}" in server.REGISTERED_RESOURCES
+    assert "hlf://status/profile_capability_catalog" in server.REGISTERED_RESOURCES
     assert "hlf://status/instinct" in server.REGISTERED_RESOURCES
     assert "hlf://status/instinct/{mission_id}" in server.REGISTERED_RESOURCES
 
@@ -633,6 +671,58 @@ def test_governed_route_resource_surfaces_latest_trace(monkeypatch) -> None:
     assert latest_resource["status"] == "ok"
     assert latest_resource["route_trace"]["operator_summary"]
     assert agent_resource["route_trace"]["request_context"]["agent_id"] == "route-resource-agent"
+
+
+def test_query_profile_capabilities_surfaces_governed_matches_and_active_profiles() -> None:
+    server.hlf_record_benchmark_artifact(
+        profile_name="translation_memory_multilingual",
+        benchmark_scores={
+            "translation_fidelity": 0.91,
+            "retrieval_quality": 0.81,
+            "routing_quality": 0.76,
+        },
+        topic="profile-catalog-query",
+        languages=["en", "zh"],
+    )
+    server.hlf_recommend_embedding_profile(
+        workload="translation_memory",
+        multilingual_required=True,
+        agent_id="profile-query-agent",
+        persist=True,
+    )
+
+    result = server.hlf_query_profile_capabilities(
+        capability="embedding",
+        language="zh",
+        evidence_only=True,
+    )
+
+    assert result["status"] == "ok"
+    assert result["summary"]["qualification_profile_count"] >= 1
+    assert any(
+        entry["profile_name"] == "translation_memory_multilingual"
+        and entry["evidence_tier"] == "launch-qualified"
+        for entry in result["qualification_profiles"]
+    )
+    active_entry = next(
+        entry for entry in result["active_profiles"] if entry["agent_id"] == "profile-query-agent"
+    )
+    assert active_entry["selected_lane"] == "retrieval"
+    assert "translation_memory_multilingual" in active_entry["governed_profile_candidates"]
+    assert "embedding" in active_entry["governed_capabilities"]
+    assert "translation_memory_multilingual" in active_entry["candidate_evidence"]
+
+
+def test_profile_capability_catalog_resource_surfaces_latest_governed_catalog() -> None:
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/profile_capability_catalog"]())
+
+    assert resource["status"] == "ok"
+    assert resource["summary"]["qualification_profile_count"] >= 1
+    assert any(
+        entry["profile_name"] == "translation_memory_multilingual"
+        for entry in resource["qualification_profiles"]
+    )
+    assert any(entry["agent_id"] == "profile-query-agent" for entry in resource["active_profiles"])
 
 
 def test_route_governed_request_requires_launch_qualified_model_for_multilingual_lane(

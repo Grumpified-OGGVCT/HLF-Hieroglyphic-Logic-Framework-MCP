@@ -8,6 +8,8 @@ status: 'In progress'
 tags: [architecture, reconstruction, planning, bridge, doctrine, recovery, hlf]
 ---
 
+<!-- markdownlint-disable MD060 -->
+
 # Introduction
 
 ![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
@@ -179,6 +181,26 @@ This plan is intentionally larger than a normal feature plan because the problem
 | TASK-044 | Add an explicit bridge task to repair the current `streamable-http` initialize fault and rerun the smoke harness before promoting remote self-build claims. | ✅ | 2026-03-19 |
 | TASK-045 | Fold the recursive build-assist milestone into active build sequencing so it is tracked as real bridge work rather than a side note. | ✅ | 2026-03-19 |
 
+### Implementation Phase 10A
+
+- **GOAL-010A**: Integrate the governed autonomous-evolution bridge so research intake can run continuously without collapsing promotion boundaries.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-046 | Fold `plan/feature-autonomous-evolution-1.md` into the master sequencing so the repo treats `observe -> propose -> verify -> promote` as a formal bridge lane rather than optional side planning. | ✅ | 2026-03-19 |
+| TASK-047 | Record the intake/promotion rule explicitly: research and weekly findings may enter at any time, but they remain advisory until provenance, verification, and governance gates are satisfied. | ✅ | 2026-03-19 |
+| TASK-048 | Add the first concrete implementation slice for this lane by enforcing a weekly evidence contract and deterministic second-pass verification in the shared artifact path used by workflows and the local scheduled pipeline. | ✅ | 2026-03-19 |
+
+### Implementation Phase 11
+
+- **GOAL-011**: Stage the next trust-bearing bridge work after Batch 1 by naming the audit spine, proof-object diagnostics, and research/build triage interface as explicit Batch 2 obligations.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-049 | Add Audit Spine completion to Batch 2: end-to-end Merkle trust demonstration, operator-readable proof objects, and trust-chain verification procedure. | ✅ | 2026-03-19 |
+| TASK-050 | Add the research/build interface to Batch 2: permissive intake, triage classification, and strict promotion gates tied to verifier and lifecycle surfaces. | ✅ | 2026-03-19 |
+| TASK-051 | Add benchmark intent to Batch 2 for trust-surface overhead and predictability: Merkle-chain overhead, gas predictability, and verification latency. | ✅ | 2026-03-19 |
+
 ## 3. Alternatives
 
 - **ALT-001**: Continue with the earlier partial reconstruction sketch in `plan/architecture-hlf-reconstruction-1.md` and infer the rest during implementation. Rejected because it leaves too many ownership and acceptance decisions implicit.
@@ -204,6 +226,10 @@ This plan is intentionally larger than a normal feature plan because the problem
 - **DEP-013**: `HLF_MCP_TODO.md`
 - **DEP-014**: `TODO.md`
 - **DEP-015**: upstream repo at `C:\Users\gerry\generic_workspace\Sovereign_Agentic_OS_with_HLF`
+- **DEP-016**: `plan/feature-autonomous-evolution-1.md`
+- **DEP-017**: `hlf_mcp/weekly_artifacts.py`
+- **DEP-018**: `.github/scripts/emit_weekly_artifact.py`
+- **DEP-019**: `scripts/run_pipeline_scheduled.py`
 
 ## 5. Files
 
@@ -227,6 +253,10 @@ This plan is intentionally larger than a normal feature plan because the problem
 - **FILE-018**: `TODO.md` — high-level backlog normalized by plan and batch
 - **FILE-019**: `README.md` — bridge path updated to point at the master plan
 - **FILE-020**: `docs/HLF_STITCHED_SYSTEM_VIEW.md` — overview updated to point at the master plan
+- **FILE-021**: `plan/feature-autonomous-evolution-1.md` — governed autonomous-evolution bridge plan
+- **FILE-022**: `hlf_mcp/weekly_artifacts.py` — shared weekly evidence contract and verification surface
+- **FILE-023**: `.github/scripts/emit_weekly_artifact.py` — workflow-facing artifact emission and second-pass verification
+- **FILE-024**: `scripts/run_pipeline_scheduled.py` — local scheduled pipeline artifact emission and second-pass verification
 
 ## 6. Testing
 
@@ -236,6 +266,8 @@ This plan is intentionally larger than a normal feature plan because the problem
 - **TEST-004**: For each backlog update, verify that `HLF_MCP_TODO.md`, `TODO.md`, and `HLF_ACTIONABLE_PLAN.md` do not contradict the master plan.
 - **TEST-005**: Before any code restoration begins, verify that the relevant feature plan under `/plan/` exists and names exact test files to run or add.
 - **TEST-006**: After future code restoration, run the smallest exact regression scope first, then broader repo validation, instead of skipping straight to vague “seems good” claims.
+- **TEST-007**: For every emitted weekly artifact, run deterministic second-pass validation before issue creation, HKS capture, or long-lived artifact storage.
+- **TEST-008**: Verify that research/build intake remains permissive while promotion remains gated by lifecycle, verifier, and governance evidence.
 
 ## 7. Risks & Assumptions
 

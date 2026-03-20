@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HLF Merge Readiness</title>
+    <meta name="description" content="Branch-aware merge readiness summary for HLF with current truth, bridge truth, and open architectural gaps.">
+    <link rel="stylesheet" href="assets/status-site.css">
+</head>
+<body class="page-merge">
+    <div class="site-shell">
+        <header class="site-header">
+            <div class="eyebrow">HLF Merge Readiness</div>
+            <div class="header-row">
+                <div>
+                    <h1>Branch-aware merge framing with current truth, bridge truth, and explicit remaining gaps.</h1>
+                    <p class="lede">This page is a generated HTML view over the merge-readiness markdown source. It keeps the same public-safe visual standard as the status front door while preserving claim-lane discipline.</p>
+                </div>
+                <div class="hero-card hero-card-merge">
+                    <div class="hero-label">Status</div>
+                    <div class="hero-value hero-value-text">branch-aware merge/readiness summary for 2026-03-20.</div>
+                    <div class="hero-meta">branch-aware summary</div>
+                    <p class="hero-text">Use this page to read what the branch can claim now, what remains bridge-qualified, and what still blocks architectural completion.</p>
+                </div>
+            </div>
+            <nav class="top-nav">
+                <a class="top-link" href="HLF_STATUS_OVERVIEW.md">Status Overview</a>
+<a class="top-link" href="merge-readiness.html">Merge Readiness</a>
+<a class="top-link" href="claims-ledger.html">Claims Ledger</a>
+<a class="top-link" href="HLF_VISION_PLAIN_LANGUAGE.md">Vision</a>
+<a class="top-link" href="HLF_MCP_POSITIONING.md">MCP Positioning</a>
+            </nav>
+        </header>
+
+        <main class="content-grid">
+            <section class="panel span-4 panel-brief">
+                <div class="panel-heading">
+                    <h2>Purpose</h2>
+                    <span class="panel-kicker">Why this summary exists</span>
+                </div>
+                <ul class="compact-list">
+<li>summarize what this branch can honestly claim now</li>
+<li>separate current packaged truth from bridge-qualified branch work</li>
+<li>name the still-open architectural gaps that remain after counting the branch improvements</li>
+</ul>
+            </section>
+
+            <section class="panel span-8 panel-proof">
+                <div class="panel-heading">
+                    <h2>Verified Branch Facts</h2>
+                    <span class="panel-kicker">High-confidence branch state</span>
+                </div>
+                <div class="metric-grid metric-grid-verified">
+                    <article class="metric-card"><p class="metric-text">branch: <code>integrate/vscode-operator-governed-review</code></p></article>
+<article class="metric-card"><p class="metric-text">divergence from <code>main</code>: <code>0</code> behind, <code>10</code> ahead</p></article>
+<article class="metric-card"><p class="metric-text">packaged surface count: <code>69</code> tools, <code>31</code> resources</p></article>
+<article class="metric-card"><p class="metric-text">repo-wide regression snapshot on 2026-03-20: <code>758 passed</code></p></article>
+                </div>
+            </section>
+
+            <section class="panel span-12 panel-band">
+                <div class="panel-heading">
+                    <h2>Lane Reading Bands</h2>
+                    <span class="panel-kicker">Merge framing by claim lane</span>
+                </div>
+                <div class="lane-band-grid">
+                    <article class="lane-band lane-current">
+            <div class="lane-band-head">
+                <div>
+                    <div class="metric-label">Current-True</div>
+                    <h3>Current-True In This Checkout</h3>
+                </div>
+                <span class="verdict-chip verdict-current chip-subtle">Current-True In This Checkout</span>
+            </div>
+            <p class="lane-detail">packaged FastMCP front door with <code>69</code> tools and <code>31</code> resources</p>
+            <p class="metric-text">These are implemented and verified enough to claim in present tense for this local branch.</p>
+        </article>
+<article class="lane-band lane-bridge">
+            <div class="lane-band-head">
+                <div>
+                    <div class="metric-label">Bridge-True</div>
+                    <h3>Bridge-True But Real In This Branch</h3>
+                </div>
+                <span class="verdict-chip verdict-bridge chip-subtle">Bridge-True But Real In This Branch</span>
+            </div>
+            <p class="lane-detail">symbolic relation-edge proof slice in <code>hlf_mcp/hlf/symbolic_surfaces.py</code></p>
+            <p class="metric-text">These surfaces are real in the checkout, but should remain explicitly qualified.</p>
+        </article>
+<article class="lane-band lane-open">
+            <div class="lane-band-head">
+                <div>
+                    <div class="metric-label">Still-Open</div>
+                    <h3>Still-Open Architectural Gaps</h3>
+                </div>
+                <span class="verdict-chip verdict-open chip-subtle">Still-Open Architectural Gaps</span>
+            </div>
+            <p class="lane-detail">full upstream routing fabric restoration</p>
+            <p class="metric-text">These remain open even after counting the branch improvements.</p>
+        </article>
+                </div>
+            </section>
+
+            <section class="panel span-12 panel-decision">
+            <div class="panel-heading">
+                <h2>Reviewer Decision Panel</h2>
+                <span class="panel-kicker">Compact PR-reader framing derived from the merge-readiness authority</span>
+            </div>
+            <div class="decision-grid">
+                <article class="decision-card decision-current">
+                    <div class="decision-head">
+                        <div class="metric-label">What is real now</div>
+                        <span class="verdict-chip verdict-current chip-subtle">current-true</span>
+                    </div>
+                    <h3>packaged FastMCP front door with <code>69</code> tools and <code>31</code> resources</h3>
+                    <p class="metric-text">These are implemented and verified enough to claim in present tense for this local branch.</p>
+                </article>
+<article class="decision-card decision-bridge">
+                    <div class="decision-head">
+                        <div class="metric-label">What is improved in branch</div>
+                        <span class="verdict-chip verdict-bridge chip-subtle">bridge-true</span>
+                    </div>
+                    <h3>symbolic relation-edge proof slice in <code>hlf_mcp/hlf/symbolic_surfaces.py</code></h3>
+                    <p class="metric-text">These surfaces are real in the checkout, but should remain explicitly qualified.</p>
+                </article>
+<article class="decision-card decision-open">
+                    <div class="decision-head">
+                        <div class="metric-label">What is still missing</div>
+                        <span class="verdict-chip verdict-open chip-subtle">still-open</span>
+                    </div>
+                    <h3>full upstream routing fabric restoration</h3>
+                    <p class="metric-text">These remain open even after counting the branch improvements.</p>
+                </article>
+<article class="decision-card decision-safe">
+                    <div class="decision-head">
+                        <div class="metric-label">What is safe to claim publicly</div>
+                        <span class="verdict-chip verdict-safe chip-subtle">public-safe</span>
+                    </div>
+                    <h3>“just docs and scaffolding”</h3>
+                    <p class="metric-text">materially ahead of <code>main</code></p>
+                </article>
+            </div>
+        </section>
+
+            <section class="panel span-6 panel-band">
+            <div class="panel-heading">
+                <h2>Current-True In This Checkout</h2>
+                <span class="panel-kicker">Merge lane summary</span>
+            </div>
+            <p>These are implemented and verified enough to claim in present tense for this local branch.</p>
+            <ul class="compact-list">
+<li>packaged FastMCP front door with <code>69</code> tools and <code>31</code> resources</li>
+<li>packaged formal-verifier behavior with structured proof reports and front-door/resource exposure</li>
+<li>packaged execution-admission wiring for verifier-aware denial behavior</li>
+<li>packaged governed routing/profile surfaces with route traces, capability catalogs, evidence-aware selection, and fail-closed denial when required evidence is missing</li>
+<li>packaged weekly artifact handling with decision persistence and evidence-query surfaces</li>
+<li>packaged governed-review normalization for spec drift, test health, ethics review, code quality, doc accuracy, and security-pattern review</li>
+</ul>
+        </section>
+<section class="panel span-6 panel-band">
+            <div class="panel-heading">
+                <h2>Bridge-True But Real In This Branch</h2>
+                <span class="panel-kicker">Merge lane summary</span>
+            </div>
+            <p>These surfaces are real in the checkout, but should remain explicitly qualified.</p>
+<p>These should be described as:</p>
+            <ul class="compact-list">
+<li>symbolic relation-edge proof slice in <code>hlf_mcp/hlf/symbolic_surfaces.py</code></li>
+<li>bounded dream-cycle, media-evidence normalization, and citation-chain proposal surfaces</li>
+<li>multimodal qualification and host-function contract resources</li>
+<li>VS Code operator bridge scaffold under <code>extensions/hlf-vscode/</code></li>
+<li>implemented branch slices</li>
+<li>bridge work in progress</li>
+<li>not full target-state completion</li>
+</ul>
+        </section>
+<section class="panel span-6 panel-band">
+            <div class="panel-heading">
+                <h2>Still-Open Architectural Gaps</h2>
+                <span class="panel-kicker">Merge lane summary</span>
+            </div>
+            <p>These remain open even after counting the branch improvements.</p>
+            <ul class="compact-list">
+<li>full upstream routing fabric restoration</li>
+<li>fuller orchestration and multi-agent delegation restoration</li>
+<li>stronger unified memory-governance contracts around revocation, supersession, freshness, expiry, and trust-tier policy</li>
+<li>deeper formal-verification semantics beyond the current packaged slice</li>
+<li>gallery-grade operator legibility and richer trust surfaces</li>
+<li>ALS-style audit sealing and signed disclosure surfaces</li>
+<li>full remote recursive-build promotion through proven <code>streamable-http</code> initialize/smoke flow</li>
+</ul>
+        </section>
+<section class="panel span-6 panel-narrative">
+            <div class="panel-heading">
+                <h2>Near-Term Merge Risks</h2>
+                <span class="panel-kicker">Merge lane summary</span>
+            </div>
+            <p>These are the most concrete current risks for merge or public promotion.</p>
+            <ul class="compact-list">
+<li>governance integrity is only as strong as manifest discipline; <code>governance/host_functions.json</code> was re-manifested in this pass after branch changes widened the registry to 32 functions</li>
+<li>public-facing docs can still lag branch reality if the new ledger and summary are not linked and kept current</li>
+<li>some branch work is easy to overstate unless claim-lane discipline is preserved</li>
+</ul>
+        </section>
+<section class="panel span-6 panel-narrative">
+            <div class="panel-heading">
+                <h2>Merge Reading</h2>
+                <span class="panel-kicker">Merge lane summary</span>
+            </div>
+            <p>The branch should be read as:</p>
+<p>That means a professional merge story is available now, but it should be phrased as:</p>
+            <ul class="compact-list">
+<li>materially ahead of <code>main</code></li>
+<li>stronger than public-main perception in operator evidence, formal verification, symbolic proof, and dream/media bridge work</li>
+<li>still not the full recovered HLF architecture</li>
+<li>current-truth packaged gains</li>
+<li>bridge-qualified branch advances</li>
+<li>explicit remaining architectural obligations</li>
+</ul>
+        </section>
+<section class="panel span-6 panel-narrative">
+            <div class="panel-heading">
+                <h2>Recommended Merge Framing</h2>
+                <span class="panel-kicker">Merge lane summary</span>
+            </div>
+            <p>If this branch is summarized for a PR, use three lanes only:</p>
+<p>1. <code>current-true</code>: packaged surfaces now real in this checkout
+2. <code>bridge-true</code>: meaningful branch slices now landed but not yet full target-state completion
+3. <code>still-open architectural gaps</code>: constitutive work still owed after merge</p>
+<p>Do not summarize the branch as either:</p>
+<p>Both would be false.</p>
+            <ul class="compact-list">
+<li>“just docs and scaffolding”</li>
+<li>or “full architectural completion”</li>
+</ul>
+        </section>
+
+            <section class="panel span-12 provenance-panel panel-provenance">
+            <div class="panel-heading">
+                <h2>Source Provenance</h2>
+                <span class="panel-kicker">Operator-facing generation trace</span>
+            </div>
+            <div class="provenance-box">
+                <div class="provenance-meta">
+                    <span class="code-pill">markdown source</span>
+                    <a class="top-link provenance-link" href="HLF_MERGE_READINESS_SUMMARY_2026-03-20.md">HLF_MERGE_READINESS_SUMMARY_2026-03-20.md</a>
+                    <span class="code-pill">watermark 2026-03-20T20:41:45Z</span>
+                </div>
+                <p class="section-note provenance-note">This page is rendered directly from the branch-aware merge-readiness markdown authority and should be read with claim-lane discipline intact.</p>
+            </div>
+        </section>
+        </main>
+
+        <footer class="site-footer">
+            <p>Public-safe presentation layer only. Use the markdown authority for exact branch wording and review context.</p>
+        </footer>
+    </div>
+</body>
+</html>

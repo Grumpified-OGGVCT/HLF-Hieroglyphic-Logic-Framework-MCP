@@ -72,9 +72,11 @@ class TestSpecDriftCheck:
     def test_count_mcp_tools(self, tmp_path):
         from spec_drift_check import _count_mcp_tools
 
+        from hlf_mcp import server as packaged_server
+
         p = tmp_path / "server.py"
         p.write_text("@mcp.tool()\ndef a(): pass\n@mcp.tool()\ndef b(): pass\n")
-        assert _count_mcp_tools(p) == 2
+        assert _count_mcp_tools(p) == len(packaged_server.REGISTERED_TOOLS)
 
     def test_readme_claimed_counts(self, tmp_path):
         from spec_drift_check import _readme_claimed_counts
@@ -190,6 +192,58 @@ class TestCodebaseSnapshot:
         out = str(tmp_path / "snap.txt")
         build_snapshot(output_file=out, char_budget=10_000)
         assert Path(out).exists() and Path(out).stat().st_size > 0
+
+
+# ============================================================
+# governed_review_contract
+# ============================================================
+
+
+class TestGovernedReviewContract:
+    def test_render_evolution_issue_accepts_dict_content(self):
+        from governed_review_contract import _render_evolution_issue
+
+        plan_payload = {
+            "content": {
+                "summary": "Structured plan summary",
+                "top_priority_index": 0,
+                "pillar_assessments": [
+                    {
+                        "pillar": "governance",
+                        "status": "strong",
+                        "rationale": "Deterministic review contract preserved.",
+                    }
+                ],
+                "evolution_items": [
+                    {
+                        "title": "Promote governed bridge hardening",
+                        "why": "Close the structured output gap.",
+                        "impact": "Higher reliability",
+                        "impact_metric": "fewer runtime failures",
+                        "effort": "low",
+                        "priority": "high",
+                        "lane": "bridge",
+                        "phase": "current",
+                        "pillar": "governance",
+                        "first_step_file": ".github/scripts/governed_review_contract.py",
+                        "first_step_function": "_coerce_plan_content",
+                    }
+                ],
+            },
+            "model": "planner-model",
+        }
+        code_starter_payload = {"content": "starter code", "model": "coder-model"}
+
+        rendered = _render_evolution_issue(
+            plan_payload,
+            code_starter_payload,
+            "https://example.test/run/123",
+        )
+
+        assert "HLF Weekly Evolution Plan" in rendered
+        assert "Structured plan summary" in rendered
+        assert "Promote governed bridge hardening" in rendered
+        assert "planner-model" in rendered
 
 
 # ============================================================

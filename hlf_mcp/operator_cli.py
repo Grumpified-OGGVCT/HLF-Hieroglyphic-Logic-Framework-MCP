@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from hlf_mcp.evidence_query import _print_payload
+from hlf_mcp.evidence_query import print_payload
 from hlf_mcp.server_context import build_server_context
 from hlf_mcp.server_core import load_test_suite_summary
 from hlf_mcp.server_resources import render_resource_uri
@@ -59,19 +59,19 @@ def _do_command(args: argparse.Namespace) -> int:
         show_hlf=args.show_hlf,
         language=args.language,
     )
-    _print_payload(payload, as_json=True if args.json else False)
+    print_payload(payload, as_json=True if args.json else False)
     return 0 if payload.get("success") else 1
 
 
 def _test_summary_command(args: argparse.Namespace) -> int:
     payload = load_test_suite_summary(args.metrics_dir, include_output=args.include_output)
-    _print_payload(payload, as_json=True if args.json else False)
+    print_payload(payload, as_json=True if args.json else False)
     return 0 if payload.get("status") == "ok" else 1
 
 
 def _weekly_evidence_summary_command(args: argparse.Namespace) -> int:
     payload = summarize_weekly_artifacts(args.metrics_dir)
-    _print_payload(payload, as_json=True if args.json else False)
+    print_payload(payload, as_json=True if args.json else False)
     return 0
 
 
@@ -83,10 +83,10 @@ def _resource_command(args: argparse.Namespace) -> int:
             parsed = json.loads(payload_text)
         except json.JSONDecodeError:
             parsed = {"status": "error", "error": "resource_output_not_json", "raw": payload_text}
-        _print_payload(parsed, as_json=True)
+        print_payload(parsed, as_json=True)
         return 0 if parsed.get("status") == "ok" else 1
 
-    _print_payload(payload_text, as_json=False)
+    print_payload(payload_text, as_json=False)
     try:
         parsed = json.loads(payload_text)
     except json.JSONDecodeError:

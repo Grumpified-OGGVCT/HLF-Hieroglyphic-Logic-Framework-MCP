@@ -3,8 +3,8 @@ import requests
 import json
 from typing import List, Dict, Any
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "devrtal-larg-2"  # or "devstrral-2-cloud" for cloud
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "devstral:24b")
 
 RESEARCH_QUESTIONS = [
     "What is the architectural/functional role of these files in HLF?",

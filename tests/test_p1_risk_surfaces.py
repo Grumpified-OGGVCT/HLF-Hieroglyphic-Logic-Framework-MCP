@@ -1,31 +1,9 @@
 from __future__ import annotations
 
-import sys
-import types
 import urllib.request
 from typing import Any
 
 import pytest
-
-
-def _install_tiktoken_stub() -> None:
-    if "tiktoken" in sys.modules:
-        return
-
-    module = types.ModuleType("tiktoken")
-
-    class _Encoder:
-        def encode(self, text: str) -> list[int]:
-            return list(text.encode("utf-8"))
-
-    def get_encoding(_name: str) -> _Encoder:
-        return _Encoder()
-
-    module.get_encoding = get_encoding  # type: ignore[attr-defined]
-    sys.modules["tiktoken"] = module
-
-
-_install_tiktoken_stub()
 
 
 def _valid_bytecode() -> bytes:

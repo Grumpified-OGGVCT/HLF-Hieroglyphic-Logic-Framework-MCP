@@ -1,22 +1,27 @@
 # Ollama Folder Q&A Tool
 
-This tool lets you batch-query your general use folder (and all subdirectories) using an Ollama LLM (local server at 11434, Devrtal larg 2 or devstrral 2 cloud model) to extract, classify, and cross-reference all constitutive HLF surfaces, mechanisms, and patterns.
+This tool batch-queries a folder tree with an Ollama-served model to extract, classify, and cross-reference constitutive HLF surfaces, mechanisms, and patterns.
 
 ## Usage
 
 1. **Install requirements:**
-   - Python 3.10+
+   - Python 3.12+
    - `requests` library (`pip install requests`)
-   - Ollama server running at `localhost:11434` with the desired model pulled (e.g., `ollama pull devrtal-larg-2`)
+   - Ollama server running at `localhost:11434` with the desired model pulled
+   - Default local model: `devstral:24b` (`ollama pull devstral:24b`)
 
-2. **Run the tool:**
+2. **Optional environment overrides:**
+   - `OLLAMA_URL` to point at a different Ollama endpoint
+   - `OLLAMA_MODEL` to select a different installed model
+
+3. **Run the tool:**
    ```sh
    python ollama_folder_qa.py
    ```
    - This will recursively scan the parent folder, chunk files, and run the research questions in batch mode.
    - Results are saved to `ollama_qa_results.json` in the same directory.
 
-3. **Enhancements:**
+4. **Enhancements:**
    - See `ENHANCEMENT_PLAN.md` for planned features: interactive mode, export formats, plugin system, etc.
 
 ## Research Questions (Batch Mode)

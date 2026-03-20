@@ -16,7 +16,7 @@ def _write_history(metrics_dir: Path, artifacts: list[dict]) -> None:
 def test_operator_cli_do_uses_packaged_helper(monkeypatch, capsys) -> None:
     from hlf_mcp import operator_cli
 
-    monkeypatch.setattr(operator_cli, "build_server_context", lambda: object())
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
     monkeypatch.setattr(
         operator_cli,
         "run_hlf_do",
@@ -90,7 +90,7 @@ def test_operator_cli_weekly_evidence_summary_reports_counts(capsys, tmp_path: P
 def test_operator_cli_resource_uses_packaged_renderer(monkeypatch, capsys) -> None:
     from hlf_mcp import operator_cli
 
-    monkeypatch.setattr(operator_cli, "build_server_context", lambda: object())
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
     monkeypatch.setattr(
         operator_cli,
         "render_resource_uri",

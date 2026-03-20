@@ -15,7 +15,7 @@ from hlf_mcp.weekly_artifacts import (
 )
 
 
-def _print_payload(payload: object, as_json: bool) -> None:
+def print_payload(payload: object, as_json: bool) -> None:
     if as_json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return
@@ -23,6 +23,52 @@ def _print_payload(payload: object, as_json: bool) -> None:
         print(payload)
         return
     print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+def _comma_join(values: object, *, default: str = "none") -> str:
+    if not isinstance(values, list):
+        return default
+    items = [str(item) for item in values if isinstance(item, str) and item]
+    return ", ".join(items) if items else default
+
+
+def _render_artifact_detail(artifact: dict[str, object]) -> str:
+    verification = artifact.get("verification") or {}
+    distribution = artifact.get("distribution_contract") or {}
+    governed_review = artifact.get("governed_review") or {}
+    lines = [
+        f"Artifact: {artifact.get('artifact_id') or 'unknown'}",
+        f"Status: {artifact.get('artifact_status') or 'unknown'}",
+        f"Source: {artifact.get('source') or 'unknown'}",
+        f"Generated: {artifact.get('generated_at') or 'unknown'}",
+        f"Verified: {'yes' if isinstance(verification, dict) and verification.get('verified') else 'no'}",
+        "Distribution eligible: "
+        + (
+            "yes"
+            if isinstance(distribution, dict)
+            and distribution.get("eligible_for_governed_distribution")
+            else "no"
+        ),
+    ]
+
+    if isinstance(governed_review, dict) and governed_review:
+        lines.extend(
+            [
+                "",
+                "Governed review:",
+                f"  Summary: {governed_review.get('summary') or 'none'}",
+                f"  Severity: {governed_review.get('severity') or 'unknown'}",
+                f"  Change class: {governed_review.get('change_class') or 'unknown'}",
+                f"  Owner persona: {governed_review.get('owner_persona') or 'unknown'}",
+                "  Review personas: " + _comma_join(governed_review.get("review_personas")),
+                "  Required gates: " + _comma_join(governed_review.get("required_gates")),
+                f"  Escalate to: {governed_review.get('escalate_to_persona') or 'none'}",
+                f"  Operator summary: {governed_review.get('operator_summary') or 'none'}",
+                "  Handoff template: " + str(governed_review.get("handoff_template_ref") or "none"),
+            ]
+        )
+
+    return "\n".join(lines)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -74,7 +120,7 @@ def _list_command(args: argparse.Namespace) -> int:
         limit=args.limit,
     )
     if args.json:
-        _print_payload(artifacts, as_json=True)
+        print_payload(artifacts, as_json=True)
         return 0
 
     if not artifacts:
@@ -106,7 +152,10 @@ def _show_command(args: argparse.Namespace) -> int:
     if artifact is None:
         print(json.dumps({"status": "not_found", "artifact_id": args.artifact_id}, indent=2))
         return 1
-    _print_payload(artifact, as_json=True if args.json else False)
+    if args.json:
+        print_payload(artifact, as_json=True)
+    else:
+        print_payload(_render_artifact_detail(artifact), as_json=False)
     return 0
 
 
@@ -127,14 +176,14 @@ def _decide_command(args: argparse.Namespace) -> int:
         print(json.dumps({"status": "not_found", "artifact_id": args.artifact_id}, indent=2))
         return 1
 
-    _print_payload(artifact, as_json=True if args.json else False)
+    print_payload(artifact, as_json=True if args.json else False)
     return 0
 
 
 def _summary_command(args: argparse.Namespace) -> int:
     summary = summarize_weekly_artifacts(args.metrics_dir)
     if args.json:
-        _print_payload(summary, as_json=True)
+        print_payload(summary, as_json=True)
         return 0
 
     print(f"Artifacts: {summary['artifact_count']}")

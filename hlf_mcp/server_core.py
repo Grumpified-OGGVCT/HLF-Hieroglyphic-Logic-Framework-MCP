@@ -10,7 +10,6 @@ from mcp.server.fastmcp import FastMCP
 from hlf_mcp.hlf.compiler import CompileError
 from hlf_mcp.server_context import ServerContext
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
-from hlf_mcp.weekly_artifacts import summarize_weekly_artifacts
 
 _log = logging.getLogger(__name__)
 
@@ -254,6 +253,8 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         metrics_dir: str | None = None,
     ) -> dict[str, Any]:
         """Return the governed weekly evidence history summary from the metrics store."""
+        from hlf_mcp.weekly_artifacts import summarize_weekly_artifacts
+
         resolved_metrics_dir = Path(metrics_dir).expanduser() if metrics_dir else None
         return summarize_weekly_artifacts(resolved_metrics_dir)
 

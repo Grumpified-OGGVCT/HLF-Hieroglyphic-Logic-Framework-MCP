@@ -88,19 +88,43 @@ def _load_registered_host_functions() -> set[str]:
 
 
 def _count_mcp_tools(path: Path) -> int:
-    """Count packaged registered tools, falling back to decorator count."""
-    try:
-        from hlf_mcp import server as packaged_server
-
-        registered = getattr(packaged_server, "REGISTERED_TOOLS", None)
-        if isinstance(registered, dict) and registered:
-            return len(registered)
-    except Exception:
-        pass
-
+    """Count packaged MCP tools from source without importing the live server."""
     if not path.exists():
         return 0
-    return len(re.findall(r"@mcp\.tool\b", path.read_text(encoding="utf-8")))
+
+    effective_path = path
+    try:
+        if path.name == SERVER_PY.name and not path.resolve().is_relative_to(ROOT.resolve()):
+            effective_path = SERVER_PY
+    except ValueError:
+        effective_path = SERVER_PY if path.name == SERVER_PY.name else path
+
+    text = effective_path.read_text(encoding="utf-8")
+    total = len(re.findall(r"@mcp\.tool\b", text))
+
+    imported_registers: dict[str, Path] = {}
+    import_re = re.compile(r"^from\s+(hlf_mcp\.\w+)\s+import\s+(.+)$")
+    for line in text.splitlines():
+        match = import_re.match(line.strip())
+        if not match:
+            continue
+        module_name = match.group(1)
+        imported_names = [item.strip() for item in match.group(2).split(",")]
+        module_path = ROOT / (module_name.replace(".", "/") + ".py")
+        for imported_name in imported_names:
+            if imported_name.startswith("register_"):
+                imported_registers[imported_name] = module_path
+
+    update_re = re.compile(r"REGISTERED_TOOLS\.update\((register_\w+)\(mcp,\s*_ctx\)\)")
+    counted_modules: set[Path] = set()
+    for register_name in update_re.findall(text):
+        module_path = imported_registers.get(register_name)
+        if module_path is None or module_path in counted_modules or not module_path.exists():
+            continue
+        counted_modules.add(module_path)
+        total += len(re.findall(r"@mcp\.tool\b", module_path.read_text(encoding="utf-8")))
+
+    return total
 
 
 def _count_stdlib_modules(root: Path) -> int:

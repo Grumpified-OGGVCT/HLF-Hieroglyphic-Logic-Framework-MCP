@@ -526,7 +526,7 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
         f"| Overall readiness | `{dashboard['overall_readiness']:.1f}%` |",
         f"| Interpretation band | `{dashboard['interpretation_band']}` |",
         "| Claim-lane label | current packaged truth plus bridge-qualified expansion |",
-        f"| One-sentence repo status | the repo already has a strong semantic and governance core, but the broader coordination-and-operator zone still suppresses total readiness |",
+            "| One-sentence repo status | the repo already has a strong semantic and governance core, but the broader coordination-and-operator zone still suppresses total readiness |",
         "",
         "### Cluster Scores",
         "",
@@ -743,27 +743,25 @@ def _render_chip(label: str, tone: str, *, subtle: bool = False) -> str:
 
 
 def _render_lane_band(title: str, detail: str, lane: str, *, eyebrow: str, supporting: str | None = None) -> str:
-    supporting_html = f'<p class="metric-text">{_inline_html(supporting)}</p>' if supporting else ""
-    return """
-    <article class="lane-band lane-{lane}">
-      <div class="lane-band-head">
-        <div>
-          <div class="metric-label">{eyebrow}</div>
-          <h3>{title}</h3>
-        </div>
-        {chip}
-      </div>
-      <p class="lane-detail">{detail}</p>
-      {supporting_html}
-    </article>
-    """.format(
-        lane=html.escape(lane),
-        eyebrow=html.escape(eyebrow),
-        title=html.escape(title),
-        chip=_render_chip(title, lane, subtle=True),
-        detail=_inline_html(detail),
-        supporting_html=supporting_html,
-    ).strip()
+        supporting_html = f'<p class="metric-text">{_inline_html(supporting)}</p>' if supporting else ""
+        safe_lane = html.escape(lane)
+        safe_eyebrow = html.escape(eyebrow)
+        safe_title = html.escape(title)
+        safe_detail = _inline_html(detail)
+        chip = _render_chip(title, lane, subtle=True)
+        return f"""
+        <article class="lane-band lane-{safe_lane}">
+            <div class="lane-band-head">
+                <div>
+                    <div class="metric-label">{safe_eyebrow}</div>
+                    <h3>{safe_title}</h3>
+                </div>
+                {chip}
+            </div>
+            <p class="lane-detail">{safe_detail}</p>
+            {supporting_html}
+        </article>
+        """.strip()
 
 
 def _render_cluster_card_grid(clusters: list[dict[str, Any]]) -> str:
@@ -796,8 +794,10 @@ def _render_readiness_strips(rows: list[dict[str, Any]], *, name_key: str, score
     for row in rows:
         score = float(row[score_key])
         tone = _score_tone(score)
+        name = html.escape(str(row[name_key]))
+        reading = html.escape(str(row[reading_key]))
         rendered.append(
-            """
+            f"""
             <article class="strip-row strip-{tone}" style="--score:{score:.1f}%">
               <div class="strip-header">
                 <div class="strip-title">{name}</div>
@@ -807,16 +807,43 @@ def _render_readiness_strips(rows: list[dict[str, Any]], *, name_key: str, score
                 <div class="readiness-strip-fill"></div>
                 <div class="readiness-strip-marker"></div>
               </div>
-              <p class="metric-text">{reading}</p>
+              <div class="strip-reading">{reading}</div>
             </article>
-            """.format(
-                tone=html.escape(tone),
-                score=score,
-                name=html.escape(str(row[name_key])),
-                reading=html.escape(str(row[reading_key])),
-            ).strip()
+            """.strip()
         )
     return "\n".join(rendered)
+
+
+def _render_governance_flow() -> str:
+    steps = [
+        ("Observe", "Evidence enters the governed lane as recorded operator or workflow truth.", "current"),
+        ("Propose", "Bridge work becomes explicit rather than implied by attractive wording.", "bridge"),
+        ("Verify", "Tests, audits, and provenance decide whether the proposal is promotable.", "safe"),
+        ("Promote", "Only the surfaces that earn current-truth wording move into public-safe claims.", "open"),
+    ]
+    cards = "\n".join(
+        f"""
+                <article class="flow-step flow-{html.escape(tone)}">
+                    <div class="flow-index">{index}</div>
+                    <div>
+                        <h3>{html.escape(title)}</h3>
+                        <p class="metric-text">{html.escape(detail)}</p>
+                    </div>
+                </article>
+                """.strip()
+        for index, (title, detail, tone) in enumerate(steps, start=1)
+    )
+    return f"""
+        <section class="panel span-12 panel-narrative">
+            <div class="panel-heading">
+                <h2>Governance Trust Path</h2>
+                <span class="panel-kicker">Clarify trust, do not beautify ambiguity</span>
+            </div>
+            <div class="flow-grid">
+                {cards}
+            </div>
+        </section>
+        """.strip()
 
 
 def _render_trend_micrographics(data: dict[str, Any]) -> str:
@@ -886,24 +913,16 @@ def _render_cluster_cards(clusters: list[dict[str, Any]]) -> str:
 
 def _render_weekly_rows(lanes: list[dict[str, Any]]) -> str:
     return "\n".join(
-        """
+        f"""
         <tr>
-          <td><span class="code-pill">{source}</span></td>
-          <td>{summary}</td>
-          <td><span class="code-pill">{owner}</span></td>
-          <td><span class="code-pill">{triage}</span></td>
-          <td><span class="status-pill status-{status_class}">{status}</span></td>
-                    <td>{artifact_path}</td>
+          <td><span class="code-pill">{html.escape(lane['source'])}</span></td>
+          <td>{html.escape(lane['summary'])}</td>
+          <td><span class="code-pill">{html.escape(lane['owner_persona'])}</span></td>
+          <td><span class="code-pill">{html.escape(lane['triage_lane'])}</span></td>
+          <td><span class="verdict-chip verdict-{html.escape(lane['status'].lower())}">{html.escape(lane['status'])}</span></td>
+          <td><span class="code-pill">{html.escape(lane['artifact_path'])}</span></td>
         </tr>
-        """.format(
-            source=html.escape(lane["source"]),
-            summary=html.escape(lane["summary"]),
-            owner=html.escape(lane["owner_persona"]),
-            triage=html.escape(lane["triage_lane"]),
-            status=html.escape(lane["status"]),
-            status_class=html.escape(lane["status"].lower()),
-            artifact_path=html.escape(lane["artifact_path"]),
-        ).strip()
+        """.strip()
         for lane in lanes
     )
 
@@ -956,25 +975,25 @@ def _render_pillar_rows(rows: list[dict[str, Any]], row_type: str) -> str:
 
 
 def _render_governance_flow() -> str:
-        steps = [
-                ("Observe", "Evidence enters the governed lane as recorded operator or workflow truth.", "current"),
-                ("Propose", "Bridge work becomes explicit rather than implied by attractive wording.", "bridge"),
+    steps = [
+        ("Observe", "Evidence enters the governed lane as recorded operator or workflow truth.", "current"),
+        ("Propose", "Bridge work becomes explicit rather than implied by attractive wording.", "bridge"),
         ("Verify", "Tests, audits, and provenance decide whether the proposal is promotable.", "safe"),
-                ("Promote", "Only the surfaces that earn current-truth wording move into public-safe claims.", "open"),
-        ]
-        cards = "\n".join(
-                """
-                <article class="flow-step flow-{tone}">
+        ("Promote", "Only the surfaces that earn current-truth wording move into public-safe claims.", "open"),
+    ]
+    cards = "\n".join(
+        f"""
+                <article class="flow-step flow-{html.escape(tone)}">
                     <div class="flow-index">{index}</div>
                     <div>
-                        <h3>{title}</h3>
-                        <p class="metric-text">{detail}</p>
+                        <h3>{html.escape(title)}</h3>
+                        <p class="metric-text">{html.escape(detail)}</p>
                     </div>
                 </article>
-                """.format(index=index, title=html.escape(title), detail=html.escape(detail), tone=html.escape(tone)).strip()
-                for index, (title, detail, tone) in enumerate(steps, start=1)
-        )
-        return """
+                """.strip()
+        for index, (title, detail, tone) in enumerate(steps, start=1)
+    )
+    return f"""
         <section class="panel span-12 panel-narrative">
             <div class="panel-heading">
                 <h2>Governance Trust Path</h2>
@@ -985,40 +1004,34 @@ def _render_governance_flow() -> str:
             </div>
             <p class="section-note">This is a static doctrinal explainer, not a claim that every upstream governance path is fully restored in packaged form.</p>
         </section>
-        """.format(cards=cards).strip()
+        """.strip()
 
 
 def _render_decision_panel(title: str, kicker: str, panels: list[dict[str, str]]) -> str:
-        cards = "\n".join(
-                """
-                <article class="decision-card decision-{tone}">
+    cards = "\n".join(
+        f"""
+                <article class="decision-card decision-{html.escape(panel['tone'])}">
                     <div class="decision-head">
-                        <div class="metric-label">{label}</div>
-                        {chip}
+                        <div class="metric-label">{html.escape(panel['label'])}</div>
+                        {_render_chip(panel['chip_label'], panel['tone'], subtle=True)}
                     </div>
-                    <h3>{value}</h3>
-                    <p class="metric-text">{detail}</p>
+                    <h3>{_inline_html(panel['value'])}</h3>
+                    <p class="metric-text">{_inline_html(panel['detail'])}</p>
                 </article>
-                """.format(
-                        label=html.escape(panel["label"]),
-                        chip=_render_chip(panel["chip_label"], panel["tone"], subtle=True),
-                        value=_inline_html(panel["value"]),
-                        detail=_inline_html(panel["detail"]),
-                        tone=html.escape(panel["tone"]),
-                ).strip()
-                for panel in panels
-        )
-        return """
+                """.strip()
+        for panel in panels
+    )
+    return f"""
         <section class="panel span-12 panel-decision">
             <div class="panel-heading">
-                <h2>{title}</h2>
-                <span class="panel-kicker">{kicker}</span>
+                <h2>{html.escape(title)}</h2>
+                <span class="panel-kicker">{html.escape(kicker)}</span>
             </div>
             <div class="decision-grid">
                 {cards}
             </div>
         </section>
-        """.format(title=html.escape(title), kicker=html.escape(kicker), cards=cards).strip()
+        """.strip()
 
 
 def _render_per_pillar_rows(pillars: list[dict[str, Any]]) -> str:
@@ -1040,7 +1053,7 @@ def _render_source_provenance(
     generated_at: str,
     authority_text: str,
 ) -> str:
-    return """
+    return f"""
         <section class="panel span-12 provenance-panel panel-provenance">
             <div class="panel-heading">
                 <h2>Source Provenance</h2>
@@ -1055,12 +1068,7 @@ def _render_source_provenance(
                 <p class="section-note provenance-note">{authority_text}</p>
             </div>
         </section>
-        """.format(
-        source_href=html.escape(source_href),
-        source_label=html.escape(source_label),
-        generated_at=html.escape(generated_at),
-        authority_text=html.escape(authority_text),
-    ).strip()
+        """.strip()
 
 
 def _render_dynamic_table(rows: list[dict[str, str]]) -> str:
@@ -1074,7 +1082,7 @@ def _render_dynamic_table(rows: list[dict[str, str]]) -> str:
         )
         for row in rows
     )
-    return """
+    return f"""
         <div class="table-wrap compact-table">
             <table>
                 <thead>
@@ -1085,7 +1093,7 @@ def _render_dynamic_table(rows: list[dict[str, str]]) -> str:
                 </tbody>
             </table>
         </div>
-        """.format(head=head, body=body).strip()
+        """.strip()
 
 
 def render_status_index_html(data: dict[str, Any]) -> str:
@@ -1122,7 +1130,6 @@ def render_status_index_html(data: dict[str, Any]) -> str:
         score_key="score",
         reading_key="name",
     )
-    strongest_and_weakest = scorecard["strongest"] + scorecard["weakest"]
     provenance = _render_source_provenance(
         source_href="HLF_STATUS_OVERVIEW.md",
         source_label="HLF_STATUS_OVERVIEW.md",

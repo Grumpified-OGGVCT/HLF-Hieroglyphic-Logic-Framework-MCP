@@ -89,7 +89,9 @@ def _extract_labeled_block(text: str, label: str) -> str:
     collected: list[str] = []
     for line in lines[start + 1 :]:
         stripped = line.strip()
-        if stripped.startswith("## ") or (stripped.endswith(":") and not stripped.startswith(("-", "1.", "2.", "3."))):
+        if stripped.startswith("## ") or (
+            stripped.endswith(":") and not stripped.startswith(("-", "1.", "2.", "3."))
+        ):
             break
         collected.append(line)
     return "\n".join(collected).strip("\n")
@@ -330,7 +332,9 @@ def _build_lane_trend(latest: dict[str, Any], previous: dict[str, Any] | None) -
 
 def _collect_weekly_lanes(repo_root: Path) -> list[dict[str, Any]]:
     artifacts_by_source: dict[str, list[dict[str, Any]]] = {}
-    for path in sorted((repo_root / "observability" / "local_validation").glob("**/weekly-*-artifact.json")):
+    for path in sorted(
+        (repo_root / "observability" / "local_validation").glob("**/weekly-*-artifact.json")
+    ):
         artifact = _load_artifact(path, repo_root)
         if artifact is None:
             continue
@@ -445,7 +449,8 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
     readiness_trend = data["readiness_trend"]
 
     cluster_rows = "\n".join(
-        f"| {row['name']} | `{row['score']:.1f}%` | {row['reading']} |" for row in dashboard["clusters"]
+        f"| {row['name']} | `{row['score']:.1f}%` | {row['reading']} |"
+        for row in dashboard["clusters"]
     )
     strongest_rows = "\n".join(
         f"| Strongest | {row['pillar']} | `{row['score']:.1f}%` | {row['reading']} |"
@@ -526,7 +531,7 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
         f"| Overall readiness | `{dashboard['overall_readiness']:.1f}%` |",
         f"| Interpretation band | `{dashboard['interpretation_band']}` |",
         "| Claim-lane label | current packaged truth plus bridge-qualified expansion |",
-            "| One-sentence repo status | the repo already has a strong semantic and governance core, but the broader coordination-and-operator zone still suppresses total readiness |",
+        "| One-sentence repo status | the repo already has a strong semantic and governance core, but the broader coordination-and-operator zone still suppresses total readiness |",
         "",
         "### Cluster Scores",
         "",
@@ -742,14 +747,16 @@ def _render_chip(label: str, tone: str, *, subtle: bool = False) -> str:
     )
 
 
-def _render_lane_band(title: str, detail: str, lane: str, *, eyebrow: str, supporting: str | None = None) -> str:
-        supporting_html = f'<p class="metric-text">{_inline_html(supporting)}</p>' if supporting else ""
-        safe_lane = html.escape(lane)
-        safe_eyebrow = html.escape(eyebrow)
-        safe_title = html.escape(title)
-        safe_detail = _inline_html(detail)
-        chip = _render_chip(title, lane, subtle=True)
-        return f"""
+def _render_lane_band(
+    title: str, detail: str, lane: str, *, eyebrow: str, supporting: str | None = None
+) -> str:
+    supporting_html = f'<p class="metric-text">{_inline_html(supporting)}</p>' if supporting else ""
+    safe_lane = html.escape(lane)
+    safe_eyebrow = html.escape(eyebrow)
+    safe_title = html.escape(title)
+    safe_detail = _inline_html(detail)
+    chip = _render_chip(title, lane, subtle=True)
+    return f"""
         <article class="lane-band lane-{safe_lane}">
             <div class="lane-band-head">
                 <div>
@@ -789,7 +796,9 @@ def _render_cluster_card_grid(clusters: list[dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
-def _render_readiness_strips(rows: list[dict[str, Any]], *, name_key: str, score_key: str, reading_key: str) -> str:
+def _render_readiness_strips(
+    rows: list[dict[str, Any]], *, name_key: str, score_key: str, reading_key: str
+) -> str:
     rendered = []
     for row in rows:
         score = float(row[score_key])
@@ -816,10 +825,26 @@ def _render_readiness_strips(rows: list[dict[str, Any]], *, name_key: str, score
 
 def _render_governance_flow() -> str:
     steps = [
-        ("Observe", "Evidence enters the governed lane as recorded operator or workflow truth.", "current"),
-        ("Propose", "Bridge work becomes explicit rather than implied by attractive wording.", "bridge"),
-        ("Verify", "Tests, audits, and provenance decide whether the proposal is promotable.", "safe"),
-        ("Promote", "Only the surfaces that earn current-truth wording move into public-safe claims.", "open"),
+        (
+            "Observe",
+            "Evidence enters the governed lane as recorded operator or workflow truth.",
+            "current",
+        ),
+        (
+            "Propose",
+            "Bridge work becomes explicit rather than implied by attractive wording.",
+            "bridge",
+        ),
+        (
+            "Verify",
+            "Tests, audits, and provenance decide whether the proposal is promotable.",
+            "safe",
+        ),
+        (
+            "Promote",
+            "Only the surfaces that earn current-truth wording move into public-safe claims.",
+            "open",
+        ),
     ]
     cards = "\n".join(
         f"""
@@ -872,7 +897,9 @@ def _render_trend_micrographics(data: dict[str, Any]) -> str:
             previous_marker = ""
         else:
             style_attr = f' style="--current:{current_percent:.1f}%;--previous:{(previous_percent if previous_percent is not None else current_percent):.1f}%"'
-            previous_marker = '<div class="trend-prev-marker"></div>' if previous_percent is not None else ""
+            previous_marker = (
+                '<div class="trend-prev-marker"></div>' if previous_percent is not None else ""
+            )
         rendered.append(
             track.format(
                 tone=html.escape(movement_tone),
@@ -915,12 +942,12 @@ def _render_weekly_rows(lanes: list[dict[str, Any]]) -> str:
     return "\n".join(
         f"""
         <tr>
-          <td><span class="code-pill">{html.escape(lane['source'])}</span></td>
-          <td>{html.escape(lane['summary'])}</td>
-          <td><span class="code-pill">{html.escape(lane['owner_persona'])}</span></td>
-          <td><span class="code-pill">{html.escape(lane['triage_lane'])}</span></td>
-          <td><span class="verdict-chip verdict-{html.escape(lane['status'].lower())}">{html.escape(lane['status'])}</span></td>
-          <td><span class="code-pill">{html.escape(lane['artifact_path'])}</span></td>
+          <td><span class="code-pill">{html.escape(lane["source"])}</span></td>
+          <td>{html.escape(lane["summary"])}</td>
+          <td><span class="code-pill">{html.escape(lane["owner_persona"])}</span></td>
+          <td><span class="code-pill">{html.escape(lane["triage_lane"])}</span></td>
+          <td><span class="verdict-chip verdict-{html.escape(lane["status"].lower())}">{html.escape(lane["status"])}</span></td>
+          <td><span class="code-pill">{html.escape(lane["artifact_path"])}</span></td>
         </tr>
         """.strip()
         for lane in lanes
@@ -976,10 +1003,26 @@ def _render_pillar_rows(rows: list[dict[str, Any]], row_type: str) -> str:
 
 def _render_governance_flow() -> str:
     steps = [
-        ("Observe", "Evidence enters the governed lane as recorded operator or workflow truth.", "current"),
-        ("Propose", "Bridge work becomes explicit rather than implied by attractive wording.", "bridge"),
-        ("Verify", "Tests, audits, and provenance decide whether the proposal is promotable.", "safe"),
-        ("Promote", "Only the surfaces that earn current-truth wording move into public-safe claims.", "open"),
+        (
+            "Observe",
+            "Evidence enters the governed lane as recorded operator or workflow truth.",
+            "current",
+        ),
+        (
+            "Propose",
+            "Bridge work becomes explicit rather than implied by attractive wording.",
+            "bridge",
+        ),
+        (
+            "Verify",
+            "Tests, audits, and provenance decide whether the proposal is promotable.",
+            "safe",
+        ),
+        (
+            "Promote",
+            "Only the surfaces that earn current-truth wording move into public-safe claims.",
+            "open",
+        ),
     ]
     cards = "\n".join(
         f"""
@@ -1010,13 +1053,13 @@ def _render_governance_flow() -> str:
 def _render_decision_panel(title: str, kicker: str, panels: list[dict[str, str]]) -> str:
     cards = "\n".join(
         f"""
-                <article class="decision-card decision-{html.escape(panel['tone'])}">
+                <article class="decision-card decision-{html.escape(panel["tone"])}">
                     <div class="decision-head">
-                        <div class="metric-label">{html.escape(panel['label'])}</div>
-                        {_render_chip(panel['chip_label'], panel['tone'], subtle=True)}
+                        <div class="metric-label">{html.escape(panel["label"])}</div>
+                        {_render_chip(panel["chip_label"], panel["tone"], subtle=True)}
                     </div>
-                    <h3>{_inline_html(panel['value'])}</h3>
-                    <p class="metric-text">{_inline_html(panel['detail'])}</p>
+                    <h3>{_inline_html(panel["value"])}</h3>
+                    <p class="metric-text">{_inline_html(panel["detail"])}</p>
                 </article>
                 """.strip()
         for panel in panels
@@ -1078,7 +1121,10 @@ def _render_dynamic_table(rows: list[dict[str, str]]) -> str:
     head = "\n".join(f"<th>{html.escape(header)}</th>" for header in headers)
     body = "\n".join(
         "<tr>{cells}</tr>".format(
-            cells="".join(f"<td>{_replace_inline_code(html.escape(row.get(header, '')))}</td>" for header in headers)
+            cells="".join(
+                f"<td>{_replace_inline_code(html.escape(row.get(header, '')))}</td>"
+                for header in headers
+            )
         )
         for row in rows
     )
@@ -1157,9 +1203,11 @@ def render_status_index_html(data: dict[str, Any]) -> str:
         </div>
         <div class="hero-card hero-card-status">
           <div class="hero-label">Overall readiness</div>
-          <div class="hero-value">{dashboard['overall_readiness']:.1f}%</div>
-          <div class="hero-meta">{html.escape(dashboard['interpretation_band'])}</div>
-          <p class="hero-text">Strongest cluster: {html.escape(dashboard['strongest_cluster'].lower())}. Main drag: {html.escape(dashboard['weakest_cluster'].lower())}.</p>
+          <div class="hero-value">{dashboard["overall_readiness"]:.1f}%</div>
+          <div class="hero-meta">{html.escape(dashboard["interpretation_band"])}</div>
+          <p class="hero-text">Strongest cluster: {
+        html.escape(dashboard["strongest_cluster"].lower())
+    }. Main drag: {html.escape(dashboard["weakest_cluster"].lower())}.</p>
         </div>
       </div>
       <nav class="top-nav">
@@ -1184,7 +1232,7 @@ def render_status_index_html(data: dict[str, Any]) -> str:
           <span class="panel-kicker">Current repo posture</span>
         </div>
         <div class="metric-grid">
-          {_render_cluster_cards(dashboard['clusters'])}
+          {_render_cluster_cards(dashboard["clusters"])}
         </div>
         <p class="section-note">Top-line readiness is an internal indicator. It helps operators read repo posture, but it does not collapse current truth, weekly proof, and bridge recovery into one completion claim.</p>
       </section>
@@ -1217,7 +1265,7 @@ def render_status_index_html(data: dict[str, Any]) -> str:
               </tr>
             </thead>
             <tbody>
-              {_render_weekly_rows(data['lanes'])}
+              {_render_weekly_rows(data["lanes"])}
             </tbody>
           </table>
         </div>
@@ -1240,8 +1288,8 @@ def render_status_index_html(data: dict[str, Any]) -> str:
               </tr>
             </thead>
             <tbody>
-              {_render_pillar_rows(scorecard['strongest'], 'Strongest')}
-              {_render_pillar_rows(scorecard['weakest'], 'Weakest')}
+              {_render_pillar_rows(scorecard["strongest"], "Strongest")}
+              {_render_pillar_rows(scorecard["weakest"], "Weakest")}
             </tbody>
           </table>
         </div>
@@ -1258,40 +1306,52 @@ def render_status_index_html(data: dict[str, Any]) -> str:
                 <p class="section-note">These strips remain evidence-backed score renderings. They do not replace the underlying readiness tables in the markdown authority.</p>
       </section>
 
-            {_render_decision_panel(
-                    "Reviewer Decision Panel",
-                    "What a PR reader should conclude from the generated status front door",
-                    [
-                            {
-                                    "label": "What is real now",
-                                    "chip_label": "current-true",
-                                    "tone": "current",
-                                    "value": "Packaged HLF core is inspectable and usable now.",
-                                    "detail": _truncate_text(_first_nonempty([cluster['reading'] for cluster in dashboard['clusters']], "Current packaged truth is present.")),
-                            },
-                            {
-                                    "label": "What is improved in branch",
-                                    "chip_label": "bridge-true",
-                                    "tone": "bridge",
-                                    "value": "Weekly evidence and operator recovery lanes sharpen branch posture.",
-                                    "detail": _truncate_text(_first_nonempty([lane['summary'] for lane in data['lanes']], "Governed weekly evidence remains part of the branch signal.")),
-                            },
-                            {
-                                    "label": "What is still missing",
-                                    "chip_label": "still-open",
-                                    "tone": "open",
-                                    "value": data['weakest_pillar']['pillar'],
-                                    "detail": _truncate_text(data['weakest_pillar']['reading']),
-                            },
-                            {
-                                    "label": "What is safe to claim publicly",
-                                    "chip_label": "claim-lane",
-                                    "tone": "safe",
-                                    "value": "Strong core, real evidence, unfinished recovery.",
-                                    "detail": "Public wording should keep packaged truth, weekly proof, and broader architectural recovery distinct.",
-                            },
-                    ],
-            )}
+            {
+        _render_decision_panel(
+            "Reviewer Decision Panel",
+            "What a PR reader should conclude from the generated status front door",
+            [
+                {
+                    "label": "What is real now",
+                    "chip_label": "current-true",
+                    "tone": "current",
+                    "value": "Packaged HLF core is inspectable and usable now.",
+                    "detail": _truncate_text(
+                        _first_nonempty(
+                            [cluster["reading"] for cluster in dashboard["clusters"]],
+                            "Current packaged truth is present.",
+                        )
+                    ),
+                },
+                {
+                    "label": "What is improved in branch",
+                    "chip_label": "bridge-true",
+                    "tone": "bridge",
+                    "value": "Weekly evidence and operator recovery lanes sharpen branch posture.",
+                    "detail": _truncate_text(
+                        _first_nonempty(
+                            [lane["summary"] for lane in data["lanes"]],
+                            "Governed weekly evidence remains part of the branch signal.",
+                        )
+                    ),
+                },
+                {
+                    "label": "What is still missing",
+                    "chip_label": "still-open",
+                    "tone": "open",
+                    "value": data["weakest_pillar"]["pillar"],
+                    "detail": _truncate_text(data["weakest_pillar"]["reading"]),
+                },
+                {
+                    "label": "What is safe to claim publicly",
+                    "chip_label": "claim-lane",
+                    "tone": "safe",
+                    "value": "Strong core, real evidence, unfinished recovery.",
+                    "detail": "Public wording should keep packaged truth, weekly proof, and broader architectural recovery distinct.",
+                },
+            ],
+        )
+    }
 
             {_render_governance_flow()}
 
@@ -1330,7 +1390,9 @@ def _parse_merge_readiness(path: Path, repo_root: Path = REPO_ROOT) -> dict[str,
 
     purpose_lines = [
         line[2:].strip()
-        for line in _extract_section_or_label(text, heading="## Purpose", label="Purpose:").splitlines()
+        for line in _extract_section_or_label(
+            text, heading="## Purpose", label="Purpose:"
+        ).splitlines()
         if line.strip().startswith("-")
     ]
     verified_lines = [
@@ -1355,11 +1417,16 @@ def _parse_merge_readiness(path: Path, repo_root: Path = REPO_ROOT) -> dict[str,
     sections: list[dict[str, Any]] = []
     for heading in section_order:
         raw_body = _extract_section(text, heading)
-        bullets = [line[2:].strip() for line in raw_body.splitlines() if line.strip().startswith("-")]
+        bullets = [
+            line[2:].strip() for line in raw_body.splitlines() if line.strip().startswith("-")
+        ]
         paragraphs = [
             paragraph.strip()
             for paragraph in raw_body.split("\n\n")
-            if paragraph.strip() and not all(line.strip().startswith("-") for line in paragraph.splitlines() if line.strip())
+            if paragraph.strip()
+            and not all(
+                line.strip().startswith("-") for line in paragraph.splitlines() if line.strip()
+            )
         ]
         sections.append(
             {
@@ -1403,9 +1470,23 @@ def _render_merge_lane_cards(merge_data: dict[str, Any]) -> str:
     cards: list[str] = []
     for section_title, tone, eyebrow in configs:
         section = section_map.get(section_title, {"paragraphs": [], "bullets": []})
-        detail = _truncate_text(_first_nonempty(section.get("bullets", []), _first_nonempty(section.get("paragraphs", []), "No summary available.")), 180)
-        supporting = _truncate_text(_first_nonempty(section.get("paragraphs", []), "Lane remains intentionally bounded by the markdown authority."), 160)
-        cards.append(_render_lane_band(section_title, detail, tone, eyebrow=eyebrow, supporting=supporting))
+        detail = _truncate_text(
+            _first_nonempty(
+                section.get("bullets", []),
+                _first_nonempty(section.get("paragraphs", []), "No summary available."),
+            ),
+            180,
+        )
+        supporting = _truncate_text(
+            _first_nonempty(
+                section.get("paragraphs", []),
+                "Lane remains intentionally bounded by the markdown authority.",
+            ),
+            160,
+        )
+        cards.append(
+            _render_lane_band(section_title, detail, tone, eyebrow=eyebrow, supporting=supporting)
+        )
     return "\n".join(cards)
 
 
@@ -1446,9 +1527,12 @@ def _parse_claims_ledger(path: Path, repo_root: Path = REPO_ROOT) -> dict[str, A
     bottom_paragraphs = [
         paragraph.strip()
         for paragraph in bottom_line.split("\n\n")
-        if paragraph.strip() and not all(line.strip().startswith("-") for line in paragraph.splitlines() if line.strip())
+        if paragraph.strip()
+        and not all(line.strip().startswith("-") for line in paragraph.splitlines() if line.strip())
     ]
-    bottom_bullets = [line[2:].strip() for line in bottom_line.splitlines() if line.strip().startswith("-")]
+    bottom_bullets = [
+        line[2:].strip() for line in bottom_line.splitlines() if line.strip().startswith("-")
+    ]
 
     return {
         "path": _normalize_relative(path, repo_root),
@@ -1486,7 +1570,12 @@ def render_merge_readiness_html(data: dict[str, Any], merge_data: dict[str, Any]
         """.format(
             panel_class=(
                 "panel-band"
-                if section["title"] in {"Current-True In This Checkout", "Bridge-True But Real In This Branch", "Still-Open Architectural Gaps"}
+                if section["title"]
+                in {
+                    "Current-True In This Checkout",
+                    "Bridge-True But Real In This Branch",
+                    "Still-Open Architectural Gaps",
+                }
                 else "panel-narrative"
             ),
             title=html.escape(section["title"]),
@@ -1503,29 +1592,81 @@ def render_merge_readiness_html(data: dict[str, Any], merge_data: dict[str, Any]
                 "label": "What is real now",
                 "chip_label": "current-true",
                 "tone": "current",
-                "value": _truncate_text(_first_nonempty(section_map.get("Current-True In This Checkout", {}).get("bullets", []), "Current packaged truth is present."), 100),
-                "detail": _truncate_text(_first_nonempty(section_map.get("Current-True In This Checkout", {}).get("paragraphs", []), "Present-tense packaged truth should stay explicit."), 170),
+                "value": _truncate_text(
+                    _first_nonempty(
+                        section_map.get("Current-True In This Checkout", {}).get("bullets", []),
+                        "Current packaged truth is present.",
+                    ),
+                    100,
+                ),
+                "detail": _truncate_text(
+                    _first_nonempty(
+                        section_map.get("Current-True In This Checkout", {}).get("paragraphs", []),
+                        "Present-tense packaged truth should stay explicit.",
+                    ),
+                    170,
+                ),
             },
             {
                 "label": "What is improved in branch",
                 "chip_label": "bridge-true",
                 "tone": "bridge",
-                "value": _truncate_text(_first_nonempty(section_map.get("Bridge-True But Real In This Branch", {}).get("bullets", []), "Bridge work is real in the checkout."), 100),
-                "detail": _truncate_text(_first_nonempty(section_map.get("Bridge-True But Real In This Branch", {}).get("paragraphs", []), "Keep branch improvements qualified rather than inflated."), 170),
+                "value": _truncate_text(
+                    _first_nonempty(
+                        section_map.get("Bridge-True But Real In This Branch", {}).get(
+                            "bullets", []
+                        ),
+                        "Bridge work is real in the checkout.",
+                    ),
+                    100,
+                ),
+                "detail": _truncate_text(
+                    _first_nonempty(
+                        section_map.get("Bridge-True But Real In This Branch", {}).get(
+                            "paragraphs", []
+                        ),
+                        "Keep branch improvements qualified rather than inflated.",
+                    ),
+                    170,
+                ),
             },
             {
                 "label": "What is still missing",
                 "chip_label": "still-open",
                 "tone": "open",
-                "value": _truncate_text(_first_nonempty(section_map.get("Still-Open Architectural Gaps", {}).get("bullets", []), "Open architecture gaps remain."), 100),
-                "detail": _truncate_text(_first_nonempty(section_map.get("Still-Open Architectural Gaps", {}).get("paragraphs", []), "Open work remains part of the reading."), 170),
+                "value": _truncate_text(
+                    _first_nonempty(
+                        section_map.get("Still-Open Architectural Gaps", {}).get("bullets", []),
+                        "Open architecture gaps remain.",
+                    ),
+                    100,
+                ),
+                "detail": _truncate_text(
+                    _first_nonempty(
+                        section_map.get("Still-Open Architectural Gaps", {}).get("paragraphs", []),
+                        "Open work remains part of the reading.",
+                    ),
+                    170,
+                ),
             },
             {
                 "label": "What is safe to claim publicly",
                 "chip_label": "public-safe",
                 "tone": "safe",
-                "value": _truncate_text(_first_nonempty(section_map.get("Recommended Merge Framing", {}).get("bullets", []), "Use lane-qualified merge framing."), 100),
-                "detail": _truncate_text(_first_nonempty(section_map.get("Merge Reading", {}).get("bullets", []), "Public wording should stay branch-aware and bounded."), 170),
+                "value": _truncate_text(
+                    _first_nonempty(
+                        section_map.get("Recommended Merge Framing", {}).get("bullets", []),
+                        "Use lane-qualified merge framing.",
+                    ),
+                    100,
+                ),
+                "detail": _truncate_text(
+                    _first_nonempty(
+                        section_map.get("Merge Reading", {}).get("bullets", []),
+                        "Public wording should stay branch-aware and bounded.",
+                    ),
+                    170,
+                ),
             },
         ],
     )
@@ -1550,7 +1691,7 @@ def render_merge_readiness_html(data: dict[str, Any], merge_data: dict[str, Any]
                 </div>
                 <div class="hero-card hero-card-merge">
                     <div class="hero-label">Status</div>
-                    <div class="hero-value hero-value-text">{html.escape(merge_data['status'])}</div>
+                    <div class="hero-value hero-value-text">{html.escape(merge_data["status"])}</div>
                     <div class="hero-meta">branch-aware summary</div>
                     <p class="hero-text">Use this page to read what the branch can claim now, what remains bridge-qualified, and what still blocks architectural completion.</p>
                 </div>
@@ -1566,7 +1707,7 @@ def render_merge_readiness_html(data: dict[str, Any], merge_data: dict[str, Any]
                     <h2>Purpose</h2>
                     <span class="panel-kicker">Why this summary exists</span>
                 </div>
-                {_render_bullet_list(merge_data['purpose'])}
+                {_render_bullet_list(merge_data["purpose"])}
             </section>
 
             <section class="panel span-8 panel-proof">
@@ -1622,7 +1763,9 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
             title=html.escape(section["title"]),
             count=len(section["rows"]),
             chip=_render_chip(section["title"], _verdict_key(section["title"])),
-            detail=html.escape(f"{len(section['rows'])} branch-aware classifications in this lane."),
+            detail=html.escape(
+                f"{len(section['rows'])} branch-aware classifications in this lane."
+            ),
         ).strip()
         for section in claims_data["sections"]
     )
@@ -1642,7 +1785,9 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
         """.format(
             title=html.escape(section["title"]),
             chip=_render_chip(section["title"], _verdict_key(section["title"])),
-            note=html.escape(f"{len(section['rows'])} classified statements remain grounded in the markdown ledger authority."),
+            note=html.escape(
+                f"{len(section['rows'])} classified statements remain grounded in the markdown ledger authority."
+            ),
             table=_render_dynamic_table(section["rows"]),
         ).strip()
         for section in claims_data["sections"]
@@ -1655,7 +1800,12 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
                 "label": "What is real now",
                 "chip_label": "resolved",
                 "tone": "resolved",
-                "value": _truncate_text(_first_nonempty(claims_data["verified"], "Verified branch facts remain the grounding layer."), 100),
+                "value": _truncate_text(
+                    _first_nonempty(
+                        claims_data["verified"], "Verified branch facts remain the grounding layer."
+                    ),
+                    100,
+                ),
                 "detail": "Verified branch facts anchor the ledger before any gap language is promoted.",
             },
             {
@@ -1677,7 +1827,13 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
                 "chip_label": "claim-lane",
                 "tone": "safe",
                 "value": "Resolve stale gap claims without declaring full completion.",
-                "detail": _truncate_text(_first_nonempty(claims_data['reading_rule'], "Use claim-lane discipline when reusing wording."), 170),
+                "detail": _truncate_text(
+                    _first_nonempty(
+                        claims_data["reading_rule"],
+                        "Use claim-lane discipline when reusing wording.",
+                    ),
+                    170,
+                ),
             },
         ],
     )
@@ -1708,7 +1864,7 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
                 </div>
                 <div class="hero-card hero-card-claims">
                     <div class="hero-label">Status</div>
-                    <div class="hero-value hero-value-text">{html.escape(claims_data['status'])}</div>
+                    <div class="hero-value hero-value-text">{html.escape(claims_data["status"])}</div>
                     <div class="hero-meta">branch-aware review aid</div>
                     <p class="hero-text">Use this page when evaluating whether public-main perceptions are stale, still valid, or only partially corrected by bridge-qualified branch work.</p>
                 </div>
@@ -1724,7 +1880,7 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
                     <h2>Purpose</h2>
                     <span class="panel-kicker">Why the ledger exists</span>
                 </div>
-                {_render_bullet_list(claims_data['purpose'])}
+                {_render_bullet_list(claims_data["purpose"])}
             </section>
 
             <section class="panel span-4 panel-narrative">
@@ -1732,7 +1888,7 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
                     <h2>Reading Rule</h2>
                     <span class="panel-kicker">Promotion discipline</span>
                 </div>
-                {_render_bullet_list(claims_data['reading_rule'])}
+                {_render_bullet_list(claims_data["reading_rule"])}
             </section>
 
             <section class="panel span-4 panel-proof">
@@ -1751,10 +1907,10 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
                     <span class="panel-kicker">Overstated, valid, resolved, and open classifications</span>
                 </div>
                 <div class="verdict-chip-row verdict-chip-row-legend">
-                    {_render_chip('Overstated', 'overstated')}
-                    {_render_chip('Valid', 'valid')}
-                    {_render_chip('Resolved', 'resolved')}
-                    {_render_chip('Open', 'open')}
+                    {_render_chip("Overstated", "overstated")}
+                    {_render_chip("Valid", "valid")}
+                    {_render_chip("Resolved", "resolved")}
+                    {_render_chip("Open", "open")}
                 </div>
                 <div class="metric-grid verdict-overview-grid">
                     {verdict_overview}
@@ -1771,8 +1927,8 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
                     <h2>Bottom Line</h2>
                     <span class="panel-kicker">How reviewers should read the branch</span>
                 </div>
-                {_render_paragraphs(claims_data['bottom_line']['paragraphs'])}
-                {_render_bullet_list(claims_data['bottom_line']['bullets'])}
+                {_render_paragraphs(claims_data["bottom_line"]["paragraphs"])}
+                {_render_bullet_list(claims_data["bottom_line"]["bullets"])}
             </section>
 
             {provenance}
@@ -1790,12 +1946,22 @@ def render_claims_ledger_html(data: dict[str, Any], claims_data: dict[str, Any])
 def write_status_surfaces(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
     data = collect_status_data(repo_root)
     docs_dir = repo_root / "docs"
-    merge_data = _parse_merge_readiness(docs_dir / "HLF_MERGE_READINESS_SUMMARY_2026-03-20.md", repo_root)
-    claims_data = _parse_claims_ledger(docs_dir / "HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md", repo_root)
-    markdown_changed = _write_if_changed(docs_dir / MARKDOWN_OUTPUT.name, render_status_overview_markdown(data))
+    merge_data = _parse_merge_readiness(
+        docs_dir / "HLF_MERGE_READINESS_SUMMARY_2026-03-20.md", repo_root
+    )
+    claims_data = _parse_claims_ledger(
+        docs_dir / "HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md", repo_root
+    )
+    markdown_changed = _write_if_changed(
+        docs_dir / MARKDOWN_OUTPUT.name, render_status_overview_markdown(data)
+    )
     html_changed = _write_if_changed(docs_dir / HTML_OUTPUT.name, render_status_index_html(data))
-    merge_html_changed = _write_if_changed(docs_dir / MERGE_HTML_OUTPUT.name, render_merge_readiness_html(data, merge_data))
-    claims_html_changed = _write_if_changed(docs_dir / CLAIMS_HTML_OUTPUT.name, render_claims_ledger_html(data, claims_data))
+    merge_html_changed = _write_if_changed(
+        docs_dir / MERGE_HTML_OUTPUT.name, render_merge_readiness_html(data, merge_data)
+    )
+    claims_html_changed = _write_if_changed(
+        docs_dir / CLAIMS_HTML_OUTPUT.name, render_claims_ledger_html(data, claims_data)
+    )
     return {
         "markdown_changed": markdown_changed,
         "html_changed": html_changed,
@@ -1821,13 +1987,22 @@ def main(argv: list[str] | None = None) -> int:
         expected_merge_html = render_merge_readiness_html(data, merge_data)
         expected_claims_html = render_claims_ledger_html(data, claims_data)
         stale: list[str] = []
-        if not MARKDOWN_OUTPUT.exists() or MARKDOWN_OUTPUT.read_text(encoding="utf-8") != expected_markdown:
+        if (
+            not MARKDOWN_OUTPUT.exists()
+            or MARKDOWN_OUTPUT.read_text(encoding="utf-8") != expected_markdown
+        ):
             stale.append(_normalize_relative(MARKDOWN_OUTPUT))
         if not HTML_OUTPUT.exists() or HTML_OUTPUT.read_text(encoding="utf-8") != expected_html:
             stale.append(_normalize_relative(HTML_OUTPUT))
-        if not MERGE_HTML_OUTPUT.exists() or MERGE_HTML_OUTPUT.read_text(encoding="utf-8") != expected_merge_html:
+        if (
+            not MERGE_HTML_OUTPUT.exists()
+            or MERGE_HTML_OUTPUT.read_text(encoding="utf-8") != expected_merge_html
+        ):
             stale.append(_normalize_relative(MERGE_HTML_OUTPUT))
-        if not CLAIMS_HTML_OUTPUT.exists() or CLAIMS_HTML_OUTPUT.read_text(encoding="utf-8") != expected_claims_html:
+        if (
+            not CLAIMS_HTML_OUTPUT.exists()
+            or CLAIMS_HTML_OUTPUT.read_text(encoding="utf-8") != expected_claims_html
+        ):
             stale.append(_normalize_relative(CLAIMS_HTML_OUTPUT))
         if stale:
             print(json.dumps({"stale_outputs": stale}, indent=2))

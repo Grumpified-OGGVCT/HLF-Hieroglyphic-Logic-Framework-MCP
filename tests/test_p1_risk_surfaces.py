@@ -27,6 +27,7 @@ def _install_tiktoken_stub() -> None:
 
 _install_tiktoken_stub()
 
+
 def _valid_bytecode() -> bytes:
     from hlf_mcp.hlf.bytecode import HLFBytecode
     from hlf_mcp.hlf.compiler import HLFCompiler
@@ -219,7 +220,9 @@ class TestServerCoreCompileErrorShaping:
 
         ctx = build_server_context()
         tools = register_core_tools(DummyMCP(), ctx)
-        monkeypatch.setattr(ctx.compiler, "compile", _raise(CompileError("Syntax error", line=10, col=5)))
+        monkeypatch.setattr(
+            ctx.compiler, "compile", _raise(CompileError("Syntax error", line=10, col=5))
+        )
 
         result = tools["hlf_compile"]("invalid hlf code")
         assert result["status"] == "error"

@@ -20,6 +20,8 @@ const FALLBACK_RESOURCES = [
   'hlf://status/instinct/{mission_id}',
   'hlf://status/witness_governance',
   'hlf://status/witness_governance/{subject_agent_id}',
+  'hlf://status/provenance_contract',
+  'hlf://status/memory_governance',
 ];
 
 function getServerResourcesPath() {

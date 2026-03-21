@@ -87,6 +87,68 @@ def test_operator_cli_weekly_evidence_summary_reports_counts(capsys, tmp_path: P
     assert payload["distribution_eligible_count"] == 1
 
 
+def test_operator_cli_provenance_summary_uses_server_context(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    class MockContext:
+        def summarize_provenance_contract(self, *, metrics_dir=None):
+            return {
+                "contract_version": "1.0",
+                "summary": {"memory_fact_count": 3, "active_pointer_count": 2},
+            }
+
+    monkeypatch.setattr(operator_cli, "build_server_context", lambda: MockContext())
+
+    exit_code = operator_cli.main(["provenance-summary", "--json"])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "ok"
+    assert payload["provenance_contract"]["summary"]["memory_fact_count"] == 3
+
+
+def test_operator_cli_memory_govern_uses_shared_helper(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", lambda: object())
+    monkeypatch.setattr(
+        operator_cli,
+        "apply_memory_governance",
+        lambda ctx, **kwargs: {
+            "status": "ok",
+            "action": kwargs["action"],
+            "fact": {"id": kwargs["fact_id"], "governance_status": "revoked"},
+            "operator_identity": {
+                "operator_id": kwargs["operator_id"],
+                "operator_display_name": kwargs["operator_display_name"],
+                "operator_channel": kwargs["operator_channel"],
+            },
+        },
+    )
+
+    exit_code = operator_cli.main([
+        "memory-govern",
+        "--action",
+        "revoke",
+        "--fact-id",
+        "41",
+        "--operator-summary",
+        "Revoked via CLI",
+        "--operator-id",
+        "alice",
+        "--operator-display-name",
+        "Alice Example",
+        "--operator-channel",
+        "operator_cli.memory_govern",
+        "--json",
+    ])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "ok"
+    assert payload["action"] == "revoke"
+    assert payload["fact"]["id"] == 41
+    assert payload["operator_identity"]["operator_id"] == "alice"
+
+
 def test_operator_cli_resource_uses_packaged_renderer(monkeypatch, capsys) -> None:
     from hlf_mcp import operator_cli
 

@@ -1,6 +1,7 @@
 import json
+from pathlib import Path
 
-from hlf_mcp import server
+from hlf_mcp import server, server_resources
 
 
 def test_hlf_do_dry_run_generates_governed_audit() -> None:
@@ -387,6 +388,15 @@ def test_server_registers_model_catalog_tools() -> None:
     assert "hlf_verify_gas_budget" in server.REGISTERED_TOOLS
     assert "hlf_instinct_realign" in server.REGISTERED_TOOLS
     assert "hlf_instinct_list" in server.REGISTERED_TOOLS
+    assert "hlf_dream_cycle_run" in server.REGISTERED_TOOLS
+    assert "hlf_dream_findings_list" in server.REGISTERED_TOOLS
+    assert "hlf_dream_findings_get" in server.REGISTERED_TOOLS
+    assert "hlf_media_evidence_list" in server.REGISTERED_TOOLS
+    assert "hlf_media_evidence_get" in server.REGISTERED_TOOLS
+    assert "hlf_dream_proposal_create" in server.REGISTERED_TOOLS
+    assert "hlf_dream_proposals_list" in server.REGISTERED_TOOLS
+    assert "hlf_dream_proposals_get" in server.REGISTERED_TOOLS
+    assert "hlf_memory_govern" in server.REGISTERED_TOOLS
     assert "hlf://status/model_catalog" in server.REGISTERED_RESOURCES
     assert "hlf://status/model_catalog/{agent_id}" in server.REGISTERED_RESOURCES
     assert "hlf://status/align" in server.REGISTERED_RESOURCES
@@ -396,6 +406,105 @@ def test_server_registers_model_catalog_tools() -> None:
     assert "hlf://status/profile_capability_catalog" in server.REGISTERED_RESOURCES
     assert "hlf://status/instinct" in server.REGISTERED_RESOURCES
     assert "hlf://status/instinct/{mission_id}" in server.REGISTERED_RESOURCES
+    assert "hlf://status/provenance_contract" in server.REGISTERED_RESOURCES
+    assert "hlf://status/memory_governance" in server.REGISTERED_RESOURCES
+    assert "hlf://status/dream-cycle" in server.REGISTERED_RESOURCES
+    assert "hlf://dream/findings" in server.REGISTERED_RESOURCES
+    assert "hlf://dream/findings/{finding_id}" in server.REGISTERED_RESOURCES
+    assert "hlf://media/evidence" in server.REGISTERED_RESOURCES
+    assert "hlf://media/evidence/{artifact_id}" in server.REGISTERED_RESOURCES
+    assert "hlf://dream/proposals" in server.REGISTERED_RESOURCES
+    assert "hlf://dream/proposals/{proposal_id}" in server.REGISTERED_RESOURCES
+    assert "hlf://status/multimodal_contracts" in server.REGISTERED_RESOURCES
+    assert "hlf://status/fixture_gallery" in server.REGISTERED_RESOURCES
+    assert "hlf://reports/fixture_gallery" in server.REGISTERED_RESOURCES
+
+
+def test_fixture_gallery_status_resource_reports_packaged_fixture_health() -> None:
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/fixture_gallery"]())
+
+    assert resource["status"] == "ok"
+    assert resource["gallery"]["surface_type"] == "generated_report"
+    assert resource["gallery"]["grounded_in_packaged_truth"] is True
+    assert resource["gallery"]["summary"]["fixture_count"] >= 11
+    assert resource["gallery"]["summary"]["compile_failed_count"] == 0
+    assert resource["gallery"]["summary"]["bytecode_failed_count"] == 0
+    assert "hlf://reports/fixture_gallery" in resource["gallery"]["taxonomy"]["generated_reports"]
+    assert any(entry["name"] == "hello_world" for entry in resource["gallery"]["entries"])
+
+
+def test_fixture_gallery_markdown_report_matches_structured_status_surface() -> None:
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/fixture_gallery"]())
+    report = server.REGISTERED_RESOURCES["hlf://reports/fixture_gallery"]()
+
+    assert report.startswith("# HLF Fixture Gallery Report\n")
+    assert (
+        "Generated from packaged fixtures using the current packaged compiler and bytecode encoder."
+        in report
+    )
+    assert f"- Fixture count: {resource['gallery']['summary']['fixture_count']}" in report
+    assert "| hello_world |" in report
+    assert "- Generated report: hlf://reports/fixture_gallery" in report
+
+
+def test_fixture_gallery_status_reports_missing_directory_when_candidates_are_invalid(
+    monkeypatch, tmp_path: Path
+) -> None:
+    invalid_fixture_file = tmp_path / "fixtures"
+    invalid_fixture_file.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setattr(server_resources, "_FIXTURE_DIR_CANDIDATES", [invalid_fixture_file])
+
+    resource = json.loads(
+        server_resources.render_resource_uri(None, "hlf://status/fixture_gallery")
+    )
+
+    assert resource["status"] == "error"
+    assert resource["error"] == "fixtures_directory_missing"
+    assert resource["gallery"]["fixture_dir"] is None
+
+
+def test_host_functions_resource_preserves_missing_governance_error_signal(monkeypatch) -> None:
+    monkeypatch.setattr(
+        server_resources,
+        "_read_governance_file",
+        lambda filename: json.dumps(
+            {
+                "error": "governance_file_not_found",
+                "file": filename,
+                "hint": "install from source",
+            }
+        ),
+    )
+
+    resource = json.loads(server_resources.render_resource_uri(None, "hlf://host_functions"))
+
+    assert resource["functions"] == []
+    assert resource["status"] == "error"
+    assert resource["error"] == "governance_file_not_found"
+    assert resource["details"]["file"] == "host_functions.json"
+
+
+def test_memory_governance_tool_returns_structured_error_for_missing_identifier() -> None:
+    result = server.hlf_memory_govern(action="revoke")
+
+    assert result["status"] == "error"
+    assert result["error"] == "Either fact_id or sha256 must be provided."
+    assert result["action"] == "revoke"
+
+
+def test_memory_governance_tool_returns_structured_error_for_invalid_action() -> None:
+    stored = server.hlf_memory_store(
+        content="Invalid memory-govern action regression",
+        topic="memory-governance-invalid-action",
+        provenance="test_frontdoor",
+        confidence=0.87,
+    )
+
+    result = server.hlf_memory_govern(action="invalid", fact_id=stored["id"])
+
+    assert result["status"] == "error"
+    assert "unsupported governance action" in result["error"].lower()
+    assert result["fact_id"] == stored["id"]
 
 
 def test_align_status_surfaces_normalized_action_semantics() -> None:
@@ -421,6 +530,164 @@ def test_formal_verifier_tools_and_resource_surface_proven_constraints() -> None
     assert tool_result["result"]["status"] in {"proven", "failed"}
     assert resource["status"] == "ok"
     assert resource["formal_verifier_status"]["solver_name"]
+
+
+def test_provenance_contract_resource_surfaces_memory_and_governance_summary() -> None:
+    stored = server.hlf_memory_store(
+        content="HLF provenance contract regression fact",
+        topic="provenance-contract-resource",
+        provenance="test_frontdoor",
+        confidence=0.93,
+        tags=["provenance-contract", "operator-regression"],
+    )
+    superseded = server._ctx.memory_store.store(
+        "Superseded provenance contract fact",
+        topic="provenance-contract-resource",
+        provenance="test_frontdoor",
+        metadata={"governed_evidence": {"operator_summary": "Superseded fact"}},
+    )
+    server._ctx.memory_store.store(
+        "Superseding provenance contract fact",
+        topic="provenance-contract-resource",
+        provenance="test_frontdoor",
+        supersedes_sha256=superseded["sha256"],
+        metadata={"governed_evidence": {"operator_summary": "Superseding fact"}},
+    )
+    server._ctx.memory_store.store(
+        "Revoked provenance contract fact",
+        topic="provenance-contract-resource",
+        provenance="test_frontdoor",
+        metadata={"governed_evidence": {"revoked": True, "operator_summary": "Revoked fact"}},
+    )
+    server._ctx.memory_store.store(
+        "Tombstoned provenance contract fact",
+        topic="provenance-contract-resource",
+        provenance="test_frontdoor",
+        metadata={"governed_evidence": {"tombstoned": True, "operator_summary": "Tombstoned fact"}},
+    )
+
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/provenance_contract"]())
+
+    assert stored["stored"] is True
+    assert resource["status"] == "ok"
+    assert resource["provenance_contract"]["contract_version"] == "1.0"
+    assert resource["provenance_contract"]["summary"]["memory_fact_count"] >= 1
+    assert resource["provenance_contract"]["summary"]["governance_event_count"] >= 1
+    assert "fact" in resource["provenance_contract"]["memory_entry_kind_counts"]
+    assert resource["provenance_contract"]["memory_state_counts"]["revoked"] >= 1
+    assert resource["provenance_contract"]["memory_state_counts"]["tombstoned"] >= 1
+    assert resource["provenance_contract"]["memory_state_counts"]["superseded"] >= 1
+    assert (
+        resource["provenance_contract"]["pointer_chain_summary"]["superseding_pointer_count"] >= 1
+    )
+    assert any(
+        pointer["pointer"].startswith("&")
+        for pointer in resource["provenance_contract"]["pointer_chain_summary"]["recent_pointers"]
+    )
+    assert any(
+        fact["topic"] == "provenance-contract-resource"
+        for fact in resource["provenance_contract"]["recent_memory_facts"]
+    )
+
+
+def test_memory_governance_tool_and_resource_surface_governed_intervention() -> None:
+    stored = server.hlf_memory_store(
+        content="Govern this memory fact",
+        topic="memory-governance-resource",
+        provenance="test_frontdoor",
+        confidence=0.88,
+    )
+
+    governed = server.hlf_memory_govern(
+        action="revoke",
+        fact_id=stored["id"],
+        operator_summary="Revoked during regression test",
+        reason="governance test",
+        operator_id="alice",
+        operator_display_name="Alice Example",
+        operator_channel="pytest.fastmcp_frontdoor",
+    )
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/memory_governance"]())
+
+    assert governed["status"] == "ok"
+    assert governed["fact"]["evidence"]["revoked"] is True
+    assert governed["fact"]["governance_status"] == "revoked"
+    assert resource["status"] == "ok"
+    assert resource["memory_governance"]["memory_state_counts"]["revoked"] >= 1
+    assert any(
+        target["topic"] == "memory-governance-resource"
+        for target in resource["memory_governance"]["recent_targets"]
+    )
+    assert any(
+        target["operator_identity"]["operator_id"] == "alice"
+        for target in resource["memory_governance"]["recent_targets"]
+        if target["topic"] == "memory-governance-resource"
+    )
+    assert any(
+        event["kind"] == "memory_governance"
+        for event in resource["memory_governance"]["recent_interventions"]
+    )
+    assert any(
+        event["operator_identity"]["operator_id"] == "alice"
+        for event in resource["memory_governance"]["recent_interventions"]
+    )
+
+
+def test_memory_governance_resource_orders_multiple_interventions_for_same_fact() -> None:
+    stored = server.hlf_memory_store(
+        content="Govern this sequence fact",
+        topic="memory-governance-sequence",
+        provenance="test_frontdoor",
+        confidence=0.9,
+    )
+
+    server.hlf_memory_govern(
+        action="revoke",
+        fact_id=stored["id"],
+        operator_summary="First revoke",
+        reason="sequence_revoke",
+        operator_id="alice",
+        operator_display_name="Alice Example",
+        operator_channel="pytest.fastmcp_frontdoor",
+    )
+    server.hlf_memory_govern(
+        action="tombstone",
+        fact_id=stored["id"],
+        operator_summary="Second tombstone",
+        reason="sequence_tombstone",
+        operator_id="alice",
+        operator_display_name="Alice Example",
+        operator_channel="pytest.fastmcp_frontdoor",
+    )
+    server.hlf_memory_govern(
+        action="reinstate",
+        fact_id=stored["id"],
+        operator_summary="Third reinstate",
+        reason="sequence_reinstate",
+        operator_id="alice",
+        operator_display_name="Alice Example",
+        operator_channel="pytest.fastmcp_frontdoor",
+    )
+
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/memory_governance"]())
+    events = [
+        event
+        for event in resource["memory_governance"]["recent_interventions"]
+        if event["subject_id"] == str(stored["id"])
+    ]
+
+    assert [event["action"] for event in events[:3]] == [
+        "memory_reinstate",
+        "memory_tombstone",
+        "memory_revoke",
+    ]
+    assert events[0]["operator_identity"] == {
+        "operator_id": "alice",
+        "operator_display_name": "Alice Example",
+        "operator_channel": "pytest.fastmcp_frontdoor",
+    }
+    assert events[0]["pointer"].startswith("&memory-governance-sequence-")
+    assert events[0]["reason"] == "sequence_reinstate"
 
 
 def test_instinct_realign_persists_mission_status_in_resource() -> None:
@@ -723,6 +990,35 @@ def test_profile_capability_catalog_resource_surfaces_latest_governed_catalog() 
         for entry in resource["qualification_profiles"]
     )
     assert any(entry["agent_id"] == "profile-query-agent" for entry in resource["active_profiles"])
+
+
+def test_profile_capability_catalog_includes_multimodal_host_function_requirements() -> None:
+    result = server.hlf_query_profile_capabilities(lane="multimodal")
+
+    assert result["status"] == "ok"
+    multimodal_entry = next(
+        entry
+        for entry in result["qualification_profiles"]
+        if entry["profile_name"] == "multimodal_vision_ocr_governed"
+    )
+    assert "OCR_EXTRACT" in multimodal_entry["required_host_functions"]
+    assert "IMAGE_SUMMARIZE" in multimodal_entry["required_host_functions"]
+
+
+def test_multimodal_contract_resource_surfaces_host_function_bindings() -> None:
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/multimodal_contracts"]())
+
+    assert resource["status"] == "ok"
+    assert resource["profile_count"] >= 3
+    vision_entry = next(
+        entry
+        for entry in resource["multimodal_profiles"]
+        if entry["profile_name"] == "multimodal_vision_ocr_governed"
+    )
+    assert vision_entry["contract_ready"] is True
+    assert any(
+        contract["name"] == "OCR_EXTRACT" for contract in vision_entry["host_function_contracts"]
+    )
 
 
 def test_route_governed_request_requires_launch_qualified_model_for_multilingual_lane(

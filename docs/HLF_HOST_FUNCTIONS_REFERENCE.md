@@ -30,6 +30,10 @@ Registry version: `1.4.0`
 | compress_tokens | `text: string` | `string` | hearth, forge, sovereign | 3 | `hlf_tokenizer` | `false` |
 | summarize | `text: string` | `string` | forge, sovereign | 8 | `zai_client` | `false` |
 | embed_text | `text: string` | `list` | forge, sovereign | 5 | `zai_client` | `false` |
+| OCR_EXTRACT | `path: path`, `mode: string` | `map` | forge, sovereign | 6 | `multimodal_ocr` | `true` |
+| IMAGE_SUMMARIZE | `path: path`, `prompt: string` | `string` | forge, sovereign | 6 | `multimodal_vision` | `true` |
+| AUDIO_TRANSCRIBE | `path: path`, `diarize: bool` | `map` | forge, sovereign | 7 | `multimodal_audio` | `true` |
+| VIDEO_SUMMARIZE | `path: path`, `prompt: string` | `map` | forge, sovereign | 8 | `multimodal_video` | `true` |
 | cosine_similarity | `a: list`, `b: list` | `float` | hearth, forge, sovereign | 2 | `builtin` | `false` |
 | cove_validate | `artifact: any` | `bool` | forge, sovereign | 6 | `cove_engine` | `false` |
 | align_verify | `intent: string` | `bool` | hearth, forge, sovereign | 4 | `align_ledger` | `false` |

@@ -74,6 +74,10 @@ def _resolve_profile_evidence_tier(
     return "evidence-present-not-qualified"
 
 
+def _profile_required_host_functions(profile: dict[str, Any]) -> list[str]:
+    return [str(item) for item in profile.get("required_host_functions", []) if str(item)]
+
+
 def _qualification_profile_entry(ctx: ServerContext, profile_name: str) -> dict[str, Any]:
     profile = dict(_QUALIFICATION_PROFILES.get(profile_name) or {})
     artifact = ctx.get_benchmark_artifact(profile_name=profile_name)
@@ -96,6 +100,7 @@ def _qualification_profile_entry(ctx: ServerContext, profile_name: str) -> dict[
         "required_lanes": [str(item) for item in profile.get("required_lanes", [])],
         "required_capabilities": [str(item) for item in profile.get("required_capabilities", [])],
         "required_languages": [str(item) for item in profile.get("required_languages", [])],
+        "required_host_functions": _profile_required_host_functions(profile),
         "benchmark_metrics": sorted(_profile_metric_names(profile_name)),
         "qualification_tiers": dict(profile.get("tiers") or {}),
         "evidence_available": artifact is not None,
@@ -118,6 +123,7 @@ def _active_session_profile_entry(
     )
 
     governed_capabilities: set[str] = set()
+    governed_host_functions: set[str] = set()
     governed_languages: set[str] = set()
     candidate_evidence: dict[str, dict[str, Any]] = {}
     for candidate_profile in route_candidates:
@@ -125,6 +131,7 @@ def _active_session_profile_entry(
         governed_capabilities.update(
             str(item) for item in candidate_definition.get("required_capabilities", [])
         )
+        governed_host_functions.update(_profile_required_host_functions(candidate_definition))
         governed_languages.update(
             str(item) for item in candidate_definition.get("required_languages", [])
         )
@@ -154,6 +161,7 @@ def _active_session_profile_entry(
         "allowed_modes": dict(profile.get("allowed_modes") or {}),
         "governed_profile_candidates": route_candidates,
         "governed_capabilities": sorted(governed_capabilities),
+        "governed_host_functions": sorted(governed_host_functions),
         "governed_languages": sorted(governed_languages),
         "evidence_available": bool(candidate_evidence),
         "candidate_evidence": candidate_evidence,
@@ -211,6 +219,8 @@ def _profile_entry_matches_filters(
         for key in (
             "required_capabilities",
             "governed_capabilities",
+            "required_host_functions",
+            "governed_host_functions",
             "required_lanes",
             "required_languages",
             "governed_languages",
@@ -293,6 +303,46 @@ def build_profile_capability_catalog(
         },
         "qualification_profiles": qualification_profiles,
         "active_profiles": active_profiles,
+    }
+
+
+def build_multimodal_contract_catalog(ctx: ServerContext | None) -> dict[str, Any]:
+    if ctx is None or not hasattr(ctx, "host_registry"):
+        return {"status": "error", "error": "multimodal_contract_catalog_unavailable"}
+
+    registry = {
+        str(entry.get("name")): entry for entry in ctx.host_registry.list_all() if entry.get("name")
+    }
+    multimodal_profiles: list[dict[str, Any]] = []
+    for profile_name in sorted(_QUALIFICATION_PROFILES):
+        profile = dict(_QUALIFICATION_PROFILES.get(profile_name) or {})
+        required_host_functions = _profile_required_host_functions(profile)
+        if not required_host_functions:
+            continue
+        host_function_contracts = [
+            registry[name] for name in required_host_functions if name in registry
+        ]
+        missing_host_functions = [name for name in required_host_functions if name not in registry]
+        multimodal_profiles.append(
+            {
+                "profile_name": profile_name,
+                "required_lanes": [str(item) for item in profile.get("required_lanes", [])],
+                "required_capabilities": [
+                    str(item) for item in profile.get("required_capabilities", [])
+                ],
+                "required_languages": [str(item) for item in profile.get("required_languages", [])],
+                "required_host_functions": required_host_functions,
+                "host_function_contracts": host_function_contracts,
+                "missing_host_functions": missing_host_functions,
+                "contract_ready": not missing_host_functions,
+            }
+        )
+
+    return {
+        "status": "ok",
+        "profile_count": len(multimodal_profiles),
+        "host_function_count": len(registry),
+        "multimodal_profiles": multimodal_profiles,
     }
 
 

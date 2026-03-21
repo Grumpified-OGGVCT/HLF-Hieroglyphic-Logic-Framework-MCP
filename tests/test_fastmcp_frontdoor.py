@@ -484,6 +484,38 @@ def test_host_functions_resource_preserves_missing_governance_error_signal(monke
     assert resource["details"]["file"] == "host_functions.json"
 
 
+def test_host_functions_surfaces_typed_contract_fields() -> None:
+    tool_result = server.hlf_host_functions(tier="forge")
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://host_functions"]())
+
+    assert tool_result["status"] == "ok"
+    read_entry = next(entry for entry in tool_result["functions"] if entry["name"] == "READ")
+    http_entry = next(entry for entry in resource["functions"] if entry["name"] == "HTTP_GET")
+
+    assert read_entry["effect_class"] == "file_read"
+    assert read_entry["failure_type"] == "io_error"
+    assert read_entry["audit_requirement"] == "standard"
+    assert read_entry["input_schema"]["properties"]["path"]["type"] == "path"
+    assert read_entry["output_schema"]["type"] == "string"
+    assert http_entry["effect_class"] == "network_read"
+    assert http_entry["audit_requirement"] == "standard"
+
+
+def test_host_call_returns_operator_readable_policy_trace() -> None:
+    result = server.hlf_host_call(
+        "HTTP_GET",
+        args_json='["https://example.com"]',
+        tier="forge",
+    )
+
+    assert result["status"] == "ok"
+    assert result["policy_trace"]["function_name"] == "HTTP_GET"
+    assert result["policy_trace"]["effect_class"] == "network_read"
+    assert result["policy_trace"]["failure_type"] == "network_error"
+    assert result["policy_trace"]["audit_requirement"] == "standard"
+    assert result["result"]["policy_trace"]["output_schema"]["type"] == "string"
+
+
 def test_memory_governance_tool_returns_structured_error_for_missing_identifier() -> None:
     result = server.hlf_memory_govern(action="revoke")
 
@@ -928,6 +960,12 @@ def test_governed_route_resource_surfaces_latest_trace(monkeypatch) -> None:
         },
         hardware_summary={"cpu_only": False, "gpu_vram_gb": 16.0},
     )
+    run = server.hlf_capsule_run(
+        '[HLF-v3]\nΔ [INTENT] goal="route-resource"\n∇ [RESULT] message="ok"\nΩ\n',
+        tier="hearth",
+        agent_id="route-resource-agent",
+        capsule_id="route-resource-capsule",
+    )
     latest_resource = json.loads(server.REGISTERED_RESOURCES["hlf://status/governed_route"]())
     agent_resource = json.loads(
         server.REGISTERED_RESOURCES["hlf://status/governed_route/{agent_id}"](
@@ -937,9 +975,14 @@ def test_governed_route_resource_surfaces_latest_trace(monkeypatch) -> None:
 
     assert route["route_trace"]["request_context"]["agent_id"] == "route-resource-agent"
     assert route["route_trace"]["policy_basis"]["missing_evidence_profiles"] == []
+    assert run["status"] == "ok"
     assert latest_resource["status"] == "ok"
     assert latest_resource["route_trace"]["operator_summary"]
+    assert latest_resource["execution_admission"]["agent_id"] == "route-resource-agent"
+    assert latest_resource["execution_admission"]["route_evidence"]["selected_lane"]
+    assert latest_resource["execution_admission"]["audit_refs"]["execution_trace_id"]
     assert agent_resource["route_trace"]["request_context"]["agent_id"] == "route-resource-agent"
+    assert agent_resource["route_trace"]["execution_admission"]["admission_verdict"]
 
 
 def test_query_profile_capabilities_surfaces_governed_matches_and_active_profiles() -> None:

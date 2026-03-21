@@ -31,15 +31,15 @@ It sharpens what should move next because those pillars are both weak and proof-
 
 ### Priority A: Typed effects and capability algebra
 
-- [ ] Add typed host-function contract fields for input schema, output schema, effect class, structured failure type, and audit requirement
-- [ ] Add denial-path tests for missing or malformed typed contracts
-- [ ] Add operator-readable policy traces that expose effect class and failure class without ambiguity
+- [x] Add typed host-function contract fields for input schema, output schema, effect class, structured failure type, and audit requirement
+- [x] Add denial-path tests for missing or malformed typed contracts
+- [x] Add operator-readable policy traces that expose effect class and failure class without ambiguity
 
 ### Priority B: Orchestration lifecycle and execution admission
 
 - [ ] Add packaged delegation, dissent, escalation, and handoff-lineage contracts
 - [ ] Add deterministic orchestration trace proofs covering allowed, denied, and escalated steps
-- [ ] Join verifier output, route evidence, and orchestration state into one execution-admission artifact
+- [x] Join verifier output, route evidence, and orchestration state into one execution-admission artifact
 
 ### Priority C: Persona/runtime proof
 
@@ -86,9 +86,9 @@ It sharpens what should move next because those pillars are both weak and proof-
 #### Governance control and typed effects (`bridge_contract` + `faithful_port`)
 
 - [ ] Create `docs/HLF_GOVERNANCE_CONTROL_MATRIX.md` linking capsules, host-function registry entries, route evidence, and audit outputs to concrete controls
-- [ ] Define typed host-function contract fields for input schema, output schema, effect class, structured failure type, and audit requirement
-- [ ] Add tests for missing-contract denial and policy trace completeness
-- [ ] Update `docs/HLF_HOST_FUNCTIONS_REFERENCE.md` to reflect contract-gate status
+- [x] Define typed host-function contract fields for input schema, output schema, effect class, structured failure type, and audit requirement
+- [x] Add tests for missing-contract denial and policy trace completeness
+- [x] Update `docs/HLF_HOST_FUNCTIONS_REFERENCE.md` to reflect contract-gate status
 
 #### HLF knowledge substrate, governed memory, and evidence contracts (`faithful_port`)
 

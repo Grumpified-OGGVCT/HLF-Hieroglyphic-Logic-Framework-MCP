@@ -345,7 +345,21 @@ def _render_governed_route_status(ctx: object | None, *, agent_id: str | None = 
     route_trace = ctx.get_governed_route(agent_id=agent_id)
     if route_trace is None:
         return json.dumps({"status": "not_found", "agent_id": agent_id}, indent=2)
-    return json.dumps({"status": "ok", "route_trace": route_trace}, indent=2)
+    execution_admission = None
+    if hasattr(ctx, "get_execution_admission"):
+        execution_admission = ctx.get_execution_admission(agent_id=agent_id)
+    normalized_trace = dict(route_trace)
+    if execution_admission and not normalized_trace.get("execution_admission"):
+        normalized_trace["execution_admission"] = execution_admission
+    return json.dumps(
+        {
+            "status": "ok",
+            "route_trace": normalized_trace,
+            "execution_admission": normalized_trace.get("execution_admission")
+            or execution_admission,
+        },
+        indent=2,
+    )
 
 
 def _render_instinct_status(ctx: object | None, *, mission_id: str | None = None) -> str:

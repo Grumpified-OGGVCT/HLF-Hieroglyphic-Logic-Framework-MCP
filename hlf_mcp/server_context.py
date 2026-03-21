@@ -59,6 +59,7 @@ class ServerContext:
     session_model_catalogs: dict[str, dict[str, Any]]
     session_benchmark_artifacts: dict[str, dict[str, Any]]
     session_governed_routes: dict[str, dict[str, Any]]
+    session_execution_admissions: dict[str, dict[str, Any]]
     session_media_evidence: dict[str, dict[str, Any]]
     session_dream_cycles: dict[str, dict[str, Any]]
     session_dream_findings: dict[str, dict[str, Any]]
@@ -495,6 +496,10 @@ class ServerContext:
 
     def persist_governed_route(self, route_trace: dict[str, Any]) -> dict[str, Any]:
         agent_id = str(route_trace.get("request_context", {}).get("agent_id") or "unknown-agent")
+        existing_admission = self.session_execution_admissions.get(agent_id)
+        if existing_admission and not route_trace.get("execution_admission"):
+            route_trace = dict(route_trace)
+            route_trace["execution_admission"] = dict(existing_admission)
         self.session_governed_routes[agent_id] = dict(route_trace)
         self.emit_governance_event(
             kind="routing_decision",
@@ -518,6 +523,102 @@ class ServerContext:
         if self.session_governed_routes:
             latest_agent_id = next(reversed(self.session_governed_routes))
             return self.session_governed_routes.get(latest_agent_id)
+        return None
+
+    def persist_execution_admission(
+        self,
+        *,
+        agent_id: str,
+        admission_record: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized_agent_id = str(agent_id or "unknown-agent")
+        persisted = dict(admission_record)
+        orchestration_lineage = persisted.get("orchestration_lineage", {})
+        if not isinstance(orchestration_lineage, dict):
+            orchestration_lineage = {}
+        mission_lineage = orchestration_lineage.get("mission")
+        if not isinstance(mission_lineage, dict):
+            mission_lineage = {}
+        self.session_execution_admissions[normalized_agent_id] = persisted
+
+        route_trace = self.session_governed_routes.get(normalized_agent_id)
+        related_refs: list[dict[str, str]] = []
+        if route_trace is not None:
+            updated_route = dict(route_trace)
+            updated_route["execution_admission"] = persisted
+            self.session_governed_routes[normalized_agent_id] = updated_route
+            route_ref = route_trace.get("policy_basis", {}).get("governance_event_ref")
+            if isinstance(route_ref, dict) and route_ref.get("event_id"):
+                related_refs.append(
+                    {
+                        "kind": str(route_ref.get("kind") or "routing_decision"),
+                        "event_id": str(route_ref.get("event_id") or ""),
+                        "trace_id": str(route_ref.get("trace_id") or ""),
+                    }
+                )
+
+        execution_trace_id = str(persisted.get("audit_refs", {}).get("execution_trace_id") or "")
+        if execution_trace_id:
+            related_refs.append(
+                {
+                    "kind": "audit",
+                    "event_id": execution_trace_id,
+                    "trace_id": execution_trace_id,
+                }
+            )
+
+        admitted = bool(persisted.get("admitted", False))
+        requires_review = bool(persisted.get("requires_operator_review", False))
+        governance_event = self.emit_governance_event(
+            kind="verification_result",
+            source="server_context.persist_execution_admission",
+            action="persist_execution_admission",
+            status="blocked"
+            if not admitted and not requires_review
+            else "warning"
+            if requires_review
+            else "ok",
+            severity="critical"
+            if not admitted and not requires_review
+            else "warning"
+            if requires_review
+            else "info",
+            subject_id=normalized_agent_id,
+            goal_id=str(persisted.get("requested_tier") or persisted.get("execution_status") or ""),
+            details={
+                "execution_status": persisted.get("execution_status"),
+                "admission_verdict": persisted.get("admission_verdict"),
+                "requested_tier": persisted.get("requested_tier"),
+                "effect_classes": list(persisted.get("effect_basis", {}).get("effect_classes", [])),
+                "tool_names": list(persisted.get("effect_basis", {}).get("tool_names", [])),
+                "selected_lane": persisted.get("route_evidence", {}).get("selected_lane"),
+                "route_decision": persisted.get("route_evidence", {}).get("decision"),
+                "delegation_count": len(orchestration_lineage.get("delegation_events", [])),
+                "mission_id": mission_lineage.get("mission_id"),
+                "execution_trace_id": execution_trace_id,
+            },
+            agent_role="execution_admission",
+            anomaly_score=1.0
+            if not admitted and not requires_review
+            else 0.5
+            if requires_review
+            else 0.0,
+            related_refs=related_refs,
+        )
+        persisted["governance_event"] = governance_event
+        self.session_execution_admissions[normalized_agent_id] = persisted
+        if route_trace is not None:
+            updated_route = dict(self.session_governed_routes[normalized_agent_id])
+            updated_route["execution_admission"] = persisted
+            self.session_governed_routes[normalized_agent_id] = updated_route
+        return persisted
+
+    def get_execution_admission(self, *, agent_id: str | None = None) -> dict[str, Any] | None:
+        if agent_id:
+            return self.session_execution_admissions.get(agent_id)
+        if self.session_execution_admissions:
+            latest_agent_id = next(reversed(self.session_execution_admissions))
+            return self.session_execution_admissions.get(latest_agent_id)
         return None
 
     def build_runtime_variables(
@@ -1244,6 +1345,7 @@ class ServerContext:
                 "model_catalogs": len(self.session_model_catalogs),
                 "benchmark_artifacts": len(self.session_benchmark_artifacts),
                 "governed_routes": len(self.session_governed_routes),
+                "execution_admissions": len(self.session_execution_admissions),
                 "media_evidence": len(self.session_media_evidence),
                 "dream_cycles": len(self.session_dream_cycles),
                 "dream_findings": len(self.session_dream_findings),
@@ -1270,6 +1372,7 @@ def build_server_context() -> ServerContext:
         session_model_catalogs={},
         session_benchmark_artifacts={},
         session_governed_routes={},
+        session_execution_admissions={},
         session_media_evidence={},
         session_dream_cycles={},
         session_dream_findings={},

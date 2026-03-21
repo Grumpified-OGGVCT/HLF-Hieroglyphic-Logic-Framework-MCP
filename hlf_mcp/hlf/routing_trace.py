@@ -50,6 +50,7 @@ class RouteTraceRecord:
     policy_basis: dict[str, Any] = field(default_factory=dict)
     fallback_chain: list[dict[str, Any]] = field(default_factory=list)
     lane_candidate_summary: dict[str, Any] = field(default_factory=dict)
+    execution_admission: dict[str, Any] = field(default_factory=dict)
     operator_summary: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -62,6 +63,7 @@ class RouteTraceRecord:
             "policy_basis": dict(self.policy_basis),
             "fallback_chain": list(self.fallback_chain),
             "lane_candidate_summary": dict(self.lane_candidate_summary),
+            "execution_admission": dict(self.execution_admission),
             "operator_summary": self.operator_summary,
         }
 

@@ -115,8 +115,6 @@ def _normalize_action(value: Any) -> dict[str, Any] | None:
 
 
 def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
-    from hlf_mcp.persona_contract import resolve_persona_contract
-
     persona_contract = resolve_persona_contract(
         source=source,
         review_type="weekly_artifact",
@@ -159,8 +157,6 @@ def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
 
 
 def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[str, Any]:
-    from hlf_mcp.persona_contract import resolve_persona_contract
-
     if not isinstance(value, dict):
         return default_governed_review(source=source)
 
@@ -261,8 +257,6 @@ def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[
 
 
 def validate_governed_review(review: Any, errors: list[str]) -> None:
-    from hlf_mcp.persona_contract import validate_persona_contract
-
     if not isinstance(review, dict):
         errors.append("governed_review_invalid")
         return

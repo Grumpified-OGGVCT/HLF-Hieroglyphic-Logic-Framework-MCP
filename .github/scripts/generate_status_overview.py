@@ -4,6 +4,7 @@ import argparse
 import html
 import json
 import re
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -150,6 +151,19 @@ def _format_delta(value: float) -> str:
 
 def _normalize_relative(path: Path, base_path: Path = REPO_ROOT) -> str:
     return path.relative_to(base_path).as_posix()
+
+
+def _tracked_repo_files(repo_root: Path) -> set[str] | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "ls-files"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return {line.strip().replace("\\", "/") for line in result.stdout.splitlines() if line.strip()}
 
 
 def _parse_dashboard(path: Path, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
@@ -338,10 +352,14 @@ def _build_lane_trend(latest: dict[str, Any], previous: dict[str, Any] | None) -
 
 
 def _collect_weekly_lanes(repo_root: Path) -> list[dict[str, Any]]:
+    tracked_files = _tracked_repo_files(repo_root)
     artifacts_by_source: dict[str, list[dict[str, Any]]] = {}
     for path in sorted(
         (repo_root / "observability" / "local_validation").glob("**/weekly-*-artifact.json")
     ):
+        artifact_path = _normalize_relative(path, repo_root)
+        if tracked_files is not None and artifact_path not in tracked_files:
+            continue
         artifact = _load_artifact(path, repo_root)
         if artifact is None:
             continue

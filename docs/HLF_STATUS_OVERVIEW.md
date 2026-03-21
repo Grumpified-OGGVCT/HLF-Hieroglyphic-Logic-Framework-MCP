@@ -89,8 +89,6 @@ what is actually moving, and what is only a baseline so far?
 | Signal | Current | Previous | Movement | Reading |
 | --- | ---: | ---: | --- | --- |
 | Overall readiness | `58.9%` | `n/a` | `baseline` | first committed readiness snapshot in the current docs set |
-| `weekly-doc-accuracy` | `no measured drift` | `n/a` | `baseline` | first committed replay for this lane |
-| `weekly-test-health` | `74.8%` | `74.8%` | `flat` | coverage is effectively flat versus the previous committed replay |
 
 Trend reading rule:
 
@@ -110,8 +108,7 @@ These results are evidence summaries, not completion claims.
 
 | Lane | Latest Reading | Owner Persona | Triage Lane | Status | Artifact Path |
 | --- | --- | --- | --- | --- | --- |
-| `weekly-doc-accuracy` | Documentation accuracy review found no measured drift. | `herald` | `ignore` | `advisory` | `observability/local_validation/2026-03-20/doc-accuracy/weekly-doc-accuracy-artifact.json` |
-| `weekly-test-health` | Test health reports partial coverage at 74.8%. Deterministic coverage data is authoritative; AI-generated test output is advisory only and requires operator review plus deduplication against existing suites. | `steward` | `backlog` | `advisory` | `observability/local_validation/2026-03-20/test-health-final/weekly-test-health-artifact.json` |
+
 
 ### Why Weekly Results Are Separate
 
@@ -204,4 +201,4 @@ If you need the safest summary of this page, use this sentence:
 
 HLF in this repo already has a strong current packaged core and real weekly governed evidence, while broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.
 
-_Generated from repo sources on 2026-03-20T20:41:45Z._
+_Generated from repo sources on 2026-03-20T00:00:00Z._

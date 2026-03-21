@@ -153,14 +153,14 @@ def test_operator_cli_memory_govern_uses_shared_helper(monkeypatch, capsys) -> N
     assert payload["operator_identity"]["operator_id"] == "alice"
 
 
-def test_operator_cli_memory_govern_requires_fact_identifier(capsys) -> None:
+def test_operator_cli_memory_govern_requires_fact_id_or_sha256(capsys) -> None:
     from hlf_mcp import operator_cli
 
-    with pytest.raises(SystemExit) as exc_info:
+    with pytest.raises(SystemExit) as excinfo:
         operator_cli.main(["memory-govern", "--action", "revoke"])
 
-    assert exc_info.value.code == 2
-    assert "one of the arguments --fact-id --sha256 is required" in capsys.readouterr().err
+    assert excinfo.value.code == 2
+    assert "memory-govern requires --fact-id or --sha256" in capsys.readouterr().err
 
 
 def test_operator_cli_resource_uses_packaged_renderer(monkeypatch, capsys) -> None:

@@ -223,6 +223,8 @@ def test_host_call_requires_and_accepts_tier_escalation_approval() -> None:
     )
 
     assert pending["status"] == "approval_required"
+    assert pending["policy_trace"]["effect_class"] == "network_read"
+    assert pending["policy_trace"]["failure_type"] == "network_error"
 
     approved = server.hlf_host_call(
         "HTTP_GET",
@@ -236,6 +238,7 @@ def test_host_call_requires_and_accepts_tier_escalation_approval() -> None:
 
     assert approved["status"] == "ok"
     assert approved["result"]["tier"] == "forge"
+    assert approved["policy_trace"]["audit_requirement"] == "standard"
 
 
 def test_runtime_execution_returns_audit_chain_entries() -> None:
@@ -251,6 +254,157 @@ def test_runtime_execution_returns_audit_chain_entries() -> None:
     assert result["status"] == "ok"
     assert result["audit"]["execution"] is not None
     assert result["audit"]["execution"]["trace_id"]
+
+
+def test_capsule_run_persists_execution_admission_into_governed_route() -> None:
+    server.hlf_record_benchmark_artifact(
+        profile_name="agent_routing_context_english",
+        benchmark_scores={"routing_quality": 0.82},
+        topic="execution-admission-route",
+        languages=["en"],
+    )
+    server.hlf_record_benchmark_artifact(
+        profile_name="sidecar_quality_explainer",
+        benchmark_scores={"sidecar_quality": 0.9},
+        topic="execution-admission-sidecar",
+        languages=["en"],
+    )
+    server.hlf_record_benchmark_artifact(
+        profile_name="verifier_accuracy_multilingual",
+        benchmark_scores={"verifier_accuracy": 0.92},
+        topic="execution-admission-verifier",
+        languages=["en"],
+    )
+    server.hlf_sync_model_catalog(
+        agent_id="execution-admission-agent",
+        agent_role="researcher",
+        runtime_status={
+            "ollama_available": True,
+            "installed_models": ["qwen3:8b"],
+            "recommended_model_runnable": True,
+            "fallback_model_runnable": False,
+        },
+        hardware_summary={"cpu_only": False, "gpu_vram_gb": 16.0},
+    )
+    server.hlf_route_governed_request(
+        payload="Explain route and proof posture.",
+        workload="agent_routing_context",
+        agent_id="execution-admission-agent",
+        agent_role="researcher",
+        runtime_status={
+            "ollama_available": True,
+            "installed_models": ["qwen3:8b"],
+            "recommended_model_runnable": True,
+            "fallback_model_runnable": False,
+        },
+        hardware_summary={"cpu_only": False, "gpu_vram_gb": 16.0},
+    )
+
+    result = server.hlf_capsule_run(
+        '[HLF-v3]\nΔ [INTENT] goal="route-proof-join"\n∇ [RESULT] message="joined"\nΩ\n',
+        tier="hearth",
+        agent_id="execution-admission-agent",
+        capsule_id=_unique_capsule_id("capsule-route-join"),
+    )
+
+    assert result["status"] == "ok"
+    assert result["execution_admission"]["route_evidence"]["available"] is True
+    assert result["execution_admission"]["route_evidence"]["selected_lane"]
+    assert result["execution_admission"]["audit_refs"]["execution_trace_id"]
+    assert (
+        result["execution_admission"]["governance_event"]["event"]["kind"] == "verification_result"
+    )
+
+
+def test_capsule_run_persists_delegation_and_handoff_lineage() -> None:
+    mission_id = f"mission-{uuid.uuid4().hex}"
+    server.hlf_instinct_step(
+        mission_id=mission_id,
+        phase="specify",
+        payload={"topic": "delegate execution lineage"},
+    )
+    server.hlf_instinct_step(
+        mission_id=mission_id,
+        phase="plan",
+        payload={
+            "task_dag": [
+                {
+                    "node_id": "delegate",
+                    "task_type": "delegate_task",
+                    "assigned_role": "orchestrator",
+                    "delegated_to": "scribe",
+                },
+                {
+                    "node_id": "verify",
+                    "task_type": "run_tests",
+                    "depends_on": ["delegate"],
+                    "assigned_role": "verifier",
+                    "escalation_role": "sentinel",
+                },
+            ]
+        },
+    )
+    server.hlf_instinct_step(
+        mission_id=mission_id,
+        phase="execute",
+        payload={
+            "execution_trace": [
+                {
+                    "node_id": "delegate",
+                    "success": True,
+                    "duration_ms": 9.0,
+                    "delegated_to": "scribe",
+                    "verification_status": "passed",
+                },
+                {
+                    "node_id": "verify",
+                    "success": True,
+                    "duration_ms": 12.0,
+                    "escalation_role": "sentinel",
+                    "verification_status": "passed",
+                },
+            ]
+        },
+    )
+
+    result = server.hlf_capsule_run(
+        '[HLF-v3]\n⌘ [DELEGATE] agent="scribe" goal="summarize release notes"\nΩ\n',
+        tier="hearth",
+        requested_tier="forge",
+        agent_id="lineage-agent",
+        capsule_id=_unique_capsule_id("capsule-lineage"),
+        variables_json=f'{{"MISSION_ID": "{mission_id}"}}',
+    )
+
+    assert result["status"] == "approval_required"
+
+    approved = server.hlf_capsule_review_decide(
+        request_id=result["approval_request"]["request_id"],
+        decision="approve",
+        operator="operator",
+        approval_token=result["approval_request"]["approval_token"],
+    )
+
+    assert approved["status"] == "ok"
+
+    result = server.hlf_capsule_run(
+        '[HLF-v3]\n⌘ [DELEGATE] agent="scribe" goal="summarize release notes"\nΩ\n',
+        tier="hearth",
+        requested_tier="forge",
+        agent_id="lineage-agent",
+        capsule_id=result["capsule"]["capsule_id"],
+        variables_json=f'{{"MISSION_ID": "{mission_id}"}}',
+    )
+
+    lineage = result["execution_admission"]["orchestration_lineage"]
+
+    assert result["status"] == "ok"
+    assert lineage["delegation_events"][0]["agent"] == "scribe"
+    assert lineage["delegation_events"][0]["task_id"]
+    assert lineage["mission"]["mission_id"] == mission_id
+    assert lineage["mission"]["execution_summary"]["delegated_nodes"] == 1
+    assert lineage["mission"]["execution_summary"]["escalated_nodes"] == 1
+    assert len(lineage["mission"]["handoff_trace"]) == 2
 
 
 def test_capsule_run_denies_when_verifier_finds_counterexample(monkeypatch) -> None:

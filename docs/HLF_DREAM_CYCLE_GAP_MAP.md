@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document maps an external dream-system integration note from the adjacent local `ollama_proxy_server` workspace onto the current HLF_MCP repository.
+This document maps the external dream-system note `DREAM_AWARENESS_INTEGRATION.md` onto the current HLF_MCP repository.
 
 It does three things:
 
@@ -25,9 +25,10 @@ Use `docs/HLF_CLAIM_LANES.md` when reusing any statement from this file.
 
 ### Source-era dream authorities
 
+- `DREAM_AWARENESS_INTEGRATION.md` is an external note and is not committed in this repository.
 - `hlf_source/agents/core/dream_state.py`
 - `hlf_source/mcp/sovereign_mcp_server.py`
-- adjacent local `ollama_proxy_server/DREAM_AWARENESS_INTEGRATION.md` design note
+- `DREAM_AWARENESS_INTEGRATION.md`
 
 ### Current packaged anchors
 

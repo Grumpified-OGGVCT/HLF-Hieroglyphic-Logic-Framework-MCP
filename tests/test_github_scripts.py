@@ -160,6 +160,34 @@ class TestReadinessRefreshCheck:
 
 
 class TestGenerateStatusOverview:
+    def test_docs_blob_href_uses_relative_links_locally_and_github_env_in_ci(self, monkeypatch):
+        from generate_status_overview import _docs_blob_href
+
+        monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+        monkeypatch.delenv("STATUS_DOCS_REF", raising=False)
+        monkeypatch.delenv("DOCS_REF", raising=False)
+        monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
+        monkeypatch.delenv("GITHUB_HEAD_REF", raising=False)
+        monkeypatch.delenv("GITHUB_REF_NAME", raising=False)
+        assert _docs_blob_href("HLF_STATUS_OVERVIEW.md") == "HLF_STATUS_OVERVIEW.md"
+
+        monkeypatch.setenv("GITHUB_REPOSITORY", "example-org/example-repo")
+        monkeypatch.setenv("GITHUB_BASE_REF", "main")
+        monkeypatch.setenv("GITHUB_REF_NAME", "feature/readiness")
+        assert _docs_blob_href("HLF_STATUS_OVERVIEW.md") == "HLF_STATUS_OVERVIEW.md"
+
+        monkeypatch.setenv("DOCS_REF", "main")
+        assert (
+            _docs_blob_href("HLF_STATUS_OVERVIEW.md")
+            == "https://github.com/example-org/example-repo/blob/main/docs/HLF_STATUS_OVERVIEW.md"
+        )
+
+        monkeypatch.setenv("STATUS_DOCS_REF", "release/docs")
+        assert (
+            _docs_blob_href("HLF_STATUS_OVERVIEW.md")
+            == "https://github.com/example-org/example-repo/blob/release/docs/docs/HLF_STATUS_OVERVIEW.md"
+        )
+
     def test_collect_status_data_and_render_surfaces(self, tmp_path):
         from generate_status_overview import (
             collect_status_data,
@@ -475,8 +503,13 @@ class TestGenerateStatusOverview:
         assert data["dashboard"]["overall_readiness"] == 58.9
         assert "Test health reports partial coverage at 74.8%." in markdown
         assert "latest replay restored a comparable coverage signal" in markdown
+        assert (
+            "Artifact paths under `observability/local_validation/...` are example/local-only"
+            in markdown
+        )
         assert "HLF Status Surface" in html
         assert "Documentation accuracy review found no measured drift." in html
+        assert "example/local-only governed-run locations" in html
         assert "Lane Reading Bands" in html
         assert "Trend Micrographics" in html
         assert "Governance Trust Path" in html

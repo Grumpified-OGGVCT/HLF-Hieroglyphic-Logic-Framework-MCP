@@ -35,23 +35,40 @@ def generate_host_functions_reference(path: Path | None = None) -> str:
         "",
         f"Registry version: `{data.get('version', 'unknown')}`",
         "",
-        "| Name | Args | Returns | Tiers | Gas | Backend | Sensitive |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| Name | Args | Returns | Input Schema | Output Schema | Tiers | Gas | Effect | Failure | Audit | Backend | Sensitive |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
+
+    def _schema_summary(schema: Any) -> str:
+        if not isinstance(schema, dict):
+            return "unknown"
+        schema_type = str(schema.get("type", "unknown"))
+        if schema_type != "object":
+            return f"`{schema_type}`"
+        properties = schema.get("properties", {})
+        required = set(schema.get("required", []))
+        fields = [
+            f"`{name}`:{properties[name].get('type', 'unknown')}{'*' if name in required else ''}"
+            for name in properties
+        ]
+        return ", ".join(fields) or "`object`"
 
     for function in functions:
         args = function.get("args", [])
-        arg_text = ", ".join(
-            f"`{arg['name']}: {arg['type']}`" for arg in args
-        ) or "none"
+        arg_text = ", ".join(f"`{arg['name']}: {arg['type']}`" for arg in args) or "none"
         tiers = ", ".join(function.get("tier", [])) or "none"
         lines.append(
-            "| {name} | {args} | `{returns}` | {tiers} | {gas} | `{backend}` | `{sensitive}` |".format(
+            "| {name} | {args} | `{returns}` | {input_schema} | {output_schema} | {tiers} | {gas} | `{effect}` | `{failure}` | `{audit}` | `{backend}` | `{sensitive}` |".format(
                 name=function["name"],
                 args=arg_text,
                 returns=function.get("returns", "unknown"),
+                input_schema=_schema_summary(function.get("input_schema")),
+                output_schema=_schema_summary(function.get("output_schema")),
                 tiers=tiers,
                 gas=function.get("gas", "?"),
+                effect=function.get("effect_class", "unknown"),
+                failure=function.get("failure_type", "unknown"),
+                audit=function.get("audit_requirement", "unknown"),
                 backend=function.get("backend", "unknown"),
                 sensitive=str(function.get("sensitive", False)).lower(),
             )

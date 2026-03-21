@@ -111,3 +111,21 @@ def test_delegate_can_use_default_rag_memory_when_enabled(monkeypatch) -> None:
     assert result["delegated"] is True
     assert result["memory_context"]["source"] == "rag_memory"
     assert result["memory_context"]["results"][0]["content"] == "Known-good repair pattern"
+
+
+def test_glyph_delegate_host_name_normalizes_to_runtime_delegate() -> None:
+    from hlf_mcp.hlf.runtime import _dispatch_host
+
+    side_effects: list[dict[str, Any]] = []
+
+    result = _dispatch_host(
+        "⌘ [DELEGATE]",
+        ["scribe", "summarize release notes"],
+        {},
+        side_effects,
+    )
+
+    assert result["delegated"] is True
+    delegation_event = next(event for event in side_effects if event.get("type") == "delegation")
+    assert delegation_event["agent"] == "scribe"
+    assert delegation_event["goal"] == "summarize release notes"

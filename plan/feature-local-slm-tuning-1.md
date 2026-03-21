@@ -27,7 +27,7 @@ Define a bridge-lane experiment to test whether a locally tuned HLF-specialized 
 - **CON-002**: Current packaged authority remains under `hlf_mcp/`; no training system is allowed to silently bypass governed routing or audit controls.
 - **CON-003**: Local tuning work must not be described as self-improving HLF or autonomous model promotion until explicit qualification and promotion paths exist.
 - **CON-004**: If the user's machine cannot support useful local tuning within the established minimum requirements, the plan must degrade to a lighter adapter-only experiment rather than forcing a full local-training stack.
-- **GUD-001**: Use existing packaged local/hybrid routing seams documented in [BUILD_GUIDE.md](c:\Users\gerry\generic_workspace\HLF_MCP\BUILD_GUIDE.md) rather than inventing a parallel runtime path.
+- **GUD-001**: Use existing packaged local/hybrid routing seams documented in [BUILD_GUIDE.md](../BUILD_GUIDE.md) rather than inventing a parallel runtime path.
 - **GUD-002**: Keep the experiment auditable: datasets, prompts, evaluation tasks, and admission outcomes must be versioned or logged.
 - **PAT-001**: Treat tuned-local-plus-MCP as the primary candidate architecture because it preserves live truth and governance while improving HLF-native fluency.
 
@@ -105,8 +105,8 @@ Define a bridge-lane experiment to test whether a locally tuned HLF-specialized 
 
 ## 5. Dependencies
 
-- **DEP-001**: Existing hybrid and local model routing guidance in [BUILD_GUIDE.md](c:\Users\gerry\generic_workspace\HLF_MCP\BUILD_GUIDE.md).
-- **DEP-002**: Existing HLF doctrine and claim-lane rules in [HLF_VISION_DOCTRINE.md](c:\Users\gerry\generic_workspace\HLF_MCP\HLF_VISION_DOCTRINE.md) and [docs/HLF_CLAIM_LANES.md](c:\Users\gerry\generic_workspace\HLF_MCP\docs\HLF_CLAIM_LANES.md).
+- **DEP-001**: Existing hybrid and local model routing guidance in [BUILD_GUIDE.md](../BUILD_GUIDE.md).
+- **DEP-002**: Existing HLF doctrine and claim-lane rules in [HLF_VISION_DOCTRINE.md](../HLF_VISION_DOCTRINE.md) and [docs/HLF_CLAIM_LANES.md](../docs/HLF_CLAIM_LANES.md).
 - **DEP-003**: Existing local/hybrid profile and model-governance seams under `hlf_mcp/`.
 - **DEP-004**: Upstream sources `unslothai/unsloth`, `pinokiocomputer/pinokio`, and `pinokiocomputer/program.pinokio.computer`.
 
@@ -134,7 +134,7 @@ Define a bridge-lane experiment to test whether a locally tuned HLF-specialized 
 
 ## 9. Related Specifications / Further Reading
 
-- [docs/HLF_CLAIM_LANES.md](c:\Users\gerry\generic_workspace\HLF_MCP\docs\HLF_CLAIM_LANES.md)
-- [BUILD_GUIDE.md](c:\Users\gerry\generic_workspace\HLF_MCP\BUILD_GUIDE.md)
-- [HLF_ACTIONABLE_PLAN.md](c:\Users\gerry\generic_workspace\HLF_MCP\HLF_ACTIONABLE_PLAN.md)
-- [plan/architecture-model-intelligence-sync-1.md](c:\Users\gerry\generic_workspace\HLF_MCP\plan\architecture-model-intelligence-sync-1.md)
+- [docs/HLF_CLAIM_LANES.md](../docs/HLF_CLAIM_LANES.md)
+- [BUILD_GUIDE.md](../BUILD_GUIDE.md)
+- [HLF_ACTIONABLE_PLAN.md](../HLF_ACTIONABLE_PLAN.md)
+- [plan/architecture-model-intelligence-sync-1.md](architecture-model-intelligence-sync-1.md)

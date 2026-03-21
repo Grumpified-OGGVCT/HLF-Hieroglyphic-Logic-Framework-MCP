@@ -108,7 +108,9 @@ These results are evidence summaries, not completion claims.
 
 | Lane | Latest Reading | Owner Persona | Triage Lane | Status | Artifact Path |
 | --- | --- | --- | --- | --- | --- |
+| `_No committed weekly artifacts were found in this checkout._` | - | - | - | `informational` | `local-only` |
 
+_Note: Artifact paths under `observability/local_validation/...` are example/local-only locations used for governed runs and are not checked into this repository._
 
 ### Why Weekly Results Are Separate
 

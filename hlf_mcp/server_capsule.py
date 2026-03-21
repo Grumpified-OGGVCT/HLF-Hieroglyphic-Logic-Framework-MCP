@@ -12,6 +12,19 @@ from hlf_mcp.hlf.execution_admission import evaluate_verifier_admission
 from hlf_mcp.hlf.memory_node import verify_pointer_ref
 from hlf_mcp.server_context import ServerContext
 
+_TAG_EFFECT_CLASS_MAP = {
+    "ACTION": "process_spawn",
+    "CALL": "route_selection",
+    "DELEGATE": "agent_delegation",
+    "IMPORT": "token_transform",
+    "MEMORY": "memory_write",
+    "RECALL": "memory_read",
+    "ROUTE": "route_selection",
+    "SHELL_EXEC": "process_spawn",
+    "SPAWN": "process_spawn",
+    "TOOL": "route_selection",
+}
+
 
 def _parse_json_object(raw: str, *, field_name: str) -> dict[str, Any]:
     try:
@@ -98,6 +111,172 @@ def _effective_verification_admission(
         reasons.append("Operator review approved execution after incomplete proof coverage.")
         effective["reasons"] = reasons
     return effective
+
+
+def _collect_effect_basis(ctx: ServerContext, verification: dict[str, Any]) -> dict[str, Any]:
+    effect_summary = verification.get("effect_summary", {})
+    tool_names = [str(name) for name in effect_summary.get("tools", []) if name]
+    effectful_tags = [str(tag) for tag in effect_summary.get("effectful_tags", []) if tag]
+    policy_traces: list[dict[str, Any]] = []
+    effect_classes = {value for tag in effectful_tags if (value := _TAG_EFFECT_CLASS_MAP.get(tag))}
+    audit_requirements: set[str] = set()
+    for tool_name in tool_names:
+        host_function = ctx.host_registry.get(tool_name)
+        if host_function is None:
+            continue
+        policy_trace = host_function.policy_trace()
+        policy_traces.append(policy_trace)
+        effect_classes.add(str(policy_trace.get("effect_class") or ""))
+        audit_requirement = str(policy_trace.get("audit_requirement") or "")
+        if audit_requirement:
+            audit_requirements.add(audit_requirement)
+    effect_classes.discard("")
+    return {
+        "effectful": bool(effect_summary.get("effectful", False)),
+        "node_count": effect_summary.get("node_count", 0),
+        "effectful_tags": effectful_tags,
+        "tool_names": tool_names,
+        "effect_classes": sorted(effect_classes),
+        "policy_traces": policy_traces,
+        "audit_requirements": sorted(audit_requirements),
+    }
+
+
+def _collect_delegation_events(side_effects: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not side_effects:
+        return []
+    lineage: list[dict[str, Any]] = []
+    for event in side_effects:
+        if str(event.get("type") or "") != "delegation":
+            continue
+        lineage.append(
+            {
+                "agent": str(event.get("agent") or ""),
+                "goal": str(event.get("goal") or ""),
+                "task_id": str(event.get("task_id") or ""),
+                "memory_context_source": str(event.get("memory_context_source") or ""),
+                "memory_context_count": int(event.get("memory_context_count") or 0),
+                "embedding_profile_id": str(event.get("embedding_profile_id") or ""),
+            }
+        )
+    return lineage
+
+
+def _collect_mission_lineage(
+    ctx: ServerContext,
+    runtime_variables: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not runtime_variables:
+        return None
+    mission_id = runtime_variables.get("MISSION_ID") or runtime_variables.get("mission_id")
+    if not mission_id or not hasattr(ctx, "instinct_mgr"):
+        return None
+    mission = ctx.instinct_mgr.get_mission(str(mission_id))
+    if mission is None:
+        return {"mission_id": str(mission_id), "status": "not_found"}
+
+    execution_trace = mission.get("execution_trace", [])
+    task_dag = mission.get("task_dag", [])
+    handoff_trace = [
+        dict(entry)
+        for entry in execution_trace
+        if str(entry.get("delegated_to") or "").strip()
+        or str(entry.get("escalation_role") or "").strip()
+        or str(entry.get("dissent_state") or "none") != "none"
+    ]
+    handoff_plan = [
+        dict(step)
+        for step in task_dag
+        if str(step.get("delegated_to") or "").strip()
+        or str(step.get("escalation_role") or "").strip()
+        or str(step.get("dissent_state") or "none") != "none"
+    ]
+    return {
+        "mission_id": mission.get("mission_id"),
+        "status": "ok",
+        "topic": mission.get("topic"),
+        "current_phase": mission.get("current_phase"),
+        "execution_summary": dict(mission.get("execution_summary") or {}),
+        "phase_history": list(mission.get("phase_history") or [])[-5:],
+        "handoff_plan": handoff_plan,
+        "handoff_trace": handoff_trace,
+    }
+
+
+def _build_execution_admission_record(
+    ctx: ServerContext,
+    *,
+    agent_id: str,
+    capsule,
+    verification: dict[str, Any],
+    execution_status: str,
+    approval_requirements: list[dict[str, Any]],
+    approval_request: dict[str, Any] | None,
+    execution_audit: dict[str, Any] | None = None,
+    side_effects: list[dict[str, Any]] | None = None,
+    runtime_variables: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    route_trace = ctx.get_governed_route(agent_id=agent_id)
+    route_decision = route_trace.get("route_decision", {}) if isinstance(route_trace, dict) else {}
+    policy_basis = route_trace.get("policy_basis", {}) if isinstance(route_trace, dict) else {}
+    effect_basis = _collect_effect_basis(ctx, verification)
+    delegation_events = _collect_delegation_events(side_effects)
+    mission_lineage = _collect_mission_lineage(ctx, runtime_variables)
+    route_evidence = {
+        "available": route_trace is not None,
+        "selected_lane": route_decision.get("selected_lane"),
+        "decision": route_decision.get("decision"),
+        "governance_mode": route_decision.get("governance_mode"),
+        "review_required": route_decision.get("review_required"),
+        "route_governance_event_ref": policy_basis.get("governance_event_ref"),
+        "policy_constraints": list(policy_basis.get("policy_constraints", [])),
+        "missing_evidence_profiles": list(policy_basis.get("missing_evidence_profiles", [])),
+        "policy_basis_present": bool(policy_basis.get("policy_basis_present", False)),
+    }
+    approval_status = "not_required"
+    if approval_request is not None:
+        approval_status = str(approval_request.get("status") or "pending")
+    elif approval_requirements:
+        approval_status = "required"
+    operator_summary = (
+        f"Execution admission for agent '{agent_id}' is '{verification.get('verdict', '')}' "
+        f"during status '{execution_status}'. "
+        f"Route lane is '{route_evidence.get('selected_lane') or 'unresolved'}' and effect classes are "
+        f"{', '.join(effect_basis['effect_classes']) or 'none'}; approval is '{approval_status}'; "
+        f"delegations recorded: {len(delegation_events)}."
+    )
+    return {
+        "contract_version": "1.0",
+        "agent_id": agent_id,
+        "capsule_id": capsule.capsule_id,
+        "requested_tier": capsule.requested_tier,
+        "execution_status": execution_status,
+        "admission_verdict": verification.get("verdict"),
+        "admitted": bool(verification.get("admitted", False)),
+        "requires_operator_review": bool(verification.get("requires_operator_review", False)),
+        "reasons": list(verification.get("reasons", [])),
+        "effect_basis": effect_basis,
+        "route_evidence": route_evidence,
+        "orchestration_lineage": {
+            "delegation_events": delegation_events,
+            "mission": mission_lineage,
+        },
+        "approval": {
+            "status": approval_status,
+            "requirements": list(approval_requirements),
+            "request": approval_request,
+        },
+        "audit_refs": {
+            "execution_trace_id": str(execution_audit.get("trace_id", ""))
+            if execution_audit
+            else "",
+            "execution_parent_trace_hash": str(execution_audit.get("parent_trace_hash", ""))
+            if execution_audit
+            else "",
+        },
+        "verification": verification,
+        "operator_summary": operator_summary,
+    }
 
 
 def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
@@ -261,6 +440,18 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             )
             approval_token_value = capsule.expected_approval_token(stmts, verification_requirements)
             if approval_requirements and not approval_granted:
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=effective_verification,
+                        execution_status="approval_required",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                    ),
+                )
                 return {
                     "status": "approval_required",
                     "tier": tier,
@@ -269,19 +460,45 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     "approval_token": approval_token_value,
                     "approval_request": approval_request,
                     "verification": effective_verification,
+                    "execution_admission": execution_admission,
                     "capsule": capsule.to_dict(),
                 }
             if not effective_verification.get("admitted", False):
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=effective_verification,
+                        execution_status="verification_denied",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                    ),
+                )
                 return {
                     "status": "verification_denied",
                     "tier": tier,
                     "requested_tier": capsule.requested_tier,
                     "verification": effective_verification,
                     "approval_requirements": approval_requirements,
+                    "execution_admission": execution_admission,
                     "capsule": capsule.to_dict(),
                 }
             violations = capsule.validate_ast(stmts, verification_requirements)
             if violations:
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=effective_verification,
+                        execution_status="capsule_violation",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                    ),
+                )
                 return {
                     "status": "capsule_violation",
                     "tier": tier,
@@ -289,6 +506,7 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     "violations": violations,
                     "approval_requirements": approval_requirements,
                     "verification": effective_verification,
+                    "execution_admission": execution_admission,
                     "capsule": capsule.to_dict(),
                 }
             effective_gas = min(gas_limit, capsule.max_gas)
@@ -315,6 +533,21 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             run_result["requested_tier"] = capsule.requested_tier
             run_result["approval_request"] = approval_request
             run_result["verification"] = effective_verification
+            run_result["execution_admission"] = ctx.persist_execution_admission(
+                agent_id=agent_id,
+                admission_record=_build_execution_admission_record(
+                    ctx,
+                    agent_id=agent_id,
+                    capsule=capsule,
+                    verification=effective_verification,
+                    execution_status=str(run_result.get("status") or "ok"),
+                    approval_requirements=approval_requirements,
+                    approval_request=approval_request,
+                    execution_audit=run_result.get("audit", {}).get("execution"),
+                    side_effects=run_result.get("side_effects"),
+                    runtime_variables=runtime_variables,
+                ),
+            )
             run_result["capsule"] = capsule.to_dict()
             return run_result
         except ValueError as exc:
@@ -365,6 +598,8 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             args = json.loads(args_json)
             if not isinstance(args, list):
                 return {"status": "error", "error": "args_json must be a JSON array"}
+            host_function = ctx.host_registry.get(function_name)
+            policy_trace = host_function.policy_trace() if host_function else None
             capsule = capsule_for_tier(
                 tier,
                 capsule_id=capsule_id or None,
@@ -385,6 +620,7 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     "status": "approval_required",
                     "tier": tier,
                     "requested_tier": capsule.requested_tier,
+                    "policy_trace": policy_trace,
                     "approval_requirements": approval_requirements,
                     "approval_token": capsule.expected_approval_token([]),
                     "approval_request": approval_request,
@@ -396,11 +632,17 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     "status": "capsule_violation",
                     "tier": tier,
                     "requested_tier": capsule.requested_tier,
+                    "policy_trace": policy_trace,
                     "violations": violations,
                     "capsule": capsule.to_dict(),
                 }
             result = ctx.host_registry.call(function_name, args, capsule.requested_tier)
-            return {"status": "ok", "result": result, "approval_request": approval_request}
+            return {
+                "status": "ok",
+                "result": result,
+                "policy_trace": result.get("policy_trace"),
+                "approval_request": approval_request,
+            }
         except json.JSONDecodeError as exc:
             return {"status": "error", "error": f"Invalid args_json: {exc}"}
         except Exception as exc:

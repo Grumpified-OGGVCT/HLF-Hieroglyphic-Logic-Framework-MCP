@@ -597,7 +597,10 @@ class ServerContext:
     ) -> list[dict[str, Any]]:
         persisted: list[dict[str, Any]] = []
         for item in media_evidence:
-            summary = item.operator_summary or f"Normalized {item.media_type} evidence for governed review"
+            summary = (
+                item.operator_summary
+                or f"Normalized {item.media_type} evidence for governed review"
+            )
             metadata = {
                 **item.to_dict(),
                 "artifact_id": item.artifact_id,
@@ -949,7 +952,9 @@ class ServerContext:
             artifact_count=len(weekly_artifacts) + len(memory_facts),
             media_artifact_count=len(persisted_media),
             finding_count=len(persisted_findings),
-            high_confidence_count=sum(1 for finding in persisted_findings if finding["confidence"] >= 0.8),
+            high_confidence_count=sum(
+                1 for finding in persisted_findings if finding["confidence"] >= 0.8
+            ),
             status="completed",
             witness_record_id=str(witness_record["governance_event"]["event"]["event_id"]),
             artifact_ids=[str(artifact.get("artifact_id", "")) for artifact in weekly_artifacts],
@@ -1004,7 +1009,9 @@ class ServerContext:
                 {
                     "kind": "witness_observation",
                     "event_id": str(witness_record["governance_event"]["event"]["event_id"]),
-                    "trace_id": str(witness_record["governance_event"]["event"].get("trace_id", "")),
+                    "trace_id": str(
+                        witness_record["governance_event"]["event"].get("trace_id", "")
+                    ),
                 }
             ],
             agent_role="dream_cycle",
@@ -1037,7 +1044,9 @@ class ServerContext:
         if topic:
             findings = [finding for finding in findings if finding.get("topic") == topic]
         findings = [
-            finding for finding in findings if float(finding.get("confidence", 0.0)) >= min_confidence
+            finding
+            for finding in findings
+            if float(finding.get("confidence", 0.0)) >= min_confidence
         ]
         findings.sort(key=lambda finding: str(finding.get("created_at", "")), reverse=True)
         return {"findings": findings, "count": len(findings)}

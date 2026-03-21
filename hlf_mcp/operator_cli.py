@@ -51,7 +51,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "memory-govern",
         help="Apply a governed memory intervention through the packaged shell surface",
     )
-    governance_parser.add_argument("--action", required=True, choices=["revoke", "tombstone", "reinstate"])
+    governance_parser.add_argument(
+        "--action", required=True, choices=["revoke", "tombstone", "reinstate"]
+    )
     fact_group = governance_parser.add_mutually_exclusive_group(required=True)
     fact_group.add_argument("--fact-id", type=int, default=None)
     fact_group.add_argument("--sha256", default=None)

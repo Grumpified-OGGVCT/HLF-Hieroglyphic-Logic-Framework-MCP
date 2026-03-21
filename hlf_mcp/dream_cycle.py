@@ -83,12 +83,11 @@ def build_dream_findings(
     if weekly_artifacts:
         artifact_ids = [str(artifact.get("artifact_id", "")) for artifact in weekly_artifacts]
         statuses = sorted(
-            {
-                str(artifact.get("artifact_status") or "advisory")
-                for artifact in weekly_artifacts
-            }
+            {str(artifact.get("artifact_status") or "advisory") for artifact in weekly_artifacts}
         )
-        sources = sorted({str(artifact.get("source") or "unknown") for artifact in weekly_artifacts})
+        sources = sorted(
+            {str(artifact.get("source") or "unknown") for artifact in weekly_artifacts}
+        )
         findings.append(
             DreamFinding(
                 finding_id=f"dream-finding-{_digest(cycle_id, 'weekly')}",
@@ -178,9 +177,7 @@ def build_dream_findings(
 
     if media_evidence:
         media_types = sorted({item.media_type for item in media_evidence})
-        confidence = round(
-            sum(item.confidence for item in media_evidence) / len(media_evidence), 4
-        )
+        confidence = round(sum(item.confidence for item in media_evidence) / len(media_evidence), 4)
         findings.append(
             DreamFinding(
                 finding_id=f"dream-finding-{_digest(cycle_id, 'media')}",

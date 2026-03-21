@@ -385,9 +385,7 @@ class RAGMemory:
         operator_identity = {
             "operator_id": str(governed.get("operator_id") or metadata.get("operator_id") or ""),
             "operator_display_name": str(
-                governed.get("operator_display_name")
-                or metadata.get("operator_display_name")
-                or ""
+                governed.get("operator_display_name") or metadata.get("operator_display_name") or ""
             ),
             "operator_channel": str(
                 governed.get("operator_channel") or metadata.get("operator_channel") or ""
@@ -767,7 +765,11 @@ class RAGMemory:
             now = time.time()
             conn.execute(
                 "UPDATE fact_store SET metadata_json = ?, accessed_at = ? WHERE id = ?",
-                (json.dumps(normalized_metadata, ensure_ascii=False, sort_keys=True), now, row["id"]),
+                (
+                    json.dumps(normalized_metadata, ensure_ascii=False, sort_keys=True),
+                    now,
+                    row["id"],
+                ),
             )
             superseded_hashes = self._superseded_hashes(conn)
 

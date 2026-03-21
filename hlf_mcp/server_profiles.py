@@ -322,9 +322,7 @@ def build_multimodal_contract_catalog(ctx: ServerContext | None) -> dict[str, An
         host_function_contracts = [
             registry[name] for name in required_host_functions if name in registry
         ]
-        missing_host_functions = [
-            name for name in required_host_functions if name not in registry
-        ]
+        missing_host_functions = [name for name in required_host_functions if name not in registry]
         multimodal_profiles.append(
             {
                 "profile_name": profile_name,
@@ -332,9 +330,7 @@ def build_multimodal_contract_catalog(ctx: ServerContext | None) -> dict[str, An
                 "required_capabilities": [
                     str(item) for item in profile.get("required_capabilities", [])
                 ],
-                "required_languages": [
-                    str(item) for item in profile.get("required_languages", [])
-                ],
+                "required_languages": [str(item) for item in profile.get("required_languages", [])],
                 "required_host_functions": required_host_functions,
                 "host_function_contracts": host_function_contracts,
                 "missing_host_functions": missing_host_functions,

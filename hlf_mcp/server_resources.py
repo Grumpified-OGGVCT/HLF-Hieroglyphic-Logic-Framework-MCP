@@ -445,7 +445,9 @@ def _render_dream_cycle_status(ctx: object | None) -> str:
             {"status": "error", "error": "dream_cycle_unavailable"},
             indent=2,
         )
-    return json.dumps({"status": "ok", "dream_cycle_status": ctx.get_dream_cycle_status()}, indent=2)
+    return json.dumps(
+        {"status": "ok", "dream_cycle_status": ctx.get_dream_cycle_status()}, indent=2
+    )
 
 
 def _render_dream_findings(

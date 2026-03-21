@@ -1,11 +1,13 @@
+const os = require('node:os');
 const vscode = require('vscode');
 
 const { getClaimLaneSections, getClaimLanesDocPath } = require('./claimLanes');
 const { getEndpointUrl, getHealthUrl, getSettings, getWorkspaceRoot } = require('./config');
 const { runBridgeDiagnostics } = require('./diagnostics');
 const { HlfServerController } = require('./launcher');
+const { getAllowedGovernanceActions, isGovernanceActionAllowed } = require('./memoryGovernance');
 const { StreamableHttpMcpClient } = require('./mcpHttpClient');
-const { OperatorPanelProvider } = require('./operatorPanel');
+const { OperatorPanelProvider, interventionMatchesTarget } = require('./operatorPanel');
 const { runOperatorAction } = require('./packagedActions');
 const { applyResourceUriValues, getResourceUriPlaceholders } = require('./resourceUriTemplate');
 const { buildHttpHeaders, deleteHttpBearerToken, hasHttpBearerToken, storeHttpBearerToken } = require('./secrets');
@@ -18,13 +20,150 @@ let diagnosticCollection;
 let operatorPanelProvider;
 let trustPanel;
 let extensionContext;
+const PROVENANCE_PANEL_CACHE_TTL_MS = 5000;
+let provenancePanelCache = {
+  expiresAt: 0,
+  payload: undefined,
+};
+let liveMcpClient;
+let liveMcpClientSignature;
+
+function getEnvironmentOperatorIdentityDefaults() {
+  let username = '';
+  try {
+    username = os.userInfo().username || '';
+  } catch {
+    username = '';
+  }
+
+  const normalizedUsername = String(username || process.env.USERNAME || process.env.USER || 'operator').trim() || 'operator';
+  const appHost = String(vscode.env?.appHost || 'desktop').trim() || 'desktop';
+  return {
+    operatorId: normalizedUsername,
+    operatorDisplayName: normalizedUsername,
+    operatorChannel: `vscode.${appHost}.operator_panel`,
+  };
+}
+
+function getStoredOperatorIdentityDefaults() {
+  const stored = extensionContext?.globalState?.get('hlf.operatorIdentityDefaults');
+  if (!stored || typeof stored !== 'object') {
+    return {};
+  }
+  return stored;
+}
+
+function getDefaultOperatorIdentity() {
+  const environmentDefaults = getEnvironmentOperatorIdentityDefaults();
+  const storedDefaults = getStoredOperatorIdentityDefaults();
+  return {
+    operatorId: String(storedDefaults.operatorId || environmentDefaults.operatorId || 'operator'),
+    operatorDisplayName: String(
+      storedDefaults.operatorDisplayName
+      || environmentDefaults.operatorDisplayName
+      || environmentDefaults.operatorId
+      || ''
+    ),
+    operatorChannel: String(storedDefaults.operatorChannel || environmentDefaults.operatorChannel || 'vscode.desktop.operator_panel'),
+  };
+}
+
+async function persistOperatorIdentityDefaults(identity) {
+  if (!extensionContext?.globalState) {
+    return;
+  }
+  await extensionContext.globalState.update('hlf.operatorIdentityDefaults', {
+    operatorId: String(identity.operatorId || ''),
+    operatorDisplayName: String(identity.operatorDisplayName || ''),
+    operatorChannel: String(identity.operatorChannel || ''),
+  });
+}
+
+async function manageOperatorIdentityDefaults() {
+  const currentDefaults = getDefaultOperatorIdentity();
+  const environmentDefaults = getEnvironmentOperatorIdentityDefaults();
+  const selection = await vscode.window.showQuickPick([
+    {
+      label: 'Update Stored Defaults',
+      value: 'update',
+      description: `${currentDefaults.operatorId}${currentDefaults.operatorDisplayName ? ` (${currentDefaults.operatorDisplayName})` : ''}`,
+      detail: `Current channel: ${currentDefaults.operatorChannel}`,
+    },
+    {
+      label: 'Reset To Environment Defaults',
+      value: 'reset',
+      description: `${environmentDefaults.operatorId}${environmentDefaults.operatorDisplayName ? ` (${environmentDefaults.operatorDisplayName})` : ''}`,
+      detail: `Reset channel to ${environmentDefaults.operatorChannel}`,
+    },
+  ], {
+    placeHolder: 'Choose how to manage stored operator identity defaults.',
+    ignoreFocusOut: true,
+  });
+
+  if (!selection) {
+    return;
+  }
+
+  if (selection.value === 'reset') {
+    await persistOperatorIdentityDefaults(environmentDefaults);
+    operatorPanelProvider?.refresh();
+    vscode.window.showInformationMessage('HLF operator identity defaults reset to environment-derived values.');
+    return;
+  }
+
+  const operatorId = await vscode.window.showInputBox({
+    prompt: 'Enter the stored default operator id.',
+    placeHolder: 'alice, gerry, oncall-operator, or other durable operator id.',
+    value: currentDefaults.operatorId,
+    ignoreFocusOut: true,
+  });
+  if (operatorId === undefined) {
+    return;
+  }
+  if (!operatorId.trim()) {
+    vscode.window.showWarningMessage('A stored default operator id is required.');
+    return;
+  }
+
+  const operatorDisplayName = await vscode.window.showInputBox({
+    prompt: 'Enter the stored default operator display name.',
+    placeHolder: 'Optional human-readable operator name.',
+    value: currentDefaults.operatorDisplayName,
+    ignoreFocusOut: true,
+  });
+  if (operatorDisplayName === undefined) {
+    return;
+  }
+
+  const operatorChannel = await vscode.window.showInputBox({
+    prompt: 'Enter the stored default operator channel.',
+    placeHolder: 'vscode.desktop.operator_panel or other governed operator channel.',
+    value: currentDefaults.operatorChannel,
+    ignoreFocusOut: true,
+  });
+  if (operatorChannel === undefined) {
+    return;
+  }
+  if (!operatorChannel.trim()) {
+    vscode.window.showWarningMessage('A stored default operator channel is required.');
+    return;
+  }
+
+  await persistOperatorIdentityDefaults({
+    operatorId: operatorId.trim(),
+    operatorDisplayName: operatorDisplayName.trim(),
+    operatorChannel: operatorChannel.trim(),
+  });
+  operatorPanelProvider?.refresh();
+  vscode.window.showInformationMessage('HLF operator identity defaults updated.');
+}
 
 function canRunLocalPackagedActions(settings) {
   return settings.attachMode !== 'attach';
 }
 
-function canProxyPackagedActions(settings) {
-  return settings.attachMode === 'attach' && settings.transport === 'streamable-http';
+function canUseLiveMcpActions(settings) {
+  return settings.transport === 'streamable-http' && (settings.attachMode === 'attach' || controller?.isRunning());
 }
 
 function parseAttachModeArgs(args) {
@@ -36,6 +175,42 @@ function parseAttachModeArgs(args) {
     return {
       kind: 'resource',
       uri: args[uriIndex + 1],
+    };
+  }
+
+  if (args[0] === 'provenance-summary') {
+    return {
+      kind: 'resource',
+      uri: 'hlf://status/provenance_contract',
+    };
+  }
+
+  if (args[0] === 'memory-govern') {
+    const actionIndex = args.indexOf('--action');
+    const factIdIndex = args.indexOf('--fact-id');
+    const shaIndex = args.indexOf('--sha256');
+    const operatorSummaryIndex = args.indexOf('--operator-summary');
+    const reasonIndex = args.indexOf('--reason');
+    const operatorIdIndex = args.indexOf('--operator-id');
+    const operatorDisplayNameIndex = args.indexOf('--operator-display-name');
+    const operatorChannelIndex = args.indexOf('--operator-channel');
+    if (actionIndex === -1 || !args[actionIndex + 1]) {
+      throw new Error('Attach-mode memory governance requests require --action.');
+    }
+
+    return {
+      kind: 'tool',
+      name: 'hlf_memory_govern',
+      arguments: {
+        action: args[actionIndex + 1],
+        fact_id: factIdIndex === -1 || !args[factIdIndex + 1] ? undefined : Number(args[factIdIndex + 1]),
+        sha256: shaIndex === -1 ? undefined : args[shaIndex + 1],
+        operator_summary: operatorSummaryIndex === -1 ? '' : args[operatorSummaryIndex + 1],
+        reason: reasonIndex === -1 ? '' : args[reasonIndex + 1],
+        operator_id: operatorIdIndex === -1 ? '' : args[operatorIdIndex + 1],
+        operator_display_name: operatorDisplayNameIndex === -1 ? '' : args[operatorDisplayNameIndex + 1],
+        operator_channel: operatorChannelIndex === -1 ? '' : args[operatorChannelIndex + 1],
+      },
     };
   }
 
@@ -74,11 +249,136 @@ function parseAttachModeArgs(args) {
 }
 
 function getPackagedActionUnavailableReason(settings) {
-  if (canRunLocalPackagedActions(settings) || canProxyPackagedActions(settings)) {
+  if (canRunLocalPackagedActions(settings) || canUseLiveMcpActions(settings)) {
     return undefined;
   }
 
   return 'Attach-mode packaged operator actions currently require streamable-http transport. SSE attach mode still exposes diagnostics and connection state only.';
+}
+
+function getLiveMcpClientCacheSignature(settings, secretHeaders = {}) {
+  return JSON.stringify({
+    endpointUrl: getEndpointUrl(settings),
+    attachMode: settings.attachMode,
+    authorization: secretHeaders.Authorization || '',
+  });
+}
+
+function resetLiveMcpClient() {
+  liveMcpClient = undefined;
+  liveMcpClientSignature = undefined;
+}
+
+function getLiveMcpClient({ settings, outputChannel, secretHeaders = {} }) {
+  const signature = getLiveMcpClientCacheSignature(settings, secretHeaders);
+  if (!liveMcpClient || liveMcpClientSignature !== signature) {
+    liveMcpClient = new StreamableHttpMcpClient({ settings, outputChannel, secretHeaders });
+    liveMcpClientSignature = signature;
+  }
+  return liveMcpClient;
+}
+
+function invalidateProvenancePanelCache() {
+  provenancePanelCache = {
+    expiresAt: 0,
+    payload: undefined,
+  };
+}
+
+function extractProvenanceContractPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+
+  if (payload.provenance_contract && typeof payload.provenance_contract === 'object') {
+    return payload.provenance_contract;
+  }
+
+  return payload;
+}
+
+function extractMemoryGovernancePayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+
+  if (payload.memory_governance && typeof payload.memory_governance === 'object') {
+    return payload.memory_governance;
+  }
+
+  return payload;
+}
+
+function buildProvenanceTrustSections(payload) {
+  const contract = extractProvenanceContractPayload(payload);
+  if (!contract) {
+    return [{
+      title: 'Memory Provenance',
+      subtitle: 'Packaged provenance contract across memory, governance, witness, and evidence surfaces.',
+      body: payload,
+    }];
+  }
+
+  const lineageEntries = Array.isArray(contract.pointer_chain_summary?.recent_pointers)
+    ? contract.pointer_chain_summary.recent_pointers
+    : [];
+  const supersessionLineage = lineageEntries.filter((entry) => entry.supersedes || entry.superseded);
+
+  return [
+    {
+      title: 'Memory Provenance',
+      subtitle: 'Summary counts and governed state from the packaged provenance contract.',
+      body: {
+        summary: contract.summary ?? {},
+        memory_state_counts: contract.memory_state_counts ?? {},
+      },
+    },
+    {
+      title: 'Pointer Chains',
+      subtitle: 'Recent pointer-chain entries with governed state and freshness status.',
+      body: lineageEntries,
+    },
+    {
+      title: 'Supersession Lineage',
+      subtitle: 'Recent superseding and superseded pointer relationships from governed memory.',
+      body: supersessionLineage,
+    },
+  ];
+}
+
+function buildGovernanceInterventionTrustSections(payload) {
+  const governance = extractMemoryGovernancePayload(payload);
+  if (!governance) {
+    return [{
+      title: 'Latest Governance Interventions',
+      subtitle: 'Packaged intervention history for governed memory actions.',
+      body: payload,
+    }];
+  }
+
+  const recentInterventions = Array.isArray(governance.recent_interventions) ? governance.recent_interventions : [];
+  const recentTargets = Array.isArray(governance.recent_targets) ? governance.recent_targets : [];
+  const sections = [{
+    title: 'Latest Governance Interventions',
+    subtitle: 'Recent memory governance interventions recorded by the packaged governance spine.',
+    body: {
+      recent_interventions: recentInterventions,
+      memory_state_counts: governance.memory_state_counts ?? {},
+    },
+  }];
+
+  for (const target of recentTargets) {
+    sections.push({
+      title: `Target Intervention History: ${describeGovernanceTarget(target)}`,
+      subtitle: 'Current packaged target state aligned with intervention history filtered to that target only.',
+      body: {
+        target,
+        recent_interventions: recentInterventions.filter((intervention) => interventionMatchesTarget(intervention, target)),
+      },
+    });
+  }
+
+  return sections;
 }
 
 function updateStatusBar() {
@@ -129,6 +429,7 @@ async function runDiagnostics(showMessage = false) {
 
 async function startServer() {
   const settings = getSettings();
+  resetLiveMcpClient();
   const result = await controller.start(settings);
   updateStatusBar();
   operatorPanelProvider?.refresh();
@@ -143,6 +444,7 @@ async function startServer() {
 
 async function stopServer() {
   const stopped = await controller.stop();
+  resetLiveMcpClient();
   updateStatusBar();
   operatorPanelProvider?.refresh();
   await runDiagnostics(false);
@@ -155,6 +457,7 @@ async function stopServer() {
 async function restartServer() {
   const settings = getSettings();
   await controller.restart(settings);
+  resetLiveMcpClient();
   updateStatusBar();
   operatorPanelProvider?.refresh();
   await runDiagnostics(false);
@@ -301,23 +604,48 @@ async function renderCommandResult(title, subtitle, result) {
   ]);
 }
 
-async function runAttachModePackagedAction({ settings, outputChannel, args, title, secretHeaders = {} }) {
+async function runLiveMcpPackagedAction({ settings, outputChannel, args, title, secretHeaders = {} }) {
   const request = parseAttachModeArgs(args);
-  const client = new StreamableHttpMcpClient({ settings, outputChannel, secretHeaders });
+  const execute = async () => {
+    const client = getLiveMcpClient({ settings, outputChannel, secretHeaders });
 
-  if (request.kind === 'resource') {
-    const result = await client.readResource(request.uri);
-    const content = result.contents?.[0]?.text ?? '';
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      parsed = content;
+    if (request.kind === 'resource') {
+      const result = await client.readResource(request.uri);
+      const content = result.contents?.[0]?.text ?? '';
+      let parsed;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        parsed = content;
+      }
+
+      return {
+        ok: true,
+        exitCode: 0,
+        stdout: typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2),
+        stderr: '',
+        parsed,
+        invocation: {
+          command: 'mcp-http',
+          args,
+        },
+      };
+    }
+
+    const result = await client.callTool(request.name, request.arguments);
+    const contentText = result.content?.[0]?.text;
+    let parsed = result.structuredContent;
+    if (parsed === undefined && contentText) {
+      try {
+        parsed = JSON.parse(contentText);
+      } catch {
+        parsed = contentText;
+      }
     }
 
     return {
-      ok: true,
-      exitCode: 0,
+      ok: result.isError !== true,
+      exitCode: result.isError ? 1 : 0,
       stdout: typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2),
       stderr: '',
       parsed,
@@ -326,30 +654,15 @@ async function runAttachModePackagedAction({ settings, outputChannel, args, titl
         args,
       },
     };
-  }
-
-  const result = await client.callTool(request.name, request.arguments);
-  const contentText = result.content?.[0]?.text;
-  let parsed = result.structuredContent;
-  if (parsed === undefined && contentText) {
-    try {
-      parsed = JSON.parse(contentText);
-    } catch {
-      parsed = contentText;
-    }
-  }
-
-  return {
-    ok: result.isError !== true,
-    exitCode: result.isError ? 1 : 0,
-    stdout: typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2),
-    stderr: '',
-    parsed,
-    invocation: {
-      command: 'mcp-http',
-      args,
-    },
   };
+
+  try {
+    return await execute();
+  } catch (error) {
+    outputChannel?.appendLine(`[hlf-vscode] live MCP action failed for ${title}: ${error.message}`);
+    resetLiveMcpClient();
+    return await execute();
+  }
 }
 
 async function runPackagedAction(args, title, subtitle) {
@@ -364,21 +677,24 @@ async function runPackagedAction(args, title, subtitle) {
   const secretHeaders = extensionContext
     ? await buildHttpHeaders(extensionContext.secrets, settings)
     : {};
-  const result = canProxyPackagedActions(settings)
-    ? await runAttachModePackagedAction({
-      settings,
-      outputChannel,
-      args,
-      title,
-      secretHeaders,
-    })
-    : await runOperatorAction({
+  let result;
+  if (canUseLiveMcpActions(settings)) {
+    result = await runLiveMcpPackagedAction({
       settings,
       outputChannel,
       args,
       title,
       secretHeaders,
     });
+  } else {
+    result = await runOperatorAction({
+      settings,
+      outputChannel,
+      args,
+      title,
+      secretHeaders,
+    });
+  }
 
   if (!result.ok) {
     vscode.window.showErrorMessage(`${title} failed with exit code ${result.exitCode}. Check the HLF MCP Bridge output channel.`);
@@ -386,6 +702,67 @@ async function runPackagedAction(args, title, subtitle) {
 
   await renderCommandResult(title, subtitle, result);
   return result;
+}
+
+async function readPanelPayload(args, title) {
+  const settings = getSettings();
+  const unavailableReason = getPackagedActionUnavailableReason(settings);
+  if (unavailableReason) {
+    outputChannel.appendLine(`[hlf-vscode] skipped ${title} for operator panel: ${unavailableReason}`);
+    return undefined;
+  }
+
+  const secretHeaders = extensionContext
+    ? await buildHttpHeaders(extensionContext.secrets, settings)
+    : {};
+  let result;
+  if (canUseLiveMcpActions(settings)) {
+    result = await runLiveMcpPackagedAction({
+      settings,
+      outputChannel,
+      args,
+      title,
+      secretHeaders,
+    });
+  } else {
+    result = await runOperatorAction({
+      settings,
+      outputChannel,
+      args,
+      title,
+      secretHeaders,
+    });
+  }
+
+  if (!result.ok) {
+    return undefined;
+  }
+
+  return result.parsed;
+}
+
+async function readProvenanceContractForPanel() {
+  if (provenancePanelCache.payload && Date.now() < provenancePanelCache.expiresAt) {
+    return provenancePanelCache.payload;
+  }
+
+  const payload = await readPanelPayload(['provenance-summary', '--json'], 'HLF Provenance Summary');
+  if (!payload) {
+    return undefined;
+  }
+
+  provenancePanelCache = {
+    expiresAt: Date.now() + PROVENANCE_PANEL_CACHE_TTL_MS,
+    payload,
+  };
+  return payload;
+}
+
+async function readMemoryGovernanceStatusForPanel() {
+  return readPanelPayload(
+    ['resource', '--uri', 'hlf://status/memory_governance', '--json'],
+    'HLF Memory Governance',
+  );
 }
 
 async function runHlfDo() {
@@ -436,8 +813,185 @@ async function showProfileCapabilityCatalog() {
   );
 }
 
+async function showProvenanceContract() {
+  await runPackagedAction(
+    ['provenance-summary', '--json'],
+    'HLF Provenance Contract',
+    'Packaged provenance contract across memory, governance, witness, and weekly evidence.',
+  );
+}
+
+function describeGovernanceTarget(target) {
+  return target.pointer || `${target.topic || 'memory'}#${target.factId || target.id || 'unknown'}`;
+}
+
+async function promptForGovernanceInterventionDetails(targetLabel, action) {
+  const identityDefaults = getDefaultOperatorIdentity();
+  const operatorSummary = await vscode.window.showInputBox({
+    prompt: `Enter the operator summary to record for ${action} on ${targetLabel}.`,
+    placeHolder: 'Brief summary of what you are changing and why.',
+    ignoreFocusOut: true,
+  });
+  if (operatorSummary === undefined) {
+    return undefined;
+  }
+  if (!operatorSummary.trim()) {
+    vscode.window.showWarningMessage('An operator summary is required for governed memory interventions.');
+    return undefined;
+  }
+
+  const reason = await vscode.window.showInputBox({
+    prompt: `Enter the reason to record for ${action} on ${targetLabel}.`,
+    placeHolder: 'Reason code or operator explanation for the intervention.',
+    ignoreFocusOut: true,
+  });
+  if (reason === undefined) {
+    return undefined;
+  }
+  if (!reason.trim()) {
+    vscode.window.showWarningMessage('A reason is required for governed memory interventions.');
+    return undefined;
+  }
+
+  const operatorId = await vscode.window.showInputBox({
+    prompt: `Enter the operator id to record for ${action} on ${targetLabel}.`,
+    placeHolder: 'alice, gerry, oncall-operator, or other durable operator id.',
+    value: identityDefaults.operatorId,
+    ignoreFocusOut: true,
+  });
+  if (operatorId === undefined) {
+    return undefined;
+  }
+  if (!operatorId.trim()) {
+    vscode.window.showWarningMessage('An operator id is required for governed memory interventions.');
+    return undefined;
+  }
+
+  const operatorDisplayName = await vscode.window.showInputBox({
+    prompt: `Enter the operator display name to record for ${action} on ${targetLabel}.`,
+    placeHolder: 'Optional human-readable operator name.',
+    value: identityDefaults.operatorDisplayName,
+    ignoreFocusOut: true,
+  });
+  if (operatorDisplayName === undefined) {
+    return undefined;
+  }
+
+  const resolvedIdentity = {
+    operatorId: operatorId.trim(),
+    operatorDisplayName: operatorDisplayName.trim(),
+    operatorChannel: identityDefaults.operatorChannel,
+  };
+  await persistOperatorIdentityDefaults(resolvedIdentity);
+
+  return {
+    operatorSummary: operatorSummary.trim(),
+    reason: reason.trim(),
+    operatorId: resolvedIdentity.operatorId,
+    operatorDisplayName: resolvedIdentity.operatorDisplayName,
+    operatorChannel: resolvedIdentity.operatorChannel,
+  };
+}
+
+async function governMemoryTarget(target, requestedAction) {
+  const allowedActions = getAllowedGovernanceActions(target || {});
+  const action = requestedAction || await vscode.window.showQuickPick(allowedActions, {
+    placeHolder: 'Choose the governed memory intervention to apply.',
+    ignoreFocusOut: true,
+  });
+  if (!action) {
+    return;
+  }
+
+  if (!isGovernanceActionAllowed(target || {}, action)) {
+    vscode.window.showWarningMessage(
+      `${action} is not a valid governed memory action for ${describeGovernanceTarget(target || {})} in state ${String(target?.state || 'unknown')}.`,
+    );
+    return;
+  }
+
+  const factId = target?.factId ?? target?.id;
+  const sha256 = target?.sha256;
+  if (!factId && !sha256) {
+    vscode.window.showWarningMessage('The selected memory target does not expose a fact id or SHA256 identifier.');
+    return;
+  }
+
+  const targetLabel = describeGovernanceTarget(target || {});
+  const interventionDetails = await promptForGovernanceInterventionDetails(targetLabel, action);
+  if (!interventionDetails) {
+    return;
+  }
+
+  if (action === 'revoke' || action === 'tombstone') {
+    const confirmation = await vscode.window.showWarningMessage(
+      `${action === 'revoke' ? 'Revoke' : 'Tombstone'} ${targetLabel}?
+
+Summary: ${interventionDetails.operatorSummary}
+Reason: ${interventionDetails.reason}
+Operator: ${interventionDetails.operatorId}${interventionDetails.operatorDisplayName ? ` (${interventionDetails.operatorDisplayName})` : ''}
+
+This changes governed memory state and will be recorded in audit/governance history.`,
+      { modal: true },
+      'Confirm',
+    );
+    if (confirmation !== 'Confirm') {
+      return;
+    }
+  }
+
+  const args = [
+    'memory-govern',
+    '--action', action,
+    '--operator-summary', interventionDetails.operatorSummary,
+    '--reason', interventionDetails.reason,
+    '--operator-id', interventionDetails.operatorId,
+    '--operator-display-name', interventionDetails.operatorDisplayName,
+    '--operator-channel', interventionDetails.operatorChannel,
+    '--json',
+  ];
+  if (factId) {
+    args.push('--fact-id', String(factId));
+  }
+  if (sha256) {
+    args.push('--sha256', String(sha256));
+  }
+
+  const result = await runPackagedAction(
+    args,
+    `HLF Memory ${action[0].toUpperCase()}${action.slice(1)}`,
+    `Governed memory intervention for ${targetLabel}.`,
+  );
+  if (!result?.ok) {
+    return;
+  }
+
+  invalidateProvenancePanelCache();
+  operatorPanelProvider?.refresh();
+}
+
 async function showClaimLanes() {
   trustPanel.show('HLF Claim Lanes', getClaimLaneSections());
+}
+
+function buildTrustPanelFailureSection(title, subtitle, error) {
+  return {
+    title,
+    subtitle,
+    body: {
+      status: 'unavailable',
+      error: error instanceof Error ? error.message : String(error || 'unknown_error'),
+    },
+  };
+}
+
+async function readTrustSectionPayload(args, title) {
+  try {
+    return await readPanelPayload(args, title);
+  } catch (error) {
+    outputChannel?.appendLine(`[hlf-vscode] trust panel section failed for ${title}: ${error.message}`);
+    return error;
+  }
 }
 
 async function openClaimLaneDoctrine() {
@@ -452,52 +1006,73 @@ async function openClaimLaneDoctrine() {
 
 async function openTrustPanel() {
   const sections = [...getClaimLaneSections()];
-  const routeResult = await runPackagedAction(
+  const routeResult = await readTrustSectionPayload(
     ['resource', '--uri', 'hlf://status/governed_route', '--json'],
-    'HLF Trust Panel',
-    'Combined trust surfaces from packaged status resources.',
+    'HLF Trust Panel: Governed Route',
   );
-  if (!routeResult) {
-    return;
-  }
-  sections.push({
-    title: 'Governed Route',
-    subtitle: 'Latest packaged route rationale and selected lane.',
-    body: routeResult.parsed ?? routeResult.stdout,
-  });
+  sections.push(routeResult instanceof Error
+    ? buildTrustPanelFailureSection('Governed Route', 'Latest packaged route rationale and selected lane.', routeResult)
+    : {
+      title: 'Governed Route',
+      subtitle: 'Latest packaged route rationale and selected lane.',
+      body: routeResult ?? { status: 'unavailable', error: 'no_payload_returned' },
+    });
 
-  const verifierResult = await runPackagedAction(
+  const verifierResult = await readTrustSectionPayload(
     ['resource', '--uri', 'hlf://status/formal_verifier', '--json'],
-    'HLF Trust Panel',
-    'Combined trust surfaces from packaged status resources.',
+    'HLF Trust Panel: Formal Verifier',
   );
-  sections.push({
-    title: 'Formal Verifier',
-    subtitle: 'Packaged verifier status surface.',
-    body: verifierResult.parsed ?? verifierResult.stdout,
-  });
+  sections.push(verifierResult instanceof Error
+    ? buildTrustPanelFailureSection('Formal Verifier', 'Packaged verifier status surface.', verifierResult)
+    : {
+      title: 'Formal Verifier',
+      subtitle: 'Packaged verifier status surface.',
+      body: verifierResult ?? { status: 'unavailable', error: 'no_payload_returned' },
+    });
 
-  const witnessResult = await runPackagedAction(
+  const witnessResult = await readTrustSectionPayload(
     ['resource', '--uri', 'hlf://status/witness_governance', '--json'],
-    'HLF Trust Panel',
-    'Combined trust surfaces from packaged status resources.',
+    'HLF Trust Panel: Witness Governance',
   );
-  sections.push({
-    title: 'Witness Governance',
-    subtitle: 'Current witness governance trust surface.',
-    body: witnessResult.parsed ?? witnessResult.stdout,
-  });
+  sections.push(witnessResult instanceof Error
+    ? buildTrustPanelFailureSection('Witness Governance', 'Current witness governance trust surface.', witnessResult)
+    : {
+      title: 'Witness Governance',
+      subtitle: 'Current witness governance trust surface.',
+      body: witnessResult ?? { status: 'unavailable', error: 'no_payload_returned' },
+    });
 
-  const memoryResult = await runPackagedAction(
-    ['resource', '--uri', 'hlf://status/benchmark_artifacts', '--json'],
-    'HLF Trust Panel',
-    'Combined trust surfaces from packaged status resources.',
+  const memoryGovernanceResult = await readTrustSectionPayload(
+    ['resource', '--uri', 'hlf://status/memory_governance', '--json'],
+    'HLF Trust Panel: Memory Governance',
   );
-  sections.push({
-    title: 'Memory Provenance',
-    subtitle: 'Benchmark artifacts and memory evidence references from packaged truth.',
-    body: memoryResult.parsed ?? memoryResult.stdout,
-  });
+  if (memoryGovernanceResult instanceof Error) {
+    sections.push(buildTrustPanelFailureSection(
+      'Latest Governance Interventions',
+      'Recent memory governance interventions recorded by the packaged governance spine.',
+      memoryGovernanceResult,
+    ));
+  } else {
+    sections.push(...buildGovernanceInterventionTrustSections(
+      memoryGovernanceResult ?? { status: 'unavailable', error: 'no_payload_returned' },
+    ));
+  }
+
+  const memoryResult = await readTrustSectionPayload(
+    ['provenance-summary', '--json'],
+    'HLF Trust Panel: Provenance Contract',
+  );
+  if (memoryResult instanceof Error) {
+    sections.push(buildTrustPanelFailureSection(
+      'Memory Provenance',
+      'Packaged provenance contract across memory, governance, witness, and evidence surfaces.',
+      memoryResult,
+    ));
+  } else {
+    sections.push(...buildProvenanceTrustSections(
+      memoryResult ?? { status: 'unavailable', error: 'no_payload_returned' },
+    ));
+  }
 
   trustPanel.show('HLF Trust Panel', sections);
 }
@@ -539,7 +1114,7 @@ function activate(context) {
   trustPanel = new TrustPanel(context.extensionUri);
   operatorPanelProvider = new OperatorPanelProvider(controller, async () => ({
     hasBearerToken: await hasHttpBearerToken(context.secrets),
-  }));
+  }), readProvenanceContractForPanel, readMemoryGovernanceStatusForPanel);
 
   context.subscriptions.push(outputChannel, diagnosticCollection, statusBar);
   context.subscriptions.push(vscode.window.registerTreeDataProvider('hlf.operatorPanel', operatorPanelProvider));
@@ -553,12 +1128,15 @@ function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('hlf.copyResourceUri', copyResourceUri));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.inspectResource', inspectResource));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.refreshOperatorPanel', refreshOperatorPanel));
+  context.subscriptions.push(vscode.commands.registerCommand('hlf.manageOperatorIdentityDefaults', manageOperatorIdentityDefaults));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.setHttpBearerToken', setHttpBearerToken));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.clearHttpBearerToken', clearHttpBearerToken));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.runFirstRunValidation', runFirstRunValidation));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.runHlfDo', runHlfDo));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.showTestSuiteSummary', showTestSuiteSummary));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.showWeeklyEvidenceSummary', showWeeklyEvidenceSummary));
+  context.subscriptions.push(vscode.commands.registerCommand('hlf.showProvenanceContract', showProvenanceContract));
+  context.subscriptions.push(vscode.commands.registerCommand('hlf.governMemoryTarget', governMemoryTarget));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.showProfileCapabilityCatalog', showProfileCapabilityCatalog));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.showClaimLanes', showClaimLanes));
   context.subscriptions.push(vscode.commands.registerCommand('hlf.openClaimLaneDoctrine', openClaimLaneDoctrine));
@@ -566,6 +1144,8 @@ function activate(context) {
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration('hlf')) {
       outputChannel.appendLine('[hlf-vscode] configuration changed; rerunning diagnostics.');
+      invalidateProvenancePanelCache();
+      resetLiveMcpClient();
       updateStatusBar();
       operatorPanelProvider?.refresh();
       void runDiagnostics(false);
@@ -586,9 +1166,19 @@ async function deactivate() {
 module.exports = {
   activate,
   buildAttachModeActionRequest: parseAttachModeArgs,
+  buildGovernanceInterventionTrustSections,
+  buildProvenanceTrustSections,
+  buildTrustPanelFailureSection,
   canRunLocalPackagedActions,
-  canProxyPackagedActions,
+  canUseLiveMcpActions,
   deactivate,
+  extractProvenanceContractPayload,
+  getDefaultOperatorIdentity,
+  getLiveMcpClientCacheSignature,
+  manageOperatorIdentityDefaults,
+  governMemoryTarget,
   getPackagedActionUnavailableReason,
-  runAttachModePackagedAction,
+  readTrustSectionPayload,
+  resetLiveMcpClient,
+  runLiveMcpPackagedAction,
 };

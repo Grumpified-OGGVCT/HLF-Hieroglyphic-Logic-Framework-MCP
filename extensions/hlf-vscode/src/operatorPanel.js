@@ -4,6 +4,7 @@ const vscode = require('vscode');
 
 const { getClaimLanePanelEntries, getClaimLanesDocPath } = require('./claimLanes');
 const { getEndpointUrl, getHealthUrl, getSettings } = require('./config');
+const { getAllowedGovernanceActions } = require('./memoryGovernance');
 const { getPackagedResourceCatalog, getServerResourcesPath } = require('./resourceCatalog');
 
 class PanelItem extends vscode.TreeItem {
@@ -61,10 +62,162 @@ function getEvidenceSnapshot(evidencePath) {
   return { exists: true, files: entries };
 }
 
+function extractProvenanceContract(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+
+  if (payload.provenance_contract && typeof payload.provenance_contract === 'object') {
+    return payload.provenance_contract;
+  }
+
+  return payload;
+}
+
+function extractMemoryGovernanceStatus(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+
+  if (payload.memory_governance && typeof payload.memory_governance === 'object') {
+    return payload.memory_governance;
+  }
+
+  return payload;
+}
+
+function buildMemoryGovernanceTargetItem(target) {
+  const identity = target.operator_identity || {};
+  const label = target.pointer || `${target.topic || 'memory'}#${target.id || 'unknown'}`;
+  const tooltip = target.operator_summary || target.sha256 || label;
+  const commandTarget = {
+    factId: target.id ?? null,
+    sha256: target.sha256 ?? '',
+    topic: target.topic ?? '',
+    pointer: target.pointer ?? '',
+    state: target.state ?? '',
+    operatorSummary: target.operator_summary ?? '',
+  };
+  const children = [
+    makeValueItem('State', target.state || 'unknown', 'Current governed memory state for this target.', 'shield'),
+    makeValueItem('Topic', target.topic || 'general', 'Memory topic associated with this governed target.', 'tag'),
+    makeValueItem('Pointer', target.pointer || 'unavailable', 'Canonical pointer reference for this target.', 'link'),
+  ];
+
+  if (identity.operator_id || identity.operator_display_name) {
+    const operatorLabel = identity.operator_display_name
+      ? `${identity.operator_display_name} (${identity.operator_id || 'unknown'})`
+      : identity.operator_id;
+    children.push(makeValueItem('Operator', operatorLabel, 'Latest operator identity aligned to this target state.', 'account'));
+  }
+  if (identity.operator_channel) {
+    children.push(makeValueItem('Channel', identity.operator_channel, 'Latest operator channel aligned to this target state.', 'plug'));
+  }
+
+  if (target.sha256) {
+    children.push(makeValueItem('SHA256', target.sha256, 'Content hash for the governed target.', 'key'));
+  }
+  if (target.operator_summary) {
+    children.push(makeValueItem('Summary', target.operator_summary, 'Latest operator summary attached to this target.', 'note'));
+  }
+  if (target.id || target.sha256) {
+    const allowedActions = getAllowedGovernanceActions(target);
+    if (allowedActions.includes('revoke')) {
+      children.push(makeCommandItem('Revoke', {
+        command: 'hlf.governMemoryTarget',
+        title: 'Revoke Memory Target',
+        arguments: [commandTarget, 'revoke'],
+      }, 'Mark this governed memory target as revoked.', 'warning'));
+    }
+    if (allowedActions.includes('tombstone')) {
+      children.push(makeCommandItem('Tombstone', {
+        command: 'hlf.governMemoryTarget',
+        title: 'Tombstone Memory Target',
+        arguments: [commandTarget, 'tombstone'],
+      }, 'Mark this governed memory target as tombstoned.', 'trash'));
+    }
+    if (allowedActions.includes('reinstate')) {
+      children.push(makeCommandItem('Reinstate', {
+        command: 'hlf.governMemoryTarget',
+        title: 'Reinstate Memory Target',
+        arguments: [commandTarget, 'reinstate'],
+      }, 'Reinstate this governed memory target.', 'history'));
+    }
+  }
+
+  return new PanelItem(label, {
+    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+    children,
+    description: target.state || 'unknown',
+    tooltip,
+    iconPath: new vscode.ThemeIcon('shield'),
+  });
+}
+
+function buildMemoryGovernanceInterventionItem(intervention) {
+  const label = intervention.pointer || `${intervention.action || 'intervention'}#${intervention.subject_id || 'unknown'}`;
+  const identity = intervention.operator_identity || {};
+  const operatorLabel = identity.operator_display_name
+    ? `${identity.operator_display_name} (${identity.operator_id || 'unknown'})`
+    : (identity.operator_id || 'unknown');
+  const children = [
+    makeValueItem('Action', intervention.action || 'unknown', 'Governance action recorded for this intervention.', 'history'),
+    makeValueItem('State', intervention.state || 'unknown', 'Governed state after this intervention.', 'shield'),
+    makeValueItem('Operator', operatorLabel, 'Operator identity recorded for this intervention.', 'account'),
+    makeValueItem('Channel', identity.operator_channel || 'unknown', 'Origin channel recorded for this intervention.', 'plug'),
+    makeValueItem('Reason', intervention.reason || 'none', 'Governance reason recorded for this intervention.', 'note'),
+  ];
+
+  if (intervention.operator_summary) {
+    children.push(makeValueItem('Summary', intervention.operator_summary, 'Operator summary recorded for this intervention.', 'comment'));
+  }
+  if (intervention.timestamp) {
+    children.push(makeValueItem('Timestamp', String(intervention.timestamp), 'Recorded governance intervention timestamp.', 'clock'));
+  }
+  if (intervention.sha256) {
+    children.push(makeValueItem('SHA256', intervention.sha256, 'Target content hash associated with this intervention.', 'key'));
+  }
+
+  return new PanelItem(label, {
+    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+    children,
+    description: intervention.action || 'unknown',
+    tooltip: intervention.operator_summary || intervention.reason || label,
+    iconPath: new vscode.ThemeIcon('history'),
+  });
+}
+
+function interventionMatchesTarget(intervention, target) {
+  const targetId = target?.id ?? target?.factId;
+  if (targetId !== undefined && targetId !== null && String(intervention?.subject_id || '') === String(targetId)) {
+    return true;
+  }
+  if (target?.sha256 && intervention?.sha256 && String(target.sha256) === String(intervention.sha256)) {
+    return true;
+  }
+  if (target?.pointer && intervention?.pointer && String(target.pointer) === String(intervention.pointer)) {
+    return true;
+  }
+  return false;
+}
+
+function buildTargetInterventionHistoryItem(target, interventions) {
+  const matching = interventions.filter((intervention) => interventionMatchesTarget(intervention, target));
+  return new PanelItem('Intervention History', {
+    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+    children: matching.length > 0
+      ? matching.map((intervention) => buildMemoryGovernanceInterventionItem(intervention))
+      : [makeValueItem('Interventions', 'none recorded', 'No recent governed memory interventions match this target.', 'circle-slash')],
+    iconPath: new vscode.ThemeIcon('history'),
+  });
+}
+
 class OperatorPanelProvider {
-  constructor(controller, getSecretStatus) {
+  constructor(controller, getSecretStatus, readProvenanceContract, readMemoryGovernanceStatus) {
     this.controller = controller;
     this.getSecretStatus = getSecretStatus;
+    this.readProvenanceContract = readProvenanceContract;
+    this.readMemoryGovernanceStatus = readMemoryGovernanceStatus;
     this._onDidChangeTreeData = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
   }
@@ -89,6 +242,22 @@ class OperatorPanelProvider {
     const serverResourcesPath = getServerResourcesPath();
     const secretStatus = this.getSecretStatus ? await this.getSecretStatus() : { hasBearerToken: false };
     const claimLaneDocPath = getClaimLanesDocPath(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+    let provenanceContract;
+    let memoryGovernance;
+    if (this.readProvenanceContract) {
+      try {
+        provenanceContract = extractProvenanceContract(await this.readProvenanceContract());
+      } catch {
+        provenanceContract = undefined;
+      }
+    }
+    if (this.readMemoryGovernanceStatus) {
+      try {
+        memoryGovernance = extractMemoryGovernanceStatus(await this.readMemoryGovernanceStatus());
+      } catch {
+        memoryGovernance = undefined;
+      }
+    }
 
     const bridgeChildren = [
       makeValueItem('Transport', settings.transport, `Current bridge transport: ${settings.transport}.`, 'radio-tower'),
@@ -167,8 +336,59 @@ class OperatorPanelProvider {
       }))
       : [makeValueItem('Packaged Status Resources', 'unavailable', 'No packaged status resources could be derived from the workspace.', 'warning')];
 
+    const provenanceSummary = provenanceContract?.summary;
+    const pointerSummary = provenanceContract?.pointer_chain_summary;
+    const stateCounts = provenanceContract?.memory_state_counts;
+    const provenanceChildren = provenanceSummary
+      ? [
+        makeValueItem('Memory Facts', String(provenanceSummary.memory_fact_count ?? 0), 'Total memory facts included in the packaged provenance contract.', 'database'),
+        makeValueItem('Governance Events', String(provenanceSummary.governance_event_count ?? 0), 'Governance events observed in the current packaged session context.', 'history'),
+        makeValueItem('Witness Subjects', String(provenanceSummary.witness_subject_count ?? 0), 'Witness-governed subjects currently tracked in the packaged context.', 'eye'),
+        makeValueItem('Active Pointers', String(pointerSummary?.active_pointer_count ?? provenanceSummary.active_pointer_count ?? 0), 'Pointers whose governed memory state is currently active.', 'link'),
+        makeValueItem('Revoked', String(stateCounts?.revoked ?? provenanceSummary.revoked_pointer_count ?? 0), 'Pointers or facts marked revoked by governed memory evidence.', 'warning'),
+        makeValueItem('Tombstoned', String(stateCounts?.tombstoned ?? provenanceSummary.tombstoned_pointer_count ?? 0), 'Pointers or facts marked tombstoned by governed memory evidence.', 'trash'),
+        makeValueItem('Superseded', String(stateCounts?.superseded ?? provenanceSummary.superseded_pointer_count ?? 0), 'Pointers or facts superseded by newer governed memory entries.', 'git-commit'),
+        makeValueItem('Stale', String(stateCounts?.stale ?? provenanceSummary.stale_pointer_count ?? 0), 'Pointers or facts whose freshness window has expired.', 'clock'),
+        makeCommandItem('Show Provenance Contract', { command: 'hlf.showProvenanceContract', title: 'Show Provenance Contract' }, 'Open the full packaged provenance contract in the trust panel.', 'shield'),
+      ]
+      : [
+        makeValueItem('Provenance Summary', 'unavailable', 'The operator panel could not load the packaged provenance contract summary.', 'warning'),
+        makeCommandItem('Show Provenance Contract', { command: 'hlf.showProvenanceContract', title: 'Show Provenance Contract' }, 'Open the full packaged provenance contract in the trust panel.', 'shield'),
+      ];
+
+    const governanceTargets = Array.isArray(memoryGovernance?.recent_targets)
+      ? memoryGovernance.recent_targets
+      : [];
+    const governanceInterventions = Array.isArray(memoryGovernance?.recent_interventions)
+      ? memoryGovernance.recent_interventions
+      : [];
+    const governanceCounts = memoryGovernance?.memory_state_counts ?? {};
+    const memoryGovernanceChildren = memoryGovernance
+      ? [
+        makeValueItem('Active', String(governanceCounts.active ?? 0), 'Governed memory facts currently considered active.', 'pass'),
+        makeValueItem('Revoked', String(governanceCounts.revoked ?? 0), 'Governed memory facts currently marked revoked.', 'warning'),
+        makeValueItem('Tombstoned', String(governanceCounts.tombstoned ?? 0), 'Governed memory facts currently marked tombstoned.', 'trash'),
+        makeValueItem('Superseded', String(governanceCounts.superseded ?? 0), 'Governed memory facts superseded by newer entries.', 'git-commit'),
+        new PanelItem('Recent Interventions', {
+          collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+          children: governanceInterventions.length > 0
+            ? governanceInterventions.map((intervention) => buildMemoryGovernanceInterventionItem(intervention))
+            : [makeValueItem('Interventions', 'none recorded', 'No recent governed memory interventions are available.', 'circle-slash')],
+          iconPath: new vscode.ThemeIcon('history'),
+        }),
+        ...governanceTargets.map((target) => {
+          const targetItem = buildMemoryGovernanceTargetItem(target);
+          targetItem.children.push(buildTargetInterventionHistoryItem(target, governanceInterventions));
+          return targetItem;
+        }),
+      ]
+      : [
+        makeValueItem('Memory Governance', 'unavailable', 'The operator panel could not load the packaged memory governance resource.', 'warning'),
+      ];
+
     const actionsChildren = [
       makeCommandItem('Run First-Run Validation', { command: 'hlf.runFirstRunValidation', title: 'Run First-Run Validation' }, 'Validate current bridge configuration and secret state.', 'check-all'),
+      makeCommandItem('Manage Operator Identity Defaults', { command: 'hlf.manageOperatorIdentityDefaults', title: 'Manage Operator Identity Defaults' }, 'Set or reset stored operator identity defaults without waiting for an intervention prompt.', 'account'),
       makeCommandItem('Run Bridge Diagnostics', { command: 'hlf.runDiagnostics', title: 'Run Bridge Diagnostics' }, 'Run bridge diagnostics now.', 'pulse'),
       makeCommandItem('Set HTTP Bearer Token', { command: 'hlf.setHttpBearerToken', title: 'Set HTTP Bearer Token' }, 'Store or replace the HTTP bearer token in VS Code secret storage.', 'key'),
       makeCommandItem('Clear HTTP Bearer Token', { command: 'hlf.clearHttpBearerToken', title: 'Clear HTTP Bearer Token' }, 'Delete the stored HTTP bearer token from VS Code secret storage.', 'trash'),
@@ -179,6 +399,7 @@ class OperatorPanelProvider {
       makeCommandItem('Run HLF Do', { command: 'hlf.runHlfDo', title: 'Run HLF Do' }, 'Invoke the packaged governed build-assist front door.', 'sparkle'),
       makeCommandItem('Show Test Summary', { command: 'hlf.showTestSuiteSummary', title: 'Show Test Summary' }, 'Show the latest packaged pytest summary.', 'beaker'),
       makeCommandItem('Show Weekly Evidence Summary', { command: 'hlf.showWeeklyEvidenceSummary', title: 'Show Weekly Evidence Summary' }, 'Show the governed weekly evidence summary.', 'graph'),
+      makeCommandItem('Show Provenance Contract', { command: 'hlf.showProvenanceContract', title: 'Show Provenance Contract' }, 'Show the packaged provenance contract across memory, governance, witness, and evidence.', 'shield'),
       makeCommandItem('Show Profile Capability Catalog', { command: 'hlf.showProfileCapabilityCatalog', title: 'Show Profile Capability Catalog' }, 'Show the packaged governed profile catalog.', 'organization'),
       makeCommandItem('Open Trust Panel', { command: 'hlf.openTrustPanel', title: 'Open Trust Panel' }, 'Open the webview trust panel for route, verifier, and memory evidence.', 'preview'),
     ];
@@ -205,6 +426,16 @@ class OperatorPanelProvider {
         children: evidenceChildren,
         iconPath: new vscode.ThemeIcon('history'),
       }),
+      new PanelItem('Provenance Summary', {
+        collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+        children: provenanceChildren,
+        iconPath: new vscode.ThemeIcon('shield'),
+      }),
+      new PanelItem('Memory Governance', {
+        collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+        children: memoryGovernanceChildren,
+        iconPath: new vscode.ThemeIcon('law'),
+      }),
       new PanelItem('Packaged Status Resources', {
         collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
         children: resourceChildren,
@@ -221,4 +452,8 @@ class OperatorPanelProvider {
 
 module.exports = {
   OperatorPanelProvider,
+  buildMemoryGovernanceInterventionItem,
+  buildTargetInterventionHistoryItem,
+  buildMemoryGovernanceTargetItem,
+  interventionMatchesTarget,
 };

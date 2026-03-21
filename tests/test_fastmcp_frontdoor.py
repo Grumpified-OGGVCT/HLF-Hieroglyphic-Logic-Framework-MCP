@@ -577,6 +577,13 @@ def test_memory_governance_tool_returns_structured_invalid_request() -> None:
     assert "unsupported governance action" in result["message"]
 
 
+def test_memory_governance_tool_normalizes_not_found_action() -> None:
+    result = server.hlf_memory_govern(action="ReVoKe", fact_id=999999)
+
+    assert result["status"] == "not_found"
+    assert result["action"] == "revoke"
+
+
 def test_memory_governance_resource_orders_multiple_interventions_for_same_fact() -> None:
     stored = server.hlf_memory_store(
         content="Govern this sequence fact",

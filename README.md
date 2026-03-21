@@ -7,6 +7,8 @@
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
+Repository home: https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP
+
 ![HLF — Hieroglyphic Logic Framework · MCP Server](docs/social_preview.svg)
 
 ---

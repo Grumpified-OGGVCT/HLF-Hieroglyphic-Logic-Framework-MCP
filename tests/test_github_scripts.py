@@ -164,15 +164,25 @@ class TestGenerateStatusOverview:
         from generate_status_overview import _docs_blob_href
 
         monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+        monkeypatch.delenv("STATUS_DOCS_REF", raising=False)
+        monkeypatch.delenv("DOCS_REF", raising=False)
+        monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
         monkeypatch.delenv("GITHUB_HEAD_REF", raising=False)
         monkeypatch.delenv("GITHUB_REF_NAME", raising=False)
         assert _docs_blob_href("HLF_STATUS_OVERVIEW.md") == "HLF_STATUS_OVERVIEW.md"
 
         monkeypatch.setenv("GITHUB_REPOSITORY", "example-org/example-repo")
-        monkeypatch.setenv("GITHUB_HEAD_REF", "feature/readiness")
+        monkeypatch.setenv("GITHUB_BASE_REF", "main")
+        monkeypatch.setenv("GITHUB_REF_NAME", "feature/readiness")
         assert (
             _docs_blob_href("HLF_STATUS_OVERVIEW.md")
-            == "https://github.com/example-org/example-repo/blob/feature/readiness/docs/HLF_STATUS_OVERVIEW.md"
+            == "https://github.com/example-org/example-repo/blob/main/docs/HLF_STATUS_OVERVIEW.md"
+        )
+
+        monkeypatch.setenv("STATUS_DOCS_REF", "release/docs")
+        assert (
+            _docs_blob_href("HLF_STATUS_OVERVIEW.md")
+            == "https://github.com/example-org/example-repo/blob/release/docs/docs/HLF_STATUS_OVERVIEW.md"
         )
 
     def test_collect_status_data_and_render_surfaces(self, tmp_path):

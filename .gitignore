@@ -103,6 +103,7 @@ data/*.sqlite3-wal
 # Generated observability and local research outputs
 observability/openllmetry/*.jsonl
 observability/openllmetry/*.txt
+observability/local_validation/
 ollama_folder_qa/ollama_qa_results.json
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
@@ -149,3 +150,4 @@ __redhat_probe.py
 # ── Local discussion notes and packaged extension outputs ─────────────────────
 Cogito_Discussion.md
 artifacts/*.vsix
+extensions/hlf-vscode/*.vsix

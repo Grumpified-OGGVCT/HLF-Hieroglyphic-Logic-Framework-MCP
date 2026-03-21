@@ -1,8 +1,8 @@
 # Single Source of Truth - HLF-Hieroglyphic-Logic-Framework-MCP
 
-**Generated on:** 2026-03-17
-**Branch:** integrate-sovereign
-**Purpose:** Authoritative current-state document for this local checkout, grounded in code and validation run on 2026-03-17, with explicit notes on extraction completeness relative to the Sovereign source repo.
+**Generated on:** 2026-03-20
+**Branch:** integrate/vscode-operator-governed-review
+**Purpose:** Authoritative current-state document for this local checkout, grounded in code present in this branch plus targeted verification run on 2026-03-20, with explicit notes on extraction completeness relative to the Sovereign source repo.
 
 ## Truth Boundary
 
@@ -140,7 +140,7 @@ This is the default build/install surface and the one exposed by `pyproject.toml
 - Entry point: `hlf-mcp`
 - Server file: `hlf_mcp/server.py`
 - Core compiler/runtime path: `hlf_mcp/hlf/*`
-- Current packaged MCP registration count after this pass: **34 tools, 9 resources, 0 prompts**
+- Current packaged MCP registration count verified in this checkout on 2026-03-20: **69 tools, 31 resources, 0 prompts**
 
 ### 2. Legacy MCP compatibility surface
 
@@ -160,6 +160,23 @@ The truthful statement is:
 - the packaged production-facing surface is `hlf_mcp`
 - the legacy `hlf/` line still contains useful, working compatibility components
 - this pass merged one high-value capability (`hlf_do`) forward into the packaged FastMCP surface instead of pretending the split does not exist
+
+### Branch-aware supplement for this checkout
+
+This SSOT now also needs one explicit branch-aware clarification because `main` currently underrepresents the active branch.
+
+- Active branch verified on 2026-03-20: `integrate/vscode-operator-governed-review`
+- Divergence verified on 2026-03-20: **0 behind, 10 ahead** of `main`
+- The local checkout therefore contains meaningful branch-resident surfaces that a public `main` review can still miss.
+
+That does **not** mean every branch surface is current-product completion.
+
+It means this local checkout truth is broader than public-main perception in at least four concrete ways:
+
+- packaged operator-review normalization now exists in `hlf_mcp/governed_review.py`
+- packaged weekly artifact decision and evidence-query surfaces now exist above `hlf_mcp/weekly_artifacts.py`
+- packaged formal-verifier behavior is now real in `hlf_mcp/hlf/formal_verifier.py` rather than only a placeholder status resource
+- packaged bridge slices for symbolic surfaces, dream-cycle/media evidence, multimodal contract resources, and the VS Code operator shell scaffold are present in this checkout even where they remain bridge-qualified rather than fully restored
 
 ## Implemented Now
 
@@ -216,6 +233,14 @@ Current truth rule:
 - Extracted governance support assets now also include `governance/templates/dictionary.json` for future LSP and tag-arity aware tooling.
 - `hlf_mcp/server.py` checks the governance manifest at startup.
 - This pass fixed a real hash drift in `governance/MANIFEST.sha256` for `tag_i18n.yaml`.
+
+### Additional packaged surfaces verified in this checkout on 2026-03-20
+
+- `hlf_mcp/hlf/formal_verifier.py` now provides a real packaged verifier path with structured proof-status reporting.
+- `hlf_mcp/hlf/execution_admission.py` and capsule/runtime wiring now carry verifier results into execution admission and denial behavior.
+- `hlf_mcp/server_profiles.py` and `hlf_mcp/hlf/routing_trace.py` now provide real packaged route-evidence, profile-capability, and fallback-trace surfaces.
+- `hlf_mcp/governed_review.py` now provides normalized governed-review contracts for spec drift, test health, ethics review, code quality, doc accuracy, and security-pattern review.
+- `hlf_mcp/evidence_query.py` and `hlf_mcp/weekly_artifacts.py` now provide operator-facing evidence listing, summary, and decision persistence over verified weekly artifacts.
 
 ### Merged forward in this pass
 
@@ -275,6 +300,13 @@ These areas are real, but should not be overstated.
 - Quick start material mixed the legacy entry path with the packaged story.
 - The main packaged server assembly is now cleaner because the large inline instruction payload was extracted out of `server.py`, and the human-facing server summary is now generated from the registered MCP surface.
 - This pass corrected the most visible drift, but the entire repo has not yet been exhaustively normalized.
+
+### Branch-resident bridge slices present in this checkout
+
+- `hlf_mcp/hlf/symbolic_surfaces.py` provides a real symbolic relation-edge extraction/projection/audit slice, but it remains bridge work rather than a fully restored symbolic-semantic system.
+- `hlf_mcp/dream_cycle.py`, `hlf_mcp/media_evidence.py`, `hlf_mcp/server_context.py`, `hlf_mcp/server_memory.py`, and `hlf_mcp/server_resources.py` provide a bounded dream-cycle and media-evidence bridge slice, but that lane remains advisory and bridge-qualified rather than full autonomous-evolution completion.
+- `hlf_mcp/server_profiles.py` and `governance/model_qualification_profiles.json` now expose multimodal host-function and qualification-contract surfaces, but multimodal remains a governed bridge lane rather than a complete packaged media stack.
+- `extensions/hlf-vscode/` now contains a real operator-bridge scaffold for VS Code, but it remains a bridge scaffold rather than a current-truth claim of Marketplace-shipped extension completion.
 
 ### Language evolution and bytecode trust bridge
 
@@ -339,10 +371,21 @@ The following validations were run in this workspace during this pass.
 | `uv run python docs/gen_from_spec.py` | Passed |
 | `uv run python scripts/hlf_token_lint.py fixtures` | Passed |
 | `uv run pytest tests/test_extracted_support_tools.py tests/test_gen_from_spec.py -q --tb=short` | Passed (`6 passed`) |
-| `uv run python -c "import hlf_mcp.server as s; print('imports-ok'); print('registered_tools', len(s.REGISTERED_TOOLS)); print('registered_resources', len(s.REGISTERED_RESOURCES)); print('exported_hlf_callables', len([name for name in dir(s) if name.startswith('hlf_') and callable(getattr(s, name))]))"` | Passed (`imports-ok`, `34` registered tools, `9` registered resources, `34` exported callable `hlf_*` names) |
+| `uv run python -c "import hlf_mcp.server as s; print('imports-ok'); print('registered_tools', len(s.REGISTERED_TOOLS)); print('registered_resources', len(s.REGISTERED_RESOURCES)); print('exported_hlf_callables', len([name for name in dir(s) if name.startswith('hlf_') and callable(getattr(s, name))]))"` | Historical 2026-03-17 run passed (`imports-ok`, `34` registered tools, `9` registered resources, `34` exported callable `hlf_*` names) |
 | `uv run pytest tests/test_fastmcp_frontdoor.py -q --tb=short` | Passed (`20 passed`) |
-| `uv run pytest -q --tb=short` | Passed (`513 passed`) |
-| Generated packaged MCP surface in `hlf_mcp.server` | `34` registered tools, `9` registered resources, `34` exported callable `hlf_*` names |
+| `uv run pytest -q --tb=short` | Historical 2026-03-17 run passed (`513 passed`) |
+| Generated packaged MCP surface in `hlf_mcp.server` | Historical 2026-03-17 value: `34` registered tools, `9` registered resources, `34` exported callable `hlf_*` names |
+
+## Supplemental Verification On 2026-03-20
+
+The following branch-aware facts were revalidated for this local checkout.
+
+| Command | Result |
+| --- | --- |
+| `git branch --show-current` | Passed (`integrate/vscode-operator-governed-review`) |
+| `git rev-list --left-right --count main...HEAD` | Passed (`0` behind, `10` ahead) |
+| `uv run python -c "from hlf_mcp import server; print(len(server.REGISTERED_TOOLS), len(server.REGISTERED_RESOURCES))"` | Passed (`69` tools, `31` resources) after re-manifesting `governance/host_functions.json` |
+| `uv run pytest -q --tb=short` | Passed (`758 passed`) |
 
 ## This Pass Changed
 
@@ -367,15 +410,19 @@ This SSOT corresponds to the following repo-level corrections made in the same p
 - updated `QUICKSTART.md` so the default quick-start path matches the packaged entry point
 - wired the extracted host-functions reference generator into the main `scripts/gen_docs.py` pipeline and updated README links to point at packaged local references
 
-## Branch Cleanup State
+## Merge Awareness State
 
-The branch is currently in a good cleanup posture for PR preparation.
+Verified current branch facts:
 
-- `integrate-sovereign` is **7 commits ahead, 0 behind** `main`.
-- The broad configured regression run is green: `uv run pytest -q --tb=short` passed with `513 passed`.
-- The focused packaged-server regression run is also green after the generated-instructions refactor: `uv run pytest tests/test_fastmcp_frontdoor.py -q --tb=short` passed with `20 passed`.
-- The latest cleanup pass removed legacy pytest return-value noise and fixed the stale legacy assumptions that cleanup exposed in `test_mcp_complete.py` and `hlf/mcp_metric.py`.
-- The remaining work before commit/PR polish is editorial and organizational rather than functional: keep docs truthful, decide the intentional omissions, and optionally split the current working tree into a small number of coherent commits.
+- `integrate/vscode-operator-governed-review` is **10 commits ahead, 0 behind** `main`.
+- The packaged surface count in this checkout is now **69 tools and 31 resources**.
+- Public-main perception therefore still undercounts meaningful branch work.
+
+Verified caution for merge/readiness interpretation:
+
+- `governance/host_functions.json` drift was resolved in this pass by re-manifesting the tracked governance set through `scripts/gen_manifest.py`
+- manifest discipline still matters: future tracked governance changes should refresh `governance/MANIFEST.sha256` in the same commit
+- the repo-wide regression suite was rerun on 2026-03-20 and passed with `758 passed`
 
 Recommended commit grouping if the branch is being tidied before push:
 

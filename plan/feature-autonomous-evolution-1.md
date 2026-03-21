@@ -66,6 +66,19 @@ That is the path from inspirational recursive-improvement rhetoric to a professi
 | TASK-005 | Add supersession, expiry, and branch-isolation rules so stale or cross-branch knowledge cannot silently pollute the truth stream. |  |  |
 | TASK-006 | Add a second-pass deterministic verifier for machine-extracted weekly findings before issue creation, planning updates, or long-lived memory storage. |  |  |
 
+### Implementation Phase 2A
+
+- **GOAL-002A**: Recover dream-cycle capability as a bounded offline-synthesis sub-lane over the evidence substrate.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-006A | Use `docs/HLF_DREAM_CYCLE_GAP_MAP.md` to classify dream surfaces as present, adjacent, or missing before implementation starts. | ✅ | 2026-03-20 |
+| TASK-006B | Use `docs/HLF_DREAM_CYCLE_BRIDGE_SPEC.md` as the implementation contract for a bounded dream-cycle bridge rooted in `hlf_mcp/server_context.py`, `hlf_mcp/server_memory.py`, `hlf_mcp/server_resources.py`, and `hlf_mcp/weekly_artifacts.py`. | ✅ | 2026-03-20 |
+| TASK-006C | Define the canonical `dream finding` and `dream cycle report` schemas with provenance, confidence, evidence refs, witness status, and advisory-only defaults. | ✅ | 2026-03-20 |
+| TASK-006D | Require any dream-derived proposal to cite its originating cycle and pass the same verification and promotion gates as all other autonomous-evolution candidates. |  |  |
+| TASK-006E | Use `docs/HLF_MULTIMODAL_MEDIA_RECOVERY_SPEC.md` to make multimodal evidence a first-class input class for dream-cycle and proposal lanes rather than a text-only afterthought. | ✅ | 2026-03-20 |
+| TASK-006F | Define how normalized media evidence objects join weekly artifacts, memory exemplars, and dream-finding provenance without bypassing safety or witness controls. | ✅ | 2026-03-20 |
+
 ### Implementation Phase 3
 
 - **GOAL-003**: Turn observed friction into bounded, governable proposals.
@@ -110,6 +123,9 @@ That is the path from inspirational recursive-improvement rhetoric to a professi
 - **DEP-004**: `docs/HLF_DESIGN_NORTH_STAR.md`
 - **DEP-005**: `docs/HLF_GOVERNANCE_CONTROL_MATRIX.md`
 - **DEP-006**: `docs/HLF_RECOVERY_ACCEPTANCE_GATES.md`
+- **DEP-006A**: `docs/HLF_DREAM_CYCLE_GAP_MAP.md`
+- **DEP-006B**: `docs/HLF_DREAM_CYCLE_BRIDGE_SPEC.md`
+- **DEP-006C**: `docs/HLF_MULTIMODAL_MEDIA_RECOVERY_SPEC.md`
 - **DEP-007**: `.github/workflows/weekly-doc-security.yml`
 - **DEP-008**: `.github/workflows/weekly-ethics-review.yml`
 - **DEP-009**: `.github/workflows/weekly-test-health.yml`
@@ -122,18 +138,25 @@ That is the path from inspirational recursive-improvement rhetoric to a professi
 - **FILE-003**: `HLF_MCP_TODO.md`
 - **FILE-004**: `docs/HLF_DESIGN_NORTH_STAR.md`
 - **FILE-005**: weekly automation workflows and support scripts under `.github/`
+- **FILE-006**: `docs/HLF_DREAM_CYCLE_GAP_MAP.md`
+- **FILE-007**: `docs/HLF_DREAM_CYCLE_BRIDGE_SPEC.md`
+- **FILE-008**: `docs/HLF_MULTIMODAL_MEDIA_RECOVERY_SPEC.md`
 
 ## 6. Testing
 
 - **TEST-001**: Add one deterministic validation path for weekly evidence artifacts before issue or memory promotion.
 - **TEST-002**: Add one proposal-schema validation test for bounded improvement proposals.
 - **TEST-003**: Add one lifecycle test proving autonomous-improvement candidates cannot bypass `VERIFY -> MERGE` gates.
+- **TEST-004**: Add one deterministic dream-cycle test proving findings are advisory, provenance-bound, and unable to mutate canonical truth by default.
+- **TEST-005**: Add one deterministic multimodal-evidence test proving image, OCR, audio-derived, and video-derived artifacts cannot influence dream or proposal lanes without schema validation, safety status, and provenance.
 
 ## 7. Risks & Assumptions
 
 - **RISK-001**: Strong vision language can create pressure to overclaim current delivery speed or correctness.
 - **RISK-002**: Weekly automation can become noisy if evidence verification and supersession are not implemented first.
 - **RISK-003**: Proposal generation without bounded scopes can collapse into generalized self-improvement theater.
+- **RISK-004**: Dream-cycle terminology can create overclaim unless every implementation and operator surface keeps the lane bounded to governed offline synthesis.
+- **RISK-005**: Multimodal evidence can smuggle unsafe or low-integrity artifacts into governed lanes unless the media schema and sanitization rules are explicit.
 - **ASSUMPTION-001**: The repo should aim for professional autonomous evolution, not uncontrolled self-modification.
 - **ASSUMPTION-002**: Operator trust and governance legibility are more important than maximal autonomy at this stage.
 
@@ -144,3 +167,6 @@ That is the path from inspirational recursive-improvement rhetoric to a professi
 - `docs/HLF_STITCHED_SYSTEM_VIEW.md`
 - `docs/HLF_GOVERNANCE_CONTROL_MATRIX.md`
 - `docs/HLF_RECOVERY_ACCEPTANCE_GATES.md`
+- `docs/HLF_DREAM_CYCLE_GAP_MAP.md`
+- `docs/HLF_DREAM_CYCLE_BRIDGE_SPEC.md`
+- `docs/HLF_MULTIMODAL_MEDIA_RECOVERY_SPEC.md`

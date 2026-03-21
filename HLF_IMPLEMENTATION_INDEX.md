@@ -1,134 +1,159 @@
 # HLF Implementation Index
 
-This document tracks all HLF enhancements implemented from the monolithic HLF discussion.
+Purpose:
 
-## Active 2026 Bridge Additions
+- provide a compact branch-aware index of meaningful HLF implementation surfaces in this checkout
+- distinguish packaged current truth from active bridge work
+- point readers to the stronger authority documents for exact claims
 
-### Pillar-mapped reconstruction backlog and operator handoff
-- **Status**: Active bridge lane
+Reading rule:
+
+- use `SSOT_HLF_MCP.md` for executable current truth
+- use `docs/HLF_CLAIM_LANES.md` when reusing wording from this file
+- use `docs/HLF_REPO_IMPLEMENTATION_MAP.md` for pillar-by-pillar packaged ownership
+- use `HLF_ACTIONABLE_PLAN.md` and `plan/architecture-hlf-reconstruction-2.md` for bridge sequencing
+
+## Packaged Current-Truth Anchors
+
+### Packaged FastMCP surface
+
+- **Status**: Current-true
 - **Files**:
-  - `docs/HLF_PILLAR_MAP.md`
-  - `docs/HLF_OPERATOR_BUILD_NOTES_2026-03-19.md`
-  - `plan/architecture-hlf-reconstruction-2.md`
-  - `HLF_MCP_TODO.md`
-  - `TODO.md`
-- **Purpose**: Normalize reconstruction work by constitutive pillar, separate packaged truth from bridge and source-only surfaces, and give future sessions an operator-facing handoff that prioritizes trust, audit, and multi-agent coordination work
-
-### Transcript-backed bridge artifacts
-- **Status**: Active bridge lane
-- **Files**:
-  - `docs/HLF_TRANSCRIPT_TARGET_STATE_BRIDGE_2026-03-18.md`
-  - `docs/HLF_TRANSCRIPT_MECHANISM_MAP_2026-03-18.md`
-  - `plan/feature-entropy-anchors-1.md`
-  - `plan/feature-witness-governance-1.md`
-- **Purpose**: Preserve transcript-derived design-intent evidence without overstating packaged truth, then turn the most implementation-ready mechanisms into ordered bridge plans
-
-### Entropy-anchor drift checks
-- **Status**: Partially implemented in packaged truth
-- **Files**:
-  - `hlf_mcp/hlf/entropy_anchor.py`
   - `hlf_mcp/server.py`
-  - `hlf_mcp/hlf/insaits.py`
-  - `hlf_mcp/hlf/audit_chain.py`
-  - `tests/test_entropy_anchor.py`
-- **Purpose**: Add an MCP-facing anti-drift check that compares packaged HLF meaning against an operator-readable baseline and emits structured audit events
-- **Build boundary**: This is a bounded HLF MCP build surface, not the full InsAIts daemon or full witness-governance network
+  - `hlf_mcp/server_core.py`
+  - `hlf_mcp/server_translation.py`
+  - `hlf_mcp/server_memory.py`
+  - `hlf_mcp/server_resources.py`
+- **Purpose**: Main product-facing HLF MCP assembly with packaged tools, resources, and transport handling
 
-## ✅ Completed Implementations
+### Deterministic language, runtime, and bytecode
 
-### Refinement 1: SQLite WAL for P0/P1 Hot Tier
-- **Status**: ✅ Complete
-- **Files**: 
-  - `/hlf/sqlite_hot_store.py` - SQLite-based hot tier implementation
-  - `/hlf/infinite_rag_hlf.py` - Modified Infinite RAG with tier switching
-- **Purpose**: Replace Redis with SQLite WAL for P0/P1 profiles
-- **Key Feature**: ACID-compliant, zero new dependencies
-
-### Refinement 2: Direct Ollama Cloud API
-- **Status**: ✅ Complete
+- **Status**: Current-true
 - **Files**:
-  - `/hlf/ollama_cloud_gateway.py` - Direct cloud API client
-  - `/hlf/model_gateway.py` - Model routing with cloud fallback
-- **Purpose**: Bypass local Ollama daemon, use `https://ollama.com/api` directly
-- **Key Feature**: Lower latency, single point of failure
+  - `hlf_mcp/hlf/compiler.py`
+  - `hlf_mcp/hlf/grammar.py`
+  - `hlf_mcp/hlf/formatter.py`
+  - `hlf_mcp/hlf/linter.py`
+  - `hlf_mcp/hlf/runtime.py`
+  - `hlf_mcp/hlf/bytecode.py`
+- **Purpose**: Canonical packaged HLF compile, format, lint, execute, and bytecode path
 
-### Refinement 3: Minimal Host-Function Set (P0)
-- **Status**: ✅ Complete
+### Governance, capsules, and trust enforcement
+
+- **Status**: Current-true to partial
 - **Files**:
-  - `/hlf/host_functions_minimal.py` - 5-function dispatcher
-  - `/spec/p0_host_functions.yaml` - P0 host function spec
-- **Functions**: READ_FILE, WRITE_FILE, WEB_SEARCH, STRUCTURED_OUTPUT, SELF_OBSERVE
-- **Purpose**: Express full HLF intelligence with minimal attack surface
+  - `hlf_mcp/hlf/capsules.py`
+  - `hlf_mcp/server_capsule.py`
+  - `hlf_mcp/hlf/memory_node.py`
+  - `hlf_mcp/hlf/execution_admission.py`
+  - `governance/align_rules.json`
+  - `governance/host_functions.json`
+- **Purpose**: Packaged tier boundaries, pointer trust, approval-aware execution, and fail-closed governance
 
-### P0/P1/P2 Profile Configurations
-- **Status**: ✅ Complete
+### Memory, witness, and weekly evidence substrate
+
+- **Status**: Current-true to partial
 - **Files**:
-  - `/hlf/profiles.py` - Profile management and detection
-  - `.env.hlf.p0`, `.env.hlf.p1`, `.env.hlf.p2` - Environment templates
-- **Purpose**: Configurable footprint from cloud-only to full sovereign
+  - `hlf_mcp/rag/memory.py`
+  - `hlf_mcp/hlf/witness_governance.py`
+  - `hlf_mcp/weekly_artifacts.py`
+  - `hlf_mcp/server_memory.py`
+  - `hlf_mcp/server_context.py`
+- **Purpose**: Governed memory storage, witness records, artifact persistence, and evidence-facing MCP access
 
-### Ollama Detector with Handshake
-- **Status**: ✅ Complete
-- **Files**: 
-  - `/scripts/ollama-detector.js` - Ollama detection and handshake
-  - `/scripts/start-complete.js` - 5-phase startup orchestration
-- **Purpose**: Automatic Ollama setup with signal verification
+## Active Bridge Additions In This Checkout
 
-### Health Check System
-- **Status**: ✅ Complete
+### Governed review normalization
+
+- **Status**: Bridge-true and implemented in this branch
 - **Files**:
-  - `/scripts/health-check.js` - Full system health monitoring
-  - `/app/api/health/route.ts` - Health API endpoint
-- **Purpose**: Real-time monitoring of all 9 services
+  - `hlf_mcp/governed_review.py`
+  - `tests/test_governed_review.py`
+- **Purpose**: Normalize review outputs for spec drift, test health, ethics review, code quality, doc accuracy, and security-pattern review into one operator-legible contract
 
-## 📊 Test Results
+### Operator evidence and weekly artifact decisions
 
-### P0 Profile (Cloud-only Core)
-- **Footprint**: Python + SQLite only (~50MB RAM idle)
-- **Inference**: Direct Ollama Cloud API
-- **Hot Tier**: SQLite WAL
-- **Host Functions**: 5 minimal functions
-- **Correctness**: 28/28 non-real-time tests pass ✅
+- **Status**: Bridge-true and implemented in this branch
+- **Files**:
+  - `hlf_mcp/weekly_artifacts.py`
+  - `hlf_mcp/evidence_query.py`
+  - `tests/test_weekly_artifacts.py`
+  - `tests/test_evidence_query.py`
+- **Purpose**: Persist weekly artifact decisions, load verified evidence, and expose operator-facing evidence review/reporting flows
 
-### P1 Profile (Cloud-assisted Workstation)
-- **Footprint**: P0 + LRU cache hot tier (~75MB RAM idle)
-- **Inference**: Ollama Cloud via optional local daemon
-- **Hot Tier**: LRU cache + SQLite WAL
-- **Host Functions**: Extended set
+### Governed routing and profile evidence
 
-### P2 Profile (Full Sovereign Lite)
-- **Footprint**: Full stack with Redis, agents (~200MB RAM idle)
-- **Inference**: Local Ollama daemon + Cloud fallback
-- **Hot Tier**: Redis + SQLite + Parquet
-- **Host Functions**: Complete set
+- **Status**: Partial packaged pillar with stronger branch proof
+- **Files**:
+  - `hlf_mcp/server_profiles.py`
+  - `hlf_mcp/hlf/model_catalog.py`
+  - `hlf_mcp/hlf/routing_trace.py`
+  - `tests/test_fastmcp_frontdoor.py`
+- **Purpose**: Evidence-aware route selection, capability catalogs, benchmark artifact persistence, and governed profile reporting
 
-## 🚀 Usage
+### Symbolic relation-edge proof slice
 
-```bash
-# Setup with profile selection
-bun run setup:hlf
+- **Status**: Bridge-true and implemented in this branch
+- **Files**:
+  - `hlf_mcp/hlf/symbolic_surfaces.py`
+  - `tests/test_symbolic_surfaces.py`
+- **Purpose**: Recover an ASCII-first semasiographic bridge surface for relation extraction, projection, explanation, and audit logging
 
-# Start with specific profile
-HLF_PROFILE=P0 bun run start:complete
-HLF_PROFILE=P1 bun run start:complete
-HLF_PROFILE=P2 bun run start:complete
+### Dream-cycle and multimodal evidence bridge slice
 
-# Health check
-bun run health
+- **Status**: Bridge-true and implemented in this branch
+- **Files**:
+  - `hlf_mcp/dream_cycle.py`
+  - `hlf_mcp/media_evidence.py`
+  - `hlf_mcp/server_context.py`
+  - `hlf_mcp/server_memory.py`
+  - `hlf_mcp/server_resources.py`
+  - `hlf_mcp/server_profiles.py`
+  - `tests/test_dream_cycle.py`
+- **Purpose**: Add advisory dream findings, media evidence normalization, citation-chain proposals, and multimodal contract resources without overclaiming full target-state autonomy or multimodal completion
 
-# Verify conformance
-bun run verify:hlf
-```
+### VS Code operator bridge scaffold
 
-## 🔧 For AI Assistant Use
+- **Status**: Bridge-true scaffold in this branch
+- **Files**:
+  - `extensions/hlf-vscode/README.md`
+  - `extensions/hlf-vscode/package.json`
+  - `extensions/hlf-vscode/src/*`
+- **Purpose**: Establish a claim-lane-aware operator shell and extension boundary over the packaged MCP surface
 
-This setup makes Frankenstein MCP fully operable by AI assistants:
-- Zero local dependencies for P0 (cloud-only)
-- Automatic Ollama detection and handshake
-- Structured output support via Ollama Cloud
-- Self-observation hooks for live monitoring
+## Internal Readiness Surfaces
 
----
-**Implementation Date**: 2025-06-12
-**Total Files Created**: 15+
-**Total Lines of Code**: 2000+
+### Canonical readiness scoring model
+
+- **Status**: Bridge-true internal planning authority
+- **Files**:
+  - `docs/HLF_READINESS_SCORING_MODEL.md`
+- **Purpose**: Define the repo's canonical internal percent model without flattening claim-lane discipline into fake completion claims
+
+### Pillar scorecard and internal dashboard
+
+- **Status**: Bridge-true internal planning authority
+- **Files**:
+  - `docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md`
+  - `docs/HLF_INTERNAL_READINESS_DASHBOARD_2026-03-20.md`
+  - `docs/HLF_READINESS_REFRESH_PROCEDURE.md`
+- **Purpose**: Convert existing pillar, proof, truth, and backlog surfaces into weighted repo, cluster, and per-pillar readiness percentages for internal use
+
+## Correction Notes
+
+- This file replaces an older, stale index that described unrelated or superseded implementation work.
+- It should not be used to argue that every bridge surface is complete.
+- It exists to stop public summaries from undercounting work already present in the active branch while preserving the repo's three-lane doctrine.
+
+## Related Files
+
+- `SSOT_HLF_MCP.md`
+- `docs/HLF_CLAIM_LANES.md`
+- `docs/HLF_REPO_IMPLEMENTATION_MAP.md`
+- `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`
+- `docs/HLF_READINESS_SCORING_MODEL.md`
+- `docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md`
+- `docs/HLF_INTERNAL_READINESS_DASHBOARD_2026-03-20.md`
+- `docs/HLF_READINESS_REFRESH_PROCEDURE.md`
+- `HLF_ACTIONABLE_PLAN.md`
+- `plan/architecture-hlf-reconstruction-2.md`

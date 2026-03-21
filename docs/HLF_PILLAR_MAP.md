@@ -121,6 +121,8 @@ Target disposition: `bridge_contract`
 - Create `docs/HLF_PERSONA_AND_OPERATOR_RECOVERY_SPEC.md` that maps persona files to review, escalation, and operator-facing behaviors.
 - Keep persona doctrine in docs and handoff flows until a bounded packaged integration contract exists.
 - Add operator workflow notes for steward, sentinel, strategist, and reviewer responsibilities.
+- Add `docs/HLF_INTERNAL_PERSONA_OPERATING_MODEL.md` and `docs/HLF_BRANCH_BOUNDED_MAINTAINER_PROTOCOL.md` as the concrete bridge contracts for responsibilities, approval gates, and bounded autonomy.
+- Add `docs/HLF_PERSONA_OWNERSHIP_MATRIX.json` as the machine-readable role map for persona-tagged outputs.
 - Add tests only when a packaged persona-aware boundary exists; until then, track this as doctrine and handoff work.
 
 ### 8. Gallery and Operator-Legibility Surface

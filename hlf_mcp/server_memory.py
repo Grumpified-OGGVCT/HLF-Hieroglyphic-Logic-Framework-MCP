@@ -22,17 +22,27 @@ def apply_memory_governance(
     source: str = "server_memory.hlf_memory_govern",
 ) -> dict[str, Any]:
     """Apply a governed memory intervention and emit the matching audit/governance records."""
-    governed_fact = ctx.memory_store.govern_fact(
-        action=action,
-        fact_id=fact_id,
-        sha256=sha256,
-        operator_summary=operator_summary,
-        governed_by=source,
-        reason=reason,
-        operator_id=operator_id,
-        operator_display_name=operator_display_name,
-        operator_channel=operator_channel,
-    )
+    try:
+        governed_fact = ctx.memory_store.govern_fact(
+            action=action,
+            fact_id=fact_id,
+            sha256=sha256,
+            operator_summary=operator_summary,
+            governed_by=source,
+            reason=reason,
+            operator_id=operator_id,
+            operator_display_name=operator_display_name,
+            operator_channel=operator_channel,
+        )
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "error": "invalid_request",
+            "message": str(exc),
+            "action": str(action).lower(),
+            "fact_id": fact_id,
+            "sha256": sha256,
+        }
     if governed_fact is None:
         return {"status": "not_found", "fact_id": fact_id, "sha256": sha256, "action": action}
 

@@ -569,6 +569,14 @@ def test_memory_governance_tool_and_resource_surface_governed_intervention() -> 
     )
 
 
+def test_memory_governance_tool_returns_structured_invalid_request() -> None:
+    result = server.hlf_memory_govern(action="unsupported-action")
+
+    assert result["status"] == "error"
+    assert result["error"] == "invalid_request"
+    assert "unsupported governance action" in result["message"]
+
+
 def test_memory_governance_resource_orders_multiple_interventions_for_same_fact() -> None:
     stored = server.hlf_memory_store(
         content="Govern this sequence fact",

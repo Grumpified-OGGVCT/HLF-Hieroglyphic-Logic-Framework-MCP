@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,13 +22,17 @@ HTML_OUTPUT = DOCS_DIR / "index.html"
 MERGE_HTML_OUTPUT = DOCS_DIR / "merge-readiness.html"
 CLAIMS_HTML_OUTPUT = DOCS_DIR / "claims-ledger.html"
 CSS_PATH = "assets/status-site.css"
-DOCS_BLOB_BASE = (
-    "https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP/blob/main/docs"
-)
 
 
 def _docs_blob_href(filename: str) -> str:
-    return f"{DOCS_BLOB_BASE}/{filename}"
+    repo = str(os.getenv("GITHUB_REPOSITORY", "")).strip()
+    normalized = filename.lstrip("/")
+    if repo:
+        branch = str(
+            os.getenv("GITHUB_HEAD_REF") or os.getenv("GITHUB_REF_NAME") or "main"
+        ).strip()
+        return f"https://github.com/{repo}/blob/{branch}/docs/{normalized}"
+    return normalized
 
 
 def _read_text(path: Path) -> str:
@@ -470,9 +475,13 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
     pillar_rows = "\n".join(
         f"| {row['name']} | `{row['score']:.1f}%` |" for row in dashboard["pillars"]
     )
-    weekly_rows = "\n".join(
-        f"| `{lane['source']}` | {lane['summary']} | `{lane['owner_persona']}` | `{lane['triage_lane']}` | `{lane['status']}` | `{lane['artifact_path']}` |"
-        for lane in lanes
+    weekly_rows = (
+        "\n".join(
+            f"| `{lane['source']}` | {lane['summary']} | `{lane['owner_persona']}` | `{lane['triage_lane']}` | `{lane['status']}` | `{lane['artifact_path']}` |"
+            for lane in lanes
+        )
+        if lanes
+        else "| `_No committed weekly artifacts were found in this checkout._` | - | - | - | `informational` | `local-only` |"
     )
     trend_rows = "\n".join(
         [
@@ -595,6 +604,8 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
         "| Lane | Latest Reading | Owner Persona | Triage Lane | Status | Artifact Path |",
         "| --- | --- | --- | --- | --- | --- |",
         weekly_rows,
+        "",
+        "_Note: Artifact paths under `observability/local_validation/...` are example/local-only locations used for governed runs and are not checked into this repository._",
         "",
         "### Why Weekly Results Are Separate",
         "",
@@ -946,6 +957,12 @@ def _render_cluster_cards(clusters: list[dict[str, Any]]) -> str:
 
 
 def _render_weekly_rows(lanes: list[dict[str, Any]]) -> str:
+    if not lanes:
+        return """
+        <tr>
+          <td colspan="6">No committed weekly artifacts were found in this checkout. Local-only governed runs may still exist outside the repository.</td>
+        </tr>
+        """.strip()
     return "\n".join(
         f"""
         <tr>
@@ -1277,6 +1294,7 @@ def render_status_index_html(data: dict[str, Any]) -> str:
           </table>
         </div>
         <p class="section-note">Weekly rows are evidence summaries. They show live governed workflow behavior, but they are not stand-ins for whole-repo completion.</p>
+        <p class="section-note">Artifact paths under <code>observability/local_validation/...</code> are example/local-only governed-run locations and are not checked into this repository.</p>
       </section>
 
     <section class="panel span-6 panel-brief">

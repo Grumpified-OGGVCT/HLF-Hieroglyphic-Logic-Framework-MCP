@@ -148,6 +148,8 @@ def _resource_command(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.command == "memory-govern" and args.fact_id is None and not args.sha256:
+        parser.error("memory-govern requires --fact-id or --sha256")
 
     if args.command == "do":
         return _do_command(args)

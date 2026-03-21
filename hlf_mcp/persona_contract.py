@@ -148,7 +148,9 @@ def _required_gates_for_change_class(change_class: str, matrix: dict[str, Any]) 
     ]
 
 
-def _resolve_change_class(source: str | None, review_type: str | None, matrix: dict[str, Any]) -> str:
+def _resolve_change_class(
+    source: str | None, review_type: str | None, matrix: dict[str, Any]
+) -> str:
     if isinstance(source, str) and source in _SOURCE_CHANGE_CLASS_MAP:
         return _SOURCE_CHANGE_CLASS_MAP[source]
     if review_type == "evolution_planning":
@@ -157,7 +159,9 @@ def _resolve_change_class(source: str | None, review_type: str | None, matrix: d
         return "workflow_contract"
     if review_type == "weekly_artifact" and source == "weekly-doc-accuracy":
         return "docs_truth"
-    fallback_classes = matrix.get("change_classes") if isinstance(matrix.get("change_classes"), dict) else {}
+    fallback_classes = (
+        matrix.get("change_classes") if isinstance(matrix.get("change_classes"), dict) else {}
+    )
     if "workflow_contract" in fallback_classes:
         return "workflow_contract"
     return next(iter(fallback_classes), "workflow_contract")
@@ -186,8 +190,12 @@ def _normalize_gate_results(
                 owner_persona = gate_states.get(gate_name, {}).get("owner_persona")
             normalized[gate_name] = {
                 "owner_persona": owner_persona,
-                "status": gate_value.get("status") if isinstance(gate_value.get("status"), str) else None,
-                "notes": gate_value.get("notes") if isinstance(gate_value.get("notes"), str) else None,
+                "status": gate_value.get("status")
+                if isinstance(gate_value.get("status"), str)
+                else None,
+                "notes": gate_value.get("notes")
+                if isinstance(gate_value.get("notes"), str)
+                else None,
             }
 
     for gate_name in required_gates:
@@ -226,7 +234,9 @@ def resolve_persona_contract(
     valid_personas = _valid_personas(matrix)
 
     change_class = existing.get("change_class")
-    if not isinstance(change_class, str) or change_class not in (matrix.get("change_classes") or {}):
+    if not isinstance(change_class, str) or change_class not in (
+        matrix.get("change_classes") or {}
+    ):
         change_class = _resolve_change_class(source, review_type, matrix)
 
     lane = existing.get("lane")
@@ -234,7 +244,9 @@ def resolve_persona_contract(
         lane = str(matrix.get("lane") or "bridge-true")
 
     required_gates = existing.get("required_gates")
-    if not isinstance(required_gates, list) or any(not isinstance(item, str) for item in required_gates):
+    if not isinstance(required_gates, list) or any(
+        not isinstance(item, str) for item in required_gates
+    ):
         required_gates = _required_gates_for_change_class(change_class, matrix)
     required_gates = [gate for gate in required_gates if gate in _gate_states(matrix)]
 
@@ -255,7 +267,11 @@ def resolve_persona_contract(
         review_personas = []
         for gate_name in required_gates:
             owner = gate_results.get(gate_name, {}).get("owner_persona")
-            if isinstance(owner, str) and owner not in {"operator", owner_persona} and owner not in review_personas:
+            if (
+                isinstance(owner, str)
+                and owner not in {"operator", owner_persona}
+                and owner not in review_personas
+            ):
                 review_personas.append(owner)
 
     escalate_to_persona = existing.get("escalate_to_persona")
@@ -277,7 +293,9 @@ def resolve_persona_contract(
     operator_summary = existing.get("operator_summary")
     if not isinstance(operator_summary, str) or not operator_summary:
         gates_text = ", ".join(required_gates) if required_gates else "no explicit persona gates"
-        review_text = ", ".join(review_personas) if review_personas else "no secondary persona reviews"
+        review_text = (
+            ", ".join(review_personas) if review_personas else "no secondary persona reviews"
+        )
         operator_summary = (
             f"Owner persona {owner_persona}; review personas {review_text}; "
             f"required gates {gates_text}."
@@ -304,7 +322,9 @@ def validate_persona_contract(review: Any, errors: list[str]) -> None:
     matrix = load_persona_matrix()
     valid_personas = _valid_personas(matrix)
     gate_states = _gate_states(matrix)
-    change_classes = matrix.get("change_classes") if isinstance(matrix.get("change_classes"), dict) else {}
+    change_classes = (
+        matrix.get("change_classes") if isinstance(matrix.get("change_classes"), dict) else {}
+    )
 
     change_class = review.get("change_class")
     if not isinstance(change_class, str) or change_class not in change_classes:

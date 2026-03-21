@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -703,7 +704,7 @@ class ServerContext:
             }
 
         created_at = datetime.now(UTC).replace(microsecond=0).isoformat()
-        seed = "|".join([created_at, normalized_lane, *normalized_finding_ids])
+        seed = "|".join([created_at, normalized_lane, *normalized_finding_ids, uuid.uuid4().hex])
         proposal_id = f"dream-proposal-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:12]}"
 
         normalized_plan = [
@@ -842,7 +843,7 @@ class ServerContext:
         media_evidence: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         created_at = datetime.now(UTC).replace(microsecond=0).isoformat()
-        cycle_id = f"dream-cycle-{hashlib.sha256(created_at.encode('utf-8')).hexdigest()[:12]}"
+        cycle_id = f"dream-cycle-{hashlib.sha256((created_at + uuid.uuid4().hex).encode('utf-8')).hexdigest()[:12]}"
 
         try:
             normalized_media = normalize_media_evidence(media_evidence)

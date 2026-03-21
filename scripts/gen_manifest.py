@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GOVERNANCE_DIR = REPO_ROOT / "governance"
 MANIFEST_PATH = GOVERNANCE_DIR / "MANIFEST.sha256"
@@ -14,6 +13,7 @@ TRACKED_FILES = (
     "align_rules.json",
     "bytecode_spec.yaml",
     "host_functions.json",
+    "model_qualification_profiles.json",
     "tag_i18n.yaml",
 )
 

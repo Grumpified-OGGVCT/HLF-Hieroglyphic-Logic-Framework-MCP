@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from hlf_mcp.server_profiles import (
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _GOVERNANCE_DIR = _PACKAGE_DIR.parent / "governance"
 _FIXTURE_DIR_CANDIDATES = [_PACKAGE_DIR.parent / "fixtures", _PACKAGE_DIR / "fixtures"]
+_log = logging.getLogger(__name__)
 
 
 def _read_governance_file(filename: str) -> str:
@@ -61,16 +63,60 @@ def _read_fixture_file(name: str) -> str:
     )
 
 
-def _get_fixture_dir() -> Path:
+def _get_fixture_dir() -> Path | None:
     for path in _FIXTURE_DIR_CANDIDATES:
         if path.exists():
             return path
-    return _FIXTURE_DIR_CANDIDATES[0]
+    return None
 
 
 def _build_fixture_gallery_report(ctx: object | None) -> dict[str, object]:
     fixture_dir = _get_fixture_dir()
+    if fixture_dir is None:
+        return {
+            "status": "error",
+            "error": "fixtures_directory_missing",
+            "message": (
+                "No fixtures/ directory found. Checked: "
+                + ", ".join(str(p) for p in _FIXTURE_DIR_CANDIDATES)
+            ),
+            "gallery": {
+                "surface_type": "generated_report",
+                "report_id": "fixture_gallery",
+                "grounded_in_packaged_truth": False,
+                "fixture_dir": None,
+                "summary": {
+                    "fixture_count": 0,
+                    "compile_ok_count": 0,
+                    "compile_failed_count": 0,
+                    "bytecode_ok_count": 0,
+                    "bytecode_failed_count": 0,
+                },
+                "entries": [],
+            },
+        }
+
     fixtures = sorted(fixture_dir.glob("*.hlf"))
+    if not fixtures:
+        return {
+            "status": "warning",
+            "warning": "no_fixtures_found",
+            "message": f"No .hlf fixtures found in fixtures directory: {fixture_dir}",
+            "gallery": {
+                "surface_type": "generated_report",
+                "report_id": "fixture_gallery",
+                "grounded_in_packaged_truth": False,
+                "fixture_dir": str(fixture_dir),
+                "summary": {
+                    "fixture_count": 0,
+                    "compile_ok_count": 0,
+                    "compile_failed_count": 0,
+                    "bytecode_ok_count": 0,
+                    "bytecode_failed_count": 0,
+                },
+                "entries": [],
+            },
+        }
 
     compiler = getattr(ctx, "compiler", None)
     if compiler is None:
@@ -619,8 +665,24 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
     def get_host_functions() -> str:
         """Available HLF host function registry from the packaged governed contract surface."""
         if ctx is not None and hasattr(ctx, "host_registry"):
-            return json.dumps(ctx.host_registry.list_all(), indent=2)
-        return _read_governance_file("host_functions.json")
+            normalized: dict[str, object] = {"functions": ctx.host_registry.list_all()}
+        else:
+            raw_text = _read_governance_file("host_functions.json")
+            try:
+                data = json.loads(raw_text)
+            except (json.JSONDecodeError, ValueError):
+                data = []
+            if isinstance(data, dict) and "functions" in data:
+                normalized = data
+            elif isinstance(data, list):
+                normalized = {"functions": data}
+            else:
+                _log.warning(
+                    "host_functions.json has unexpected top-level type %s; wrapping in functions list",
+                    type(data).__name__,
+                )
+                normalized = {"functions": [data]}
+        return json.dumps(normalized, indent=2)
 
     @mcp.resource("hlf://examples/{name}")
     def get_example(name: str) -> str:

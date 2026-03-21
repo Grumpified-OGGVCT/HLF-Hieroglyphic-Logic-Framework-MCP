@@ -21,6 +21,12 @@ def test_build_spec_sentinel_governed_review_warns_on_drift() -> None:
     assert review["automation_status"] == "generated"
     assert review["severity"] == "warning"
     assert review["recommended_triage_lane"] == "current_batch"
+    assert review["change_class"] == "workflow_contract"
+    assert review["owner_persona"] == "steward"
+    assert "sentinel" in review["review_personas"]
+    assert "operator_promotion" in review["required_gates"]
+    assert review["escalate_to_persona"] == "strategist"
+    assert review["handoff_template_ref"] == "governance/templates/persona_review_handoff.md"
 
 
 def test_build_test_health_governed_review_escalates_low_coverage() -> None:
@@ -45,6 +51,9 @@ def test_build_test_health_governed_review_escalates_low_coverage() -> None:
     )
     assert review["review_metadata"]["existing_test_context_present"] is True
     assert "advisory only" in review["summary"]
+    assert review["change_class"] == "workflow_contract"
+    assert review["owner_persona"] == "steward"
+    assert review["escalate_to_persona"] == "sentinel"
 
 
 def test_build_ethics_review_governed_review_ignores_no_actionable_findings() -> None:
@@ -74,6 +83,9 @@ def test_build_code_quality_governed_review_warns_on_open_alerts() -> None:
 
     assert review["severity"] == "warning"
     assert review["recommended_triage_lane"] == "backlog"
+    assert review["change_class"] == "security_sensitive"
+    assert review["owner_persona"] == "sentinel"
+    assert "steward" in review["review_personas"]
 
 
 def test_build_doc_accuracy_governed_review_marks_drift_as_backlog() -> None:
@@ -91,6 +103,9 @@ def test_build_doc_accuracy_governed_review_marks_drift_as_backlog() -> None:
 
     assert review["severity"] == "warning"
     assert review["recommended_triage_lane"] == "backlog"
+    assert review["change_class"] == "docs_truth"
+    assert review["owner_persona"] == "herald"
+    assert "chronicler" in review["review_personas"]
 
 
 def test_build_security_patterns_governed_review_escalates_actionable_findings() -> None:
@@ -107,3 +122,36 @@ def test_build_security_patterns_governed_review_escalates_actionable_findings()
     assert review["severity"] == "critical"
     assert review["recommended_triage_lane"] == "current_batch"
     assert review["backend"]["model"] == "deepseek-r1:14b"
+    assert review["change_class"] == "security_sensitive"
+    assert review["owner_persona"] == "sentinel"
+    assert review["escalate_to_persona"] == "operator"
+
+
+def test_normalize_governed_review_recomputes_contract_from_input_review_type() -> None:
+    from hlf_mcp.governed_review import normalize_governed_review
+
+    review = normalize_governed_review(
+        {
+            "review_type": "evolution_planning",
+            "summary": "Plan the next bridge tranche.",
+            "severity": "warning",
+            "automation_status": "generated",
+            "operator_gate_required": True,
+            "recommended_triage_lane": "backlog",
+            "backend": {},
+            "pillar_assessments": [],
+            "recommended_actions": [],
+            "evidence_refs": [],
+            "escalation_triggers": [],
+        },
+        source="manual-plan",
+    )
+
+    assert review["change_class"] == "planning_only"
+    assert review["owner_persona"] == "strategist"
+    assert review["required_gates"] == [
+        "strategist_review",
+        "chronicler_review",
+        "cove_review",
+        "operator_promotion",
+    ]

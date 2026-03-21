@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from hlf_mcp.dream_cycle import DreamCycleReport, build_dream_findings
 from hlf_mcp.hlf.align_governor import AlignGovernor
 from hlf_mcp.hlf.approval_ledger import ApprovalLedger
 from hlf_mcp.hlf.audit_chain import AuditChain
@@ -24,6 +26,7 @@ from hlf_mcp.hlf.governance_events import (
     GovernanceStatus,
 )
 from hlf_mcp.hlf.linter import HLFLinter
+from hlf_mcp.hlf.memory_node import build_pointer_ref
 from hlf_mcp.hlf.registry import HostFunctionRegistry
 from hlf_mcp.hlf.runtime import HLFRuntime
 from hlf_mcp.hlf.tool_dispatch import ToolRegistry
@@ -33,7 +36,9 @@ from hlf_mcp.hlf.witness_governance import (
     WitnessRecommendedAction,
 )
 from hlf_mcp.instinct.lifecycle import InstinctLifecycle
+from hlf_mcp.media_evidence import MediaEvidenceRecord, normalize_media_evidence
 from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar, RAGMemory
+from hlf_mcp.weekly_artifacts import load_verified_weekly_artifacts, summarize_weekly_artifacts
 
 
 @dataclass(slots=True)
@@ -54,6 +59,10 @@ class ServerContext:
     session_model_catalogs: dict[str, dict[str, Any]]
     session_benchmark_artifacts: dict[str, dict[str, Any]]
     session_governed_routes: dict[str, dict[str, Any]]
+    session_media_evidence: dict[str, dict[str, Any]]
+    session_dream_cycles: dict[str, dict[str, Any]]
+    session_dream_findings: dict[str, dict[str, Any]]
+    session_dream_proposals: dict[str, dict[str, Any]]
     witness_governance: WitnessGovernance
     approval_ledger: ApprovalLedger
     audit_chain: AuditChain
@@ -562,6 +571,686 @@ class ServerContext:
                 variables["_model_lane_summary"] = catalog.get("agent_lane_summary", {})
         return variables
 
+    def _find_memory_fact(
+        self,
+        *,
+        entry_kind: str,
+        artifact_id: str | None = None,
+        sha256: str | None = None,
+    ) -> dict[str, Any] | None:
+        for fact in self.memory_store.query_facts(
+            entry_kind=entry_kind,
+            include_stale=True,
+            include_superseded=True,
+            include_revoked=True,
+        ):
+            metadata = dict(fact.get("metadata") or {})
+            if artifact_id and str(metadata.get("artifact_id") or "") == artifact_id:
+                return fact
+            if sha256 and str(fact.get("sha256") or "") == sha256:
+                return fact
+        return None
+
+    def persist_media_evidence(
+        self,
+        media_evidence: list[MediaEvidenceRecord],
+    ) -> list[dict[str, Any]]:
+        persisted: list[dict[str, Any]] = []
+        for item in media_evidence:
+            summary = (
+                item.operator_summary
+                or f"Normalized {item.media_type} evidence for governed review"
+            )
+            metadata = {
+                **item.to_dict(),
+                "artifact_id": item.artifact_id,
+                "operator_summary": summary,
+                "provenance": dict(item.provenance),
+                "governed_evidence": {
+                    "source_class": "media_evidence",
+                    "source_type": "multimodal_evidence",
+                    "source": item.provenance.get("source")
+                    or item.provenance.get("collector")
+                    or "server_context.persist_media_evidence",
+                    "source_path": item.source_path or item.provenance.get("artifact_path"),
+                    "artifact_id": item.artifact_id,
+                    "collector": item.provenance.get("collector")
+                    or "server_context.persist_media_evidence",
+                    "collected_at": item.collected_at,
+                    "confidence": item.confidence,
+                    "trust_tier": item.trust_tier,
+                    "operator_summary": summary,
+                },
+            }
+            stored = self.memory_store.store(
+                item.render_content(),
+                topic="hlf_media_evidence",
+                confidence=float(item.confidence),
+                provenance=str(
+                    item.provenance.get("collector")
+                    or item.provenance.get("source")
+                    or "server_context.persist_media_evidence"
+                ),
+                tags=["media", item.media_type, "governed"],
+                entry_kind="media_evidence",
+                metadata=metadata,
+            )
+            evidence = stored.get("evidence")
+            memory_ref = {"id": stored.get("id"), "sha256": stored.get("sha256")}
+            if evidence is None:
+                existing = self._find_memory_fact(
+                    entry_kind="media_evidence",
+                    artifact_id=item.artifact_id,
+                    sha256=str(stored.get("sha256") or item.sha256),
+                )
+                if existing is not None:
+                    evidence = existing.get("evidence")
+                    memory_ref = {
+                        "id": existing.get("id"),
+                        "sha256": existing.get("sha256"),
+                    }
+            payload = {
+                **item.to_dict(),
+                "memory_ref": memory_ref,
+                "memory_evidence": evidence,
+            }
+            self.session_media_evidence[item.artifact_id] = payload
+            persisted.append(payload)
+        return persisted
+
+    def list_media_evidence(self, *, media_type: str | None = None) -> dict[str, Any]:
+        evidence = list(self.session_media_evidence.values())
+        if media_type:
+            evidence = [item for item in evidence if item.get("media_type") == media_type]
+        evidence.sort(key=lambda item: str(item.get("collected_at", "")), reverse=True)
+        return {"media_evidence": evidence, "count": len(evidence)}
+
+    def get_media_evidence(self, artifact_id: str) -> dict[str, Any] | None:
+        return self.session_media_evidence.get(artifact_id)
+
+    def create_dream_proposal(
+        self,
+        *,
+        finding_ids: list[str],
+        title: str,
+        summary: str,
+        lane: str = "bridge",
+        proposal_text: str = "",
+        verification_plan: list[str] | None = None,
+    ) -> dict[str, Any]:
+        allowed_lanes = {"vision", "bridge", "current_truth"}
+        normalized_lane = str(lane or "bridge")
+        if normalized_lane not in allowed_lanes:
+            return {
+                "status": "error",
+                "error": "invalid_lane",
+                "allowed_lanes": sorted(allowed_lanes),
+            }
+
+        normalized_finding_ids = [str(item) for item in finding_ids if str(item)]
+        if not normalized_finding_ids:
+            return {"status": "error", "error": "finding_ids_required"}
+
+        findings: list[dict[str, Any]] = []
+        missing_finding_ids: list[str] = []
+        for finding_id in normalized_finding_ids:
+            finding = self.get_dream_finding(finding_id)
+            if finding is None:
+                missing_finding_ids.append(finding_id)
+                continue
+            findings.append(finding)
+        if missing_finding_ids:
+            return {
+                "status": "error",
+                "error": "dream_findings_not_found",
+                "missing_finding_ids": missing_finding_ids,
+            }
+
+        created_at = datetime.now(UTC).replace(microsecond=0).isoformat()
+        seed = "|".join([created_at, normalized_lane, *normalized_finding_ids, uuid.uuid4().hex])
+        proposal_id = f"dream-proposal-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:12]}"
+
+        normalized_plan = [
+            str(item).strip() for item in (verification_plan or []) if str(item).strip()
+        ]
+        if not normalized_plan:
+            normalized_plan = [
+                "produce an explicit verification artifact before any promotion decision",
+                "record operator review before promote transition",
+            ]
+
+        cited_media_evidence_ids = sorted(
+            {
+                str(ref.get("artifact_id") or "")
+                for finding in findings
+                for ref in (finding.get("evidence_refs") or [])
+                if str(ref.get("kind") or "") == "media_evidence"
+                and str(ref.get("artifact_id") or "")
+            }
+        )
+        cited_memory_fact_ids = [
+            str((finding.get("memory_ref") or {}).get("id") or "")
+            for finding in findings
+            if str((finding.get("memory_ref") or {}).get("id") or "")
+        ]
+        witness_record_ids = sorted(
+            {
+                str((finding.get("provenance") or {}).get("witness_record_id") or "")
+                for finding in findings
+                if str((finding.get("provenance") or {}).get("witness_record_id") or "")
+            }
+        )
+        citation_chain = {
+            "observe": {
+                "finding_ids": normalized_finding_ids,
+                "memory_fact_ids": cited_memory_fact_ids,
+                "media_evidence_ids": cited_media_evidence_ids,
+                "witness_record_ids": witness_record_ids,
+            },
+            "propose": {
+                "proposal_id": proposal_id,
+                "lane": normalized_lane,
+                "title": title,
+                "summary": summary,
+                "proposal_text": proposal_text,
+            },
+            "verify": {
+                "required": True,
+                "status": "pending",
+                "verification_plan": normalized_plan,
+                "verification_artifact_ids": [],
+            },
+            "promote": {
+                "eligible": False,
+                "status": "blocked_pending_verify",
+                "blocked_by": ["verify_stage_incomplete", "operator_gate_required"],
+            },
+        }
+        proposal = {
+            "proposal_id": proposal_id,
+            "created_at": created_at,
+            "lane": normalized_lane,
+            "title": title,
+            "summary": summary,
+            "proposal_text": proposal_text,
+            "status": "proposed",
+            "advisory_only": True,
+            "cited_finding_ids": normalized_finding_ids,
+            "cited_media_evidence_ids": cited_media_evidence_ids,
+            "citation_chain": citation_chain,
+            "promotion_gate": citation_chain["promote"],
+        }
+        stored = self.memory_store.store(
+            json.dumps(proposal, ensure_ascii=False, sort_keys=True),
+            topic="hlf_dream_proposals",
+            confidence=0.72,
+            provenance="server_context.create_dream_proposal",
+            tags=["dream", "proposal", normalized_lane],
+            entry_kind="dream_proposal",
+            metadata={
+                **proposal,
+                "artifact_id": proposal_id,
+                "operator_summary": summary,
+                "governed_evidence": {
+                    "source_class": "dream_proposal",
+                    "source_type": "proposal_lane",
+                    "source": "server_context.create_dream_proposal",
+                    "artifact_id": proposal_id,
+                    "collector": "server_context.create_dream_proposal",
+                    "collected_at": created_at,
+                    "trust_tier": "advisory",
+                    "operator_summary": summary,
+                },
+            },
+        )
+        governance_event = self.emit_governance_event(
+            kind="proposal_lane",
+            source="server_context.create_dream_proposal",
+            action="create_dream_proposal",
+            status="pending",
+            severity="info",
+            subject_id=proposal_id,
+            goal_id=normalized_lane,
+            details={
+                "cited_finding_ids": normalized_finding_ids,
+                "cited_media_evidence_ids": cited_media_evidence_ids,
+                "verification_plan": normalized_plan,
+            },
+            agent_role="proposal_lane",
+        )
+        payload = {
+            **proposal,
+            "memory_ref": {"id": stored.get("id"), "sha256": stored.get("sha256")},
+            "memory_evidence": stored.get("evidence"),
+            "governance_event": governance_event,
+        }
+        self.session_dream_proposals[proposal_id] = payload
+        return {"status": "ok", "proposal": payload}
+
+    def list_dream_proposals(self, *, lane: str | None = None) -> dict[str, Any]:
+        proposals = list(self.session_dream_proposals.values())
+        if lane:
+            proposals = [item for item in proposals if item.get("lane") == lane]
+        proposals.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+        return {"proposals": proposals, "count": len(proposals)}
+
+    def get_dream_proposal(self, proposal_id: str) -> dict[str, Any] | None:
+        return self.session_dream_proposals.get(proposal_id)
+
+    def run_dream_cycle(
+        self,
+        *,
+        metrics_dir: str | None = None,
+        max_artifacts: int = 3,
+        max_facts: int = 10,
+        media_evidence: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        created_at = datetime.now(UTC).replace(microsecond=0).isoformat()
+        cycle_id = f"dream-cycle-{hashlib.sha256((created_at + uuid.uuid4().hex).encode('utf-8')).hexdigest()[:12]}"
+
+        try:
+            normalized_media = normalize_media_evidence(media_evidence)
+        except ValueError as exc:
+            return {
+                "status": "error",
+                "error": "invalid_media_evidence",
+                "validation_errors": [str(exc)],
+            }
+
+        persisted_media = self.persist_media_evidence(normalized_media) if normalized_media else []
+
+        resolved_metrics_dir = Path(metrics_dir).expanduser() if metrics_dir else None
+        weekly_artifacts = load_verified_weekly_artifacts(
+            resolved_metrics_dir,
+            verified_only=False,
+        )[: max(0, max_artifacts)]
+
+        memory_candidates = self.memory_store.query_facts(
+            include_stale=False,
+            include_superseded=False,
+            include_revoked=False,
+        )
+        allowed_entry_kinds = {
+            "benchmark_artifact",
+            "hks_exemplar",
+            "media_evidence",
+            "witness_observation",
+        }
+        memory_facts = [
+            fact for fact in memory_candidates if str(fact.get("entry_kind")) in allowed_entry_kinds
+        ][: max(0, max_facts)]
+
+        witness_record = self.record_witness_observation(
+            subject_agent_id=cycle_id,
+            category="dream_cycle_run",
+            witness_id="dream-cycle",
+            severity="info",
+            confidence=1.0,
+            source="server_context.run_dream_cycle",
+            evidence_text="Bounded dream-cycle run over governed evidence.",
+            recommended_action="observe",
+            details={
+                "artifact_count": len(weekly_artifacts),
+                "memory_fact_count": len(memory_facts),
+                "media_artifact_count": len(persisted_media),
+            },
+            negative=False,
+        )
+
+        findings = build_dream_findings(
+            cycle_id=cycle_id,
+            created_at=created_at,
+            weekly_artifacts=weekly_artifacts,
+            memory_facts=memory_facts,
+            media_evidence=normalized_media,
+            witness_record_id=str(witness_record["governance_event"]["event"]["event_id"]),
+        )
+
+        persisted_findings: list[dict[str, Any]] = []
+        for finding in findings:
+            finding_dict = finding.to_dict()
+            finding_record = self.memory_store.store(
+                finding.render_content(),
+                topic="hlf_dream_findings",
+                confidence=float(finding.confidence),
+                provenance="server_context.run_dream_cycle",
+                tags=["dream", finding.topic, "advisory"],
+                entry_kind="dream_finding",
+                metadata={
+                    **finding_dict,
+                    "artifact_id": finding.finding_id,
+                    "operator_summary": finding.summary,
+                    "provenance": dict(finding.provenance),
+                    "governed_evidence": {
+                        "source_class": "dream_finding",
+                        "source_type": "dream_cycle",
+                        "source": "server_context.run_dream_cycle",
+                        "artifact_id": finding.finding_id,
+                        "collector": "server_context.run_dream_cycle",
+                        "collected_at": finding.created_at,
+                        "trust_tier": "advisory",
+                        "operator_summary": finding.summary,
+                    },
+                },
+            )
+            finding_payload = {
+                **finding_dict,
+                "memory_ref": {
+                    "id": finding_record.get("id"),
+                    "sha256": finding_record.get("sha256"),
+                },
+                "memory_evidence": finding_record.get("evidence"),
+            }
+            self.session_dream_findings[finding.finding_id] = finding_payload
+            persisted_findings.append(finding_payload)
+
+        report = DreamCycleReport(
+            cycle_id=cycle_id,
+            started_at=created_at,
+            completed_at=datetime.now(UTC).replace(microsecond=0).isoformat(),
+            input_window="bounded_governed_recent",
+            artifact_count=len(weekly_artifacts) + len(memory_facts),
+            media_artifact_count=len(persisted_media),
+            finding_count=len(persisted_findings),
+            high_confidence_count=sum(
+                1 for finding in persisted_findings if finding["confidence"] >= 0.8
+            ),
+            status="completed",
+            witness_record_id=str(witness_record["governance_event"]["event"]["event_id"]),
+            artifact_ids=[str(artifact.get("artifact_id", "")) for artifact in weekly_artifacts],
+            finding_ids=[finding["finding_id"] for finding in persisted_findings],
+        )
+        report_dict = report.to_dict()
+        report_record = self.memory_store.store(
+            json.dumps(report_dict, ensure_ascii=False, sort_keys=True),
+            topic="hlf_dream_cycles",
+            confidence=1.0,
+            provenance="server_context.run_dream_cycle",
+            tags=["dream", "cycle", "advisory"],
+            entry_kind="dream_cycle_report",
+            metadata={
+                **report_dict,
+                "artifact_id": cycle_id,
+                "operator_summary": (
+                    f"Dream cycle {cycle_id} completed with {report.finding_count} finding(s)."
+                ),
+                "provenance": {
+                    "source_type": "dream_cycle",
+                    "source": "server_context.run_dream_cycle",
+                    "collector": "server_context.run_dream_cycle",
+                    "collected_at": report.completed_at,
+                },
+                "governed_evidence": {
+                    "source_class": "dream_cycle_report",
+                    "source_type": "dream_cycle",
+                    "source": "server_context.run_dream_cycle",
+                    "artifact_id": cycle_id,
+                    "collector": "server_context.run_dream_cycle",
+                    "collected_at": report.completed_at,
+                    "trust_tier": "advisory",
+                    "operator_summary": (
+                        f"Dream cycle {cycle_id} completed with {report.finding_count} finding(s)."
+                    ),
+                },
+            },
+        )
+        governance_event = self.emit_governance_event(
+            kind="dream_cycle",
+            source="server_context.run_dream_cycle",
+            action="run_dream_cycle",
+            subject_id=cycle_id,
+            goal_id="hlf_dream_cycle",
+            details={
+                "report": report_dict,
+                "memory_report_id": report_record.get("id"),
+                "memory_report_sha256": report_record.get("sha256"),
+            },
+            related_refs=[
+                {
+                    "kind": "witness_observation",
+                    "event_id": str(witness_record["governance_event"]["event"]["event_id"]),
+                    "trace_id": str(
+                        witness_record["governance_event"]["event"].get("trace_id", "")
+                    ),
+                }
+            ],
+            agent_role="dream_cycle",
+        )
+        report_payload = {
+            **report_dict,
+            "memory_ref": {"id": report_record.get("id"), "sha256": report_record.get("sha256")},
+            "memory_evidence": report_record.get("evidence"),
+            "governance_event": governance_event,
+        }
+        self.session_dream_cycles[cycle_id] = report_payload
+        return {
+            "status": "ok",
+            "report": report_payload,
+            "findings": persisted_findings,
+            "media_evidence": persisted_media,
+            "advisory_only": True,
+        }
+
+    def list_dream_findings(
+        self,
+        *,
+        cycle_id: str | None = None,
+        topic: str | None = None,
+        min_confidence: float = 0.0,
+    ) -> dict[str, Any]:
+        findings = list(self.session_dream_findings.values())
+        if cycle_id:
+            findings = [finding for finding in findings if finding.get("cycle_id") == cycle_id]
+        if topic:
+            findings = [finding for finding in findings if finding.get("topic") == topic]
+        findings = [
+            finding
+            for finding in findings
+            if float(finding.get("confidence", 0.0)) >= min_confidence
+        ]
+        findings.sort(key=lambda finding: str(finding.get("created_at", "")), reverse=True)
+        return {"findings": findings, "count": len(findings)}
+
+    def get_dream_finding(self, finding_id: str) -> dict[str, Any] | None:
+        return self.session_dream_findings.get(finding_id)
+
+    def get_dream_cycle_status(self) -> dict[str, Any]:
+        cycles = list(self.session_dream_cycles.values())
+        findings = list(self.session_dream_findings.values())
+        latest_cycle = cycles[-1] if cycles else None
+        return {
+            "total_cycles": len(cycles),
+            "total_findings": len(findings),
+            "total_media_evidence": len(self.session_media_evidence),
+            "total_proposals": len(self.session_dream_proposals),
+            "high_confidence_findings": sum(
+                1 for finding in findings if float(finding.get("confidence", 0.0)) >= 0.8
+            ),
+            "latest_cycle": latest_cycle,
+        }
+
+    def summarize_provenance_contract(
+        self,
+        *,
+        metrics_dir: str | None = None,
+        memory_limit: int = 8,
+        governance_limit: int = 12,
+    ) -> dict[str, Any]:
+        memory_facts = self.memory_store.all_facts()
+        memory_entry_kind_counts: dict[str, int] = {}
+        memory_state_counts: dict[str, int] = {
+            "active": 0,
+            "stale": 0,
+            "superseded": 0,
+            "revoked": 0,
+            "tombstoned": 0,
+        }
+        recent_memory_facts: list[dict[str, Any]] = []
+        pointer_chain_entries: list[dict[str, Any]] = []
+        superseding_pointer_count = 0
+
+        for fact in memory_facts:
+            entry_kind = str(fact.get("entry_kind") or "fact")
+            memory_entry_kind_counts[entry_kind] = memory_entry_kind_counts.get(entry_kind, 0) + 1
+
+            evidence = dict(fact.get("evidence") or {})
+            metadata = dict(fact.get("metadata") or {})
+            state = str(evidence.get("state") or "active")
+            if state not in memory_state_counts:
+                memory_state_counts[state] = 0
+            memory_state_counts[state] += 1
+
+            pointer_alias = f"{fact.get('topic') or 'general'}-{fact.get('id') or 'entry'}"
+            pointer = build_pointer_ref(pointer_alias, str(fact.get("sha256") or ""))
+            supersedes = str(evidence.get("supersedes") or fact.get("supersedes_sha256") or "")
+            if supersedes:
+                superseding_pointer_count += 1
+
+            if len(pointer_chain_entries) < max(1, memory_limit):
+                pointer_chain_entries.append(
+                    {
+                        "id": fact.get("id"),
+                        "topic": fact.get("topic"),
+                        "sha256": fact.get("sha256"),
+                        "pointer": pointer,
+                        "pointer_alias": pointer_alias,
+                        "state": state,
+                        "freshness_status": evidence.get("freshness_status"),
+                        "revoked": evidence.get("revoked", False),
+                        "tombstoned": evidence.get("tombstoned", False),
+                        "superseded": evidence.get("superseded", False),
+                        "supersedes": supersedes,
+                        "trust_tier": evidence.get("trust_tier"),
+                        "artifact_id": evidence.get("artifact_id"),
+                    }
+                )
+
+            if len(recent_memory_facts) >= max(1, memory_limit):
+                continue
+
+            recent_memory_facts.append(
+                {
+                    "id": fact.get("id"),
+                    "entry_kind": entry_kind,
+                    "topic": fact.get("topic"),
+                    "sha256": fact.get("sha256"),
+                    "confidence": fact.get("confidence"),
+                    "created_at": fact.get("created_at"),
+                    "operator_summary": metadata.get("operator_summary")
+                    or evidence.get("operator_summary")
+                    or metadata.get("summary")
+                    or "",
+                    "source": evidence.get("source") or fact.get("provenance"),
+                    "trust_tier": evidence.get("trust_tier"),
+                    "artifact_id": evidence.get("artifact_id"),
+                    "provenance_grade": evidence.get("provenance_grade"),
+                    "pointer": pointer,
+                    "state": state,
+                    "operator_identity": evidence.get("operator_identity")
+                    or {
+                        "operator_id": str(metadata.get("operator_id") or ""),
+                        "operator_display_name": str(metadata.get("operator_display_name") or ""),
+                        "operator_channel": str(metadata.get("operator_channel") or ""),
+                    },
+                    "freshness_status": evidence.get("freshness_status"),
+                    "revoked": evidence.get("revoked", False),
+                    "tombstoned": evidence.get("tombstoned", False),
+                    "superseded": evidence.get("superseded", False),
+                    "supersedes": supersedes,
+                    "event_ref": metadata.get("event_ref"),
+                }
+            )
+
+        governance_events = self.recent_governance_events(limit=max(1, governance_limit))
+        recent_governance_events = [
+            {
+                "kind": event.get("kind"),
+                "action": event.get("action"),
+                "status": event.get("status"),
+                "severity": event.get("severity"),
+                "source": event.get("source"),
+                "subject_id": event.get("subject_id"),
+                "goal_id": event.get("goal_id"),
+                "timestamp": event.get("timestamp"),
+                "event_ref": event.get("event_ref"),
+            }
+            for event in governance_events
+        ]
+
+        witness_subjects = self.list_witness_subjects().get("subjects", [])
+        witness_summary = {
+            "subject_count": len(witness_subjects),
+            "watched_count": sum(
+                1 for subject in witness_subjects if subject.get("trust_state") == "watched"
+            ),
+            "probation_count": sum(
+                1 for subject in witness_subjects if subject.get("trust_state") == "probation"
+            ),
+            "restricted_count": sum(
+                1 for subject in witness_subjects if subject.get("trust_state") == "restricted"
+            ),
+            "subjects": witness_subjects[:5],
+        }
+
+        resolved_metrics_dir = Path(metrics_dir).expanduser() if metrics_dir else None
+        weekly_evidence_summary = summarize_weekly_artifacts(resolved_metrics_dir)
+
+        return {
+            "contract_version": "1.0",
+            "summary": {
+                "memory_fact_count": len(memory_facts),
+                "memory_topic_count": len({str(fact.get("topic") or "") for fact in memory_facts}),
+                "active_memory_count": memory_state_counts.get("active", 0),
+                "stale_memory_count": memory_state_counts.get("stale", 0),
+                "superseded_memory_count": memory_state_counts.get("superseded", 0),
+                "revoked_memory_count": memory_state_counts.get("revoked", 0),
+                "tombstoned_memory_count": memory_state_counts.get("tombstoned", 0),
+                "governance_event_count": len(self.governance_events),
+                "witness_subject_count": witness_summary["subject_count"],
+                "active_profile_count": len(self.session_profiles),
+                "active_model_catalog_count": len(self.session_model_catalogs),
+                "active_route_count": len(self.session_governed_routes),
+                "active_media_evidence_count": len(self.session_media_evidence),
+                "pointer_count": len(memory_facts),
+                "active_pointer_count": memory_state_counts.get("active", 0),
+                "revoked_pointer_count": memory_state_counts.get("revoked", 0),
+                "tombstoned_pointer_count": memory_state_counts.get("tombstoned", 0),
+                "superseded_pointer_count": memory_state_counts.get("superseded", 0),
+                "stale_pointer_count": memory_state_counts.get("stale", 0),
+                "weekly_artifact_count": weekly_evidence_summary.get("artifact_count", 0),
+                "weekly_distribution_eligible_count": weekly_evidence_summary.get(
+                    "distribution_eligible_count", 0
+                ),
+            },
+            "memory_stats": self.memory_store.stats(),
+            "memory_entry_kind_counts": memory_entry_kind_counts,
+            "memory_state_counts": memory_state_counts,
+            "recent_memory_facts": recent_memory_facts,
+            "pointer_chain_summary": {
+                "pointer_count": len(memory_facts),
+                "active_pointer_count": memory_state_counts.get("active", 0),
+                "revoked_pointer_count": memory_state_counts.get("revoked", 0),
+                "tombstoned_pointer_count": memory_state_counts.get("tombstoned", 0),
+                "superseded_pointer_count": memory_state_counts.get("superseded", 0),
+                "stale_pointer_count": memory_state_counts.get("stale", 0),
+                "superseding_pointer_count": superseding_pointer_count,
+                "recent_pointers": pointer_chain_entries,
+            },
+            "recent_governance_events": recent_governance_events,
+            "witness_summary": witness_summary,
+            "weekly_evidence_summary": weekly_evidence_summary,
+            "session_surface_counts": {
+                "profiles": len(self.session_profiles),
+                "model_catalogs": len(self.session_model_catalogs),
+                "benchmark_artifacts": len(self.session_benchmark_artifacts),
+                "governed_routes": len(self.session_governed_routes),
+                "media_evidence": len(self.session_media_evidence),
+                "dream_cycles": len(self.session_dream_cycles),
+                "dream_findings": len(self.session_dream_findings),
+                "dream_proposals": len(self.session_dream_proposals),
+            },
+        }
+
 
 def build_server_context() -> ServerContext:
     return ServerContext(
@@ -581,6 +1270,10 @@ def build_server_context() -> ServerContext:
         session_model_catalogs={},
         session_benchmark_artifacts={},
         session_governed_routes={},
+        session_media_evidence={},
+        session_dream_cycles={},
+        session_dream_findings={},
+        session_dream_proposals={},
         witness_governance=WitnessGovernance(),
         approval_ledger=ApprovalLedger(),
         audit_chain=AuditChain(),

@@ -84,6 +84,11 @@
         "category": "HLF"
       },
       {
+        "command": "hlf.manageOperatorIdentityDefaults",
+        "title": "HLF: Manage Operator Identity Defaults",
+        "category": "HLF"
+      },
+      {
         "command": "hlf.setHttpBearerToken",
         "title": "HLF: Set HTTP Bearer Token",
         "category": "HLF"
@@ -111,6 +116,16 @@
       {
         "command": "hlf.showWeeklyEvidenceSummary",
         "title": "HLF: Show Weekly Evidence Summary",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.showProvenanceContract",
+        "title": "HLF: Show Provenance Contract",
+        "category": "HLF"
+      },
+      {
+        "command": "hlf.governMemoryTarget",
+        "title": "HLF: Govern Memory Target",
         "category": "HLF"
       },
       {

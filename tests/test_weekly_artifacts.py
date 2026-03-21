@@ -5,27 +5,9 @@ from pathlib import Path
 
 
 def _minimal_governed_review(source: str) -> dict[str, object]:
-    return {
-        "contract_version": "1.0",
-        "review_type": "weekly_artifact",
-        "summary": f"No governed review contract was attached for {source}.",
-        "severity": "info",
-        "automation_status": "not_collected",
-        "operator_gate_required": True,
-        "recommended_triage_lane": None,
-        "backend": {
-            "provider": None,
-            "access_mode": None,
-            "model": None,
-            "tier_index": None,
-            "fallback_chain": [],
-        },
-        "pillar_assessments": [],
-        "recommended_actions": [],
-        "evidence_refs": [],
-        "escalation_triggers": [],
-        "review_metadata": {"source": source},
-    }
+    from hlf_mcp.governed_review import default_governed_review
+
+    return default_governed_review(source=source)
 
 
 def test_collect_governance_manifest_snapshot_reports_clean_manifest(tmp_path: Path) -> None:
@@ -108,6 +90,12 @@ def test_build_weekly_artifact_uses_latest_suite_summary(monkeypatch, tmp_path: 
     assert artifact["security_findings"]["collection_state"] == "not_collected"
     assert artifact["security_findings"]["tool"] == "CodeQL"
     assert artifact["governed_review"]["contract_version"] == "1.0"
+    assert artifact["governed_review"]["change_class"] == "workflow_contract"
+    assert artifact["governed_review"]["owner_persona"] == "steward"
+    assert (
+        artifact["governed_review"]["handoff_template_ref"]
+        == "governance/templates/persona_review_handoff.md"
+    )
 
 
 def test_build_weekly_artifact_normalizes_security_findings_from_workflow_payload(

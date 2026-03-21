@@ -207,7 +207,7 @@ def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[
             review_type=normalized.get("review_type"),
             severity=normalized.get("severity"),
             recommended_triage_lane=normalized.get("recommended_triage_lane"),
-            existing=normalized,
+            existing=value,
         )
     )
     return normalized

@@ -125,3 +125,33 @@ def test_build_security_patterns_governed_review_escalates_actionable_findings()
     assert review["change_class"] == "security_sensitive"
     assert review["owner_persona"] == "sentinel"
     assert review["escalate_to_persona"] == "operator"
+
+
+def test_normalize_governed_review_recomputes_contract_from_input_review_type() -> None:
+    from hlf_mcp.governed_review import normalize_governed_review
+
+    review = normalize_governed_review(
+        {
+            "review_type": "evolution_planning",
+            "summary": "Plan the next bridge tranche.",
+            "severity": "warning",
+            "automation_status": "generated",
+            "operator_gate_required": True,
+            "recommended_triage_lane": "backlog",
+            "backend": {},
+            "pillar_assessments": [],
+            "recommended_actions": [],
+            "evidence_refs": [],
+            "escalation_triggers": [],
+        },
+        source="manual-plan",
+    )
+
+    assert review["change_class"] == "planning_only"
+    assert review["owner_persona"] == "strategist"
+    assert review["required_gates"] == [
+        "strategist_review",
+        "chronicler_review",
+        "cove_review",
+        "operator_promotion",
+    ]

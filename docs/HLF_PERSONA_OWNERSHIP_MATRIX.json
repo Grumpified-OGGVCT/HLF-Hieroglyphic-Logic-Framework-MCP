@@ -1,0 +1,229 @@
+{
+  "schema_version": "1.0",
+  "last_updated": "2026-03-20",
+  "lane": "bridge-true",
+  "status": "active-bridge-contract",
+  "source_of_truth": [
+    "docs/HLF_PERSONA_AND_OPERATOR_RECOVERY_SPEC.md",
+    "docs/HLF_INTERNAL_PERSONA_OPERATING_MODEL.md",
+    "docs/HLF_BRANCH_BOUNDED_MAINTAINER_PROTOCOL.md"
+  ],
+  "authority_boundary": {
+    "live_packaged_runtime_authority": false,
+    "upstream_persona_prompts_are_runtime_governors": false,
+    "operator_promotion_required": true,
+    "branch_bounded_only": true
+  },
+  "structured_fields": [
+    "change_class",
+    "lane",
+    "owner_persona",
+    "review_personas",
+    "required_gates",
+    "gate_results",
+    "escalate_to_persona",
+    "operator_summary"
+  ],
+  "gate_states": {
+    "strategist_review": {
+      "owner_persona": "strategist",
+      "terminal_states": ["approved", "revise", "defer", "escalate"],
+      "blocks_promotion_when": ["revise", "defer", "escalate"]
+    },
+    "steward_review": {
+      "owner_persona": "steward",
+      "terminal_states": ["approved", "revise", "blocked", "escalate", "not_applicable"],
+      "blocks_promotion_when": ["revise", "blocked", "escalate"]
+    },
+    "sentinel_review": {
+      "owner_persona": "sentinel",
+      "terminal_states": ["approved", "revise", "blocked", "escalate", "not_applicable"],
+      "blocks_promotion_when": ["revise", "blocked", "escalate"]
+    },
+    "herald_review": {
+      "owner_persona": "herald",
+      "terminal_states": ["approved", "revise", "blocked", "not_applicable"],
+      "blocks_promotion_when": ["revise", "blocked"]
+    },
+    "chronicler_review": {
+      "owner_persona": "chronicler",
+      "terminal_states": ["approved", "revise", "flag_drift", "not_applicable"],
+      "blocks_promotion_when": ["revise"]
+    },
+    "cove_review": {
+      "owner_persona": "cove",
+      "terminal_states": ["approved", "revise", "blocked"],
+      "blocks_promotion_when": ["revise", "blocked"]
+    },
+    "operator_promotion": {
+      "owner_persona": "operator",
+      "terminal_states": ["promote", "hold", "reject"],
+      "blocks_promotion_when": ["hold", "reject"]
+    }
+  },
+  "change_classes": {
+    "planning_only": {
+      "required_gates": [
+        "strategist_review",
+        "chronicler_review",
+        "cove_review",
+        "operator_promotion"
+      ]
+    },
+    "docs_truth": {
+      "required_gates": [
+        "strategist_review",
+        "herald_review",
+        "chronicler_review",
+        "cove_review",
+        "operator_promotion"
+      ]
+    },
+    "workflow_contract": {
+      "required_gates": [
+        "strategist_review",
+        "steward_review",
+        "sentinel_review",
+        "herald_review",
+        "cove_review",
+        "operator_promotion"
+      ]
+    },
+    "security_sensitive": {
+      "required_gates": [
+        "strategist_review",
+        "sentinel_review",
+        "steward_review",
+        "cove_review",
+        "operator_promotion"
+      ]
+    },
+    "low_risk_maintenance": {
+      "required_gates": [
+        "strategist_review",
+        "cove_review",
+        "operator_promotion"
+      ]
+    }
+  },
+  "personas": {
+    "strategist": {
+      "tier": "tier_1",
+      "status": "internal_role",
+      "upstream_source": "hlf_source/config/personas/strategist.md",
+      "internal_role": "planning_authority",
+      "safe_internal_fit": true,
+      "maintainer_mode": "bounded_drafting",
+      "owner_tags": ["owner_persona", "escalate_to_persona"],
+      "allowed_actions": [
+        "classify_lane",
+        "set_change_class",
+        "sequence_work",
+        "approve_or_defer_plan",
+        "request_escalation"
+      ],
+      "forbidden_actions": [
+        "merge_changes",
+        "publish_artifacts",
+        "override_failed_validation",
+        "grant_runtime_authority"
+      ]
+    },
+    "steward": {
+      "tier": "tier_1",
+      "status": "internal_role",
+      "upstream_source": "hlf_source/config/personas/steward.md",
+      "internal_role": "workflow_integrity_reviewer",
+      "safe_internal_fit": true,
+      "maintainer_mode": "bounded_drafting_and_blocking_review",
+      "owner_tags": ["review_personas", "required_gates"],
+      "allowed_actions": [
+        "review_tool_contracts",
+        "review_transport_or_workflow_changes",
+        "propose_bounded_workflow_fixes",
+        "block_on_contract_risk"
+      ],
+      "forbidden_actions": [
+        "auto_apply_changes",
+        "waive_security_findings",
+        "modify_protected_branch_policy"
+      ]
+    },
+    "sentinel": {
+      "tier": "tier_1",
+      "status": "internal_role",
+      "upstream_source": "hlf_source/config/personas/sentinel.md",
+      "internal_role": "security_boundary_reviewer",
+      "safe_internal_fit": true,
+      "maintainer_mode": "bounded_drafting_and_blocking_review",
+      "owner_tags": ["review_personas", "required_gates", "escalate_to_persona"],
+      "allowed_actions": [
+        "review_security_posture",
+        "review_fail_closed_behavior",
+        "propose_bounded_hardening",
+        "block_on_boundary_risk"
+      ],
+      "forbidden_actions": [
+        "silently_relax_controls",
+        "approve_promotion_after_block_without_operator",
+        "modify_secret_material"
+      ]
+    },
+    "herald": {
+      "tier": "tier_1",
+      "status": "internal_role",
+      "upstream_source": "hlf_source/config/personas/herald.md",
+      "internal_role": "documentation_truth_reviewer",
+      "safe_internal_fit": true,
+      "maintainer_mode": "bounded_drafting_and_blocking_review",
+      "owner_tags": ["review_personas"],
+      "allowed_actions": [
+        "classify_claim_lanes",
+        "sync_docs_and_handoffs",
+        "flag_overstatement",
+        "block_on_claim_drift"
+      ],
+      "forbidden_actions": [
+        "upgrade_bridge_to_current_truth_without_evidence",
+        "edit_runtime_code_as_primary_owner"
+      ]
+    },
+    "chronicler": {
+      "tier": "tier_1",
+      "status": "internal_role",
+      "upstream_source": "hlf_source/config/personas/chronicler.md",
+      "internal_role": "drift_and_debt_reviewer",
+      "safe_internal_fit": true,
+      "maintainer_mode": "advisory_review",
+      "owner_tags": ["review_personas"],
+      "allowed_actions": [
+        "track_doctrinal_drift",
+        "track_debt_trends",
+        "flag_unresolved_gap_impact"
+      ],
+      "forbidden_actions": [
+        "promote_changes_alone",
+        "suppress_known_drift"
+      ]
+    },
+    "cove": {
+      "tier": "tier_1",
+      "status": "internal_role",
+      "upstream_source": "hlf_source/config/personas/cove.md",
+      "internal_role": "final_validation_gate",
+      "safe_internal_fit": true,
+      "maintainer_mode": "review_only",
+      "owner_tags": ["required_gates", "gate_results"],
+      "allowed_actions": [
+        "review_validation_evidence",
+        "approve_or_block_readiness",
+        "return_change_for_revision"
+      ],
+      "forbidden_actions": [
+        "merge_changes",
+        "replace_required_role_reviews",
+        "ignore_failed_diagnostics"
+      ]
+    }
+  }
+}

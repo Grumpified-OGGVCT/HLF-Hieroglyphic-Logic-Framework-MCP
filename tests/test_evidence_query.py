@@ -5,27 +5,9 @@ from pathlib import Path
 
 
 def _minimal_governed_review(source: str) -> dict[str, object]:
-    return {
-        "contract_version": "1.0",
-        "review_type": "weekly_artifact",
-        "summary": f"No governed review contract was attached for {source}.",
-        "severity": "info",
-        "automation_status": "not_collected",
-        "operator_gate_required": True,
-        "recommended_triage_lane": None,
-        "backend": {
-            "provider": None,
-            "access_mode": None,
-            "model": None,
-            "tier_index": None,
-            "fallback_chain": [],
-        },
-        "pillar_assessments": [],
-        "recommended_actions": [],
-        "evidence_refs": [],
-        "escalation_triggers": [],
-        "review_metadata": {"source": source},
-    }
+    from hlf_mcp.governed_review import default_governed_review
+
+    return default_governed_review(source=source)
 
 
 def _write_history(metrics_dir: Path, artifacts: list[dict]) -> None:
@@ -80,6 +62,7 @@ def test_evidence_query_list_and_show_commands(capsys, tmp_path: Path) -> None:
         "decision_records": [{"decision": "promoted"}],
         "verification": {"verified": True},
         "distribution_contract": {"eligible_for_governed_distribution": True},
+        "governed_review": _minimal_governed_review("weekly-code-quality"),
     }
     _write_history(metrics_dir, [artifact])
 
@@ -88,6 +71,14 @@ def test_evidence_query_list_and_show_commands(capsys, tmp_path: Path) -> None:
     )
     assert exit_code == 0
     assert "weekly_demo" in capsys.readouterr().out
+
+    exit_code = evidence_query.main(["--metrics-dir", str(metrics_dir), "show", "weekly_demo"])
+    assert exit_code == 0
+    human_output = capsys.readouterr().out
+    assert "Artifact: weekly_demo" in human_output
+    assert "Governed review:" in human_output
+    assert "Owner persona: sentinel" in human_output
+    assert "Handoff template: governance/templates/persona_review_handoff.md" in human_output
 
     exit_code = evidence_query.main(
         ["--metrics-dir", str(metrics_dir), "show", "weekly_demo", "--json"]

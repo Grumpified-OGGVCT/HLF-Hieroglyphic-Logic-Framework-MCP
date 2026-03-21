@@ -18,6 +18,8 @@ GovernanceEventKind = Literal[
     "witness_observation",
     "verification_result",
     "approval_transition",
+    "dream_cycle",
+    "proposal_lane",
 ]
 
 GovernanceSeverity = Literal["info", "warning", "critical"]

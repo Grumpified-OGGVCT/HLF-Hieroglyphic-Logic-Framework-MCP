@@ -382,6 +382,17 @@ class RAGMemory:
             or metadata.get("summary")
             or ""
         )
+        operator_identity = {
+            "operator_id": str(governed.get("operator_id") or metadata.get("operator_id") or ""),
+            "operator_display_name": str(
+                governed.get("operator_display_name")
+                or metadata.get("operator_display_name")
+                or ""
+            ),
+            "operator_channel": str(
+                governed.get("operator_channel") or metadata.get("operator_channel") or ""
+            ),
+        }
         collector_version = governed.get("collector_version") or metadata.get("collector_version")
         trust_tier = governed.get("trust_tier") or metadata.get("trust_tier") or "local"
         fresh_until = governed.get("fresh_until") or metadata.get("fresh_until")
@@ -445,6 +456,7 @@ class RAGMemory:
             "superseded": superseded,
             "state": state,
             "operator_summary": operator_summary,
+            "operator_identity": operator_identity,
             "provenance_grade": "evidence-backed" if provenance_backed else "basic",
             "provenance_available": bool(collector and collected_at),
         }
@@ -677,6 +689,95 @@ class RAGMemory:
                 "provenance_available": True,
             },
         }
+
+    def govern_fact(
+        self,
+        *,
+        action: str,
+        fact_id: int | None = None,
+        sha256: str | None = None,
+        operator_summary: str = "",
+        governed_by: str = "operator",
+        reason: str = "",
+        operator_id: str = "",
+        operator_display_name: str = "",
+        operator_channel: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_action = str(action or "").strip().lower()
+        if normalized_action not in {"revoke", "tombstone", "reinstate"}:
+            raise ValueError(f"unsupported governance action: {action!r}")
+        if fact_id is None and not sha256:
+            raise ValueError("fact_id or sha256 is required")
+
+        with self._lock, self._connect() as conn:
+            if fact_id is not None:
+                row = conn.execute(
+                    "SELECT id, sha256, content, topic, confidence, provenance, tags, "
+                    "created_at, accessed_at, entry_kind, domain, solution_kind, "
+                    "supersedes_sha256, metadata_json FROM fact_store WHERE id = ?",
+                    (fact_id,),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT id, sha256, content, topic, confidence, provenance, tags, "
+                    "created_at, accessed_at, entry_kind, domain, solution_kind, "
+                    "supersedes_sha256, metadata_json FROM fact_store WHERE sha256 = ?",
+                    (str(sha256).strip().lower(),),
+                ).fetchone()
+
+            if row is None:
+                return None
+
+            metadata = json.loads(row["metadata_json"] or "{}")
+            governed_evidence = metadata.get("governed_evidence")
+            if not isinstance(governed_evidence, dict):
+                governed_evidence = {}
+            if normalized_action == "revoke":
+                governed_evidence["revoked"] = True
+                governed_evidence["tombstoned"] = False
+            elif normalized_action == "tombstone":
+                governed_evidence["revoked"] = False
+                governed_evidence["tombstoned"] = True
+            else:
+                governed_evidence["revoked"] = False
+                governed_evidence["tombstoned"] = False
+
+            if operator_summary:
+                governed_evidence["operator_summary"] = operator_summary
+            metadata["governed_evidence"] = governed_evidence
+            metadata["governance_action"] = normalized_action
+            metadata["governed_by"] = governed_by
+            metadata["governed_reason"] = reason
+            metadata["operator_id"] = str(operator_id or "")
+            metadata["operator_display_name"] = str(operator_display_name or "")
+            metadata["operator_channel"] = str(operator_channel or "")
+            metadata["governed_at"] = _timestamp_to_iso8601(time.time())
+
+            normalized_metadata = self._normalize_metadata(
+                metadata=metadata,
+                topic=str(row["topic"] or ""),
+                confidence=float(row["confidence"]),
+                provenance=str(row["provenance"] or "agent"),
+                entry_kind=str(row["entry_kind"] or "fact"),
+                domain=str(row["domain"] or ""),
+                solution_kind=str(row["solution_kind"] or ""),
+                supersedes_sha256=str(row["supersedes_sha256"] or ""),
+                created_at=float(row["created_at"]),
+            )
+            now = time.time()
+            conn.execute(
+                "UPDATE fact_store SET metadata_json = ?, accessed_at = ? WHERE id = ?",
+                (json.dumps(normalized_metadata, ensure_ascii=False, sort_keys=True), now, row["id"]),
+            )
+            superseded_hashes = self._superseded_hashes(conn)
+
+        evidence = self._build_evidence(
+            row=row,
+            metadata=normalized_metadata,
+            superseded_hashes=superseded_hashes,
+            now=now,
+        )
+        return self._row_to_fact(row=row, metadata=normalized_metadata, evidence=evidence)
 
     def store_exemplar(self, exemplar: HKSValidatedExemplar) -> dict[str, Any]:
         metadata = exemplar.to_metadata()

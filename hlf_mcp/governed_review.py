@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from hlf_mcp.persona_contract import resolve_persona_contract, validate_persona_contract
+
 REVIEW_CONTRACT_VERSION = "1.0"
 
 ALLOWED_REVIEW_SEVERITIES = {"info", "warning", "critical"}
@@ -113,7 +115,7 @@ def _normalize_action(value: Any) -> dict[str, Any] | None:
 
 
 def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
-    return {
+    review = {
         "contract_version": REVIEW_CONTRACT_VERSION,
         "review_type": "weekly_artifact",
         "summary": f"No governed review contract was attached for {source or 'this artifact'}.",
@@ -134,6 +136,16 @@ def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
         "escalation_triggers": [],
         "review_metadata": {"source": source},
     }
+    review.update(
+        resolve_persona_contract(
+            source=source,
+            review_type=review["review_type"],
+            severity=review["severity"],
+            recommended_triage_lane=review["recommended_triage_lane"],
+            existing=review,
+        )
+    )
+    return review
 
 
 def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[str, Any]:
@@ -188,6 +200,16 @@ def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[
 
     metadata = value.get("review_metadata")
     normalized["review_metadata"] = metadata if isinstance(metadata, dict) else {"source": source}
+
+    normalized.update(
+        resolve_persona_contract(
+            source=source,
+            review_type=normalized.get("review_type"),
+            severity=normalized.get("severity"),
+            recommended_triage_lane=normalized.get("recommended_triage_lane"),
+            existing=normalized,
+        )
+    )
     return normalized
 
 
@@ -255,6 +277,8 @@ def validate_governed_review(review: Any, errors: list[str]) -> None:
 
     if not isinstance(review.get("review_metadata"), dict):
         errors.append("governed_review_review_metadata_invalid")
+
+    validate_persona_contract(review, errors)
 
 
 def _backend_from_ollama_payload(

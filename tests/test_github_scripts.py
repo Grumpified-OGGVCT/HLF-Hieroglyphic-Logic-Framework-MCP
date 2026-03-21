@@ -107,6 +107,360 @@ class TestSpecDriftCheck:
             assert check["only_in_py"] == [], f"Only in py: {check['only_in_py']}"
 
 
+class TestReadinessRefreshCheck:
+    def test_refresh_required_when_truth_input_changes_without_readiness_outputs(self, tmp_path):
+        from readiness_refresh_check import build_refresh_report
+
+        changed = ["SSOT_HLF_MCP.md"]
+        report = build_refresh_report(changed)
+
+        assert report["refresh_required"] is True
+        assert report["satisfied"] is False
+        assert "SSOT_HLF_MCP.md" in report["changed_inputs"]
+
+    def test_refresh_satisfied_when_input_and_readiness_output_change_together(self):
+        from readiness_refresh_check import build_refresh_report
+
+        changed = [
+            "docs/HLF_MISSING_PILLARS.md",
+            "docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md",
+        ]
+        report = build_refresh_report(changed)
+
+        assert report["refresh_required"] is True
+        assert report["satisfied"] is True
+        assert "docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md" in report["changed_outputs"]
+
+    def test_refresh_required_when_weekly_artifact_changes_without_generated_outputs(self):
+        from readiness_refresh_check import build_refresh_report
+
+        changed = ["observability/local_validation/2026-03-20/test-health-final/weekly-test-health-artifact.json"]
+        report = build_refresh_report(changed)
+
+        assert report["refresh_required"] is True
+        assert report["satisfied"] is False
+        assert changed[0] in report["changed_inputs"]
+
+    def test_refresh_satisfied_when_weekly_artifact_and_status_outputs_change_together(self):
+        from readiness_refresh_check import build_refresh_report
+
+        changed = [
+            "observability/local_validation/2026-03-20/test-health-final/weekly-test-health-artifact.json",
+            "docs/HLF_STATUS_OVERVIEW.md",
+            "docs/index.html",
+        ]
+        report = build_refresh_report(changed)
+
+        assert report["refresh_required"] is True
+        assert report["satisfied"] is True
+        assert "docs/index.html" in report["changed_outputs"]
+
+
+class TestGenerateStatusOverview:
+    def test_collect_status_data_and_render_surfaces(self, tmp_path):
+        from generate_status_overview import (
+            collect_status_data,
+            render_claims_ledger_html,
+            render_merge_readiness_html,
+            render_status_index_html,
+            render_status_overview_markdown,
+            write_status_surfaces,
+        )
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir(parents=True)
+        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "test-health-final").mkdir(parents=True)
+        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "doc-accuracy").mkdir(parents=True)
+
+        (docs_dir / "HLF_INTERNAL_READINESS_DASHBOARD_2026-03-20.md").write_text(
+            "\n".join(
+                [
+                    "## Top-Level Indices",
+                    "",
+                    "| Index | Score | Reading |",
+                    "| --- | ---: | --- |",
+                    "| Overall repo readiness | 58.9% | bridge-active |",
+                    "",
+                    "## Cluster View",
+                    "",
+                    "| Cluster | Included pillars | Score | Reading |",
+                    "| --- | --- | ---: | --- |",
+                    "| Semantic core | deterministic language core | 70.8% | strongest current cluster |",
+                    "| Governance and trust | governance-native execution | 59.8% | real substance |",
+                    "| Coordination and operator systems | routing | 41.3% | main drag on total readiness |",
+                    "",
+                    "### Per-Pillar Readiness",
+                    "",
+                    "| Pillar | Score |",
+                    "| --- | ---: |",
+                    "| Deterministic language core | 87.5% |",
+                    "| Runtime and capsule-bounded execution | 82.5% |",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (docs_dir / "HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md").write_text(
+            "\n".join(
+                [
+                    "## Weighted Result",
+                    "",
+                    "- `58.9%`",
+                    "",
+                    "## Strongest Pillars",
+                    "",
+                    "| Pillar | Score | Why it leads |",
+                    "| --- | ---: | --- |",
+                    "| Deterministic language core | 87.5% | strongest combination of implementation and proof |",
+                    "",
+                    "## Weakest Pillars",
+                    "",
+                    "| Pillar | Score | Why it lags |",
+                    "| --- | ---: | --- |",
+                    "| Ecosystem integration surface | 22.5% | packaged proof remains mostly absent |",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (docs_dir / "HLF_MERGE_READINESS_SUMMARY_2026-03-20.md").write_text(
+            "\n".join(
+                [
+                    "# HLF Merge Readiness Summary",
+                    "",
+                    "Status: branch-aware merge/readiness summary for 2026-03-20.",
+                    "",
+                    "## Purpose",
+                    "",
+                    "- summarize what this branch can honestly claim now",
+                    "- separate current packaged truth from bridge-qualified branch work",
+                    "",
+                    "## Verified branch facts",
+                    "",
+                    "- branch: `integrate/vscode-operator-governed-review`",
+                    "- repo-wide regression snapshot on 2026-03-20: `758 passed`",
+                    "",
+                    "## Current-True In This Checkout",
+                    "",
+                    "These are implemented and verified enough to claim in present tense for this local branch.",
+                    "",
+                    "- packaged FastMCP front door with `69` tools and `31` resources",
+                    "",
+                    "## Bridge-True But Real In This Branch",
+                    "",
+                    "These surfaces are real in the checkout, but should remain explicitly qualified.",
+                    "",
+                    "- bounded dream-cycle, media-evidence normalization, and citation-chain proposal surfaces",
+                    "",
+                    "## Still-Open Architectural Gaps",
+                    "",
+                    "- full upstream routing fabric restoration",
+                    "",
+                    "## Near-Term Merge Risks",
+                    "",
+                    "- public-facing docs can still lag branch reality if the new ledger and summary are not linked and kept current",
+                    "",
+                    "## Merge Reading",
+                    "",
+                    "- materially ahead of `main`",
+                    "",
+                    "## Recommended Merge Framing",
+                    "",
+                    "1. `current-true`: packaged surfaces now real in this checkout",
+                    "2. `bridge-true`: meaningful branch slices now landed but not yet full target-state completion",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (docs_dir / "HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md").write_text(
+            "\n".join(
+                [
+                    "# HLF Branch-Aware Claims Ledger",
+                    "",
+                    "Status: public-facing branch-aware review aid for 2026-03-20.",
+                    "",
+                    "Purpose:",
+                    "",
+                    "- give reviewers a compact way to distinguish public-main perception from current branch reality",
+                    "- keep branch improvements visible without promoting bridge work into false completion",
+                    "",
+                    "Reading rule:",
+                    "",
+                    "- use `docs/HLF_CLAIM_LANES.md` when reusing or promoting any statement from this file",
+                    "- this ledger is branch-aware, not `main`-only",
+                    "",
+                    "Verified branch facts used here:",
+                    "",
+                    "- active branch: `integrate/vscode-operator-governed-review`",
+                    "- packaged surface count in this checkout: `69` tools, `31` resources",
+                    "",
+                    "## 1. Overstated Public Gaps",
+                    "",
+                    "| Public gap claim | Branch-aware reality | True remaining gap after both are considered |",
+                    "| --- | --- | --- |",
+                    "| Formal verification is only a placeholder | Packaged verifier behavior exists | Deeper verifier semantics remain open |",
+                    "",
+                    "## 2. Valid Public Gaps",
+                    "",
+                    "| Public gap claim | Branch-aware reality | True remaining gap after both are considered |",
+                    "| --- | --- | --- |",
+                    "| Memory governance is still incomplete | Correct | Stronger freshness and revocation closure remain open |",
+                    "",
+                    "## 3. Branch-Resolved Gaps",
+                    "",
+                    "| Gap previously inferred from public-facing materials | What now exists in this checkout | Lane-qualified reading |",
+                    "| --- | --- | --- |",
+                    "| Formal verifier only exposes a status stub | Tools and reports now exist | `current-true` for the packaged slice |",
+                    "",
+                    "## 4. Still-Open Architectural Gaps",
+                    "",
+                    "| Gap | Why it is still open |",
+                    "| --- | --- |",
+                    "| Full routing fabric restoration | The broader gateway coordination layer is not yet restored |",
+                    "",
+                    "## Bottom Line",
+                    "",
+                    "The public repo can still make the branch look thinner than it is.",
+                    "",
+                    "- some public gaps are stale or overstated for this checkout",
+                    "- some remain real architectural gaps even after the branch work is counted",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        test_health_artifact = {
+            "source": "weekly-test-health",
+            "generated_at": "2026-03-20T20:41:45+00:00",
+            "artifact_status": "advisory",
+            "governed_review": {
+                "summary": "Test health reports partial coverage at 74.8%.",
+                "recommended_triage_lane": "backlog",
+                "owner_persona": "steward",
+                "review_metadata": {"percent_covered": 74.8383122882661},
+            },
+        }
+        prior_test_health_artifact = {
+            "source": "weekly-test-health",
+            "generated_at": "2026-03-20T20:10:00+00:00",
+            "artifact_status": "advisory",
+            "governed_review": {
+                "summary": "Test health run completed without usable coverage totals.",
+                "recommended_triage_lane": "backlog",
+                "owner_persona": "steward",
+                "review_metadata": {"percent_covered": None},
+            },
+        }
+        doc_accuracy_artifact = {
+            "source": "weekly-doc-accuracy",
+            "generated_at": "2026-03-20T20:29:01+00:00",
+            "artifact_status": "advisory",
+            "governed_review": {
+                "summary": "Documentation accuracy review found no measured drift.",
+                "recommended_triage_lane": "ignore",
+                "owner_persona": "herald",
+                "review_metadata": {"drift_detected": False},
+            },
+            "workflow_payload": {"doc_drift": {"drift_detected": False}},
+        }
+
+        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "test-health-final" / "weekly-test-health-artifact.json").write_text(
+            json.dumps(test_health_artifact),
+            encoding="utf-8",
+        )
+        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "test-health-final" / "weekly-test-health-prior-artifact.json").write_text(
+            json.dumps(prior_test_health_artifact),
+            encoding="utf-8",
+        )
+        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "doc-accuracy" / "weekly-doc-accuracy-artifact.json").write_text(
+            json.dumps(doc_accuracy_artifact),
+            encoding="utf-8",
+        )
+
+        data = collect_status_data(tmp_path)
+        markdown = render_status_overview_markdown(data)
+        html = render_status_index_html(data)
+        merge_html = render_merge_readiness_html(
+            data,
+            {
+                "path": "docs/HLF_MERGE_READINESS_SUMMARY_2026-03-20.md",
+                "status": "branch-aware merge/readiness summary for 2026-03-20.",
+                "purpose": [
+                    "summarize what this branch can honestly claim now",
+                    "separate current packaged truth from bridge-qualified branch work",
+                ],
+                "verified": [
+                    "branch: `integrate/vscode-operator-governed-review`",
+                    "repo-wide regression snapshot on 2026-03-20: `758 passed`",
+                ],
+                "sections": [
+                    {
+                        "title": "Current-True In This Checkout",
+                        "paragraphs": [
+                            "These are implemented and verified enough to claim in present tense for this local branch.",
+                        ],
+                        "bullets": ["packaged FastMCP front door with `69` tools and `31` resources"],
+                    }
+                ],
+            },
+        )
+        claims_html = render_claims_ledger_html(
+            data,
+            {
+                "path": "docs/HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md",
+                "status": "public-facing branch-aware review aid for 2026-03-20.",
+                "purpose": [
+                    "give reviewers a compact way to distinguish public-main perception from current branch reality",
+                ],
+                "reading_rule": [
+                    "use `docs/HLF_CLAIM_LANES.md` when reusing or promoting any statement from this file",
+                ],
+                "verified": [
+                    "active branch: `integrate/vscode-operator-governed-review`",
+                ],
+                "sections": [
+                    {
+                        "title": "Overstated Public Gaps",
+                        "rows": [
+                            {
+                                "Public gap claim": "Formal verification is only a placeholder",
+                                "Branch-aware reality": "Packaged verifier behavior exists",
+                                "True remaining gap after both are considered": "Deeper verifier semantics remain open",
+                            }
+                        ],
+                    }
+                ],
+                "bottom_line": {
+                    "paragraphs": ["The public repo can still make the branch look thinner than it is."],
+                    "bullets": ["some public gaps are stale or overstated for this checkout"],
+                },
+            },
+        )
+        write_result = write_status_surfaces(tmp_path)
+
+        assert data["dashboard"]["overall_readiness"] == 58.9
+        assert "Test health reports partial coverage at 74.8%." in markdown
+        assert "latest replay restored a comparable coverage signal" in markdown
+        assert "HLF Status Surface" in html
+        assert "Documentation accuracy review found no measured drift." in html
+        assert "Lane Reading Bands" in html
+        assert "Trend Micrographics" in html
+        assert "Governance Trust Path" in html
+        assert "Source Provenance" in html
+        assert "HLF Merge Readiness" in merge_html
+        assert "branch-aware merge/readiness summary for 2026-03-20." in merge_html
+        assert "Reviewer Decision Panel" in merge_html
+        assert "HLF Claims Ledger" in claims_html
+        assert "Verdict System" in claims_html
+        assert "HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md" in claims_html
+        assert write_result["merge_html_changed"] is True
+        assert write_result["claims_html_changed"] is True
+        assert (docs_dir / "merge-readiness.html").exists()
+        assert (docs_dir / "claims-ledger.html").exists()
+
+
 # ============================================================
 # ethics_compliance_check
 # ============================================================
@@ -194,6 +548,9 @@ class TestCodebaseSnapshot:
         assert Path(out).exists() and Path(out).stat().st_size > 0
 
 
+from textwrap import dedent
+
+
 # ============================================================
 # governed_review_contract
 # ============================================================
@@ -244,6 +601,47 @@ class TestGovernedReviewContract:
         assert "Structured plan summary" in rendered
         assert "Promote governed bridge hardening" in rendered
         assert "planner-model" in rendered
+        assert "## Persona Handoff" in rendered
+        assert "- Change class: planning_only" in rendered
+        assert "- Owner persona: strategist" in rendered
+        assert "- Handoff template: `governance/templates/persona_review_handoff.md`" in rendered
+
+    def test_render_evolution_issue_preserves_persona_handoff_block_wording(self):
+        from governed_review_contract import _render_evolution_issue
+
+        plan_payload = {
+            "content": {
+                "summary": "Structured plan summary",
+                "top_priority_index": 0,
+                "pillar_assessments": [],
+                "evolution_items": [],
+            },
+            "model": "planner-model",
+        }
+        code_starter_payload = {"content": "starter code", "model": "coder-model"}
+
+        rendered = _render_evolution_issue(
+            plan_payload,
+            code_starter_payload,
+            "https://example.test/run/123",
+        )
+
+        expected_block = dedent(
+            """
+            ## Persona Handoff
+
+            - Change class: planning_only
+            - Lane: bridge-true
+            - Owner persona: strategist
+            - Review personas: chronicler, cove
+            - Required gates: strategist_review, chronicler_review, cove_review, operator_promotion
+            - Escalate to: none
+            - Operator summary: Owner persona strategist; review personas chronicler, cove; required gates strategist_review, chronicler_review, cove_review, operator_promotion.
+            - Handoff template: `governance/templates/persona_review_handoff.md`
+            """
+        ).strip()
+
+        assert expected_block in rendered
 
 
 # ============================================================

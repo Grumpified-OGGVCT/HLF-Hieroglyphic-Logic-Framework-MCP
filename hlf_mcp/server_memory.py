@@ -8,6 +8,81 @@ from hlf_mcp.hlf.memory_node import build_pointer_ref
 from hlf_mcp.server_context import ServerContext
 
 
+def apply_memory_governance(
+    ctx: ServerContext,
+    *,
+    action: str,
+    fact_id: int | None = None,
+    sha256: str | None = None,
+    operator_summary: str = "",
+    reason: str = "",
+    operator_id: str = "",
+    operator_display_name: str = "",
+    operator_channel: str = "",
+    source: str = "server_memory.hlf_memory_govern",
+) -> dict[str, Any]:
+    """Apply a governed memory intervention and emit the matching audit/governance records."""
+    governed_fact = ctx.memory_store.govern_fact(
+        action=action,
+        fact_id=fact_id,
+        sha256=sha256,
+        operator_summary=operator_summary,
+        governed_by=source,
+        reason=reason,
+        operator_id=operator_id,
+        operator_display_name=operator_display_name,
+        operator_channel=operator_channel,
+    )
+    if governed_fact is None:
+        return {"status": "not_found", "fact_id": fact_id, "sha256": sha256, "action": action}
+
+    pointer_alias = f"{governed_fact.get('topic') or 'general'}-{governed_fact.get('id') or 'entry'}"
+    pointer = build_pointer_ref(pointer_alias, str(governed_fact.get("sha256") or ""))
+    audit = ctx.audit_chain.log(
+        "hlf_memory_govern",
+        {
+            "action": action,
+            "fact_id": governed_fact.get("id"),
+            "sha256": governed_fact.get("sha256"),
+            "topic": governed_fact.get("topic"),
+            "pointer": pointer,
+            "reason": reason,
+            "operator_id": operator_id,
+            "operator_display_name": operator_display_name,
+            "operator_channel": operator_channel,
+        },
+        agent_role="memory_governance",
+        goal_id=str(governed_fact.get("topic") or ""),
+    )
+    governance_event = ctx.emit_governance_event(
+        kind="memory_governance",
+        source=source,
+        action=f"memory_{str(action).lower()}",
+        status="ok",
+        severity="warning" if str(action).lower() in {"revoke", "tombstone"} else "info",
+        subject_id=str(governed_fact.get("id") or ""),
+        goal_id=str(governed_fact.get("topic") or ""),
+        details={
+            "sha256": governed_fact.get("sha256"),
+            "pointer": pointer,
+            "state": governed_fact.get("governance_status"),
+            "reason": reason,
+            "operator_summary": operator_summary,
+            "operator_id": operator_id,
+            "operator_display_name": operator_display_name,
+            "operator_channel": operator_channel,
+        },
+        agent_role="memory_governance",
+    )
+    return {
+        "status": "ok",
+        "action": str(action).lower(),
+        "fact": governed_fact,
+        "audit": audit,
+        "governance_event": governance_event,
+    }
+
+
 def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_memory_store(
@@ -199,6 +274,32 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         return ctx.memory_store.stats()
 
     @mcp.tool()
+    def hlf_memory_govern(
+        action: str,
+        fact_id: int | None = None,
+        sha256: str | None = None,
+        operator_summary: str = "",
+        reason: str = "",
+        operator_id: str = "",
+        operator_display_name: str = "",
+        operator_channel: str = "",
+        source: str = "server_memory.hlf_memory_govern",
+    ) -> dict[str, Any]:
+        """Apply a governed memory intervention such as revoke, tombstone, or reinstate."""
+        return apply_memory_governance(
+            ctx,
+            action=action,
+            fact_id=fact_id,
+            sha256=sha256,
+            operator_summary=operator_summary,
+            reason=reason,
+            operator_id=operator_id,
+            operator_display_name=operator_display_name,
+            operator_channel=operator_channel,
+            source=source,
+        )
+
+    @mcp.tool()
     def hlf_witness_record(
         subject_agent_id: str,
         category: str,
@@ -245,13 +346,103 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         listing = ctx.list_witness_subjects(trust_state=trust_state)
         return {"status": "ok", **listing}
 
+    @mcp.tool()
+    def hlf_dream_cycle_run(
+        metrics_dir: str | None = None,
+        max_artifacts: int = 3,
+        max_facts: int = 10,
+        media_evidence: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Run a bounded governed dream cycle over recent evidence and return advisory findings."""
+        return ctx.run_dream_cycle(
+            metrics_dir=metrics_dir,
+            max_artifacts=max_artifacts,
+            max_facts=max_facts,
+            media_evidence=media_evidence,
+        )
+
+    @mcp.tool()
+    def hlf_dream_findings_list(
+        cycle_id: str | None = None,
+        topic: str | None = None,
+        min_confidence: float = 0.0,
+    ) -> dict[str, Any]:
+        """List advisory dream findings produced during bounded dream-cycle runs."""
+        return {"status": "ok", **ctx.list_dream_findings(
+            cycle_id=cycle_id,
+            topic=topic,
+            min_confidence=min_confidence,
+        )}
+
+    @mcp.tool()
+    def hlf_dream_findings_get(finding_id: str) -> dict[str, Any]:
+        """Return a specific advisory dream finding by ID."""
+        finding = ctx.get_dream_finding(finding_id)
+        if finding is None:
+            return {"status": "not_found", "finding_id": finding_id}
+        return {"status": "ok", "finding": finding}
+
+    @mcp.tool()
+    def hlf_media_evidence_list(media_type: str | None = None) -> dict[str, Any]:
+        """List normalized shared media evidence records admitted into governed memory."""
+        return {"status": "ok", **ctx.list_media_evidence(media_type=media_type)}
+
+    @mcp.tool()
+    def hlf_media_evidence_get(artifact_id: str) -> dict[str, Any]:
+        """Return a specific shared media evidence record by artifact ID."""
+        evidence = ctx.get_media_evidence(artifact_id)
+        if evidence is None:
+            return {"status": "not_found", "artifact_id": artifact_id}
+        return {"status": "ok", "media_evidence": evidence}
+
+    @mcp.tool()
+    def hlf_dream_proposal_create(
+        finding_ids: list[str],
+        title: str,
+        summary: str,
+        lane: str = "bridge",
+        proposal_text: str = "",
+        verification_plan: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create an advisory dream proposal with explicit observe-propose-verify-promote citation gates."""
+        return ctx.create_dream_proposal(
+            finding_ids=finding_ids,
+            title=title,
+            summary=summary,
+            lane=lane,
+            proposal_text=proposal_text,
+            verification_plan=verification_plan,
+        )
+
+    @mcp.tool()
+    def hlf_dream_proposals_list(lane: str | None = None) -> dict[str, Any]:
+        """List advisory dream proposals staged for a governed implementation lane."""
+        return {"status": "ok", **ctx.list_dream_proposals(lane=lane)}
+
+    @mcp.tool()
+    def hlf_dream_proposals_get(proposal_id: str) -> dict[str, Any]:
+        """Return a specific advisory dream proposal by ID."""
+        proposal = ctx.get_dream_proposal(proposal_id)
+        if proposal is None:
+            return {"status": "not_found", "proposal_id": proposal_id}
+        return {"status": "ok", "proposal": proposal}
+
     return {
         "hlf_memory_store": hlf_memory_store,
         "hlf_memory_query": hlf_memory_query,
         "hlf_hks_capture": hlf_hks_capture,
         "hlf_hks_recall": hlf_hks_recall,
         "hlf_memory_stats": hlf_memory_stats,
+        "hlf_memory_govern": hlf_memory_govern,
         "hlf_witness_record": hlf_witness_record,
         "hlf_witness_status": hlf_witness_status,
         "hlf_witness_list": hlf_witness_list,
+        "hlf_dream_cycle_run": hlf_dream_cycle_run,
+        "hlf_dream_findings_list": hlf_dream_findings_list,
+        "hlf_dream_findings_get": hlf_dream_findings_get,
+        "hlf_media_evidence_list": hlf_media_evidence_list,
+        "hlf_media_evidence_get": hlf_media_evidence_get,
+        "hlf_dream_proposal_create": hlf_dream_proposal_create,
+        "hlf_dream_proposals_list": hlf_dream_proposals_list,
+        "hlf_dream_proposals_get": hlf_dream_proposals_get,
     }

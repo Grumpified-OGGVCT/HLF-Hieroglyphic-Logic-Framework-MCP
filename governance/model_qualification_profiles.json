@@ -87,6 +87,76 @@
           "verifier_accuracy": 0.97
         }
       }
+    },
+    "multimodal_vision_ocr_governed": {
+      "required_lanes": ["multimodal"],
+      "required_capabilities": ["vision", "ocr", "structured-extraction"],
+      "required_languages": ["en", "fr", "es", "ar", "zh"],
+      "required_host_functions": ["OCR_EXTRACT", "IMAGE_SUMMARIZE"],
+      "tiers": {
+        "baseline-qualified": {
+          "vision_grounding": 0.7,
+          "ocr_fidelity": 0.8,
+          "safety_adherence": 0.9
+        },
+        "launch-qualified": {
+          "vision_grounding": 0.82,
+          "ocr_fidelity": 0.9,
+          "safety_adherence": 0.95
+        },
+        "promotion-qualified": {
+          "vision_grounding": 0.9,
+          "ocr_fidelity": 0.96,
+          "safety_adherence": 0.98
+        }
+      }
+    },
+    "multimodal_audio_evidence_governed": {
+      "required_lanes": ["multimodal"],
+      "required_capabilities": ["audio-transcription", "speaker-tracking"],
+      "required_languages": ["en", "fr", "es", "ar", "zh"],
+      "required_host_functions": ["AUDIO_TRANSCRIBE"],
+      "tiers": {
+        "baseline-qualified": {
+          "audio_transcription_quality": 0.82,
+          "safety_adherence": 0.9
+        },
+        "launch-qualified": {
+          "audio_transcription_quality": 0.9,
+          "speaker_separation": 0.78,
+          "safety_adherence": 0.95
+        },
+        "promotion-qualified": {
+          "audio_transcription_quality": 0.96,
+          "speaker_separation": 0.88,
+          "safety_adherence": 0.98
+        }
+      }
+    },
+    "multimodal_video_evidence_governed": {
+      "required_lanes": ["multimodal"],
+      "required_capabilities": ["video-understanding", "temporal-summarization", "vision"],
+      "required_languages": ["en", "fr", "es", "ar", "zh"],
+      "required_host_functions": ["VIDEO_SUMMARIZE", "IMAGE_SUMMARIZE"],
+      "tiers": {
+        "baseline-qualified": {
+          "video_summary_quality": 0.75,
+          "vision_grounding": 0.72,
+          "safety_adherence": 0.9
+        },
+        "launch-qualified": {
+          "video_summary_quality": 0.86,
+          "vision_grounding": 0.82,
+          "temporal_consistency": 0.78,
+          "safety_adherence": 0.95
+        },
+        "promotion-qualified": {
+          "video_summary_quality": 0.93,
+          "vision_grounding": 0.9,
+          "temporal_consistency": 0.87,
+          "safety_adherence": 0.98
+        }
+      }
     }
   }
 }

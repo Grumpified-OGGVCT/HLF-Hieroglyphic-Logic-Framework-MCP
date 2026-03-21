@@ -7,6 +7,7 @@ from pathlib import Path
 from hlf_mcp.evidence_query import print_payload
 from hlf_mcp.server_context import build_server_context
 from hlf_mcp.server_core import load_test_suite_summary
+from hlf_mcp.server_memory import apply_memory_governance
 from hlf_mcp.server_resources import render_resource_uri
 from hlf_mcp.server_translation import run_hlf_do
 from hlf_mcp.weekly_artifacts import summarize_weekly_artifacts
@@ -38,6 +39,28 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     evidence_parser.add_argument("--metrics-dir", type=Path, default=None)
     evidence_parser.add_argument("--json", action="store_true")
+
+    provenance_parser = subparsers.add_parser(
+        "provenance-summary",
+        help="Summarize packaged provenance across memory, governance, witness, and evidence",
+    )
+    provenance_parser.add_argument("--metrics-dir", type=Path, default=None)
+    provenance_parser.add_argument("--json", action="store_true")
+
+    governance_parser = subparsers.add_parser(
+        "memory-govern",
+        help="Apply a governed memory intervention through the packaged shell surface",
+    )
+    governance_parser.add_argument("--action", required=True, choices=["revoke", "tombstone", "reinstate"])
+    governance_parser.add_argument("--fact-id", type=int, default=None)
+    governance_parser.add_argument("--sha256", default=None)
+    governance_parser.add_argument("--operator-summary", default="")
+    governance_parser.add_argument("--reason", default="")
+    governance_parser.add_argument("--operator-id", default="")
+    governance_parser.add_argument("--operator-display-name", default="")
+    governance_parser.add_argument("--operator-channel", default="")
+    governance_parser.add_argument("--source", default="operator_cli.memory_govern")
+    governance_parser.add_argument("--json", action="store_true")
 
     resource_parser = subparsers.add_parser(
         "resource",
@@ -75,6 +98,34 @@ def _weekly_evidence_summary_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _provenance_summary_command(args: argparse.Namespace) -> int:
+    ctx = build_server_context()
+    payload = {
+        "status": "ok",
+        "provenance_contract": ctx.summarize_provenance_contract(metrics_dir=args.metrics_dir),
+    }
+    print_payload(payload, as_json=True if args.json else False)
+    return 0
+
+
+def _memory_govern_command(args: argparse.Namespace) -> int:
+    ctx = build_server_context()
+    payload = apply_memory_governance(
+        ctx,
+        action=args.action,
+        fact_id=args.fact_id,
+        sha256=args.sha256,
+        operator_summary=args.operator_summary,
+        reason=args.reason,
+        operator_id=args.operator_id,
+        operator_display_name=args.operator_display_name,
+        operator_channel=args.operator_channel,
+        source=args.source,
+    )
+    print_payload(payload, as_json=True if args.json else False)
+    return 0 if payload.get("status") == "ok" else 1
+
+
 def _resource_command(args: argparse.Namespace) -> int:
     ctx = build_server_context()
     payload_text = render_resource_uri(ctx, args.uri)
@@ -104,6 +155,10 @@ def main(argv: list[str] | None = None) -> int:
         return _test_summary_command(args)
     if args.command == "weekly-evidence-summary":
         return _weekly_evidence_summary_command(args)
+    if args.command == "provenance-summary":
+        return _provenance_summary_command(args)
+    if args.command == "memory-govern":
+        return _memory_govern_command(args)
     if args.command == "resource":
         return _resource_command(args)
 

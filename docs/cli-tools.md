@@ -17,6 +17,8 @@ This file replaces the drifted upstream CLI page with the commands that actually
 | `hlfsh` | `hlf_mcp.hlf.hlfsh:main` | Launch the interactive HLF shell |
 | `hlflsp` | `hlf_mcp.hlf.hlflsp:main` | Start the HLF language server |
 | `hlftest` | `hlf_mcp.hlf.hlftest:main` | Compile and lint HLF snippets, files, or directories |
+| `hlf-evidence` | `hlf_mcp.evidence_query:main` | Query governed weekly evidence artifacts and operator review state |
+| `hlf-operator` | `hlf_mcp.operator_cli:main` | Run packaged operator-facing review and governance commands |
 
 Examples below use `uv run`, but the commands also work directly after installing the package.
 
@@ -185,6 +187,59 @@ from hlf_mcp.hlf.hlftest import assert_compiles, assert_lints_clean, assert_gas_
 assert_compiles('[HLF-v3]\nRESULT 0 "ok"\nΩ')
 assert_lints_clean('[HLF-v3]\nRESULT 0 "ok"\nΩ')
 assert_gas_under('[HLF-v3]\nRESULT 0 "ok"\nΩ', 50)
+```
+
+## `hlf-evidence`
+
+Query governed weekly evidence artifacts and inspect operator-facing review details.
+
+```bash
+uv run hlf-evidence list --status promoted
+uv run hlf-evidence show weekly_demo
+uv run hlf-evidence show weekly_demo --json
+uv run hlf-evidence summary
+```
+
+Supported subcommands:
+
+- `list`
+- `show ARTIFACT_ID`
+- `decide ARTIFACT_ID`
+- `summary`
+
+Current `show` behavior:
+
+- `--json` prints the full stored artifact payload.
+- plain `show` prints an operator-oriented summary.
+- when a governed review is present, the plain view includes the persona handoff contract:
+	- change class
+	- owner persona
+	- review personas
+	- required gates
+	- escalation target
+	- operator summary
+	- handoff template reference
+
+Example plain output shape:
+
+```text
+Artifact: weekly_demo
+Status: promoted
+Source: weekly-code-quality
+Generated: 2026-03-19T00:00:00+00:00
+Verified: yes
+Distribution eligible: yes
+
+Governed review:
+	Summary: No governed review contract was attached for weekly-code-quality.
+	Severity: info
+	Change class: security_sensitive
+	Owner persona: sentinel
+	Review personas: strategist, steward, cove
+	Required gates: strategist_review, sentinel_review, steward_review, cove_review, operator_promotion
+	Escalate to: none
+	Operator summary: Owner persona sentinel; review personas strategist, steward, cove; required gates strategist_review, sentinel_review, steward_review, cove_review, operator_promotion.
+	Handoff template: governance/templates/persona_review_handoff.md
 ```
 
 ## Related References

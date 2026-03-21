@@ -1,9 +1,9 @@
 # HLF governance file manifest — SHA-256 hashes
 # Generated at commit time; server checks this at startup (warns on drift).
-# Regenerate: python scripts/gen_manifest.py  (or see pyproject.toml scripts)
+# Regenerate: uv run python scripts/gen_manifest.py
 # Format: <sha256hex>  <filename>  (two spaces, GNU coreutils sha256sum style)
 
 9dc9cf87996813d9cfe915d530b704ee90524138b2083d4691d4536b8aeaf238  align_rules.json
 a5824af588ca3a4882d2c07b01e5d7f952aee4827d086353871bc4eb4a35e4c7  bytecode_spec.yaml
-c9c5ca14ddf8ab743cdd0d7be4e87b728a36a3777c0f938e9dbec71ad68d9b10  host_functions.json
+39ca6127a04706f738a6f05d5521e77307e2e4dba022967d1af53d76b3dca587  host_functions.json
 ef940ec3da28d3e44fe14cc5e24ecfbed05b0cc072438a5d7e11d5518cc1bf85  tag_i18n.yaml

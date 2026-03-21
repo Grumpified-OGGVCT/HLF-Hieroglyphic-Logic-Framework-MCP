@@ -1,0 +1,88 @@
+name: "Readiness Refresh Guard"
+
+"on":
+  pull_request:
+    paths:
+      - "SSOT_HLF_MCP.md"
+      - "docs/HLF_MISSING_PILLARS.md"
+      - "docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md"
+      - "docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md"
+      - "docs/HLF_INTERNAL_READINESS_DASHBOARD_2026-03-20.md"
+      - "docs/HLF_READINESS_REFRESH_PROCEDURE.md"
+      - "docs/HLF_STATUS_OVERVIEW.md"
+      - "docs/index.html"
+      - "docs/merge-readiness.html"
+      - "docs/claims-ledger.html"
+      - ".github/scripts/readiness_refresh_check.py"
+      - ".github/scripts/generate_status_overview.py"
+      - "observability/local_validation/**/*.json"
+  push:
+    branches: [main]
+    paths:
+      - "SSOT_HLF_MCP.md"
+      - "docs/HLF_MISSING_PILLARS.md"
+      - "docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md"
+      - "docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md"
+      - "docs/HLF_INTERNAL_READINESS_DASHBOARD_2026-03-20.md"
+      - "docs/HLF_READINESS_REFRESH_PROCEDURE.md"
+      - ".github/scripts/readiness_refresh_check.py"
+      - "docs/HLF_STATUS_OVERVIEW.md"
+      - "docs/index.html"
+      - "docs/merge-readiness.html"
+      - "docs/claims-ledger.html"
+      - ".github/scripts/generate_status_overview.py"
+      - "observability/local_validation/**/*.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readiness-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set comparison range
+        id: range
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect changed files
+        shell: bash
+        run: |
+          git diff --name-only "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}" > /tmp/readiness_changed_files.txt
+          cat /tmp/readiness_changed_files.txt
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Validate readiness refresh coupling
+        run: |
+          python .github/scripts/readiness_refresh_check.py \
+            --changed-files-file /tmp/readiness_changed_files.txt \
+            --output /tmp/readiness_refresh_report.json
+
+      - name: Validate generated status surfaces
+        run: |
+          python .github/scripts/generate_status_overview.py --check
+
+      - name: Upload readiness refresh report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: readiness-refresh-report
+          path: /tmp/readiness_refresh_report.json
+          retention-days: 30

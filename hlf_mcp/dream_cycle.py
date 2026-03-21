@@ -4,7 +4,7 @@ import hashlib
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from hlf_mcp.media_evidence import MediaEvidenceRecord, normalize_media_evidence
+from hlf_mcp.media_evidence import MediaEvidenceRecord
 
 
 def _digest(*parts: str) -> str:

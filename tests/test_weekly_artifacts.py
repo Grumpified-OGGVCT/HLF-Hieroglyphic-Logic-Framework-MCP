@@ -92,7 +92,10 @@ def test_build_weekly_artifact_uses_latest_suite_summary(monkeypatch, tmp_path: 
     assert artifact["governed_review"]["contract_version"] == "1.0"
     assert artifact["governed_review"]["change_class"] == "workflow_contract"
     assert artifact["governed_review"]["owner_persona"] == "steward"
-    assert artifact["governed_review"]["handoff_template_ref"] == "governance/templates/persona_review_handoff.md"
+    assert (
+        artifact["governed_review"]["handoff_template_ref"]
+        == "governance/templates/persona_review_handoff.md"
+    )
 
 
 def test_build_weekly_artifact_normalizes_security_findings_from_workflow_payload(

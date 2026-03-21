@@ -8,27 +8,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _minimal_governed_review(source: str) -> dict[str, object]:
-    return {
-        "contract_version": "1.0",
-        "review_type": "weekly_artifact",
-        "summary": f"No governed review contract was attached for {source}.",
-        "severity": "info",
-        "automation_status": "not_collected",
-        "operator_gate_required": True,
-        "recommended_triage_lane": None,
-        "backend": {
-            "provider": None,
-            "access_mode": None,
-            "model": None,
-            "tier_index": None,
-            "fallback_chain": [],
-        },
-        "pillar_assessments": [],
-        "recommended_actions": [],
-        "evidence_refs": [],
-        "escalation_triggers": [],
-        "review_metadata": {"source": source},
-    }
+    from hlf_mcp.governed_review import default_governed_review
+
+    return default_governed_review(source=source)
 
 
 def _load_module(path: Path, name: str):

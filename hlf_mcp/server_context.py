@@ -9,8 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from hlf_mcp.dream_cycle import DreamCycleReport, DreamFinding, build_dream_findings, normalize_media_evidence
-from hlf_mcp.media_evidence import MediaEvidenceRecord
+from hlf_mcp.dream_cycle import DreamCycleReport, build_dream_findings
 from hlf_mcp.hlf.align_governor import AlignGovernor
 from hlf_mcp.hlf.approval_ledger import ApprovalLedger
 from hlf_mcp.hlf.audit_chain import AuditChain
@@ -36,6 +35,7 @@ from hlf_mcp.hlf.witness_governance import (
     WitnessRecommendedAction,
 )
 from hlf_mcp.instinct.lifecycle import InstinctLifecycle
+from hlf_mcp.media_evidence import MediaEvidenceRecord, normalize_media_evidence
 from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar, RAGMemory
 from hlf_mcp.weekly_artifacts import load_verified_weekly_artifacts, summarize_weekly_artifacts
 

@@ -6,10 +6,12 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from hlf_mcp.hlf.bytecode import HLFBytecode
-from hlf_mcp.hlf.bytecode import OPCODES
+from hlf_mcp.hlf.bytecode import OPCODES, HLFBytecode
 from hlf_mcp.hlf.compiler import HLFCompiler
-from hlf_mcp.server_profiles import build_multimodal_contract_catalog, build_profile_capability_catalog
+from hlf_mcp.server_profiles import (
+    build_multimodal_contract_catalog,
+    build_profile_capability_catalog,
+)
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _GOVERNANCE_DIR = _PACKAGE_DIR.parent / "governance"

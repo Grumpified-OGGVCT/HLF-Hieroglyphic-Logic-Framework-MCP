@@ -47,7 +47,9 @@ def _match_input_patterns(changed: set[str]) -> list[str]:
 def build_refresh_report(changed_files: list[str]) -> dict[str, object]:
     changed = set(_normalize_paths(changed_files))
     changed_inputs = sorted(changed & READINESS_INPUTS)
-    changed_inputs.extend(path for path in _match_input_patterns(changed) if path not in changed_inputs)
+    changed_inputs.extend(
+        path for path in _match_input_patterns(changed) if path not in changed_inputs
+    )
     changed_outputs = sorted(changed & READINESS_OUTPUTS)
     refresh_required = bool(changed_inputs)
     satisfied = not refresh_required or bool(changed_outputs)

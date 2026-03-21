@@ -190,6 +190,12 @@ This plan is intentionally larger than a normal feature plan because the problem
 | TASK-046 | Fold `plan/feature-autonomous-evolution-1.md` into the master sequencing so the repo treats `observe -> propose -> verify -> promote` as a formal bridge lane rather than optional side planning. | ✅ | 2026-03-19 |
 | TASK-047 | Record the intake/promotion rule explicitly: research and weekly findings may enter at any time, but they remain advisory until provenance, verification, and governance gates are satisfied. | ✅ | 2026-03-19 |
 | TASK-048 | Add the first concrete implementation slice for this lane by enforcing a weekly evidence contract and deterministic second-pass verification in the shared artifact path used by workflows and the local scheduled pipeline. | ✅ | 2026-03-19 |
+| TASK-048A | Create `docs/HLF_DREAM_CYCLE_GAP_MAP.md` to classify source-era dream capability against current packaged memory, witness, audit, and operator surfaces. | ✅ | 2026-03-20 |
+| TASK-048B | Create `docs/HLF_DREAM_CYCLE_BRIDGE_SPEC.md` to define the bounded dream-cycle bridge as governed offline synthesis rather than present-tense self-awareness. | ✅ | 2026-03-20 |
+| TASK-048C | Add dream-cycle recovery to the autonomous-evolution and repo backlog surfaces so future implementation starts from packaged insertion seams instead of source-era subsystem cloning. | ✅ | 2026-03-20 |
+| TASK-048D | Create `docs/HLF_MULTIMODAL_MEDIA_RECOVERY_SPEC.md` so media handling becomes an explicit governed bridge requirement rather than source-only capability drift. | ✅ | 2026-03-20 |
+| TASK-048E | Add multimodal evidence requirements to the dream-cycle bridge so offline synthesis can consume normalized image, OCR, audio-derived, and video-derived evidence. | ✅ | 2026-03-20 |
+| TASK-048F | Add backlog work for media host functions, schemas, safety controls, multimodal qualification profiles, and deterministic tests. | ✅ | 2026-03-20 |
 
 ### Implementation Phase 11
 
@@ -200,6 +206,17 @@ This plan is intentionally larger than a normal feature plan because the problem
 | TASK-049 | Add Audit Spine completion to Batch 2: end-to-end Merkle trust demonstration, operator-readable proof objects, and trust-chain verification procedure. | ✅ | 2026-03-19 |
 | TASK-050 | Add the research/build interface to Batch 2: permissive intake, triage classification, and strict promotion gates tied to verifier and lifecycle surfaces. | ✅ | 2026-03-19 |
 | TASK-051 | Add benchmark intent to Batch 2 for trust-surface overhead and predictability: Merkle-chain overhead, gas predictability, and verification latency. | ✅ | 2026-03-19 |
+
+### Implementation Phase 11A
+
+- **GOAL-011A**: Capture the next high-value adoption and operator-shell wishlist items as executable bridge plans rather than loose chat ideas.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-052 | Create `plan/feature-self-healing-parser-1.md` to define a bounded correction-assist lane for friendly parser diagnostics, safe auto-repairs, and repair preview without weakening canonical parse discipline. | ✅ | 2026-03-20 |
+| TASK-053 | Add the self-healing parser lane to `HLF_MCP_TODO.md` and `TODO.md` so the next PR can assess and start from an executable backlog entry rather than a remembered wishlist. | ✅ | 2026-03-20 |
+| TASK-054 | Create `plan/architecture-visual-operator-workbench-1.md` to bind live intent visualization, governance visibility, and later replay debugging to the VS Code extension and packaged operator-shell path. | ✅ | 2026-03-20 |
+| TASK-055 | Add the visual operator workbench lane to active backlog surfaces with an explicit rule that time-travel debugging stays gated on authoritative step-trace artifacts. | ✅ | 2026-03-20 |
 
 ## 3. Alternatives
 
@@ -257,6 +274,11 @@ This plan is intentionally larger than a normal feature plan because the problem
 - **FILE-022**: `hlf_mcp/weekly_artifacts.py` — shared weekly evidence contract and verification surface
 - **FILE-023**: `.github/scripts/emit_weekly_artifact.py` — workflow-facing artifact emission and second-pass verification
 - **FILE-024**: `scripts/run_pipeline_scheduled.py` — local scheduled pipeline artifact emission and second-pass verification
+- **FILE-025**: `docs/HLF_DREAM_CYCLE_GAP_MAP.md` — source-to-packaged diagnosis for dream-cycle recovery
+- **FILE-026**: `docs/HLF_DREAM_CYCLE_BRIDGE_SPEC.md` — bounded governed dream-cycle recovery contract
+- **FILE-027**: `docs/HLF_MULTIMODAL_MEDIA_RECOVERY_SPEC.md` — governed multimodal and media recovery contract
+- **FILE-028**: `plan/feature-self-healing-parser-1.md` — bounded correction-assist and parser-usability bridge plan
+- **FILE-029**: `plan/architecture-visual-operator-workbench-1.md` — extension-hosted visual operator workbench bridge plan
 
 ## 6. Testing
 

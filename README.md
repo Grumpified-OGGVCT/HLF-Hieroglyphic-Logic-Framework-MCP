@@ -7,9 +7,7 @@
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-<p align="center">
-  <img src="docs/social_preview.svg" alt="HLF — Hieroglyphic Logic Framework · MCP Server" width="100%"/>
-</p>
+![HLF — Hieroglyphic Logic Framework · MCP Server](docs/social_preview.svg)
 
 ---
 
@@ -47,13 +45,29 @@ flowchart LR
 Quick reading guide for first-time readers:
 
 | If you want... | Read this first | Then read |
-|---|---|---|
+| --- | --- | --- |
 | the big idea | `docs/HLF_VISION_PLAIN_LANGUAGE.md` | `HLF_VISION_DOCTRINE.md` |
 | the strict current truth | `SSOT_HLF_MCP.md` | `BUILD_GUIDE.md` |
 | the recovery path | `plan/architecture-hlf-reconstruction-2.md` | `HLF_ACTIONABLE_PLAN.md` |
 | the wording discipline | `docs/HLF_CLAIM_LANES.md` | `docs/HLF_MCP_POSITIONING.md` |
 
 For a broader document map after that first pass, use `HLF_IMPLEMENTATION_INDEX.md`, `HLF_SOURCE_EXTRACTION_LEDGER.md`, `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`, and `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`.
+
+For branch-aware public review and PR reading, use:
+
+- `docs/claims-ledger.html`
+- `docs/HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md`
+- `docs/HLF_MERGE_READINESS_SUMMARY_2026-03-20.md`
+- `docs/HLF_REVIEWER_HANDOFF_2026-03-20.md`
+- `docs/HLF_STATUS_OVERVIEW.md`
+- `docs/index.html`
+
+For the merged GitHub Pages status surface, use:
+
+- `docs/HLF_STATUS_OVERVIEW.md`
+- `docs/index.html`
+- `docs/merge-readiness.html`
+- `docs/claims-ledger.html`
 
 Repository boundary:
 
@@ -97,7 +111,6 @@ If you are evaluating this repo as an agent user, builder, or operator, the righ
 
 - HLF is the governed meaning and coordination substrate
 - the packaged MCP server is the main present-tense product surface
-- MCP is the front door to HLF, not the full definition of HLF
 
 What that means in practice:
 
@@ -119,7 +132,6 @@ For the full doctrinal version of that distinction, read `docs/HLF_MCP_POSITIONI
 
 MCP front-door view:
 the shipped MCP surface is the entry lane, not the full ontology of the system.
-
 
 ```mermaid
 flowchart TD
@@ -241,21 +253,37 @@ Reading rule:
 
 ## Table of Contents
 
-1. [What is HLF?](#1-what-is-hlf)
-   - [Ethos — People First, Transparent Governance](#ethos--people-first-transparent-governance)
-2. [Quick Start](#2-quick-start)
-3. [Architecture Overview](#3-architecture-overview)
-4. [Grammar & Language Reference](#4-grammar--language-reference)
-5. [Compiler Pipeline (5 Passes)](#5-compiler-pipeline-5-passes)
-6. [Bytecode VM](#6-bytecode-vm)
-7. [Intent Capsule Tier Model](#7-intent-capsule-tier-model)
-8. [Host Function Registry](#8-host-function-registry)
-9. [Stdlib — 8 Complete Modules](#9-stdlib--8-complete-modules)
-10. [HLF Knowledge Substrate (HKS)](#10-hlf-knowledge-substrate-hks)
-11. [Instinct SDD Lifecycle](#11-instinct-sdd-lifecycle)
+1. What is HLF?
+    - Ethos - People First, Transparent Governance
+2. Quick Start
+3. Architecture Overview
+4. Grammar and Language Reference
+5. Compiler Pipeline (5 Passes)
+6. Bytecode VM
+7. Intent Capsule Tier Model
+8. Host Function Registry
+9. Stdlib - 8 Complete Modules
+10. HLF Knowledge Substrate (HKS)
+11. Instinct SDD Lifecycle
 12. [MCP Server & Transports](#12-mcp-server--transports)
 13. [MCP Tools Reference](#13-mcp-tools-reference)
 14. [Docker Deployment](#14-docker-deployment)
+
+## Operator Evidence Review
+
+The packaged CLI includes `hlf-evidence` for reviewing governed weekly artifacts.
+
+Useful commands:
+
+```bash
+uv run hlf-evidence list --status promoted
+uv run hlf-evidence show weekly_demo
+uv run hlf-evidence show weekly_demo --json
+```
+
+Operator-facing `show` output is intentionally different from raw JSON. When a governed review is attached, the plain-text view exposes the persona handoff contract directly, including change class, owner persona, review personas, required gates, escalation target, operator summary, and the handoff template reference.
+
+See `docs/cli-tools.md` for the command reference.
 15. [Benchmark Results](#15-benchmark-results)
 16. [Governance & Security](#16-governance--security)
 17. [Development](#17-development)
@@ -272,7 +300,7 @@ HLF is the attempt to build a governed meaning layer between human intent and ma
 The current MCP server matters because it is the easiest adoption path.
 But the larger target is a real language and runtime for governed agent work.
 
-```
+```hlf
 [HLF-v3]
 Δ analyze /security/seccomp.json
   Ж [CONSTRAINT] mode="ro"
@@ -281,14 +309,13 @@ But the larger target is a real language and runtime for governed agent work.
 Ω
 ```
 
-
 In other words:
 the front door is present-tense product truth, while the fuller HLF system remains the larger architectural target.
 
 ### Core Properties
 
 | Property | Mechanism |
-|---|---|
+| --- | --- |
 | **Deterministic Intent** | LALR(1) parsing — 100% reproducible execution paths, zero ambiguity |
 | **Token Compression** | 12–30% vs NLP prose; up to 83% vs verbose JSON (tiktoken cl100k_base) |
 | **Cryptographic Governance** | SHA-256 / Merkle-chain audit trail on every intent and memory write |
@@ -300,14 +327,13 @@ the front door is present-tense product truth, while the fuller HLF system remai
 
 HLF programs exist in five interchangeable, round-trippable representations:
 
-```
+```text
 Glyph Source  ──compile──▶  JSON AST  ──codegen──▶  .hlb Bytecode
      ▲                          │                         │
      │ hlffmt                   │ insaits                 │ disassemble
      │                          ▼                         ▼
 ASCII Source            English Audit             Assembly Listing
 ```
-
 
 ### Ethos — People First, Transparent Governance
 
@@ -373,7 +399,7 @@ They do not by themselves promote recursive-build maturity claims.
 **Endpoints when SSE is active:**
 
 | Path | Purpose |
-|---|---|
+| --- | --- |
 | `GET /sse` | SSE event stream (MCP handshake) |
 | `POST /messages/` | MCP message endpoint |
 | `GET /health` | Health check (returns `{"status":"ok"}`) |
@@ -500,46 +526,49 @@ flowchart TD
 
 ### The 7 Hieroglyphic Glyphs
 
-Every HLF statement begins with one of seven Unicode glyphs. Each glyph carries semantic meaning and maps to a specific bytecode opcode:
+Glyph statements begin with one of seven Unicode glyphs. HLF also supports keyword-led statements such as `SET`, `ASSIGN`, `IF`, `FUNCTION`, `TOOL`, `CALL`, `IMPORT`, and the Instinct spec forms. The table below shows the current packaged glyph set and the current packaged bytecode lowering used by the compiler:
 
 | Glyph | Name | Semantic Role | ASCII Alias | Opcode |
-|---|---|---|---|---|
-| `Δ` | DELTA | Analyze / primary action | `ANALYZE` | `0x51` |
-| `Ж` | ZHE | Enforce / constrain / assert | `ENFORCE` | `0x60` |
-| `⨝` | JOIN | Consensus / join / vote | `JOIN` | `0x61` |
-| `⌘` | COMMAND | Command / delegate / route | `CMD` | `0x52` |
-| `∇` | NABLA | Source / parameter / data flow | `SOURCE` | `0x01` |
-| `⩕` | BOWTIE | Priority / weight / rank | `PRIORITY` | `0x11` |
-| `⊎` | UNION | Branch / condition / union | `BRANCH` | `0x41` |
+| --- | --- | --- | --- | --- |
+| `Δ` | DELTA | Analyze / primary action | `ANALYZE` | `0x51` (`CALL_HOST`) |
+| `Ж` | ZHE | Enforce / constrain / assert | `ENFORCE` | `0x60` (`TAG`) |
+| `⨝` | JOIN | Consensus / join / vote | `JOIN` | `0x61` (`INTENT`) |
+| `⌘` | COMMAND | Command / delegate / route | `CMD` | `0x51` (`CALL_HOST`) |
+| `∇` | NABLA | Source / parameter / data flow | `SOURCE` | `0x01` (`PUSH_CONST`) |
+| `⩕` | BOWTIE | Priority / weight / rank | `PRIORITY` | `0x60` (`TAG`) |
+| `⊎` | UNION | Branch / condition / union | `BRANCH` | `0x41` (`JZ`) |
 
 ### Statement Types (21 total)
 
-```
+```text
 glyph_stmt   — Δ/Ж/⨝/⌘/∇/⩕/⊎ [TAG] key="val" ...
-set_stmt     — SET name = expr          (immutable binding)
 assign_stmt  — ASSIGN name = expr       (mutable binding)
-if_block     — IF expr { ... } ELIF expr { ... } ELSE { ... }
-if_flat      — IF expr => stmt
+set_stmt     — SET name = expr          (immutable binding)
+if_block_stmt — IF expr { ... } ELIF expr { ... } ELSE { ... }
+if_flat_stmt — IF expr => stmt
 for_stmt     — FOR name IN expr { ... }
-parallel_stmt— PARALLEL { ... } { ... }
-func_stmt    — FUNCTION name(args) { ... }
+parallel_stmt — PARALLEL { ... } { ... }
+func_block_stmt — FUNCTION name(args) { ... }
 intent_stmt  — INTENT name key="val" { ... }
 tool_stmt    — TOOL name key="val"
 call_stmt    — CALL name(args)
+return_stmt  — RETURN value?
 result_stmt  — RESULT code msg?
 log_stmt     — LOG "message"
 import_stmt  — IMPORT module_name
 memory_stmt  — MEMORY entity confidence="0.9" content="..."
 recall_stmt  — RECALL entity top_k=5
-spec_define  — SPEC_DEFINE name key="val"
-spec_gate    — SPEC_GATE name key="val"
-spec_update  — SPEC_UPDATE name key="val"
-spec_seal    — SPEC_SEAL name
+spec_define_stmt — SPEC_DEFINE name key="val"
+spec_gate_stmt — SPEC_GATE name key="val"
+spec_update_stmt — SPEC_UPDATE name key="val"
+spec_seal_stmt — SPEC_SEAL name
 ```
+
+Bridge note: the current packaged grammar is real and usable now, but the long-term HLF language target is larger than this syntax inventory alone and will need stronger canonical surface discipline across glyph, ASCII, AST, bytecode, and audit/decompilation forms.
 
 ### Canonical Tags
 
-```
+```hlf
 INTENT  CONSTRAINT  ASSERT  EXPECT  DELEGATE  ROUTE  SOURCE
 PARAM   PRIORITY    VOTE    RESULT  MEMORY    RECALL
 GATE    DEFINE      MIGRATION  ALIGN
@@ -547,7 +576,7 @@ GATE    DEFINE      MIGRATION  ALIGN
 
 ### Expression Precedence (low → high)
 
-```
+```text
 _expr   (20) : ==  !=  <  >  <=  >=  AND  OR
 _term   (30) : +  -
 _factor (40) : *  /  %
@@ -557,7 +586,7 @@ _atom        : string · int · float · bool · $VAR · ${VAR} · ident · path
 
 ### Program Structure
 
-```
+```hlf
 [HLF-v3]          ← header: version declaration
 <statements>       ← body: one or more statements
 Ω                  ← omega terminator (required)
@@ -565,69 +594,63 @@ _atom        : string · int · float · bool · $VAR · ${VAR} · ident · path
 
 ### Type Annotations (`TYPE_SYM`)
 
-```
+```text
 𝕊  — string    ℕ  — integer    𝔹  — boolean    𝕁  — JSON    𝔸  — any
 ```
 
 ### Example Programs
 
-<details>
-<summary><strong>Hello World</strong></summary>
+#### Hello World
 
 ```hlf
 # HLF v3 — Hello World
 [HLF-v3]
 Δ [INTENT] goal="hello_world"
-  Ж [ASSERT] status="ok"
-  ∇ [RESULT] message="Hello, World!"
+    Ж [ASSERT] status="ok"
+    ∇ [RESULT] message="Hello, World!"
 Ω
 ```
-</details>
 
-<details>
-<summary><strong>Security Baseline Audit (Sentinel Mode)</strong></summary>
+#### Security Baseline Audit (Sentinel Mode)
 
 ```hlf
 # HLF v3 — Security Baseline Audit
 [HLF-v3]
 Δ analyze /security/seccomp.json
-  Ж [CONSTRAINT] mode="ro"
-  Ж [EXPECT] vulnerability_shorthand
-  ⨝ [VOTE] consensus="strict"
+    Ж [CONSTRAINT] mode="ro"
+    Ж [EXPECT] vulnerability_shorthand
+    ⨝ [VOTE] consensus="strict"
 Ω
 ```
-</details>
 
-<details>
-<summary><strong>Multi-Agent Task Delegation (Orchestrator Mode)</strong></summary>
+#### Multi-Agent Task Delegation (Orchestrator Mode)
 
 ```hlf
 # HLF v3 — Multi-Agent Task Delegation
 [HLF-v3]
 ⌘ [DELEGATE] agent="scribe" goal="fractal_summarize"
-  ∇ [SOURCE] /data/raw_logs/matrix_sync_2026.txt
-  ⩕ [PRIORITY] level="high"
-  Ж [ASSERT] vram_limit="8GB"
+    ∇ [SOURCE] /data/raw_logs/matrix_sync_2026.txt
+    ⩕ [PRIORITY] level="high"
+    Ж [ASSERT] vram_limit="8GB"
 Ω
 ```
-</details>
 
-<details>
-<summary><strong>Real-Time Resource Mediation (MoMA Router)</strong></summary>
+#### Real-Time Resource Mediation (MoMA Router)
 
 ```hlf
 # HLF v3 — MoMA Router
 [HLF-v3]
 ⌘ [ROUTE] strategy="auto" tier="${DEPLOYMENT_TIER}"
-  ∇ [PARAM] temperature=0.0
-  Ж [VOTE] confirmation="required"
+    ∇ [PARAM] temperature=0.0
+    Ж [VOTE] confirmation="required"
 Ω
 ```
-</details>
 
 ---
 
 ## 5. Compiler Pipeline (5 Passes)
+
+The diagram below summarizes the five named compiler passes. The current packaged compile path also includes the ethics governor hook, gas estimation, and AST caching around those named passes.
 
 ```mermaid
 flowchart LR
@@ -658,7 +681,7 @@ flowchart LR
         a1["Regex pattern scan\nagainst 5 ALIGN rules\n(credentials, SSRF,\ninjection, traversal, exfil)"]
     end
 
-    out["JSON AST\n+ human_readable\n+ sha256\n+ bytecode hex"]
+    out["JSON AST\n+ human_readable nodes\n+ version and counts\n+ normalization and ALIGN metadata"]
 
     src --> P0 --> P1 --> P2 --> P3 --> P4 --> out
 ```
@@ -668,10 +691,12 @@ flowchart LR
 Pass 0 prevents **IDN homograph attacks** — where a visually identical Cyrillic `а` replaces Latin `a` to smuggle unexpected behaviour through the parser:
 
 | Category | Example substitutions |
-|---|---|
+| --- | --- |
 | Cyrillic | `а→a` `е→e` `о→o` `р→p` `с→c` `х→x` `у→y` |
 | Greek | `α→a` `ε→e` `ο→o` `ρ→p` `σ→s` |
 | Math operators | `−→-` `×→*` `÷→/` `≠→!=` `≤→<=` `≥→>=` |
+
+Bridge note: the packaged compiler already enforces a real deterministic pipeline, but the bridge to fuller HLF completion requires stronger conformance surfaces, round-trip proof, and tighter spec-to-implementation canonicality than a pass diagram alone can show.
 
 ---
 
@@ -679,7 +704,7 @@ Pass 0 prevents **IDN homograph attacks** — where a visually identical Cyrilli
 
 ### Binary Format (`.hlb`)
 
-```
+```text
 Offset  Size   Field
 ──────  ─────  ────────────────────────────────────────────
 0       32     SHA-256 manifest hash (integrity guard)
@@ -696,7 +721,7 @@ Offset  Size   Field
 
 Every instruction is exactly **3 bytes**:
 
-```
+```text
 [opcode: 1 byte] [operand: 2 bytes little-endian]
 ```
 
@@ -751,11 +776,11 @@ graph LR
     end
 ```
 
-> **Opcode conflict fixed**: `OPENCLAW_TOOL` was previously at `0x65`, conflicting with the Instinct spec opcodes. It is now at `0x53`. The `governance/bytecode_spec.yaml` file is the **single source of truth** — all enum values in code are generated from it.
+> **Opcode conflict fixed**: `OPENCLAW_TOOL` was previously at `0x65`, conflicting with the Instinct spec opcodes. It is now at `0x53`. The `governance/bytecode_spec.yaml` file is the **single source of truth**. The current packaged code is aligned to that spec; it is not yet fully generated from it.
 
 ### Constant Pool Encoding
 
-```
+```text
 Type   Byte   Encoding
 ─────  ─────  ──────────────────────────────
 INT    0x01   <Bq>  little-endian signed 64-bit
@@ -768,7 +793,7 @@ NULL   0x05   <B>   no payload
 ### Gas Model
 
 | Tier | Gas Limit | Use Case |
-|---|---|---|
+| --- | --- | --- |
 | `hearth` | 100 | Untrusted / minimal agents |
 | `forge` | 500 | Standard agents |
 | `sovereign` | 1000 | Trusted orchestrators |
@@ -777,6 +802,8 @@ NULL   0x05   <B>   no payload
 | `OPENCLAW_TOOL` | 20 | Sandboxed external tools |
 
 The VM meters gas **before** each dispatch. On budget breach it raises `HlfVMGasExhausted` immediately — no partial execution.
+
+Bridge note: the current bytecode/runtime contract is real and auditable now, but fuller completion still requires stronger spec-driven generation, conformance testing, and proof that runtime behavior preserves canonical HLF meaning across all surfaces.
 
 ---
 
@@ -787,24 +814,24 @@ Intent Capsules bound what each agent tier can read, write, and call — enforce
 ```mermaid
 graph TD
     subgraph hearth["🔒 hearth — Minimal Trust"]
-        h1["Allowed tags: SET · IF · RESULT"]
-        h2["No TOOL or HOST calls"]
+        h1["Allowed tags include SET · IF · RESULT\nplus INTENT/CONSTRAINT/ASSERT/PARAM/SOURCE/LOG"]
+        h2["No TOOL calls; memory and recall denied"]
         h3["Gas limit: 100"]
         h4["Read-only: SYS_INFO · NOW"]
     end
 
     subgraph forge["🔧 forge — Standard Agent"]
-        f1["Allowed tags: SET · ASSIGN · IF · FOR · RESULT · TOOL · HOST"]
+        f1["Allowed tags include SET · ASSIGN · IF · FOR · RESULT · TOOL · CALL\nplus memory, import, intent, route, delegate, vote, priority"]
         f2["Denied tags: SPAWN · SHELL_EXEC"]
-        f3["Allowed tools: READ · WRITE · HTTP_GET"]
+        f3["Allowed tools include READ · WRITE · HTTP_GET\nwith explicit denied-tool checks"]
         f4["Gas limit: 500"]
     end
 
     subgraph sovereign["👑 sovereign — Trusted Orchestrator"]
-        s1["All tags allowed"]
-        s2["All host functions allowed"]
+        s1["No capsule tag deny-list by default"]
+        s2["Capsule admits all tools subject to registry/runtime tier checks"]
         s3["Gas limit: 1000"]
-        s4["Full memory & spawn access"]
+        s4["Broadest packaged capsule surface"]
     end
 
     hearth -->|"promoted by operator"| forge
@@ -816,18 +843,20 @@ graph TD
 Before any VM execution, the capsule checks the AST statically:
 
 1. **Tag whitelist/blacklist** — denied tags raise `CapsuleViolation` before the first instruction runs
-2. **Tool/function whitelist** — `TOOL` and `HOST` nodes checked against `allowed_tools` / `denied_tools`
-3. **Read-only variable guard** — `SET` and `ASSIGN` to protected vars (`SYS_INFO`, `NOW`) blocked
-4. **Gas budget** — cumulative gas from host calls tracked against `max_gas`
+2. **Tool whitelist/blacklist** — explicit tool/call surfaces are checked against `allowed_tools` / `denied_tools`
+3. **Read-only variable guard** — `SET` and `ASSIGN` to protected vars such as `SYS_INFO` and, in `hearth`, `NOW` are blocked
+4. **Gas budget** — cumulative gas from capability use is checked against `max_gas`
+
+Bridge note: capsules already provide real bounded-admission behavior, but the larger HLF target requires a richer formal effect and approval model than the current tier explainer captures.
 
 ---
 
 ## 8. Host Function Registry
 
-28 host functions are defined in `governance/host_functions.json`. Each has `tier`, `gas`, `backend`, and `sensitive` fields enforced at runtime:
+32 host functions are defined in `governance/host_functions.json`. Each has `tier`, `gas`, `backend`, and `sensitive` fields enforced at runtime. The table below is a representative subset of the current packaged registry surface:
 
 | Function | Tiers | Gas | Backend | Sensitive |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `READ` | all | 1 | `dapr_file_read` | ✗ |
 | `WRITE` | all | 2 | `dapr_file_write` | ✗ |
 | `SPAWN` | forge, sovereign | 5 | `docker_orchestrator` | ✗ |
@@ -859,14 +888,16 @@ Before any VM execution, the capsule checks the AST statically:
 
 > **Sensitive outputs**: Functions with `sensitive=true` never log raw return values — only a `SHA-256[:16]` prefix is written to audit logs.
 
+Bridge note: the registry is already a real capability contract, but fuller HLF completion needs a stronger effect schema with clearer determinism, idempotence, and backend-portability semantics than the current README subset can express.
+
 ---
 
 ## 9. Stdlib — 8 Complete Modules
 
-All stdlib modules are fully implemented (no stubs). They are importable in HLF via `IMPORT module_name` and callable as `module_name.FUNCTION(args)`.
+All eight stdlib modules listed here are implemented in the packaged runtime with no obvious placeholder stubs. “Complete” here means implemented now, not semantically finished relative to the larger HLF language target. They are importable in HLF via `IMPORT module_name` and callable as `module_name.FUNCTION(args)`.
 
 | Module | Key Functions |
-|---|---|
+| --- | --- |
 | `agent` | `AGENT_ID`, `AGENT_TIER`, `AGENT_CAPABILITIES`, `SET_GOAL`, `GET_GOALS`, `COMPLETE_GOAL` |
 | `collections` | `LIST_LENGTH/APPEND/CONCAT/FILTER/MAP/REDUCE`, `DICT_GET/SET/KEYS/VALUES` |
 | `crypto` | `ENCRYPT` (AES-256-GCM), `DECRYPT`, `KEY_GENERATE`, `KEY_DERIVE` (PBKDF2-HMAC-SHA256 600K iter), `SIGN/SIGN_VERIFY` (HMAC-SHA256), `HASH/HASH_VERIFY`, `MERKLE_ROOT`, `MERKLE_CHAIN_APPEND` |
@@ -891,6 +922,8 @@ key    = crypto.KEY_DERIVE(password, salt_b64)
 # MERKLE_ROOT: SHA-256 binary tree — lossless round-trip from AST
 root   = crypto.MERKLE_ROOT(["leaf1", "leaf2", "leaf3"])
 ```
+
+Bridge note: the packaged stdlib is already materially useful, but the long-range HLF language surface will need stronger typing, effect semantics, package/version discipline, and broader governed language capabilities than the current stdlib summary alone implies.
 
 ---
 
@@ -949,7 +982,7 @@ graph LR
 ### HKS Properties
 
 | Property | Implementation |
-|---|---|
+| --- | --- |
 | **Infinite RAG integration** | HKS can use the packaged Infinite RAG subsystem for persisted memory and retrieval |
 | **Cosine dedup** | Bag-of-words cosine similarity; nodes with similarity `>0.98` rejected as duplicates |
 | **Provenance lineage** | Every write appends a SHA-256 chain link for forensic audit and replayable evidence |
@@ -975,18 +1008,20 @@ HKS is intended to converge toward a richer governed substrate carrying freshnes
 ### HLF ↔ HKS Synergy
 
 | Without HLF | With HLF |
-|---|---|
+| --- | --- |
 | RAG ingests verbose NLP → bloated store | RAG ingests compressed HLF ASTs → smaller, denser entries |
 | Context window fills quickly | HLF intents are 12–30% smaller → more facts per prompt |
 | Cross-agent sharing is prose-ambiguous | Agents share typed, deterministic HLF → exact semantic match |
 | Dream State compresses NLP → lossy | Dream State compresses HLF AST → lossless (round-trips) |
-| No governance on memory writes | Every write passes through ALIGN Ledger validation via HLF |
+| No governed knowledge contract | Packaged HKS already adds provenance, exemplar capture, and evidence-aware memory flows; fuller write-gating and trust semantics remain bridge work |
+
+Bridge note: HKS is already more than a generic memory bucket in this checkout, but the intended governed knowledge substrate is still larger than the current packaged persistence, exemplar, and weekly-evidence surfaces.
 
 ---
 
 ## 11. Instinct SDD Lifecycle
 
-Every agent mission enforces the deterministic **Specify → Plan → Execute → Verify → Merge** lifecycle. Phase skips and backward transitions are blocked. The CoVE gate is mandatory on `VERIFY → MERGE`.
+Every mission tracked through the packaged Instinct lifecycle follows the deterministic **Specify → Plan → Execute → Verify → Merge** path. Phase skips and backward transitions are blocked. The CoVE gate is mandatory on `VERIFY → MERGE`.
 
 ```mermaid
 stateDiagram-v2
@@ -996,7 +1031,7 @@ stateDiagram-v2
     PLAN --> EXECUTE : plan approved
     EXECUTE --> VERIFY : execution complete
     VERIFY --> MERGE : CoVE gate PASSED ✓
-    VERIFY --> EXECUTE : CoVE gate FAILED ✗ — re-execute
+    VERIFY --> VERIFY : CoVE gate FAILED ✗ — merge blocked
     MERGE --> [*] : mission complete
 
     SPECIFY --> SPECIFY : validation error (stays)
@@ -1019,8 +1054,10 @@ stateDiagram-v2
 
 - **No phase skips**: Cannot jump from `SPECIFY` to `EXECUTE` — every intermediate phase is required
 - **No backward transitions**: A `MERGE`d mission cannot reopen to `EXECUTE`
-- **CoVE gate on VERIFY→MERGE**: If `cove_result.get("passed") == False`, the transition is blocked and the mission re-enters `EXECUTE`
+- **CoVE gate on VERIFY→MERGE**: If `cove_result.get("passed") == False`, the merge transition is blocked and the mission remains at `VERIFY` unless advanced later through the lifecycle
 - **ALIGN Ledger logging**: Every phase transition emits a ledger entry with SHA-256 hash and ULID timestamp
+
+Bridge note: the packaged lifecycle already enforces a real deterministic mission path, but the larger HLF coordination target still requires richer orchestration, verification evidence, and cross-agent governance than this lifecycle summary alone covers.
 
 ---
 
@@ -1062,7 +1099,7 @@ graph LR
 ### Transport Configuration
 
 | `HLF_TRANSPORT` | Endpoint | Typical Use |
-|---|---|---|
+| --- | --- | --- |
 | `stdio` (default) | stdin/stdout | Claude Desktop, local agents |
 | `sse` | `GET /sse` + `POST /messages/` | Remote agents, Docker, web clients |
 | `streamable-http` | `POST /mcp` | Modern MCP 1.26+ clients; packaged transport availability, not recursive-build proof by itself |
@@ -1086,7 +1123,7 @@ HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 ### Compiler & Analysis Tools
 
 | Tool | Description | Key Parameters |
-|---|---|---|
+| --- | --- | --- |
 | `hlf_do` | Plain-English front door: intent -> governed HLF -> audit | `intent, tier, dry_run, show_hlf` |
 | `hlf_compile` | Parse HLF source → JSON AST + bytecode hex | `source: str` |
 | `hlf_format` | Canonicalize: uppercase tags, trailing `Ω` | `source: str` |
@@ -1098,7 +1135,7 @@ HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 ### Translation & Decompilation
 
 | Tool | Description |
-|---|---|
+| --- | --- |
 | `hlf_translate_to_hlf` | English prose → HLF source (tone-aware) |
 | `hlf_translate_to_english` | HLF source → natural language summary |
 | `hlf_decompile_ast` | HLF source → structured English docs (AST level) |
@@ -1108,7 +1145,7 @@ HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 ### Capsule & Security
 
 | Tool | Description |
-|---|---|
+| --- | --- |
 | `hlf_capsule_validate` | Pre-flight AST check against `hearth`/`forge`/`sovereign` capsule |
 | `hlf_capsule_run` | Capsule-sandboxed compile + run (violations caught before VM entry) |
 | `hlf_host_functions` | List host functions available for a tier |
@@ -1118,7 +1155,7 @@ HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 ### Memory & Instinct
 
 | Tool | Description |
-|---|---|
+| --- | --- |
 | `hlf_memory_store` | Store a fact in the Infinite RAG subsystem with pointer and audit metadata |
 | `hlf_memory_query` | Query the Infinite RAG subsystem with governed filters for provenance and entry kinds |
 | `hlf_hks_capture` | Capture a validated HKS exemplar with provenance, tests, and solution metadata |
@@ -1131,14 +1168,14 @@ HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 ### Benchmarking
 
 | Tool | Description |
-|---|---|
+| --- | --- |
 | `hlf_benchmark` | Token compression analysis: HLF vs NLP prose |
 | `hlf_benchmark_suite` | Run all 7 fixture benchmarks, return full table |
 
 ### Resources (read-only)
 
 | URI | Contents |
-|---|---|
+| --- | --- |
 | `hlf://grammar` | Full LALR(1) Lark grammar text |
 | `hlf://opcodes` | Bytecode opcode table (37 opcodes) |
 | `hlf://host_functions` | Available host function registry |
@@ -1194,7 +1231,7 @@ services:
 ### Environment Reference
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `HLF_TRANSPORT` | `stdio` | Transport type: `stdio` / `sse` / `streamable-http` |
 | `HLF_HOST` | `0.0.0.0` | Bind address for HTTP transports |
 | `HLF_PORT` | none | Required port for HTTP transports |
@@ -1206,7 +1243,7 @@ services:
 Real compression ratios measured with **tiktoken cl100k_base** (OpenAI's tokenizer):
 
 | Domain | NLP Tokens | HLF Tokens | Compression | 5-Agent Swarm Saved |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **Hello World** | 71 | 50 | **29.6%** | 105 tokens |
 | **Security Audit** | 105 | 78 | **25.7%** | 135 tokens |
 | **Content Delegation** | 115 | 101 | **12.2%** | 70 tokens |
@@ -1215,7 +1252,7 @@ Real compression ratios measured with **tiktoken cl100k_base** (OpenAI's tokeniz
 | **Stack Deployment** | 104 | 109 | -4.8% | *(overhead)* |
 | **Overall** | **663** | **580** | **12.5%** | **415 tokens/cycle** |
 
-```
+```text
 Token Compression by Domain
 ─────────────────────────────────────────────────────────────────
 Hello World     [██████████████████████████████ 29.6%]
@@ -1239,8 +1276,8 @@ Overall: 12.5% · In a 5-agent swarm: 415 tokens saved per broadcast cycle
 The ALIGN Ledger runs as Pass 4 in the compiler. Every string literal in the AST is scanned:
 
 | Rule | ID | Pattern | Action |
-|---|---|---|---|
-| No credential exposure | `ALIGN-001` | `password=`, `api_key=`, `bearer ` etc. | **BLOCK** |
+| --- | --- | --- | --- |
+| No credential exposure | `ALIGN-001` | `password=`, `api_key=`, `bearer` etc. | **BLOCK** |
 | No localhost SSRF | `ALIGN-002` | `http://127.0.0.1`, `http://localhost` | **WARN** |
 | No shell injection | `ALIGN-003` | `exec(`, `eval(`, `popen(` | **BLOCK** |
 | No path traversal | `ALIGN-004` | `../` `..\\` | **BLOCK** |
@@ -1292,7 +1329,7 @@ Reading rule:
 - this is why governance, admission, evidence, and human-readable output are treated as core surfaces rather than extras
 
 | Layer | What it prevents |
-|---|---|
+| --- | --- |
 | Homoglyph normalization | IDN homograph attacks via Cyrillic/Greek lookalikes |
 | ALIGN Ledger | Credential leaks, SSRF, shell injection, path traversal, exfil |
 | Intent Capsules | Tag/tool/function access violations per tier |
@@ -1307,7 +1344,7 @@ Reading rule:
 The governor is wired into the compiler pipeline as a mandatory pre-flight gate. It runs before bytecode generation and raises `CompileError` on any high-severity signal — no partial execution, no silent bypass.
 
 | Module | Responsibility |
-|---|---|
+| --- | --- |
 | `constitution.py` | Hard-law violations: lethal content, CSAM, absolute blocks; tier escalation checks |
 | `termination.py` | Fail-closed termination, ULID audit log, appealable vs. non-appealable articles |
 | `red_hat.py` | Declared red-hat research scope validation; fingerprint registry |
@@ -1357,7 +1394,7 @@ uv run pytest tests/test_github_scripts.py -v
 ### CLI Tools
 
 | Command | Description |
-|---|---|
+| --- | --- |
 | `uv run hlfc <file.hlf>` | Compile HLF → JSON AST + bytecode |
 | `uv run hlffmt <file.hlf>` | Canonicalize formatting |
 | `uv run hlflint <file.hlf>` | Static linting |
@@ -1374,7 +1411,7 @@ uv run pytest tests/test_github_scripts.py -v
 
 ### Project Structure
 
-```
+```text
 hlf_mcp/
 ├── server.py               # FastMCP server and packaged MCP front door
 ├── hlf/
@@ -1405,7 +1442,7 @@ hlf_mcp/
 
 governance/
 ├── bytecode_spec.yaml      # ← Single source of truth for all opcodes
-├── host_functions.json     # 28 host functions (tier/gas/backend/sensitive)
+├── host_functions.json     # 32 host functions (tier/gas/backend/sensitive)
 ├── align_rules.json        # 5 ALIGN Ledger governance rules
 ├── module_import_rules.yaml# Import policy extracted from Sovereign source
 └── templates/
@@ -1449,7 +1486,7 @@ uv run ruff format hlf_mcp/
 - [x] Bytecode VM: 37 opcodes, gas metering, SHA-256 `.hlb` header
 - [x] Fixed opcode conflict (`OPENCLAW_TOOL` `0x65` → `0x53`)
 - [x] `governance/bytecode_spec.yaml` as single source of truth
-- [x] 28 host functions with tier/gas/backend enforcement
+- [x] 32 host functions with tier/gas/backend enforcement
 - [x] Intent Capsules: hearth / forge / sovereign tiers
 - [x] 8 stdlib modules (no stubs — AES-256-GCM crypto, PBKDF2, HMAC-SHA256)
 - [x] Infinite RAG subsystem (SQLite WAL, Merkle lineage, cosine dedup)
@@ -1473,6 +1510,21 @@ uv run ruff format hlf_mcp/
 - [x] **hlfsh REPL**: interactive shell on the packaged compiler/linter surface
 - [x] **hlftest runner**: packaged compile + lint harness for snippets, files, and fixture directories
 
+Branch-aware note for current checkout:
+
+- [x] **Governed review contracts**: normalized review payloads now exist for spec drift, test health, ethics review, code quality, doc accuracy, and security-pattern review (`hlf_mcp/governed_review.py`)
+- [x] **Operator evidence surfaces**: weekly artifact decision persistence and evidence query/reporting are already packaged on this branch (`hlf_mcp/weekly_artifacts.py`, `tests/test_evidence_query.py`)
+- [x] **Symbolic relation-edge proof slice**: ASCII-first symbolic extraction, projection, and audit logging are present and tested (`hlf_mcp/hlf/symbolic_surfaces.py`, `tests/test_symbolic_surfaces.py`)
+- [x] **Dream-cycle and media-evidence bridge slice**: advisory dream findings, media evidence normalization, citation-chain proposals, and multimodal contract resources are present in this branch and remain bridge-lane surfaces rather than full target-state completion (`hlf_mcp/server_context.py`, `hlf_mcp/server_memory.py`, `hlf_mcp/server_resources.py`, `tests/test_dream_cycle.py`)
+- [x] **VS Code operator bridge scaffold**: a claim-lane-aware operator shell scaffold exists under `extensions/hlf-vscode/`; treat it as bridge work, not Marketplace-shipped completion
+
+Reviewer note:
+
+- use `docs/HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md` for a compact public-facing classification of overstated public gaps, valid public gaps, branch-resolved gaps, and still-open architectural gaps
+- use `docs/HLF_MERGE_READINESS_SUMMARY_2026-03-20.md` for the current branch split between `current-true`, `bridge-true`, and still-open architectural work
+
+- use `docs/HLF_REVIEWER_HANDOFF_2026-03-20.md` for a PR-ready reviewer handoff distilled from the merge-readiness summary
+
 ### Phase 3 — Universal Usability 🌐 (planned)
 
 - [ ] **ASCII surface**: round-trip `IF risk > 0 THEN [RESULT]` ↔ `⊎ risk > 0 ⇒ [RESULT]`
@@ -1488,7 +1540,7 @@ uv run ruff format hlf_mcp/
 Integrations with the Sovereign Agentic OS via HLF host functions:
 
 | Integration | HLF Host Functions | Status |
-|---|---|---|
+| --- | --- | --- |
 | Project Janus (RAG pipeline) | `janus.crawl`, `janus.query`, `janus.archive` | 📋 Planned |
 | OVERWATCH (sentinel watchdog) | `overwatch.scan`, `overwatch.terminate` | 📋 Planned |
 | API-Keeper (credential vault) | `apikeeper.store`, `apikeeper.rotate` | 📋 Planned |

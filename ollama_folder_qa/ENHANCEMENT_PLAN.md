@@ -2,7 +2,7 @@
 
 ## Core Features
 - **Recursive Directory Scan**: Traverse all subdirectories, build a manifest of files for context selection.
-- **Ollama Q&A Integration**: Connect to Ollama server (localhost:11434), use Devrtal larg 2 or devstrral 2 cloud model for context-rich Q&A.
+- **Ollama Q&A Integration**: Connect to Ollama server (default `localhost:11434`) and use an environment-selected model, defaulting to `devstral:24b`, for context-rich Q&A.
 - **Context Selection**: Intelligently select relevant files/chunks for each question.
 - **Answer Synthesis**: Aggregate, deduplicate, and reference file paths in answers.
 

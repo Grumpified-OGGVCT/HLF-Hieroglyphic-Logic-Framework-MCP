@@ -92,6 +92,58 @@ Immediate bridge tasks for this track:
 3. bind autonomous-improvement candidates to `VERIFY -> MERGE` gates and operator-review rules
 4. convert strong outcome claims such as faster shipping, lower defects, and greater reliability into benchmark work rather than present-tense assertions
 
+## Dream-Cycle Reflection Bridge Track
+
+Use `docs/HLF_DREAM_CYCLE_GAP_MAP.md` as the current bridge diagnosis for dream recovery.
+
+Use `docs/HLF_DREAM_CYCLE_BRIDGE_SPEC.md` as the formal bridge contract.
+
+This track exists because the repo still carries the need for offline synthesis over accumulated evidence, but packaged HLF_MCP does not currently ship a first-class dream-cycle surface.
+
+Working rule:
+
+- do not frame this lane as present-tense self-awareness
+- do not restore the source-era dream subsystem wholesale
+- recover the useful part as governed offline synthesis over packaged evidence, memory, witness, and operator surfaces
+- keep dream findings advisory until they survive explicit proposal, verification, and promotion gates
+
+Primary packaged insertion seam:
+
+- `hlf_mcp/server_context.py`
+
+Supporting seams:
+
+- `hlf_mcp/server_memory.py`
+- `hlf_mcp/server_resources.py`
+- `hlf_mcp/weekly_artifacts.py`
+
+Immediate bridge tasks for this track:
+
+1. define the typed `dream finding` and `dream cycle report` contracts over governed evidence
+2. add a bounded dream-cycle execution path that records provenance and witness state without mutating canonical truth by default
+3. expose operator-readable dream status and findings through packaged resource or tool surfaces
+4. connect high-quality dream findings to the broader `observe -> propose -> verify -> promote` lane only after explicit verification rules exist
+
+## Multimodal Evidence And Media Bridge Track
+
+Use `docs/HLF_MULTIMODAL_MEDIA_RECOVERY_SPEC.md` as the formal bridge contract for media handling.
+
+This track exists because HLF cannot stay current or relevant if governed evidence handling remains text-only while modern real-world operator and agent work is increasingly image, document, audio, and video adjacent.
+
+Working rule:
+
+- do not treat multimodal support as a provider-specific flourish
+- do not treat OCR alone as sufficient
+- recover media handling as a governed capability class with host-function contracts, schemas, safety controls, and operator proof surfaces
+- require media-derived evidence to be auditable before it can influence dream-cycle, routing, memory promotion, or proposal lanes
+
+Immediate bridge tasks for this track:
+
+1. define the canonical media evidence schema for image, OCR-bearing document image, diagram image, audio transcript, and video summary artifacts
+2. define packaged host-function contracts for vision, OCR, audio transcript, and video summary lanes
+3. add media-specific safety controls for EXIF or embedded metadata, prompt injection, unsupported payloads, and transcript hallucination labeling
+4. add deterministic tests proving media artifacts cannot influence governed lanes without provenance, sanitization status, and operator-legible summaries
+
 ## Symbolic Surface Bridge Track
 
 Use `plan/feature-symbolic-semantic-surfaces-1.md` as the authoritative bridge plan for the new semasiographic and glyph-inspired HLF lane.
@@ -163,6 +215,64 @@ Working rule:
 - do not elevate sponsorship, pricing, or enterprise language into the main repo story during reconstruction
 - if any public support surface is added before beta, keep it minimal and non-intrusive, such as a footer-level support or sustainability link
 - revisit broader sustainability disclosure only after control-group usage and real operating data exist
+
+## Score-Driven Bridge Batch (2026-03-20)
+
+This is the next bridge batch derived directly from the readiness scorecard and live validation checkpoint.
+
+Priority order is based on the weakest score-bearing pillars that also have immediate proof or operator-leverage value.
+
+### 1. Typed effects and capability algebra
+
+Why now:
+
+- scorecard pressure remains high here
+- governance and host-function registry surfaces already exist, so stronger typed contracts can raise both proof and trust quickly
+
+Required batch outputs:
+
+1. typed host-function contract fields for input schema, output schema, effect class, structured failure type, and audit requirement
+2. denial-path tests for missing or malformed typed contracts
+3. host-function reference updates that distinguish current truth from bridge work cleanly
+
+### 2. Orchestration lifecycle and execution admission
+
+Why now:
+
+- orchestration depth is one of the largest suppressors of total readiness
+- current lifecycle fragments are real, but they do not yet carry the broader plan-to-execute and delegation story
+
+Required batch outputs:
+
+1. packaged delegation, dissent, escalation, and handoff-lineage contracts
+2. deterministic orchestration trace proofs
+3. verifier-plus-route-plus-orchestration admission story for allowed, denied, and escalated steps
+
+### 3. Persona/runtime proof
+
+Why now:
+
+- live validation now proves persona-tagged weekly governance is operationally real
+- the next gap is runtime and workflow proof depth, not more persona prose
+
+Required batch outputs:
+
+1. persona-tagged workflow tests beyond weekly-doc-accuracy and weekly-test-health
+2. proof that persona handoff fields survive artifact normalization, evidence query, and operator rendering intact
+3. explicit runtime boundaries showing where persona doctrine remains advisory versus authoritative
+
+### 4. Ecosystem bridge discipline
+
+Why now:
+
+- ecosystem integration still has the weakest readiness score
+- GitHub Pages and the VS Code bridge make publication and operator-surface drift more visible, so the compatibility program needs cleaner operational boundaries
+
+Required batch outputs:
+
+1. compatibility matrix by ecosystem, transport, and tested SDK version
+2. launch-mode and attach-mode contract shared across JS or TS, Java, Go, and Rust bridges
+3. documented compatibility-watch process for upstream MCP SDK and protocol movement
 
 ---
 

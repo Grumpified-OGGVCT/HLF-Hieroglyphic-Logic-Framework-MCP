@@ -121,6 +121,14 @@ def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
         "automation_status": "not_collected",
         "operator_gate_required": True,
         "recommended_triage_lane": None,
+        "change_class": None,
+        "lane": None,
+        "owner_persona": None,
+        "review_personas": [],
+        "required_gates": [],
+        "escalate_to_persona": None,
+        "operator_summary": None,
+        "handoff_template_ref": None,
         "backend": {
             "provider": None,
             "access_mode": None,
@@ -169,6 +177,21 @@ def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[
     triage_lane = value.get("recommended_triage_lane")
     if triage_lane in ALLOWED_TRIAGE_LANES:
         normalized["recommended_triage_lane"] = triage_lane
+
+    for field_name in (
+        "change_class",
+        "lane",
+        "owner_persona",
+        "escalate_to_persona",
+        "operator_summary",
+        "handoff_template_ref",
+    ):
+        field_value = value.get(field_name)
+        if isinstance(field_value, str) and field_value:
+            normalized[field_name] = field_value
+
+    normalized["review_personas"] = _as_string_list(value.get("review_personas"))
+    normalized["required_gates"] = _as_string_list(value.get("required_gates"))
 
     normalized["backend"] = _normalize_backend(value.get("backend"))
     normalized["pillar_assessments"] = [
@@ -389,6 +412,22 @@ def build_evolution_governed_review(
         "automation_status": "generated",
         "operator_gate_required": True,
         "recommended_triage_lane": plan.get("recommended_triage_lane"),
+        "change_class": "planning_only",
+        "lane": "bridge-true",
+        "owner_persona": "strategist",
+        "review_personas": ["chronicler", "cove"],
+        "required_gates": [
+            "strategist_review",
+            "chronicler_review",
+            "cove_review",
+            "operator_promotion",
+        ],
+        "escalate_to_persona": "none",
+        "operator_summary": (
+            "Owner persona strategist; review personas chronicler, cove; "
+            "required gates strategist_review, chronicler_review, cove_review, operator_promotion."
+        ),
+        "handoff_template_ref": "governance/templates/persona_review_handoff.md",
         "backend": _backend_from_ollama_payload(plan_payload),
         "pillar_assessments": [
             {

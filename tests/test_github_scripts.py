@@ -13,6 +13,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from textwrap import dedent
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -546,9 +547,6 @@ class TestCodebaseSnapshot:
         out = str(tmp_path / "snap.txt")
         build_snapshot(output_file=out, char_budget=10_000)
         assert Path(out).exists() and Path(out).stat().st_size > 0
-
-
-from textwrap import dedent
 
 
 # ============================================================

@@ -17,6 +17,10 @@ def _iso_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
+def _is_valid_sha256_digest(value: str) -> bool:
+    return len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+
+
 @dataclass(slots=True)
 class MediaEvidenceRecord:
     media_type: str
@@ -52,8 +56,8 @@ class MediaEvidenceRecord:
         self.confidence = float(self.confidence)
         if self.media_type not in ALLOWED_MEDIA_TYPES:
             raise ValueError(f"Unsupported media_type: {self.media_type}")
-        if len(self.sha256) < 16:
-            raise ValueError("sha256 is required for media evidence")
+        if not _is_valid_sha256_digest(self.sha256):
+            raise ValueError("sha256 must be a 64-character hex digest")
         if not self.extraction_mode:
             raise ValueError("extraction_mode is required for media evidence")
         if not self.safety_status:

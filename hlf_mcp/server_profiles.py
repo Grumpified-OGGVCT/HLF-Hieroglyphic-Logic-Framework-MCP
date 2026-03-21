@@ -6,7 +6,7 @@ import platform
 import shutil
 import subprocess
 import uuid
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -25,7 +25,9 @@ from hlf_mcp.hlf.routing_trace import (
     RouteTraceRecord,
     build_operator_route_summary,
 )
-from hlf_mcp.server_context import ServerContext
+
+if TYPE_CHECKING:
+    from hlf_mcp.server_context import ServerContext
 
 Workload = Literal[
     "translation_memory",

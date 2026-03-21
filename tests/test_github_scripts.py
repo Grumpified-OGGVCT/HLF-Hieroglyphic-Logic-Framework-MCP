@@ -174,6 +174,9 @@ class TestGenerateStatusOverview:
         monkeypatch.setenv("GITHUB_REPOSITORY", "example-org/example-repo")
         monkeypatch.setenv("GITHUB_BASE_REF", "main")
         monkeypatch.setenv("GITHUB_REF_NAME", "feature/readiness")
+        assert _docs_blob_href("HLF_STATUS_OVERVIEW.md") == "HLF_STATUS_OVERVIEW.md"
+
+        monkeypatch.setenv("DOCS_REF", "main")
         assert (
             _docs_blob_href("HLF_STATUS_OVERVIEW.md")
             == "https://github.com/example-org/example-repo/blob/main/docs/HLF_STATUS_OVERVIEW.md"

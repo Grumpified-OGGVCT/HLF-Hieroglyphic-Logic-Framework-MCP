@@ -33,13 +33,11 @@ def _docs_blob_href(filename: str) -> str:
 
 
 def _docs_blob_href(filename: str) -> str:
-    repo = str(os.getenv("GITHUB_REPOSITORY", "")).strip()
     normalized = filename.lstrip("/")
-    if repo:
-        override_ref = os.getenv("STATUS_DOCS_REF") or os.getenv("DOCS_REF")
-        branch = str(
-            override_ref or os.getenv("GITHUB_BASE_REF") or os.getenv("GITHUB_REF_NAME") or "main"
-        ).strip()
+    override_ref = str(os.getenv("STATUS_DOCS_REF") or os.getenv("DOCS_REF") or "").strip()
+    repo = str(os.getenv("GITHUB_REPOSITORY", "")).strip()
+    if repo and override_ref:
+        branch = override_ref
         return f"https://github.com/{repo}/blob/{branch}/docs/{normalized}"
     return normalized
 

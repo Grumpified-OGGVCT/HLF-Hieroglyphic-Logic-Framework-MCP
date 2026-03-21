@@ -115,6 +115,15 @@ def _normalize_action(value: Any) -> dict[str, Any] | None:
 
 
 def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
+    from hlf_mcp.persona_contract import resolve_persona_contract
+
+    persona_contract = resolve_persona_contract(
+        source=source,
+        review_type="weekly_artifact",
+        severity="info",
+        recommended_triage_lane=None,
+    )
+
     review = {
         "contract_version": REVIEW_CONTRACT_VERSION,
         "review_type": "weekly_artifact",
@@ -123,14 +132,7 @@ def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
         "automation_status": "not_collected",
         "operator_gate_required": True,
         "recommended_triage_lane": None,
-        "change_class": None,
-        "lane": None,
-        "owner_persona": None,
-        "review_personas": [],
-        "required_gates": [],
-        "escalate_to_persona": None,
-        "operator_summary": None,
-        "handoff_template_ref": None,
+        **persona_contract,
         "backend": {
             "provider": None,
             "access_mode": None,
@@ -157,6 +159,8 @@ def default_governed_review(*, source: str | None = None) -> dict[str, Any]:
 
 
 def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[str, Any]:
+    from hlf_mcp.persona_contract import resolve_persona_contract
+
     if not isinstance(value, dict):
         return default_governed_review(source=source)
 
@@ -205,6 +209,26 @@ def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[
     normalized["review_personas"] = _as_string_list(value.get("review_personas"))
     normalized["required_gates"] = _as_string_list(value.get("required_gates"))
 
+    normalized.update(
+        resolve_persona_contract(
+            source=source,
+            review_type=normalized["review_type"],
+            severity=normalized["severity"],
+            recommended_triage_lane=normalized["recommended_triage_lane"],
+            existing={
+                "change_class": normalized["change_class"],
+                "lane": normalized["lane"],
+                "owner_persona": normalized["owner_persona"],
+                "review_personas": normalized["review_personas"],
+                "required_gates": normalized["required_gates"],
+                "gate_results": value.get("gate_results"),
+                "escalate_to_persona": normalized["escalate_to_persona"],
+                "operator_summary": normalized["operator_summary"],
+                "handoff_template_ref": normalized["handoff_template_ref"],
+            },
+        )
+    )
+
     normalized["backend"] = _normalize_backend(value.get("backend"))
     normalized["pillar_assessments"] = [
         assessment
@@ -237,6 +261,8 @@ def normalize_governed_review(value: Any, *, source: str | None = None) -> dict[
 
 
 def validate_governed_review(review: Any, errors: list[str]) -> None:
+    from hlf_mcp.persona_contract import validate_persona_contract
+
     if not isinstance(review, dict):
         errors.append("governed_review_invalid")
         return
@@ -300,6 +326,8 @@ def validate_governed_review(review: Any, errors: list[str]) -> None:
 
     if not isinstance(review.get("review_metadata"), dict):
         errors.append("governed_review_review_metadata_invalid")
+
+    validate_persona_contract(review, errors)
 
     validate_persona_contract(review, errors)
 

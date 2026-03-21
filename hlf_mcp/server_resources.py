@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -16,6 +17,52 @@ from hlf_mcp.server_profiles import (
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _GOVERNANCE_DIR = _PACKAGE_DIR.parent / "governance"
 _FIXTURE_DIR_CANDIDATES = [_PACKAGE_DIR.parent / "fixtures", _PACKAGE_DIR / "fixtures"]
+_log = logging.getLogger(__name__)
+
+
+def _normalize_host_functions_payload(raw_text: str) -> dict[str, object]:
+    try:
+        data = json.loads(raw_text)
+    except (json.JSONDecodeError, ValueError) as exc:
+        _log.error("Failed to parse governance host_functions.json: %s", exc)
+        return {
+            "functions": [],
+            "status": "error",
+            "error": "invalid_governance_json",
+        }
+
+    if isinstance(data, dict):
+        if "error" in data:
+            return {
+                "functions": [],
+                "status": "error",
+                "error": str(data.get("error") or "invalid_governance_payload"),
+                "details": data,
+            }
+        if "functions" in data and isinstance(data["functions"], list):
+            return data
+        _log.warning(
+            "host_functions.json has unexpected top-level dict schema; preserving error state"
+        )
+        return {
+            "functions": [],
+            "status": "error",
+            "error": "invalid_governance_schema:dict",
+            "details": data,
+        }
+
+    if isinstance(data, list):
+        return {"functions": data}
+
+    _log.warning(
+        "host_functions.json has unexpected top-level type %s; preserving error state",
+        type(data).__name__,
+    )
+    return {
+        "functions": [],
+        "status": "error",
+        "error": f"invalid_governance_schema:{type(data).__name__}",
+    }
 
 
 def _read_governance_file(filename: str) -> str:
@@ -61,16 +108,66 @@ def _read_fixture_file(name: str) -> str:
     )
 
 
-def _get_fixture_dir() -> Path:
+def _get_fixture_dir() -> Path | None:
     for path in _FIXTURE_DIR_CANDIDATES:
-        if path.exists():
-            return path
-    return _FIXTURE_DIR_CANDIDATES[0]
+        if not path.is_dir():
+            continue
+        try:
+            next(path.iterdir(), None)
+        except (PermissionError, OSError) as exc:
+            _log.warning("Fixtures directory candidate %s is not accessible: %s", path, exc)
+            continue
+        return path
+    return None
 
 
 def _build_fixture_gallery_report(ctx: object | None) -> dict[str, object]:
     fixture_dir = _get_fixture_dir()
+    if fixture_dir is None:
+        return {
+            "status": "error",
+            "error": "fixtures_directory_missing",
+            "message": (
+                "No fixtures/ directory found. Checked: "
+                + ", ".join(str(p) for p in _FIXTURE_DIR_CANDIDATES)
+            ),
+            "gallery": {
+                "surface_type": "generated_report",
+                "report_id": "fixture_gallery",
+                "grounded_in_packaged_truth": False,
+                "fixture_dir": None,
+                "summary": {
+                    "fixture_count": 0,
+                    "compile_ok_count": 0,
+                    "compile_failed_count": 0,
+                    "bytecode_ok_count": 0,
+                    "bytecode_failed_count": 0,
+                },
+                "entries": [],
+            },
+        }
+
     fixtures = sorted(fixture_dir.glob("*.hlf"))
+    if not fixtures:
+        return {
+            "status": "warning",
+            "warning": "no_fixtures_found",
+            "message": f"No .hlf fixtures found in fixtures directory: {fixture_dir}",
+            "gallery": {
+                "surface_type": "generated_report",
+                "report_id": "fixture_gallery",
+                "grounded_in_packaged_truth": False,
+                "fixture_dir": str(fixture_dir),
+                "summary": {
+                    "fixture_count": 0,
+                    "compile_ok_count": 0,
+                    "compile_failed_count": 0,
+                    "bytecode_ok_count": 0,
+                    "bytecode_failed_count": 0,
+                },
+                "entries": [],
+            },
+        }
 
     compiler = getattr(ctx, "compiler", None)
     if compiler is None:
@@ -348,7 +445,9 @@ def _render_dream_cycle_status(ctx: object | None) -> str:
             {"status": "error", "error": "dream_cycle_unavailable"},
             indent=2,
         )
-    return json.dumps({"status": "ok", "dream_cycle_status": ctx.get_dream_cycle_status()}, indent=2)
+    return json.dumps(
+        {"status": "ok", "dream_cycle_status": ctx.get_dream_cycle_status()}, indent=2
+    )
 
 
 def _render_dream_findings(
@@ -452,6 +551,14 @@ def render_resource_uri(ctx: object | None, resource_uri: str) -> str:
 
     if resource_uri == "hlf://status/multimodal_contracts":
         return json.dumps(build_multimodal_contract_catalog(ctx), indent=2)
+
+    if resource_uri == "hlf://host_functions":
+        if ctx is not None and hasattr(ctx, "host_registry"):
+            return json.dumps({"functions": ctx.host_registry.list_all()}, indent=2)
+        return json.dumps(
+            _normalize_host_functions_payload(_read_governance_file("host_functions.json")),
+            indent=2,
+        )
 
     if resource_uri == "hlf://status/model_catalog":
         return _render_model_catalog_status(ctx)
@@ -619,8 +726,12 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
     def get_host_functions() -> str:
         """Available HLF host function registry from the packaged governed contract surface."""
         if ctx is not None and hasattr(ctx, "host_registry"):
-            return json.dumps(ctx.host_registry.list_all(), indent=2)
-        return _read_governance_file("host_functions.json")
+            normalized: dict[str, object] = {"functions": ctx.host_registry.list_all()}
+        else:
+            normalized = _normalize_host_functions_payload(
+                _read_governance_file("host_functions.json")
+            )
+        return json.dumps(normalized, indent=2)
 
     @mcp.resource("hlf://examples/{name}")
     def get_example(name: str) -> str:

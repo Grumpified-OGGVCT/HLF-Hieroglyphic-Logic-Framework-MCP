@@ -136,7 +136,9 @@ def test_shared_media_evidence_is_persisted_in_memory_surface() -> None:
 
     listing = server.REGISTERED_TOOLS["hlf_media_evidence_list"]()
     fetched = server.REGISTERED_TOOLS["hlf_media_evidence_get"]("media-audio-1")
-    resource = json.loads(server.REGISTERED_RESOURCES["hlf://media/evidence/{artifact_id}"]("media-audio-1"))
+    resource = json.loads(
+        server.REGISTERED_RESOURCES["hlf://media/evidence/{artifact_id}"]("media-audio-1")
+    )
 
     assert result["status"] == "ok"
     assert result["media_evidence"][0]["artifact_id"] == "media-audio-1"
@@ -177,7 +179,10 @@ def test_dream_proposal_enforces_observe_propose_verify_promote_chain() -> None:
         summary="Use advisory dream evidence to stage a bridge-lane proposal without bypassing verify.",
         lane="bridge",
         proposal_text="Create a bounded bridge implementation guarded by explicit verification artifacts.",
-        verification_plan=["run focused dream/proposal regression tests", "capture operator review outcome"],
+        verification_plan=[
+            "run focused dream/proposal regression tests",
+            "capture operator review outcome",
+        ],
     )
     listed = server.REGISTERED_TOOLS["hlf_dream_proposals_list"](lane="bridge")
     detail = json.loads(
@@ -195,6 +200,8 @@ def test_dream_proposal_enforces_observe_propose_verify_promote_chain() -> None:
     assert citation_chain["promote"]["eligible"] is False
     assert "verify_stage_incomplete" in citation_chain["promote"]["blocked_by"]
     assert listed["status"] == "ok"
-    assert any(item["proposal_id"] == proposal["proposal"]["proposal_id"] for item in listed["proposals"])
+    assert any(
+        item["proposal_id"] == proposal["proposal"]["proposal_id"] for item in listed["proposals"]
+    )
     assert detail["status"] == "ok"
     assert detail["proposal"]["lane"] == "bridge"

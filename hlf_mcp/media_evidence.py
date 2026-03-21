@@ -61,9 +61,7 @@ class MediaEvidenceRecord:
         if not isinstance(self.provenance, dict) or not self.provenance:
             raise ValueError("provenance is required for media evidence")
         if not (self.derived_text or self.structured_extraction_ref):
-            raise ValueError(
-                "media evidence requires derived_text or structured_extraction_ref"
-            )
+            raise ValueError("media evidence requires derived_text or structured_extraction_ref")
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("confidence must be between 0.0 and 1.0")
 

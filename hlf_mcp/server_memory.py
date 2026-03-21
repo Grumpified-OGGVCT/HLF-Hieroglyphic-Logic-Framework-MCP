@@ -22,21 +22,41 @@ def apply_memory_governance(
     source: str = "server_memory.hlf_memory_govern",
 ) -> dict[str, Any]:
     """Apply a governed memory intervention and emit the matching audit/governance records."""
-    governed_fact = ctx.memory_store.govern_fact(
-        action=action,
-        fact_id=fact_id,
-        sha256=sha256,
-        operator_summary=operator_summary,
-        governed_by=source,
-        reason=reason,
-        operator_id=operator_id,
-        operator_display_name=operator_display_name,
-        operator_channel=operator_channel,
-    )
+    if fact_id is None and not sha256:
+        return {
+            "status": "error",
+            "error": "Either fact_id or sha256 must be provided.",
+            "action": action,
+            "fact_id": fact_id,
+            "sha256": sha256,
+        }
+
+    try:
+        governed_fact = ctx.memory_store.govern_fact(
+            action=action,
+            fact_id=fact_id,
+            sha256=sha256,
+            operator_summary=operator_summary,
+            governed_by=source,
+            reason=reason,
+            operator_id=operator_id,
+            operator_display_name=operator_display_name,
+            operator_channel=operator_channel,
+        )
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "error": str(exc),
+            "action": action,
+            "fact_id": fact_id,
+            "sha256": sha256,
+        }
     if governed_fact is None:
         return {"status": "not_found", "fact_id": fact_id, "sha256": sha256, "action": action}
 
-    pointer_alias = f"{governed_fact.get('topic') or 'general'}-{governed_fact.get('id') or 'entry'}"
+    pointer_alias = (
+        f"{governed_fact.get('topic') or 'general'}-{governed_fact.get('id') or 'entry'}"
+    )
     pointer = build_pointer_ref(pointer_alias, str(governed_fact.get("sha256") or ""))
     audit = ctx.audit_chain.log(
         "hlf_memory_govern",
@@ -368,11 +388,14 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         min_confidence: float = 0.0,
     ) -> dict[str, Any]:
         """List advisory dream findings produced during bounded dream-cycle runs."""
-        return {"status": "ok", **ctx.list_dream_findings(
-            cycle_id=cycle_id,
-            topic=topic,
-            min_confidence=min_confidence,
-        )}
+        return {
+            "status": "ok",
+            **ctx.list_dream_findings(
+                cycle_id=cycle_id,
+                topic=topic,
+                min_confidence=min_confidence,
+            ),
+        }
 
     @mcp.tool()
     def hlf_dream_findings_get(finding_id: str) -> dict[str, Any]:

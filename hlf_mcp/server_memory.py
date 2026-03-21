@@ -80,7 +80,9 @@ def apply_memory_governance(
             "action": normalized_action,
         }
 
-    pointer_alias = f"{governed_fact.get('topic') or 'general'}-{governed_fact.get('id') or 'entry'}"
+    pointer_alias = (
+        f"{governed_fact.get('topic') or 'general'}-{governed_fact.get('id') or 'entry'}"
+    )
     pointer = build_pointer_ref(pointer_alias, str(governed_fact.get("sha256") or ""))
     audit = ctx.audit_chain.log(
         "hlf_memory_govern",
@@ -412,11 +414,14 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         min_confidence: float = 0.0,
     ) -> dict[str, Any]:
         """List advisory dream findings produced during bounded dream-cycle runs."""
-        return {"status": "ok", **ctx.list_dream_findings(
-            cycle_id=cycle_id,
-            topic=topic,
-            min_confidence=min_confidence,
-        )}
+        return {
+            "status": "ok",
+            **ctx.list_dream_findings(
+                cycle_id=cycle_id,
+                topic=topic,
+                min_confidence=min_confidence,
+            ),
+        }
 
     @mcp.tool()
     def hlf_dream_findings_get(finding_id: str) -> dict[str, Any]:

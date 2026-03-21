@@ -127,22 +127,24 @@ def test_operator_cli_memory_govern_uses_shared_helper(monkeypatch, capsys) -> N
         },
     )
 
-    exit_code = operator_cli.main([
-        "memory-govern",
-        "--action",
-        "revoke",
-        "--fact-id",
-        "41",
-        "--operator-summary",
-        "Revoked via CLI",
-        "--operator-id",
-        "alice",
-        "--operator-display-name",
-        "Alice Example",
-        "--operator-channel",
-        "operator_cli.memory_govern",
-        "--json",
-    ])
+    exit_code = operator_cli.main(
+        [
+            "memory-govern",
+            "--action",
+            "revoke",
+            "--fact-id",
+            "41",
+            "--operator-summary",
+            "Revoked via CLI",
+            "--operator-id",
+            "alice",
+            "--operator-display-name",
+            "Alice Example",
+            "--operator-channel",
+            "operator_cli.memory_govern",
+            "--json",
+        ]
+    )
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "ok"

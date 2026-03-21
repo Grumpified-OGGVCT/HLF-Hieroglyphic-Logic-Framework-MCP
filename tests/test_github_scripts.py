@@ -135,7 +135,9 @@ class TestReadinessRefreshCheck:
     def test_refresh_required_when_weekly_artifact_changes_without_generated_outputs(self):
         from readiness_refresh_check import build_refresh_report
 
-        changed = ["observability/local_validation/2026-03-20/test-health-final/weekly-test-health-artifact.json"]
+        changed = [
+            "observability/local_validation/2026-03-20/test-health-final/weekly-test-health-artifact.json"
+        ]
         report = build_refresh_report(changed)
 
         assert report["refresh_required"] is True
@@ -158,9 +160,7 @@ class TestReadinessRefreshCheck:
 
 
 class TestGenerateStatusOverview:
-    def test_docs_blob_href_uses_relative_links_locally_and_github_env_in_ci(
-        self, monkeypatch
-    ):
+    def test_docs_blob_href_uses_relative_links_locally_and_github_env_in_ci(self, monkeypatch):
         from generate_status_overview import _docs_blob_href
 
         monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
@@ -200,8 +200,12 @@ class TestGenerateStatusOverview:
 
         docs_dir = tmp_path / "docs"
         docs_dir.mkdir(parents=True)
-        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "test-health-final").mkdir(parents=True)
-        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "doc-accuracy").mkdir(parents=True)
+        (
+            tmp_path / "observability" / "local_validation" / "2026-03-20" / "test-health-final"
+        ).mkdir(parents=True)
+        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "doc-accuracy").mkdir(
+            parents=True
+        )
 
         (docs_dir / "HLF_INTERNAL_READINESS_DASHBOARD_2026-03-20.md").write_text(
             "\n".join(
@@ -397,15 +401,36 @@ class TestGenerateStatusOverview:
             "workflow_payload": {"doc_drift": {"drift_detected": False}},
         }
 
-        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "test-health-final" / "weekly-test-health-artifact.json").write_text(
+        (
+            tmp_path
+            / "observability"
+            / "local_validation"
+            / "2026-03-20"
+            / "test-health-final"
+            / "weekly-test-health-artifact.json"
+        ).write_text(
             json.dumps(test_health_artifact),
             encoding="utf-8",
         )
-        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "test-health-final" / "weekly-test-health-prior-artifact.json").write_text(
+        (
+            tmp_path
+            / "observability"
+            / "local_validation"
+            / "2026-03-20"
+            / "test-health-final"
+            / "weekly-test-health-prior-artifact.json"
+        ).write_text(
             json.dumps(prior_test_health_artifact),
             encoding="utf-8",
         )
-        (tmp_path / "observability" / "local_validation" / "2026-03-20" / "doc-accuracy" / "weekly-doc-accuracy-artifact.json").write_text(
+        (
+            tmp_path
+            / "observability"
+            / "local_validation"
+            / "2026-03-20"
+            / "doc-accuracy"
+            / "weekly-doc-accuracy-artifact.json"
+        ).write_text(
             json.dumps(doc_accuracy_artifact),
             encoding="utf-8",
         )
@@ -432,7 +457,9 @@ class TestGenerateStatusOverview:
                         "paragraphs": [
                             "These are implemented and verified enough to claim in present tense for this local branch.",
                         ],
-                        "bullets": ["packaged FastMCP front door with `69` tools and `31` resources"],
+                        "bullets": [
+                            "packaged FastMCP front door with `69` tools and `31` resources"
+                        ],
                     }
                 ],
             },
@@ -464,7 +491,9 @@ class TestGenerateStatusOverview:
                     }
                 ],
                 "bottom_line": {
-                    "paragraphs": ["The public repo can still make the branch look thinner than it is."],
+                    "paragraphs": [
+                        "The public repo can still make the branch look thinner than it is."
+                    ],
                     "bullets": ["some public gaps are stale or overstated for this checkout"],
                 },
             },
@@ -474,7 +503,10 @@ class TestGenerateStatusOverview:
         assert data["dashboard"]["overall_readiness"] == 58.9
         assert "Test health reports partial coverage at 74.8%." in markdown
         assert "latest replay restored a comparable coverage signal" in markdown
-        assert "Artifact paths under `observability/local_validation/...` are example/local-only" in markdown
+        assert (
+            "Artifact paths under `observability/local_validation/...` are example/local-only"
+            in markdown
+        )
         assert "HLF Status Surface" in html
         assert "Documentation accuracy review found no measured drift." in html
         assert "example/local-only governed-run locations" in html

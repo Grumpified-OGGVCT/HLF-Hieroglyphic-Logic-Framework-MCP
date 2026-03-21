@@ -985,7 +985,7 @@ def _render_weekly_rows(lanes: list[dict[str, Any]]) -> str:
         return "\n".join(
             [
                 "<tr>",
-                "  <td colspan=\"6\">No committed weekly artifacts were found in this checkout. Local-only governed runs may still exist outside the repository.</td>",
+                '  <td colspan="6">No committed weekly artifacts were found in this checkout. Local-only governed runs may still exist outside the repository.</td>',
                 "</tr>",
             ]
         )

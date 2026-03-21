@@ -30,7 +30,11 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _matrix_path() -> Path:
+def _runtime_matrix_path() -> Path:
+    return Path(__file__).resolve().parent / "governance" / "HLF_PERSONA_OWNERSHIP_MATRIX.json"
+
+
+def _repo_matrix_path() -> Path:
     return _repo_root() / "docs" / "HLF_PERSONA_OWNERSHIP_MATRIX.json"
 
 
@@ -47,6 +51,7 @@ def _fallback_matrix() -> dict[str, Any]:
             "gate_results",
             "escalate_to_persona",
             "operator_summary",
+            "handoff_template_ref",
         ],
         "gate_states": {
             "strategist_review": {"owner_persona": "strategist"},
@@ -116,12 +121,14 @@ def _fallback_matrix() -> dict[str, Any]:
 @lru_cache(maxsize=1)
 def load_persona_matrix() -> dict[str, Any]:
     fallback = _fallback_matrix()
-    path = _matrix_path()
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, json.JSONDecodeError):
-        return fallback
-    return payload if isinstance(payload, dict) else fallback
+    for path in (_runtime_matrix_path(), _repo_matrix_path()):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return fallback
 
 
 def _valid_personas(matrix: dict[str, Any]) -> set[str]:

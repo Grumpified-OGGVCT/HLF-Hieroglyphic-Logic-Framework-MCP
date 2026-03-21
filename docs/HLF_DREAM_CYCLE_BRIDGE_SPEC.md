@@ -60,7 +60,7 @@ The bridge target is:
 
 - `hlf_source/agents/core/dream_state.py`
 - `hlf_source/mcp/sovereign_mcp_server.py`
-- `C:\Users\gerry\ollama_proxy_server\DREAM_AWARENESS_INTEGRATION.md`
+- adjacent local `ollama_proxy_server/DREAM_AWARENESS_INTEGRATION.md` design note
 
 ### Packaged anchors
 

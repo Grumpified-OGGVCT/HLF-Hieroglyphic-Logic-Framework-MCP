@@ -1,6 +1,7 @@
 import json
+from pathlib import Path
 
-from hlf_mcp import server
+from hlf_mcp import server, server_resources
 
 
 def test_hlf_do_dry_run_generates_governed_audit() -> None:
@@ -437,12 +438,75 @@ def test_fixture_gallery_markdown_report_matches_structured_status_surface() -> 
     report = server.REGISTERED_RESOURCES["hlf://reports/fixture_gallery"]()
 
     assert report.startswith("# HLF Fixture Gallery Report\n")
-    assert "Generated from packaged fixtures using the current packaged compiler and bytecode encoder." in report
     assert (
-        f"- Fixture count: {resource['gallery']['summary']['fixture_count']}" in report
+        "Generated from packaged fixtures using the current packaged compiler and bytecode encoder."
+        in report
     )
+    assert f"- Fixture count: {resource['gallery']['summary']['fixture_count']}" in report
     assert "| hello_world |" in report
     assert "- Generated report: hlf://reports/fixture_gallery" in report
+
+
+def test_fixture_gallery_status_reports_missing_directory_when_candidates_are_invalid(
+    monkeypatch, tmp_path: Path
+) -> None:
+    invalid_fixture_file = tmp_path / "fixtures"
+    invalid_fixture_file.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setattr(server_resources, "_FIXTURE_DIR_CANDIDATES", [invalid_fixture_file])
+
+    resource = json.loads(
+        server_resources.render_resource_uri(None, "hlf://status/fixture_gallery")
+    )
+
+    assert resource["status"] == "error"
+    assert resource["error"] == "fixtures_directory_missing"
+    assert resource["gallery"]["fixture_dir"] is None
+
+
+def test_host_functions_resource_preserves_missing_governance_error_signal(monkeypatch) -> None:
+    monkeypatch.setattr(
+        server_resources,
+        "_read_governance_file",
+        lambda filename: json.dumps(
+            {
+                "error": "governance_file_not_found",
+                "file": filename,
+                "hint": "install from source",
+            }
+        ),
+    )
+
+    resource = json.loads(server_resources.render_resource_uri(None, "hlf://host_functions"))
+
+    assert resource["functions"] == []
+    assert resource["status"] == "error"
+    assert resource["error"] == "governance_file_not_found"
+    assert resource["details"]["file"] == "host_functions.json"
+
+
+def test_memory_governance_tool_returns_structured_error_for_missing_identifier() -> None:
+    result = server.hlf_memory_govern(action="revoke")
+
+    assert result["status"] == "error"
+    assert result["error"] == "invalid_request"
+    assert result["message"] == "fact_id or sha256 is required"
+    assert result["action"] == "revoke"
+
+
+def test_memory_governance_tool_returns_structured_error_for_invalid_action() -> None:
+    stored = server.hlf_memory_store(
+        content="Invalid memory-govern action regression",
+        topic="memory-governance-invalid-action",
+        provenance="test_frontdoor",
+        confidence=0.87,
+    )
+
+    result = server.hlf_memory_govern(action="invalid", fact_id=stored["id"])
+
+    assert result["status"] == "error"
+    assert result["error"] == "invalid_request"
+    assert "unsupported governance action" in result["message"].lower()
+    assert result["fact_id"] == stored["id"]
 
 
 def test_align_status_surfaces_normalized_action_semantics() -> None:
@@ -515,7 +579,9 @@ def test_provenance_contract_resource_surfaces_memory_and_governance_summary() -
     assert resource["provenance_contract"]["memory_state_counts"]["revoked"] >= 1
     assert resource["provenance_contract"]["memory_state_counts"]["tombstoned"] >= 1
     assert resource["provenance_contract"]["memory_state_counts"]["superseded"] >= 1
-    assert resource["provenance_contract"]["pointer_chain_summary"]["superseding_pointer_count"] >= 1
+    assert (
+        resource["provenance_contract"]["pointer_chain_summary"]["superseding_pointer_count"] >= 1
+    )
     assert any(
         pointer["pointer"].startswith("&")
         for pointer in resource["provenance_contract"]["pointer_chain_summary"]["recent_pointers"]
@@ -567,21 +633,6 @@ def test_memory_governance_tool_and_resource_surface_governed_intervention() -> 
         event["operator_identity"]["operator_id"] == "alice"
         for event in resource["memory_governance"]["recent_interventions"]
     )
-
-
-def test_memory_governance_tool_returns_structured_invalid_request() -> None:
-    result = server.hlf_memory_govern(action="unsupported-action")
-
-    assert result["status"] == "error"
-    assert result["error"] == "invalid_request"
-    assert "unsupported governance action" in result["message"]
-
-
-def test_memory_governance_tool_normalizes_not_found_action() -> None:
-    result = server.hlf_memory_govern(action="ReVoKe", fact_id=999999)
-
-    assert result["status"] == "not_found"
-    assert result["action"] == "revoke"
 
 
 def test_memory_governance_resource_orders_multiple_interventions_for_same_fact() -> None:
@@ -967,7 +1018,9 @@ def test_multimodal_contract_resource_surfaces_host_function_bindings() -> None:
         if entry["profile_name"] == "multimodal_vision_ocr_governed"
     )
     assert vision_entry["contract_ready"] is True
-    assert any(contract["name"] == "OCR_EXTRACT" for contract in vision_entry["host_function_contracts"])
+    assert any(
+        contract["name"] == "OCR_EXTRACT" for contract in vision_entry["host_function_contracts"]
+    )
 
 
 def test_route_governed_request_requires_launch_qualified_model_for_multilingual_lane(

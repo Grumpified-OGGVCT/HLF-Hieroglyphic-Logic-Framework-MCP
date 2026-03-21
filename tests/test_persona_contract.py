@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 
 def test_resolve_persona_contract_for_docs_truth_source() -> None:
     from hlf_mcp.persona_contract import resolve_persona_contract
@@ -64,3 +66,43 @@ def test_validate_persona_contract_rejects_missing_required_gate() -> None:
     validate_governed_review(review, errors)
 
     assert "governed_review_gate_results[strategist_review]_missing" in errors
+
+
+def test_load_persona_matrix_prefers_runtime_copy_when_present(tmp_path, monkeypatch) -> None:
+    from hlf_mcp import persona_contract
+
+    runtime_matrix = tmp_path / "runtime.json"
+    runtime_matrix.write_text(
+        json.dumps(
+            {
+                "lane": "runtime-lane",
+                "change_classes": {},
+                "gate_states": {},
+                "personas": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    repo_matrix = tmp_path / "repo.json"
+    repo_matrix.write_text(
+        json.dumps(
+            {
+                "lane": "repo-lane",
+                "change_classes": {},
+                "gate_states": {},
+                "personas": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(persona_contract, "_runtime_matrix_path", lambda: runtime_matrix)
+    monkeypatch.setattr(persona_contract, "_repo_matrix_path", lambda: repo_matrix)
+    persona_contract.load_persona_matrix.cache_clear()
+
+    try:
+        matrix = persona_contract.load_persona_matrix()
+    finally:
+        persona_contract.load_persona_matrix.cache_clear()
+
+    assert matrix["lane"] == "runtime-lane"

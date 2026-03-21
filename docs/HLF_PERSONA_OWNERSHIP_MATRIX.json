@@ -22,7 +22,8 @@
     "required_gates",
     "gate_results",
     "escalate_to_persona",
-    "operator_summary"
+    "operator_summary",
+    "handoff_template_ref"
   ],
   "gate_states": {
     "strategist_review": {

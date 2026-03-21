@@ -1,6 +1,7 @@
 import json
+from pathlib import Path
 
-from hlf_mcp import server
+from hlf_mcp import server, server_resources
 
 
 def test_hlf_do_dry_run_generates_governed_audit() -> None:
@@ -443,6 +444,64 @@ def test_fixture_gallery_markdown_report_matches_structured_status_surface() -> 
     )
     assert "| hello_world |" in report
     assert "- Generated report: hlf://reports/fixture_gallery" in report
+
+
+def test_fixture_gallery_status_reports_missing_directory_when_candidates_are_invalid(
+    monkeypatch, tmp_path: Path
+) -> None:
+    invalid_fixture_file = tmp_path / "fixtures"
+    invalid_fixture_file.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setattr(server_resources, "_FIXTURE_DIR_CANDIDATES", [invalid_fixture_file])
+
+    resource = json.loads(server_resources.render_resource_uri(None, "hlf://status/fixture_gallery"))
+
+    assert resource["status"] == "error"
+    assert resource["error"] == "fixtures_directory_missing"
+    assert resource["gallery"]["fixture_dir"] is None
+
+
+def test_host_functions_resource_preserves_missing_governance_error_signal(monkeypatch) -> None:
+    monkeypatch.setattr(
+        server_resources,
+        "_read_governance_file",
+        lambda filename: json.dumps(
+            {
+                "error": "governance_file_not_found",
+                "file": filename,
+                "hint": "install from source",
+            }
+        ),
+    )
+
+    resource = json.loads(server_resources.render_resource_uri(None, "hlf://host_functions"))
+
+    assert resource["functions"] == []
+    assert resource["status"] == "error"
+    assert resource["error"] == "governance_file_not_found"
+    assert resource["details"]["file"] == "host_functions.json"
+
+
+def test_memory_governance_tool_returns_structured_error_for_missing_identifier() -> None:
+    result = server.hlf_memory_govern(action="revoke")
+
+    assert result["status"] == "error"
+    assert result["error"] == "Either fact_id or sha256 must be provided."
+    assert result["action"] == "revoke"
+
+
+def test_memory_governance_tool_returns_structured_error_for_invalid_action() -> None:
+    stored = server.hlf_memory_store(
+        content="Invalid memory-govern action regression",
+        topic="memory-governance-invalid-action",
+        provenance="test_frontdoor",
+        confidence=0.87,
+    )
+
+    result = server.hlf_memory_govern(action="invalid", fact_id=stored["id"])
+
+    assert result["status"] == "error"
+    assert "unsupported governance action" in result["error"].lower()
+    assert result["fact_id"] == stored["id"]
 
 
 def test_align_status_surfaces_normalized_action_semantics() -> None:

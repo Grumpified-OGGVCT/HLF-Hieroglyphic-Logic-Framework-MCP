@@ -20,6 +20,51 @@ _FIXTURE_DIR_CANDIDATES = [_PACKAGE_DIR.parent / "fixtures", _PACKAGE_DIR / "fix
 _log = logging.getLogger(__name__)
 
 
+def _normalize_host_functions_payload(raw_text: str) -> dict[str, object]:
+    try:
+        data = json.loads(raw_text)
+    except (json.JSONDecodeError, ValueError) as exc:
+        _log.error("Failed to parse governance host_functions.json: %s", exc)
+        return {
+            "functions": [],
+            "status": "error",
+            "error": "invalid_governance_json",
+        }
+
+    if isinstance(data, dict):
+        if "error" in data:
+            return {
+                "functions": [],
+                "status": "error",
+                "error": str(data.get("error") or "invalid_governance_payload"),
+                "details": data,
+            }
+        if "functions" in data and isinstance(data["functions"], list):
+            return data
+        _log.warning(
+            "host_functions.json has unexpected top-level dict schema; preserving error state"
+        )
+        return {
+            "functions": [],
+            "status": "error",
+            "error": "invalid_governance_schema:dict",
+            "details": data,
+        }
+
+    if isinstance(data, list):
+        return {"functions": data}
+
+    _log.warning(
+        "host_functions.json has unexpected top-level type %s; preserving error state",
+        type(data).__name__,
+    )
+    return {
+        "functions": [],
+        "status": "error",
+        "error": f"invalid_governance_schema:{type(data).__name__}",
+    }
+
+
 def _read_governance_file(filename: str) -> str:
     path = _GOVERNANCE_DIR / filename
     if path.exists():
@@ -65,8 +110,14 @@ def _read_fixture_file(name: str) -> str:
 
 def _get_fixture_dir() -> Path | None:
     for path in _FIXTURE_DIR_CANDIDATES:
-        if path.exists():
-            return path
+        if not path.is_dir():
+            continue
+        try:
+            next(path.iterdir(), None)
+        except (PermissionError, OSError) as exc:
+            _log.warning("Fixtures directory candidate %s is not accessible: %s", path, exc)
+            continue
+        return path
     return None
 
 
@@ -499,6 +550,14 @@ def render_resource_uri(ctx: object | None, resource_uri: str) -> str:
     if resource_uri == "hlf://status/multimodal_contracts":
         return json.dumps(build_multimodal_contract_catalog(ctx), indent=2)
 
+    if resource_uri == "hlf://host_functions":
+        if ctx is not None and hasattr(ctx, "host_registry"):
+            return json.dumps({"functions": ctx.host_registry.list_all()}, indent=2)
+        return json.dumps(
+            _normalize_host_functions_payload(_read_governance_file("host_functions.json")),
+            indent=2,
+        )
+
     if resource_uri == "hlf://status/model_catalog":
         return _render_model_catalog_status(ctx)
 
@@ -667,21 +726,9 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
         if ctx is not None and hasattr(ctx, "host_registry"):
             normalized: dict[str, object] = {"functions": ctx.host_registry.list_all()}
         else:
-            raw_text = _read_governance_file("host_functions.json")
-            try:
-                data = json.loads(raw_text)
-            except (json.JSONDecodeError, ValueError):
-                data = []
-            if isinstance(data, dict) and "functions" in data:
-                normalized = data
-            elif isinstance(data, list):
-                normalized = {"functions": data}
-            else:
-                _log.warning(
-                    "host_functions.json has unexpected top-level type %s; wrapping in functions list",
-                    type(data).__name__,
-                )
-                normalized = {"functions": [data]}
+            normalized = _normalize_host_functions_payload(
+                _read_governance_file("host_functions.json")
+            )
         return json.dumps(normalized, indent=2)
 
     @mcp.resource("hlf://examples/{name}")

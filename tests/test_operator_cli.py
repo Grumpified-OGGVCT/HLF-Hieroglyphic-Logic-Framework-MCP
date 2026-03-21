@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 
 def _write_history(metrics_dir: Path, artifacts: list[dict]) -> None:
     metrics_dir.mkdir(parents=True, exist_ok=True)
@@ -147,6 +149,16 @@ def test_operator_cli_memory_govern_uses_shared_helper(monkeypatch, capsys) -> N
     assert payload["action"] == "revoke"
     assert payload["fact"]["id"] == 41
     assert payload["operator_identity"]["operator_id"] == "alice"
+
+
+def test_operator_cli_memory_govern_requires_fact_identifier(capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    with pytest.raises(SystemExit) as exc_info:
+        operator_cli.main(["memory-govern", "--action", "revoke"])
+
+    assert exc_info.value.code == 2
+    assert "one of the arguments --fact-id --sha256 is required" in capsys.readouterr().err
 
 
 def test_operator_cli_resource_uses_packaged_renderer(monkeypatch, capsys) -> None:

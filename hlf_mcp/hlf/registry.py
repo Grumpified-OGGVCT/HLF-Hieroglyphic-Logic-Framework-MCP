@@ -44,6 +44,7 @@ _ALLOWED_EFFECT_CLASSES = {
     "file_read",
     "file_write",
     "formal_verification",
+    "guarded_actuation",
     "governance_vote",
     "local_analysis",
     "memory_read",
@@ -58,11 +59,15 @@ _ALLOWED_EFFECT_CLASSES = {
     "network_write",
     "process_spawn",
     "route_selection",
+    "safety_stop",
+    "sensor_read",
     "similarity_math",
     "timing",
     "token_transform",
+    "trajectory_plan",
     "verification",
     "web_search",
+    "world_state_read",
 }
 _ALLOWED_FAILURE_TYPES = {
     "execution_error",
@@ -77,6 +82,9 @@ _ALLOWED_FAILURE_TYPES = {
     "verification_error",
 }
 _ALLOWED_AUDIT_REQUIREMENTS = {"full", "sensitive_hash", "standard"}
+_ALLOWED_SAFETY_CLASSES = {"none", "bounded", "high", "critical"}
+_ALLOWED_REVIEW_POSTURES = {"none", "operator_review", "post_action_review"}
+_ALLOWED_EXECUTION_MODES = {"direct", "simulation_only", "simulation_preferred", "replay_only"}
 _TYPED_CONTRACT_FIELDS = (
     "input_schema",
     "output_schema",
@@ -84,6 +92,14 @@ _TYPED_CONTRACT_FIELDS = (
     "failure_type",
     "audit_requirement",
 )
+
+
+def _validate_string_list(value: Any, *, field_name: str, fn_name: str) -> list[str]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{fn_name}: {field_name} must be a list of strings")
+    return [item for item in value if item]
 
 
 def _normalize_schema_type(value: Any) -> str:
@@ -165,12 +181,17 @@ class HostFunction:
     effect_class: str
     failure_type: str
     audit_requirement: str
+    safety_class: str = "none"
+    review_posture: str = "none"
+    execution_mode: str = "direct"
+    supervisory_only: bool = False
+    evidence_pointer_fields: list[str] = dataclasses.field(default_factory=list)
     sensitive: bool = False
     binary_path: str | None = None
     binary_sha256: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "HostFunction":
+    def from_dict(cls, data: dict[str, Any]) -> HostFunction:
         name = str(data.get("name") or "").strip()
         missing_fields = [field for field in _TYPED_CONTRACT_FIELDS if field not in data]
         if missing_fields:
@@ -213,6 +234,30 @@ class HostFunction:
                 fn_name=name or "host_function",
                 allowed_values=_ALLOWED_AUDIT_REQUIREMENTS,
             ),
+            safety_class=_validate_contract_literal(
+                data.get("safety_class", "none"),
+                field_name="safety_class",
+                fn_name=name or "host_function",
+                allowed_values=_ALLOWED_SAFETY_CLASSES,
+            ),
+            review_posture=_validate_contract_literal(
+                data.get("review_posture", "none"),
+                field_name="review_posture",
+                fn_name=name or "host_function",
+                allowed_values=_ALLOWED_REVIEW_POSTURES,
+            ),
+            execution_mode=_validate_contract_literal(
+                data.get("execution_mode", "direct"),
+                field_name="execution_mode",
+                fn_name=name or "host_function",
+                allowed_values=_ALLOWED_EXECUTION_MODES,
+            ),
+            supervisory_only=bool(data.get("supervisory_only", False)),
+            evidence_pointer_fields=_validate_string_list(
+                data.get("evidence_pointer_fields", []),
+                field_name="evidence_pointer_fields",
+                fn_name=name or "host_function",
+            ),
             sensitive=data.get("sensitive", False),
             binary_path=data.get("binary_path"),
             binary_sha256=data.get("binary_sha256"),
@@ -228,6 +273,11 @@ class HostFunction:
             "effect_class": self.effect_class,
             "failure_type": self.failure_type,
             "audit_requirement": self.audit_requirement,
+            "safety_class": self.safety_class,
+            "review_posture": self.review_posture,
+            "execution_mode": self.execution_mode,
+            "supervisory_only": self.supervisory_only,
+            "evidence_pointer_fields": list(self.evidence_pointer_fields),
             "input_schema": self.input_schema,
             "output_schema": self.output_schema,
             "backend": self.backend,
@@ -626,7 +676,14 @@ class HostFunctionRegistry:
             )
 
     def get(self, name: str) -> HostFunction | None:
-        return self._functions.get(name)
+        direct = self._functions.get(name)
+        if direct is not None:
+            return direct
+        lowered = str(name or "").lower()
+        for key, function in self._functions.items():
+            if key.lower() == lowered:
+                return function
+        return None
 
     def call(self, name: str, args: list[Any], tier: str = "hearth") -> dict[str, Any]:
         """Validate a host function call and return a metadata envelope.
@@ -642,7 +699,7 @@ class HostFunctionRegistry:
         can be queried about costs, tier requirements, and argument shapes
         independently of the runtime.
         """
-        fn = self._functions.get(name)
+        fn = self.get(name)
         if not fn:
             raise ValueError(f"Unknown host function: {name}")
         if tier not in fn.tiers:
@@ -658,6 +715,11 @@ class HostFunctionRegistry:
             "effect_class": fn.effect_class,
             "failure_type": fn.failure_type,
             "audit_requirement": fn.audit_requirement,
+            "safety_class": fn.safety_class,
+            "review_posture": fn.review_posture,
+            "execution_mode": fn.execution_mode,
+            "supervisory_only": fn.supervisory_only,
+            "evidence_pointer_fields": list(fn.evidence_pointer_fields),
             "input_schema": fn.input_schema,
             "output_schema": fn.output_schema,
             "policy_trace": fn.policy_trace(),

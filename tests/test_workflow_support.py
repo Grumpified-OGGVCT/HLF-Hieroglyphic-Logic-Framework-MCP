@@ -212,9 +212,7 @@ def test_fetch_code_scanning_summary_falls_back_when_api_unavailable(
 
 
 def test_monitor_model_drift_normalizes_fenced_json_response() -> None:
-    module = _load_module(
-        REPO_ROOT / "scripts" / "monitor_model_drift.py", "monitor_model_drift"
-    )
+    module = _load_module(REPO_ROOT / "scripts" / "monitor_model_drift.py", "monitor_model_drift")
 
     parsed, metadata = module._normalize_probe_response(
         """```json
@@ -310,8 +308,11 @@ def test_run_drift_probes_disables_search_and_classifies_outcomes(monkeypatch) -
             self._results = [
                 _FakeResult('{"answer": "RIGHT", "confidence": 1.0, "reasoning": "ok"}'),
                 _FakeResult('{"answer": "WRONG", "confidence": 1.0, "reasoning": "wrong"}'),
-                _FakeResult('not json at all'),
-                _FakeResult('{"answer": "RIGHT", "confidence": 1.0, "reasoning": "tool"}', tool_calls=[{"name": "web_search"}]),
+                _FakeResult("not json at all"),
+                _FakeResult(
+                    '{"answer": "RIGHT", "confidence": 1.0, "reasoning": "tool"}',
+                    tool_calls=[{"name": "web_search"}],
+                ),
             ]
 
         def complete(self, system: str, prompt: str):

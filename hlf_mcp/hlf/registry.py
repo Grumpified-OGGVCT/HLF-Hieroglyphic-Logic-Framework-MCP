@@ -170,7 +170,7 @@ class HostFunction:
     binary_sha256: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "HostFunction":
+    def from_dict(cls, data: dict[str, Any]) -> HostFunction:
         name = str(data.get("name") or "").strip()
         missing_fields = [field for field in _TYPED_CONTRACT_FIELDS if field not in data]
         if missing_fields:

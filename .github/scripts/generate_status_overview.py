@@ -23,15 +23,6 @@ HTML_OUTPUT = DOCS_DIR / "index.html"
 MERGE_HTML_OUTPUT = DOCS_DIR / "merge-readiness.html"
 CLAIMS_HTML_OUTPUT = DOCS_DIR / "claims-ledger.html"
 CSS_PATH = "assets/status-site.css"
-DOCS_BLOB_BASE = (
-    "https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP/blob/main/docs"
-)
-
-
-def _docs_blob_href(filename: str) -> str:
-    return f"{DOCS_BLOB_BASE}/{filename}"
-
-
 def _docs_blob_href(filename: str) -> str:
     normalized = filename.lstrip("/")
     override_ref = str(os.getenv("STATUS_DOCS_REF") or os.getenv("DOCS_REF") or "").strip()

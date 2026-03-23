@@ -35,6 +35,7 @@ The right public reading is therefore:
 
 - current packaged truth is strong enough to inspect and use now
 - weekly governance evidence is real and operational
+- Instinct now exposes packaged proof-state, phase-completion, and mission-lineage summaries across operator review surfaces
 - broader coordination, operator, and ecosystem completion is still in active bridge work
 
 ## 1. Whole HLF Status
@@ -50,7 +51,7 @@ what is the repo as a whole, in honest claim-lane terms?
 | Overall readiness | `58.9%` |
 | Interpretation band | `bridge-active` |
 | Claim-lane label | current packaged truth plus bridge-qualified expansion |
-| One-sentence repo status | the repo already has a strong semantic and governance core, but the broader coordination-and-operator zone still suppresses total readiness |
+| One-sentence repo status | the repo already has a strong semantic and governance core, and Instinct now exposes packaged proof-state and mission-lineage summaries, but broader coordination-and-operator completion still suppresses total readiness |
 
 ### Cluster Scores
 
@@ -181,7 +182,7 @@ The highest-value remaining moves are:
 
 1. strengthen typed effect and capability contracts
 2. deepen formal verification and routing proof
-3. raise orchestration from partial lifecycle presence into stronger packaged coordination proof
+3. extend shipped Instinct proof-state and mission-lineage evidence into thicker packaged coordination proof
 4. convert persona/operator doctrine into thicker workflow and runtime evidence
 5. keep memory governance and weekly evidence contracts converging without fragmenting the trust surface
 
@@ -201,6 +202,6 @@ This page is derived from these repo authorities:
 
 If you need the safest summary of this page, use this sentence:
 
-HLF in this repo already has a strong current packaged core and real weekly governed evidence, while broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.
+HLF in this repo already has a strong current packaged core, real weekly governed evidence, and packaged Instinct proof-state surfaces, while broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.
 
 _Generated from repo sources on 2026-03-20T00:00:00Z._

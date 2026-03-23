@@ -117,13 +117,14 @@ jobs:
           echo "Model:   $MODEL_USED (tier $TIER_USED)"
           echo ""
 
-            python -c "
-            import json
-            data = json.load(open('/tmp/drift_output.json'))
-            print('Outcome classes:')
-            for name, count in sorted(data.get('outcomeCounts', {}).items()):
+          python - <<'PY'
+          import json
+
+          data = json.load(open('/tmp/drift_output.json'))
+          print('Outcome classes:')
+          for name, count in sorted(data.get('outcomeCounts', {}).items()):
               print(f'  {name}: {count}')
-            "
+          PY
 
           # Print probe breakdown
           python -c "

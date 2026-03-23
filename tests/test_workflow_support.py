@@ -229,6 +229,53 @@ def test_monitor_model_drift_normalizes_fenced_json_response() -> None:
     assert metadata["normalization"] == "fenced_json"
 
 
+def test_monitor_model_drift_normalizes_nested_fenced_json_response() -> None:
+    module = _load_module(
+        REPO_ROOT / "scripts" / "monitor_model_drift.py", "monitor_model_drift_nested"
+    )
+
+    candidate, source = module._extract_json_candidate(
+        """```json
+        {
+            "answer": "MUTABLE",
+            "confidence": "0.95",
+            "reasoning": "Map supports updates {even with braces}.",
+            "meta": {
+                "a": 1,
+                "b": {
+                    "c": 2
+                }
+            }
+        }
+        ```"""
+    )
+    parsed, metadata = module._normalize_probe_response(
+        """```json
+        {
+            "answer": "MUTABLE",
+            "confidence": "0.95",
+            "reasoning": "Map supports updates {even with braces}.",
+            "meta": {
+                "a": 1,
+                "b": {
+                    "c": 2
+                }
+            }
+        }
+        ```"""
+    )
+
+    assert candidate is not None
+    assert '"meta": {' in candidate
+    assert '"c": 2' in candidate
+    assert source == "fenced_json"
+    assert parsed is not None
+    assert parsed["answer"] == "MUTABLE"
+    assert parsed["confidence"] == 0.95
+    assert parsed["reasoning"] == "Map supports updates {even with braces}."
+    assert metadata["normalization"] == "fenced_json"
+
+
 def test_run_drift_probes_disables_search_and_classifies_outcomes(monkeypatch) -> None:
     module = _load_module(
         REPO_ROOT / "scripts" / "monitor_model_drift.py", "monitor_model_drift_cases"

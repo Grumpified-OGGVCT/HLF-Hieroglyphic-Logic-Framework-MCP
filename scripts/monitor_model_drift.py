@@ -37,7 +37,7 @@ import os
 import re
 import sys
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +45,7 @@ SCRIPTS_DIR = Path(__file__).parent.parent / ".github" / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 try:
-    from ollama_client import FallbackOrchestrator, REASONING_CHAIN
+    from ollama_client import REASONING_CHAIN, FallbackOrchestrator
     _CLIENT_AVAILABLE = True
 except ImportError:
     _CLIENT_AVAILABLE = False
@@ -179,27 +179,12 @@ OUTCOME_PROTOCOL_FAILURE = "protocol_shape_failure"
 OUTCOME_TOOL_CALL_FAILURE = "tool_call_behavior_failure"
 
 
-def _extract_json_candidate(text: str) -> tuple[str | None, str | None]:
-    stripped = text.strip()
-    if not stripped:
-        return None, "empty_response"
-
-    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", stripped, flags=re.IGNORECASE | re.DOTALL)
-    if fence_match:
-        return fence_match.group(1).strip(), "fenced_json"
-
-    if stripped.startswith("{") and stripped.endswith("}"):
-        return stripped, "raw_json"
-
-    start = stripped.find("{")
-    if start == -1:
-        return None, "missing_json_object"
-
+def _scan_balanced_json_object(text: str, start: int = 0) -> str | None:
     depth = 0
     in_string = False
     escape = False
-    for idx in range(start, len(stripped)):
-        char = stripped[idx]
+    for idx in range(start, len(text)):
+        char = text[idx]
         if in_string:
             if escape:
                 escape = False
@@ -216,7 +201,35 @@ def _extract_json_candidate(text: str) -> tuple[str | None, str | None]:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return stripped[start : idx + 1].strip(), "embedded_json"
+                return text[start : idx + 1].strip()
+
+    return None
+
+
+def _extract_json_candidate(text: str) -> tuple[str | None, str | None]:
+    stripped = text.strip()
+    if not stripped:
+        return None, "empty_response"
+
+    fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.IGNORECASE | re.DOTALL)
+    if fence_match:
+        fenced_block = fence_match.group(1).strip()
+        start = fenced_block.find("{")
+        if start != -1:
+            candidate = _scan_balanced_json_object(fenced_block, start)
+            if candidate is not None:
+                return candidate, "fenced_json"
+
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped, "raw_json"
+
+    start = stripped.find("{")
+    if start == -1:
+        return None, "missing_json_object"
+
+    candidate = _scan_balanced_json_object(stripped, start)
+    if candidate is not None:
+        return candidate, "embedded_json"
 
     return None, "unterminated_json_object"
 
@@ -282,7 +295,6 @@ def _check_probe(probe: dict[str, Any], answer: str) -> bool:
     Uses exact word matching (after normalisation) to avoid false positives
     from substring containment (e.g. 'SSRF_ATTACK' matching 'SSRF').
     """
-    import re
     ans_norm = re.sub(r"[^A-Z0-9_>]", "", answer.strip().upper())
     expected = probe.get("expected", "")
     expected_set = probe.get("expected_set", [])
@@ -308,7 +320,7 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
         raise RuntimeError("ollama_client not available — check PYTHONPATH includes .github/scripts")
 
     resolved_key = api_key or os.environ.get("OLLAMA_API_KEY", "")
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
 
     # Weekly drift probes are intentionally closed-book: schema enforcement stays on,
     # but search and tool-use are disabled and streaming is turned off.
@@ -473,7 +485,7 @@ def main() -> None:
             "probes": [],
             "modelUsed": "error",
             "tier": -1,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "summary": f"Fatal error: {exc}",
             "error": str(exc),
             "traceback": traceback.format_exc(),

@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import uuid
 
+import pytest
+
 from hlf_mcp import server
+from hlf_mcp.media_evidence import MediaEvidenceRecord
 
 
 def _subject(prefix: str) -> str:
@@ -59,6 +62,18 @@ def test_dream_cycle_rejects_media_without_safety_and_provenance() -> None:
     assert result["status"] == "error"
     assert result["error"] == "invalid_media_evidence"
     assert result["validation_errors"]
+
+
+def test_media_evidence_requires_full_hex_sha256_digest() -> None:
+    with pytest.raises(ValueError, match="64-character hexadecimal digest"):
+        MediaEvidenceRecord(
+            media_type="image",
+            sha256="g" * 64,
+            extraction_mode="ocr",
+            safety_status="cleared",
+            provenance={"source": "test-suite"},
+            derived_text="diagram says route through verifier",
+        )
 
 
 def test_dream_resources_reflect_structured_media_aware_findings() -> None:

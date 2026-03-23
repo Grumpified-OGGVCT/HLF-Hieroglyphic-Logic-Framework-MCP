@@ -7,6 +7,29 @@ from mcp.server.fastmcp import FastMCP
 from hlf_mcp.hlf.memory_node import build_pointer_ref
 from hlf_mcp.server_context import ServerContext
 
+_SUPPORTED_MEMORY_GOVERNANCE_ACTIONS = {"revoke", "tombstone", "reinstate"}
+
+
+def _normalize_memory_governance_action(action: str) -> str:
+    return str(action or "").strip().lower()
+
+
+def _invalid_memory_governance_request(
+    *,
+    action: str,
+    fact_id: int | None,
+    sha256: str | None,
+    message: str,
+) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "error": "invalid_request",
+        "message": message,
+        "action": action,
+        "fact_id": fact_id,
+        "sha256": sha256,
+    }
+
 
 def apply_memory_governance(
     ctx: ServerContext,
@@ -22,37 +45,40 @@ def apply_memory_governance(
     source: str = "server_memory.hlf_memory_govern",
 ) -> dict[str, Any]:
     """Apply a governed memory intervention and emit the matching audit/governance records."""
-    if fact_id is None and not sha256:
-        return {
-            "status": "error",
-            "error": "Either fact_id or sha256 must be provided.",
-            "action": action,
-            "fact_id": fact_id,
-            "sha256": sha256,
-        }
-
-    try:
-        governed_fact = ctx.memory_store.govern_fact(
-            action=action,
+    normalized_action = _normalize_memory_governance_action(action)
+    if normalized_action not in _SUPPORTED_MEMORY_GOVERNANCE_ACTIONS:
+        return _invalid_memory_governance_request(
+            action=normalized_action,
             fact_id=fact_id,
             sha256=sha256,
-            operator_summary=operator_summary,
-            governed_by=source,
-            reason=reason,
-            operator_id=operator_id,
-            operator_display_name=operator_display_name,
-            operator_channel=operator_channel,
+            message=f"unsupported governance action: {action!r}",
         )
-    except ValueError as exc:
+    if fact_id is None and not sha256:
+        return _invalid_memory_governance_request(
+            action=normalized_action,
+            fact_id=fact_id,
+            sha256=sha256,
+            message="fact_id or sha256 is required",
+        )
+
+    governed_fact = ctx.memory_store.govern_fact(
+        action=normalized_action,
+        fact_id=fact_id,
+        sha256=sha256,
+        operator_summary=operator_summary,
+        governed_by=source,
+        reason=reason,
+        operator_id=operator_id,
+        operator_display_name=operator_display_name,
+        operator_channel=operator_channel,
+    )
+    if governed_fact is None:
         return {
-            "status": "error",
-            "error": str(exc),
-            "action": action,
+            "status": "not_found",
             "fact_id": fact_id,
             "sha256": sha256,
+            "action": normalized_action,
         }
-    if governed_fact is None:
-        return {"status": "not_found", "fact_id": fact_id, "sha256": sha256, "action": action}
 
     pointer_alias = (
         f"{governed_fact.get('topic') or 'general'}-{governed_fact.get('id') or 'entry'}"
@@ -61,7 +87,7 @@ def apply_memory_governance(
     audit = ctx.audit_chain.log(
         "hlf_memory_govern",
         {
-            "action": action,
+            "action": normalized_action,
             "fact_id": governed_fact.get("id"),
             "sha256": governed_fact.get("sha256"),
             "topic": governed_fact.get("topic"),
@@ -77,9 +103,9 @@ def apply_memory_governance(
     governance_event = ctx.emit_governance_event(
         kind="memory_governance",
         source=source,
-        action=f"memory_{str(action).lower()}",
+        action=f"memory_{normalized_action}",
         status="ok",
-        severity="warning" if str(action).lower() in {"revoke", "tombstone"} else "info",
+        severity="warning" if normalized_action in {"revoke", "tombstone"} else "info",
         subject_id=str(governed_fact.get("id") or ""),
         goal_id=str(governed_fact.get("topic") or ""),
         details={
@@ -96,7 +122,7 @@ def apply_memory_governance(
     )
     return {
         "status": "ok",
-        "action": str(action).lower(),
+        "action": normalized_action,
         "fact": governed_fact,
         "audit": audit,
         "governance_event": governance_event,

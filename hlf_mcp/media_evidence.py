@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import string
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -15,10 +16,6 @@ ALLOWED_MEDIA_TYPES = {
 
 def _iso_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
-
-
-def _is_valid_sha256_digest(value: str) -> bool:
-    return len(value) == 64 and all(char in "0123456789abcdef" for char in value)
 
 
 @dataclass(slots=True)
@@ -56,8 +53,8 @@ class MediaEvidenceRecord:
         self.confidence = float(self.confidence)
         if self.media_type not in ALLOWED_MEDIA_TYPES:
             raise ValueError(f"Unsupported media_type: {self.media_type}")
-        if not _is_valid_sha256_digest(self.sha256):
-            raise ValueError("sha256 must be a 64-character hex digest")
+        if len(self.sha256) != 64 or any(ch not in string.hexdigits for ch in self.sha256):
+            raise ValueError("sha256 must be a 64-character hexadecimal digest")
         if not self.extraction_mode:
             raise ValueError("extraction_mode is required for media evidence")
         if not self.safety_status:

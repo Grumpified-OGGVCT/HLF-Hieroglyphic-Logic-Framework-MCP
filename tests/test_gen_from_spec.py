@@ -24,6 +24,8 @@ def test_generate_host_functions_reference_uses_packaged_registry() -> None:
     assert "Registry version:" in text
     assert "| READ |" in text
     assert "| z3_verify |" in text
+    assert "| Input Schema | Output Schema |" in text
+    assert "`file_read`" in text
 
 
 def test_write_host_functions_reference_writes_file(tmp_path: Path) -> None:

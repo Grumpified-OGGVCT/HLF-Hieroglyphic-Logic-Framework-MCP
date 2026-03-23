@@ -165,6 +165,34 @@ HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
     "z3_verify": {"tier": "operators", "gas": 10, "effects": [], "desc": "Z3 formal verification"},
 }
 
+_HOST_FUNCTION_ALIASES: dict[str, str] = {
+    "action": "analyze",
+    "analyze": "analyze",
+    "delegate": "delegate",
+    "route": "route",
+    "vote": "vote",
+}
+
+
+def _normalize_host_function_name(fn_name: str) -> str:
+    raw_name = str(fn_name or "").strip()
+    if not raw_name:
+        return ""
+    lowered = raw_name.lower()
+    if lowered in HOST_FUNCTIONS:
+        return lowered
+
+    bracketed = raw_name
+    if raw_name.startswith("[") and raw_name.endswith("]"):
+        bracketed = raw_name[1:-1].strip()
+    elif " [" in raw_name and raw_name.endswith("]"):
+        bracketed = raw_name.split(" [", 1)[1][:-1].strip()
+
+    normalized = _HOST_FUNCTION_ALIASES.get(bracketed.lower())
+    if normalized:
+        return normalized
+    return lowered
+
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
 
@@ -968,6 +996,8 @@ def _dispatch_host(
     import os as _os
     import time as _time
 
+    requested_fn_name = str(fn_name or "")
+    fn_name = _normalize_host_function_name(requested_fn_name)
     fn_info = HOST_FUNCTIONS.get(fn_name, {})
     # Record all declared effects for the audit trail
     for eff in fn_info.get("effects", []):
@@ -1071,6 +1101,23 @@ def _dispatch_host(
             memory_context = _query_memory_context(memory_query, scope, side_effects)
             if memory_context is not None:
                 result["memory_context"] = memory_context
+            side_effects.append(
+                {
+                    "type": "delegation",
+                    "agent": agent,
+                    "goal": goal,
+                    "task_id": result["task_id"],
+                    "memory_context_source": str(memory_context.get("source", ""))
+                    if isinstance(memory_context, dict)
+                    else "",
+                    "memory_context_count": int(memory_context.get("count", 0))
+                    if isinstance(memory_context, dict)
+                    else 0,
+                    "embedding_profile_id": str(profile_summary.get("profile_id", ""))
+                    if isinstance(profile_summary, dict)
+                    else "",
+                }
+            )
 
         elif fn_name == "route":
             strategy = str(args[0]) if args else "auto"
@@ -1241,16 +1288,20 @@ def _dispatch_host(
         # ── Unknown host function — structured error, never silent ───────────
         else:
             result = {
-                "host_fn": fn_name,
+                "host_fn": requested_fn_name,
                 "status": "unresolved",
                 "args": [str(a)[:80] for a in args[:4]],
-                "note": f"No backend mapped for host function '{fn_name}'; "
+                "note": f"No backend mapped for host function '{requested_fn_name}'; "
                 "register via governance/host_functions.json backend field",
             }
+            if fn_name and fn_name != requested_fn_name:
+                result["normalized_host_fn"] = fn_name
 
     except Exception as exc:  # noqa: BLE001
-        result = {"host_fn": fn_name, "status": "error", "error": str(exc)}
-        side_effects.append({"type": "host_error", "fn": fn_name, "error": str(exc)})
+        result = {"host_fn": requested_fn_name, "status": "error", "error": str(exc)}
+        side_effects.append(
+            {"type": "host_error", "fn": fn_name or requested_fn_name, "error": str(exc)}
+        )
 
     # Hash sensitive results in the audit trail
     if sensitive and not isinstance(result, dict):

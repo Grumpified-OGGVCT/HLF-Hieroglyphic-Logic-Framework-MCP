@@ -54,9 +54,8 @@ def _build_parser() -> argparse.ArgumentParser:
     governance_parser.add_argument(
         "--action", required=True, choices=["revoke", "tombstone", "reinstate"]
     )
-    fact_group = governance_parser.add_mutually_exclusive_group(required=True)
-    fact_group.add_argument("--fact-id", type=int, default=None)
-    fact_group.add_argument("--sha256", default=None)
+    governance_parser.add_argument("--fact-id", type=int, default=None)
+    governance_parser.add_argument("--sha256", default=None)
     governance_parser.add_argument("--operator-summary", default="")
     governance_parser.add_argument("--reason", default="")
     governance_parser.add_argument("--operator-id", default="")
@@ -151,6 +150,8 @@ def _resource_command(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.command == "memory-govern" and args.fact_id is None and not args.sha256:
+        parser.error("memory-govern requires --fact-id or --sha256")
 
     if args.command == "do":
         return _do_command(args)

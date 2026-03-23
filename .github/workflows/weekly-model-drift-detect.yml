@@ -9,8 +9,8 @@
 # ║  probes against the HLF specification using Ollama Cloud API with:           ║
 # ║    • Structured outputs (JSON schema enforcement for parseable results)      ║
 # ║    • Tiered fallback: nemotron-3-super → kimi-k2:1t-cloud → qwen3.5:cloud   ║
-# ║    • Streaming with buffer protection                                        ║
-# ║    • Web search tool (model can check for spec updates)                     ║
+# ║    • Closed-book probe mode (no web search or tool-use contamination)       ║
+# ║    • Non-streaming JSON calls for stricter structured-output stability      ║
 # ║    • Circuit breaker + exponential backoff retries                          ║
 # ║                                                                              ║
 # ║  Drift score: fraction of weighted probes that answered incorrectly.        ║
@@ -80,7 +80,7 @@ jobs:
           echo "Running HLF semantic drift probes..."
           echo "Primary model: nemotron-3-super (120B MoE, LatentMoE+Mamba)"
           echo "Fallback chain: kimi-k2:1t-cloud -> qwen3.5:cloud -> deepseek-r1:14b"
-          echo "Capabilities: structured outputs + web search + streaming + circuit breaker"
+          echo "Capabilities: structured outputs + closed-book probe mode + circuit breaker"
           echo ""
 
           python scripts/monitor_model_drift.py --output /tmp/drift_output.json
@@ -117,6 +117,14 @@ jobs:
           echo "Model:   $MODEL_USED (tier $TIER_USED)"
           echo ""
 
+            python -c "
+            import json
+            data = json.load(open('/tmp/drift_output.json'))
+            print('Outcome classes:')
+            for name, count in sorted(data.get('outcomeCounts', {}).items()):
+              print(f'  {name}: {count}')
+            "
+
           # Print probe breakdown
           python -c "
           import json
@@ -124,8 +132,9 @@ jobs:
           print('Probe results:')
           for p in data.get('probes', []):
               icon = '✓' if p.get('correct') else '✗'
+              outcome = p.get('outcomeClass', 'unknown')
               err = p.get('error', '')[:60] if not p.get('correct') else ''
-              print(f'  {icon} {p[\"id\"]} [{p[\"category\"]}] weight={p[\"weight\"]} answer={p.get(\"answer\",\"ERR\")!r} {err}')
+              print(f'  {icon} {p[\"id\"]} [{p[\"category\"]}] class={outcome} weight={p[\"weight\"]} answer={p.get(\"answer\",\"ERR\")!r} {err}')
           "
 
       - name: Upload drift report artifact
@@ -173,9 +182,10 @@ jobs:
           rows = []
           for p in data.get('probes', []):
               icon = '✅' if p.get('correct') else '❌'
+              outcome = p.get('outcomeClass', 'unknown')
               answer = p.get('answer', 'ERROR')[:40]
               expected = str(p.get('expected', '?'))[:30]
-              rows.append(f'| {icon} | {p[\"id\"]} | {p[\"category\"]} | {p[\"weight\"]} | {expected} | {answer} |')
+              rows.append(f'| {icon} | {p[\"id\"]} | {p[\"category\"]} | {outcome} | {p[\"weight\"]} | {expected} | {answer} |')
           print('\n'.join(rows))
           ")
 
@@ -193,8 +203,10 @@ jobs:
 
           ### Probe Breakdown
 
-          | Result | ID | Category | Weight | Expected | Got |
-          |--------|-----|----------|--------|----------|-----|
+          Closed-book baseline note: web search and tool-use are intentionally disabled for these probes. Tool-call failures indicate harness/protocol problems, not semantic success.
+
+          | Result | ID | Category | Class | Weight | Expected | Got |
+          |--------|-----|----------|-------|--------|----------|-----|
           $PROBE_TABLE
 
           ---
@@ -202,13 +214,15 @@ jobs:
           ### What to do
 
           1. Review the failing probes above — each one corresponds to a core HLF contract.
-          2. If the model's answer was wrong: the model's training data may have drifted away
+           2. Treat `semantic_wrong_answer` as actual model-semantic drift.
+           3. Treat `protocol_shape_failure` and `tool_call_behavior_failure` as harness or response-shape failures first; do not over-read them as semantic regressions.
+           4. If the model's answer was wrong: the model's training data may have drifted away
              from the HLF specification. Consider updating the spec documentation or adding
              training examples to correct the model's understanding.
-          3. If an error occurred: check that the Ollama Cloud API is accessible and
+           5. If an error occurred: check that the Ollama Cloud API is accessible and
              \`OLLAMA_API_KEY\` is valid. The fallback chain was:
              \`nemotron-3-super → kimi-k2:1t-cloud → qwen3.5:cloud → deepseek-r1:14b\`
-          4. If status persists as ALERT for 2+ weeks, open a Phase 2 issue to add
+           6. If status persists as ALERT for 2+ weeks, open a Phase 2 issue to add
              a model fine-tuning checkpoint with HLF-specific examples.
 
           ---

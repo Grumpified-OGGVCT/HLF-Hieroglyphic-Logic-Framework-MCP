@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 READINESS_INPUTS = {
-    "SSOT_HLF_MCP.md",
     "docs/HLF_MISSING_PILLARS.md",
     "docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md",
     ".github/scripts/generate_status_overview.py",

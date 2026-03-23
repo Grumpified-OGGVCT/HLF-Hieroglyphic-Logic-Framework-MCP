@@ -109,15 +109,15 @@ class TestSpecDriftCheck:
 
 
 class TestReadinessRefreshCheck:
-    def test_refresh_required_when_truth_input_changes_without_readiness_outputs(self, tmp_path):
+    def test_refresh_not_required_for_ssot_only_change(self, tmp_path):
         from readiness_refresh_check import build_refresh_report
 
         changed = ["SSOT_HLF_MCP.md"]
         report = build_refresh_report(changed)
 
-        assert report["refresh_required"] is True
-        assert report["satisfied"] is False
-        assert "SSOT_HLF_MCP.md" in report["changed_inputs"]
+        assert report["refresh_required"] is False
+        assert report["satisfied"] is True
+        assert report["changed_inputs"] == []
 
     def test_refresh_satisfied_when_input_and_readiness_output_change_together(self):
         from readiness_refresh_check import build_refresh_report

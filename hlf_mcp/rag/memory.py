@@ -29,6 +29,8 @@ from typing import Any
 
 from hlf_mcp.hlf.memory_node import build_pointer_ref, parse_pointer_ref, verify_pointer_ref
 
+logger = logging.getLogger(__name__)
+
 # ── Simple vector embedding (bag-of-words TF-IDF approximation) ───────────────
 # Used when a proper ML embedding model is unavailable.
 

@@ -23,11 +23,13 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.entropy_anchor import evaluate_entropy_anchor
+from hlf_mcp.doc_ingest import DocumentIngester, summarize_reports
 from hlf_mcp.server_capsule import register_capsule_tools
 from hlf_mcp.server_completion import register_completion_tools
 from hlf_mcp.server_context import build_server_context, check_governance_manifest
@@ -41,6 +43,8 @@ from hlf_mcp.server_translation import register_translation_tools
 from hlf_mcp.server_verifier import register_verifier_tools
 
 _log = logging.getLogger(__name__)
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # ── Server instance ────────────────────────────────────────────────────────────
 
@@ -232,8 +236,69 @@ def _get_http_bind() -> tuple[str, int]:
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 
+def _startup_self_index() -> None:
+    """Ingest HLF docs and governance markdown into the governed knowledge substrate.
+
+    Runs once at server startup.  Deduplication in the memory substrate makes
+    subsequent startups fast—only new or modified chunks are stored.
+    """
+    try:
+        ingester = DocumentIngester(_ctx.memory_store)
+        reports: list = []
+
+        # Canonical HLF documentation
+        docs_dir = _REPO_ROOT / "docs"
+        if docs_dir.is_dir():
+            reports.extend(
+                ingester.ingest_directory(
+                    docs_dir,
+                    domain="hlf-specific",
+                    source_authority_label="canonical",
+                    file_pattern="*.md",
+                    recursive=True,
+                )
+            )
+
+        # Root-level markdown (README, SSOT, vision doctrine, etc.)
+        reports.extend(
+            ingester.ingest_directory(
+                _REPO_ROOT,
+                domain="hlf-specific",
+                source_authority_label="canonical",
+                file_pattern="*.md",
+                recursive=False,
+            )
+        )
+
+        # Governance assets
+        governance_dir = _REPO_ROOT / "governance"
+        if governance_dir.is_dir():
+            reports.extend(
+                ingester.ingest_directory(
+                    governance_dir,
+                    domain="hlf-specific",
+                    source_authority_label="canonical",
+                    file_pattern="*.md",
+                    recursive=True,
+                )
+            )
+
+        summary = summarize_reports(reports)
+        _log.info(
+            "HLK startup self-index: %d stored, %d deduped, %d errors, %d files, %.2fs",
+            summary["stored"],
+            summary["deduped"],
+            summary["errors"],
+            summary["files_processed"],
+            summary["elapsed_seconds"],
+        )
+    except Exception:
+        _log.exception("HLK startup self-index failed — server will start without self-index")
+
+
 def main() -> None:
     """Start the HLF MCP server with the configured transport."""
+    _startup_self_index()
     transport = os.environ.get("HLF_TRANSPORT", "stdio").lower().strip()
 
     if transport == "stdio":

@@ -34,6 +34,7 @@ from hlf_mcp.hlf.task_classifier import (
     task_envelope_to_workload,
 )
 
+
 logger = logging.getLogger(__name__)
 
 # ── Workload → catalog lane mapping ─────────────────────────────────────────
@@ -70,6 +71,7 @@ class GovernedCompletionResult:
         advisory_mode: True when completion proceeded despite a denied verdict.
         governance_warning: Human-readable warning when advisory mode engaged.
         latency_s: Wall-clock time from entry to completion.
+        evidence_lineage: Trace linking routing decision → execution → evidence.
     """
     orchestration: OrchestrationResult
     verdict: GovernedRouteVerdict
@@ -77,6 +79,7 @@ class GovernedCompletionResult:
     advisory_mode: bool = False
     governance_warning: str = ""
     latency_s: float = 0.0
+    evidence_lineage: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         workload = task_envelope_to_workload(self.task_envelope)
@@ -95,6 +98,7 @@ class GovernedCompletionResult:
             "escalation_depth": self.orchestration.escalation_depth,
             "latency_s": round(self.latency_s, 3),
             "audit_trail": self.orchestration.audit_trail,
+            "evidence_lineage": self.evidence_lineage,
         }
 
 
@@ -206,6 +210,44 @@ async def governed_complete(
         advisory_fallback=advisory_fallback,
     )
 
+    # Build evidence lineage: links routing decision → execution → outcome
+    evidence_lineage = _build_evidence_lineage(
+        task_envelope=envelope,
+        verdict=verdict,
+        result=result,
+        workload=workload,
+        selected_lane=selected_lane,
+        advisory_mode=advisory_mode,
+    )
+
+    # Persist evidence fact to governed metrics substrate
+    latency_s = round(time.monotonic() - t0, 3)
+    try:
+        from hlf.mcp_metrics import get_metrics
+        get_metrics().record_evidence_fact(
+            task_type=envelope.task_type,
+            task_category=envelope.category,
+            task_size=envelope.size,
+            workload_string=workload,
+            selected_lane=selected_lane,
+            routing_decision=verdict.decision,
+            routing_allowed=verdict.allowed,
+            predicted_primary_model=verdict.primary_model,
+            actual_model_used=result.model_used,
+            actual_provider_used=result.provider_used,
+            predicted_primary_matched=(result.model_used == verdict.primary_model),
+            escalation_depth=result.escalation_depth,
+            escalation_attempts=len(result.audit_trail),
+            advisory_mode=advisory_mode,
+            governance_mode=verdict.governance_mode,
+            deployment_tier=verdict.deployment_tier,
+            latency_s=latency_s,
+            rationale="; ".join(verdict.rationale) if isinstance(verdict.rationale, list) else verdict.rationale,
+            policy_constraints="; ".join(verdict.policy_constraints) if isinstance(verdict.policy_constraints, list) else verdict.policy_constraints,
+        )
+    except Exception as exc:
+        logger.debug("Evidence fact recording skipped: %s", exc)
+
     return GovernedCompletionResult(
         orchestration=result,
         verdict=verdict,
@@ -213,6 +255,7 @@ async def governed_complete(
         advisory_mode=advisory_mode,
         governance_warning=governance_warning,
         latency_s=round(time.monotonic() - t0, 3),
+        evidence_lineage=evidence_lineage,
     )
 
 
@@ -234,3 +277,71 @@ def _pick_models_for_lane(
         return primary, fallback
     except Exception:
         return "", ""
+
+
+def _build_evidence_lineage(
+    *,
+    task_envelope: TaskEnvelope,
+    verdict: GovernedRouteVerdict,
+    result: OrchestrationResult,
+    workload: str,
+    selected_lane: str,
+    advisory_mode: bool,
+) -> dict[str, Any]:
+    """Build evidence lineage connecting routing decision → execution → outcome.
+    
+    This lineage is used to:
+    1. Prove the path from intent classification to final result
+    2. Track whether execution matched routing predictions
+    3. Support governed evidence facts with full audit trail
+    4. Enable promotion/demotion of HKS exemplars based on fidelity
+    """
+    from hlf_mcp.hlf.task_classifier import TASK_TYPE_REGISTRY
+
+    task_type = task_envelope.task_type
+    task_metadata = TASK_TYPE_REGISTRY.get(task_type, {})
+
+    return {
+        # Classification layer (intent → task type)
+        "task_type": task_type,
+        "task_category": task_envelope.category,
+        "task_size": task_envelope.size,
+        "estimated_gas": task_envelope.estimated_gas,
+        "fast_path": task_envelope.fast_path,
+        "task_agent": task_metadata.get("agent", "unknown"),
+
+        # Routing layer (task type → lane decision)
+        "routing_decision": verdict.decision,
+        "selected_lane": selected_lane,
+        "workload_string": workload,
+        "governance_mode": verdict.governance_mode,
+        "align_action": verdict.align_action,
+        "deployment_tier": verdict.deployment_tier,
+        "routing_allowed": verdict.allowed,
+        "review_required": verdict.review_required,
+
+        # Decision rationale (why this lane?)
+        "rationale": verdict.rationale,
+        "policy_constraints": verdict.policy_constraints,
+
+        # Model selection (which models authorized?)
+        "predicted_primary_model": verdict.primary_model,
+        "predicted_fallback_model": verdict.fallback_model,
+        "predicted_primary_access": verdict.primary_access_mode,
+        "predicted_fallback_access": verdict.fallback_access_mode,
+
+        # Execution layer (what actually happened?)
+        "actual_model_used": result.model_used,
+        "actual_provider_used": result.provider_used,
+        "actual_lane_used": result.lane,
+        "escalation_depth": result.escalation_depth,
+        "escalation_attempts": len(result.audit_trail),
+
+        # Advisory tracking (did we bypass governance?)
+        "advisory_mode": advisory_mode,
+
+        # Matching prediction to execution
+        "predicted_primary_matched": result.model_used == verdict.primary_model,
+        "used_primary_model": result.escalation_depth <= 1,
+        "used_fallback_model": result.escalation_depth > 1,
+    }

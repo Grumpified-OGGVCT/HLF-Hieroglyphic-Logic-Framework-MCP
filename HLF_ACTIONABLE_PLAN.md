@@ -1,4 +1,5 @@
 # HLF (High Leverage Framework) - Actionable Implementation Plan
+
 ## Extracted from Monolithic Research Document
 
 ---
@@ -42,7 +43,22 @@ Immediate reconstruction outputs required:
 2. a pillar map of original HLF versus current damaged fragment
 3. a sprint stack ordered by real HLF pillars instead of packaging neatness
 
+## Use-Case Planning Rule
+
+Domain examples named in this file are working exemplars, not exhaustive limits.
+
+If a use case appears here in depth, that does not mean it is the only domain that matters.
+It means the repo has enough signal to use that domain as a bridge-planning proving ground.
+
+Apply the same rule to every embedded use-case family:
+
+- treat named examples as evidence-bearing test cases for the larger HLF architecture
+- do not let repeated examples silently harden into a fake product boundary
+- preserve the option for additional domains to be absorbed through the same governed meaning, memory, translation, routing, and audit spine
+- require the same lane discipline for all domains: current-truth when shipped, bridge-true when partially real, vision-true when still doctrinal
+
 The smallest local organism that can express full HLF intelligence requires:
+
 - **Deterministic coordination** (spec-first grammar, ALIGN Ledger seals)
 - **Structural compression** (glyph/ASCII surfaces reducing token footprint)
 - **Governed tool use** (host-function tiers, intent capsules)
@@ -53,8 +69,28 @@ The smallest local organism that can express full HLF intelligence requires:
 Current bridge direction:
 
 - use the current packaged MCP surface immediately for local, bounded build assistance
-- do not center the story on remote `streamable-http` self-hosting until real MCP initialization succeeds end to end
+- keep remote `streamable-http` self-hosting claims bounded to transport proof that has been revalidated end to end, rather than treating HTTP as the primary self-build story prematurely
 - treat `stdio` plus build-observation tools as the first credible "HLF helps finish HLF" milestone
+
+## Agent-Facing First-Impression Bridge Track
+
+Use `plan/feature-agent-first-impression-surface-1.md` as the bounded bridge plan for making HLF legible to arriving agents at first contact.
+
+This track exists because the current packaged front door still leads many capable agents to classify HLF primarily as a governance and audit surface rather than as a shared operating language for agents, tools, memory, and bounded coordination.
+
+Working rule:
+
+- do not solve this gap with README inflation or broader hype language
+- make the value legible through packaged MCP affordances, instruction synthesis, and thin operator entrypoints
+- keep the first slice resource-backed, deterministic, and anchored to current packaged truth plus explicit bridge qualifiers
+- treat later visual or richer onboarding hosts as follow-on consumers of this packaged contract, not as replacements for it
+
+Immediate bridge tasks for this track:
+
+1. add packaged `hlf://agent/...` resources for protocol identity, current authority, handoff semantics, and quickstart flow
+2. update packaged initialize-time instructions so arriving agents see HLF as a coordination and handoff protocol, not only as a governed tool inventory
+3. expose the same surfaces through thin `hlf-operator` entrypoints
+4. prove improvement through deterministic discoverability tests rather than subjective wording claims
 
 ### First build-assist lane
 
@@ -67,10 +103,18 @@ Use these surfaces together first:
 
 ### Immediate bridge tasks for this lane
 
-1. fix the current `streamable-http` dependency/runtime initialize fault
-2. rerun the smoke harness after the repair
-3. add an explicit packaged build-assist workflow that documents how `hlf_do`, `hlf_test_suite_summary`, and build-observation surfaces are used together
-4. promote broader self-build claims only after those gates are green
+1. add an explicit packaged build-assist workflow that documents how `hlf_do`, `hlf_test_suite_summary`, and build-observation surfaces are used together
+2. keep the live smoke harness as the bounded proof source for HTTP transport claims
+3. promote broader remote self-build claims only after those workflow gates are green
+
+### 2026-03-22 validated ingress/operator-surface checkpoint
+
+- packaged execution ingress is now shared across route, capsule, core runtime, and natural-language front doors rather than living only inside route admission
+- operator status exposure now includes a first-class ingress surface at `hlf://status/ingress` and `hlf://status/ingress/{agent_id}` plus governed-route top-level ingress summaries
+- active-transport proof for this checkpoint is the packaged `stdio` lane: the running operator process was `uv run hlf-mcp`, and the ingress resource was revalidated end to end through stdio MCP `initialize` -> `tools/call` (`hlf_run`) -> `resources/read` against `hlf://status/ingress/{agent_id}`, yielding an `ok` render from execution-admission fallback
+- operator-shell parity for this checkpoint includes the named `hlf-operator ingress-status` command so ingress status is reachable alongside `governed-route` and `formal-verifier`
+- `streamable-http` initialize now also validates on the current branch: the live HTTP smoke lane completed `initialize`, `notifications/initialized`, and the broader MCP flow successfully, and the harness now includes the same positive ingress proof via `hlf_run` plus `resources/read` on `hlf://status/ingress/{agent_id}`
+- use this checkpoint as the present proof boundary for ingress/operator trust surfaces, with `stdio` still the first credible local build-assist lane and `streamable-http` now validated as a bounded HTTP proof lane
 
 ## Autonomous Evolution Bridge Track
 
@@ -91,6 +135,7 @@ Immediate bridge tasks for this track:
 2. define the proposal schema and risk classes for docs, tests, schema, and runtime changes
 3. bind autonomous-improvement candidates to `VERIFY -> MERGE` gates and operator-review rules
 4. convert strong outcome claims such as faster shipping, lower defects, and greater reliability into benchmark work rather than present-tense assertions
+5. use the audited `STaR` and `Think, Act, Learn` rows only as bounded bridge donors for exemplar-bootstrap and closed-loop evidence-learning tasks in `plan/feature-autonomous-evolution-1.md`
 
 ## Dream-Cycle Reflection Bridge Track
 
@@ -144,6 +189,38 @@ Immediate bridge tasks for this track:
 3. add media-specific safety controls for EXIF or embedded metadata, prompt injection, unsupported payloads, and transcript hallucination labeling
 4. add deterministic tests proving media artifacts cannot influence governed lanes without provenance, sanitization status, and operator-legible summaries
 
+## Robotics And Embodied Execution Bridge Track
+
+Use `docs/HLF_ROBOTICS_EMBODIED_FIT_ASSESSMENT.md` as the fit and correction note for robotics claims.
+
+Use `plan/feature-robotics-embodied-execution-1.md` as the bounded feature plan for the first embodied-execution slice.
+
+This track exists because robotics is one of the stronger long-range domain fits for HLF, but it only fits honestly if the repo treats HLF as the supervisory meaning, safety, and audit layer first rather than pretending the current packaged runtime is already a hard-real-time robot controller.
+
+This robotics track is also an example family, not an exhaustive cap on HLF's future use cases.
+
+Use it as one proving ground for a more general rule:
+
+- domain-facing NLP, speech, or operator interaction should be ingress and egress around HLF, not a replacement for HLF-native cognition
+- the system should be able to research new domain concepts, absorb them into the governed knowledge substrate, and promote them into contracts only with evidence, audit, and review discipline
+- robotics, industrial control, simulation, assistants, scientific workflows, and other future use cases should all be able to converge on the same meaning, memory, and audit spine rather than forcing HLF into a single product-shaped story
+
+Working rule:
+
+- do not frame packaged HLF as a low-level servo loop or certified robotics stack today
+- recover embodied execution as typed capability contracts, verifier admission, evidence-bearing world-state pointers, and guarded actuation semantics
+- keep the first slice supervisory, simulation-backed, and fail-closed
+- promote stronger robotics claims only after embodied host functions, safety envelopes, and proof surfaces are actually packaged
+
+Immediate bridge tasks for this track:
+
+1. define robotics-specific host-function contracts for sensor read, world-state recall, trajectory proposal, guarded actuation, and emergency stop
+2. bind embodied action requests to the existing capsule, verifier, routing, witness, approval, and audit seams
+3. add governed world-state and sensor-evidence pointer contracts so physical evidence is referenced, not passed as unchecked raw context
+4. require simulation, replay, or mock-hardware proof before broader physical-world claims move out of the bridge lane
+5. treat HLF-native robot cognition plus real-time NLP translation as a bridge target only after the knowledge-substrate, translation-memory, and audit contracts are strong enough to support governed domain absorption instead of ad hoc prompting
+6. use the audited `CRCL`, `URScript`, `RSL`, `LTLCodeGen`, and `BehaviorTree.CPP` rows only as explicit contract-shape donors for `plan/feature-robotics-embodied-execution-1.md`
+
 ## Symbolic Surface Bridge Track
 
 Use `plan/feature-symbolic-semantic-surfaces-1.md` as the authoritative bridge plan for the new semasiographic and glyph-inspired HLF lane.
@@ -168,9 +245,23 @@ Immediate bridge tasks for this track:
 3. add round-trip, translation, and audit tests for `ASCII -> AST -> projection -> explanation`
 4. bind symbolic output into operator and gallery surfaces only after canonical-source side-by-side evidence exists
 
+Validated research triage for this track:
+
+- keep and implement now: relation-edge proof surfaces, side-by-side audit outputs, and benchmark lanes for compression with fidelity, determinism, translation clarity, and operator legibility
+- keep but defer: rendered diagrams, gallery views, and other display-only symbolic surfaces that derive from canonical relations after proof exists
+- keep out of the near-term core: fractal rendering stacks, gematria-style annotation schemes, QRNG paths, qutrit abstractions, and any claim about symbolic cognition or time-perception effects
+
+External research intake rule for this track:
+
+- accept only submissions that name target repo files, classify the claim lane (`current-truth`, `bridge`, or `vision`), specify deterministic tests or benchmarks, and state dependency cost
+- reject speculative status reports that describe work as already implemented without branch-valid file evidence
+- reject proposals that give symbolic renderings semantic authority or bypass ASCII, AST, validation, governance, or audit paths
+
 ## Knowledge Substrate Refactor Baseline
 
 Use `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` as the active external research brief for the weekly knowledge substrate work.
+
+Use `docs/HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md` as the current repo-owned intake ledger for which external memory, context-rot, reasoning, and robotics/domain-language baselines were actually source-checked and which lane they are allowed to influence.
 
 This implementation stream must include refactoring, not just additive features.
 
@@ -178,6 +269,7 @@ Refactoring rules for this track:
 
 - active docs, plans, workflows, and tool contracts must use HLF-native naming aligned with `hlf_mcp/`, `hlf/`, and `hlf_source/`
 - comparison-driven language may inform design, but it must not remain embedded in current implementation surfaces
+- only external techniques that are recorded in the source-audit ledger as `verified` or carefully bounded `partial` may influence bridge planning without a fresh re-check
 - new knowledge-substrate code should land under a coherent package boundary instead of scattering ingest, schema, provenance, and retrieval logic across unrelated modules
 - naming, schema, workflow, and MCP contract refactors must be planned alongside implementation so the final surface is cohesive
 
@@ -187,6 +279,7 @@ Refactoring rules for this track:
 2. define the canonical package boundary for chunking, ingestion, provenance, retrieval, and exemplar memory
 3. normalize memory and retrieval tool naming around a single runtime contract
 4. update tests, docs, and workflow labels in lockstep with the implementation changes
+5. translate the audited `MemER`, `TempoFit`, and `QwenLong-L1.5` rows into explicit package-boundary, supersession, context-fit, and benchmark tasks inside `plan/architecture-hlf-language-knowledge-convergence-1.md`
 
 ## Quality Envelope Baseline
 
@@ -204,6 +297,36 @@ That document defines the active quality dimensions for this repo:
 Implementation work should prefer improvements that move one or more of those measurable dimensions, not just aesthetic refactors.
 
 **None of these require local GPU inference.**
+
+## External Review Triage (2026-03-23)
+
+Keep only the externally raised items that survived repo-grounded review and place them in the right lane.
+
+The bridge authority for that review is `docs/HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md`.
+
+Use it to distinguish:
+
+- what was source-verified strongly enough to guide bridge work
+- what remains partial and should stay bounded
+- what must not be promoted into README or SSOT language yet
+
+### Finished or current-truth corrections
+
+- do not treat the packaged MCP as dependent on a local tuned model; the current backend story is governed backend selection across `local-via-ollama`, `cloud-via-ollama`, and `remote-direct`
+- do not treat the future HLF-specialized local LoRA lane as present-tense runtime truth; it remains a bridge experiment after the current build is working
+- keep cloud-first operator guidance separate from packaged MCP dependency claims
+
+### Near-term hardening batch
+
+1. add a non-root Docker runtime and reconcile any Docker wording that still implies a stronger container-hardening posture than the file earns
+2. add dependency CVE scanning to the weekly quality lane without collapsing the existing governed review structure into a generic security checklist
+3. expand lint coverage carefully beyond the current narrow rule set, but do it as a measured ratchet rather than a noisy repo-wide churn pass
+
+### Medium-term ops and release batch
+
+1. add versioned GitHub release and container-tag discipline so rollback targets are explicit rather than `latest`-only
+2. add SBOM generation in a lane that matches the repo's existing evidence and manifest style
+3. add a rollback or incident-recovery runbook proportionate to the current packaged HTTP and operator surfaces
 
 ## Sustainability Disclosure Discipline
 
@@ -279,6 +402,7 @@ Required batch outputs:
 ## 📋 ACTIONABLE REFINEMENTS (Prioritized)
 
 ### ✅ REFINEMENT 0: Quality Track Instead of Hand-Wavy Perfection
+
 **Status**: HIGH PRIORITY - Governs how all other refinements are judged
 
 **Problem**: The repo has strong vision language, but the question "how close to perfect are we getting?" was not yet expressed as repository-maintained quality criteria.
@@ -304,6 +428,7 @@ Required batch outputs:
 HLF can be shown, with tracked metrics, to produce more reproducible and governable outcomes than equivalent NLP-only orchestration.
 
 ### ✅ REFINEMENT 0B: VS Code Extension Bridge Track
+
 **Status**: HIGH PRIORITY - Broad adoption path without reducing HLF into a thin plugin story
 
 **Problem**: The repo has local MCP wiring, distribution metadata, and operator-GUI draft material, but it does not yet have a packaged VS Code extension surface that can launch or attach to HLF in a standard, configurable, distributable way.
@@ -330,17 +455,18 @@ HLF can be shown, with tracked metrics, to produce more reproducible and governa
 HLF can be installed and operated inside VS Code like a first-class extension while still preserving the packaged MCP server as the implementation authority and preserving claim-lane discipline around transport maturity.
 
 ### ✅ REFINEMENT 0C: Ecosystem Compatibility Bridge Track
-**Status**: HIGH PRIORITY - Keep HLF natively compatible with major MCP ecosystems without fragmenting the core
+
+**Status**: HIGH PRIORITY - Keep the packaged HLF MCP surface natively compatible with major MCP ecosystems and host applications without fragmenting authority
 
 **Problem**: The repo now has a concrete VS Code bridge track, but the broader compatibility goal across JavaScript or TypeScript, Java, Go, Rust, and related MCP ecosystems is still only implied in scattered roadmap notes.
 
-**Solution**: Treat ecosystem compatibility as an explicit bridge program: one canonical HLF core, many first-class launch, attach, and integration bridges that stay current with upstream SDK and protocol evolution.
+**Solution**: Treat ecosystem compatibility as an explicit bridge program: one canonical packaged HLF MCP authority, many first-class launch, attach, and host-application integration bridges that stay current with upstream SDK and protocol evolution.
 
 **Implementation Direction**:
 
-- keep packaged HLF authority in `hlf_mcp/` and build reference bridges instead of parallel HLF runtimes in other languages
+- keep packaged HLF authority in `hlf_mcp/` and build reference bridges or host integrations instead of parallel HLF runtimes in other languages or host ecosystems
 - preserve transport parity expectations across bridges wherever honest support is possible: `stdio`, `sse`, and `streamable-http`
-- maintain a compatibility matrix and version-watch discipline so JS/TS, Java, Go, Rust, and adjacent bridges do not silently drift stale
+- maintain a compatibility matrix and version-watch discipline so JS/TS, Java, Go, Rust, editor hosts, bot hosts, and adjacent bridges do not silently drift stale
 - let the VS Code extension serve as the first concrete JS/TS bridge while planning equally explicit lanes for Go, Java, and Rust
 
 **Immediate next implementation items**:
@@ -353,9 +479,10 @@ HLF can be installed and operated inside VS Code like a first-class extension wh
 
 **Success condition**:
 
-HLF has a maintained compatibility program for major MCP ecosystems, with one canonical core and explicit, testable bridge lanes rather than ad hoc one-off adapters.
+HLF has a maintained compatibility program for major MCP ecosystems and host applications, with one canonical packaged MCP authority and explicit, testable bridge lanes rather than ad hoc one-off adapters.
 
 ### ✅ REFINEMENT 0A: Knowledge Substrate Refactor Track
+
 **Status**: HIGH PRIORITY - Required for cohesion before the weekly knowledge system scales out
 
 **Problem**: Knowledge-system design notes are strong, but the implementation path still risks landing as a mix of comparison artifacts, scattered module ownership, and inconsistent runtime contracts.
@@ -381,6 +508,7 @@ HLF has a maintained compatibility program for major MCP ecosystems, with one ca
 The weekly knowledge-substrate program lands as a coherent HLF surface with consistent naming, package boundaries, and runtime contracts rather than as a stack of loosely attached features.
 
 ### ✅ REFINEMENT 1: SQLite WAL for Hot Tier (P0/P1)
+
 **Status**: HIGH PRIORITY - Zero correctness loss
 
 **Problem**: Redis hot tier (~1ms) vs SQLite WAL (~5ms) latency difference
@@ -388,6 +516,7 @@ The weekly knowledge-substrate program lands as a coherent HLF surface with cons
 **Solution**: Use SQLite WAL for P0/P1 hot tier with gas tolerance adjustment
 
 **Implementation**:
+
 ```python
 # File: hlf/infinite_rag.py - __init__() modification
 if os.getenv("HLF_PROFILE") in ["P0", "P1"]:
@@ -400,6 +529,7 @@ GAS_TOLERANCE_MS = 50  # From 5ms (was: GAS_TOLERANCE_MS = 5)
 ```
 
 **New Code Required**:
+
 ```python
 # File: hlf/stores/sqlite_hot_store.py (NEW FILE)
 import sqlite3
@@ -434,6 +564,7 @@ class SQLiteHotStore:
 ```
 
 **Verification Command**:
+
 ```bash
 HLF_PROFILE=P0 uv run pytest tests/conformance/ -x
 ```
@@ -443,6 +574,7 @@ HLF_PROFILE=P0 uv run pytest tests/conformance/ -x
 ---
 
 ### ✅ REFINEMENT 2: Direct Ollama Cloud API Default
+
 **Status**: HIGH PRIORITY - Eliminates local daemon
 
 **Problem**: Local Ollama daemon adds extra hop and failure point
@@ -450,6 +582,7 @@ HLF_PROFILE=P0 uv run pytest tests/conformance/ -x
 **Solution**: Default to `https://ollama.com/api` direct API
 
 **Implementation**:
+
 ```python
 # File: agents/core/model_gateway.py - _get_ollama_base_url()
 def _get_ollama_base_url(self):
@@ -462,6 +595,7 @@ def _get_ollama_base_url(self):
 ```
 
 **Environment Configuration**:
+
 ```bash
 # .env file addition
 HLF_OLLAMA_USE_CLOUD_DIRECT=1
@@ -470,6 +604,7 @@ OLLAMA_BASE_URL=https://ollama.com/api
 ```
 
 **Test Command**:
+
 ```bash
 HLF_OLLAMA_USE_CLOUD_DIRECT=1 \
 OLLAMA_API_KEY=your_key_here \
@@ -481,11 +616,13 @@ uv run python -m agents.core.model_gateway \
 ---
 
 ### ✅ REFINEMENT 3: Minimal P0 Host-Function Set (5 Functions)
+
 **Status**: HIGH PRIORITY - Strategic essentialism
 
 **The 5 Essential Functions for P0**:
+
 | Function | Purpose | Gas Cost |
-|----------|---------|----------|
+| --- | --- | --- |
 | `READ_FILE` | Read file contents | 2 |
 | `WRITE_FILE` | Write file contents | 3 |
 | `WEB_SEARCH` | Fetch web via Ollama Cloud | 5 |
@@ -493,6 +630,7 @@ uv run python -m agents.core.model_gateway \
 | `SELF_OBSERVE` | SOC hook - meta-intent emission | 1 |
 
 **Implementation**:
+
 ```yaml
 # File: spec/effects/p0_host_functions.yaml (NEW FILE)
 version: "0.5.0"
@@ -545,11 +683,13 @@ host_functions:
 ---
 
 ### ✅ REFINEMENT 4: Default Controller Model
+
 **Status**: MEDIUM PRIORITY - Model selection
 
 **Selected Model**: `gpt-oss:20b-cloud`
 
 **Why**:
+
 - ⭐⭐⭐⭐ Reasoning strength (agentic workflows)
 - ✅ Native tool calling
 - ✅ Native structured outputs
@@ -557,12 +697,14 @@ host_functions:
 - Cost: $0.0006/1K tokens
 
 **Implementation**:
+
 ```python
 # File: pyproject.toml or .env
 OLLAMA_CONTROLLER_MODEL="gpt-oss:20b-cloud"
 ```
 
 **Test Structured Output**:
+
 ```python
 import requests, os, json
 
@@ -582,9 +724,11 @@ print(json.loads(response.json()['message']['content'])['value'])  # Should prin
 ---
 
 ### ✅ REFINEMENT 5: LRU Cache Hot Tier Alternative
+
 **Status**: MEDIUM PRIORITY - For <10ms operations
 
 **Implementation**:
+
 ```python
 # File: hlf/stores/lru_hot_store.py (NEW FILE)
 from collections import OrderedDict
@@ -612,6 +756,7 @@ class LRUHotStore:
 ```
 
 **Hybrid Usage**:
+
 ```python
 # In infinite_rag.py
 if os.getenv("HLF_PROFILE") == "P0":
@@ -627,6 +772,7 @@ else:
 ## 🔧 IMPLEMENTATION CHECKLIST
 
 ### Phase 1: Core Infrastructure (Week 1)
+
 - [ ] Create `hlf/stores/sqlite_hot_store.py`
 - [ ] Create `hlf/stores/lru_hot_store.py`
 - [ ] Modify `hlf/infinite_rag.py` for profile-based store selection
@@ -635,6 +781,7 @@ else:
 - [ ] Modify `agents/core/model_gateway.py` for direct cloud API
 
 ### Phase 2: Integration & Testing (Week 2)
+
 - [ ] Add environment variable configuration
 - [ ] Create profile detection utility
 - [ ] Update conformance suite tags
@@ -643,6 +790,7 @@ else:
 - [ ] Test P2 profile (Full stack)
 
 ### Phase 3: Documentation (Week 3)
+
 - [ ] Update SETUP_GUIDE.md with HLF profiles
 - [ ] Create P0 quickstart documentation
 - [ ] Document host function specifications
@@ -653,7 +801,7 @@ else:
 ## 📊 P0/P1/P2 Profile Matrix
 
 | Feature | P0 (Cloud-only Core) | P1 (Cloud Workstation) | P2 (Full Sovereign) |
-|---------|----------------------|------------------------|---------------------|
+| --- | --- | --- | --- |
 | **Local Footprint** | Python + SQLite | Python + SQLite + LRU | Python + SQLite + Redis |
 | **Inference** | Direct Ollama Cloud | Direct Ollama Cloud | Ollama Cloud + Local |
 | **Hot Tier** | LRU Cache (<0.1ms) | SQLite WAL (~5ms) | Redis (<1ms) |
@@ -667,6 +815,7 @@ else:
 ## 🧪 VERIFICATION COMMANDS
 
 ### Test P0 Cloud-only Core
+
 ```bash
 # 1. Setup P0 environment
 uv sync --no-extras
@@ -688,6 +837,7 @@ print('Meta-intents:', len(rag.hot_store.cache if hasattr(rag.hot_store, 'cache'
 ```
 
 ### Test Host Functions
+
 ```bash
 # Test all 5 P0 host functions
 uv run python -m agents.core.host_function_dispatcher \
@@ -700,6 +850,7 @@ uv run python -m agents.core.host_function_dispatcher \
 ## 🎯 SUCCESS CRITERIA
 
 ✅ **P0 is viable when**:
+
 - 28/28 non-realtime conformance tests pass
 - Self-observation hook captures compiler meta-intents
 - Host functions work via Ollama Cloud
@@ -707,12 +858,14 @@ uv run python -m agents.core.host_function_dispatcher \
 - <50MB RAM idle footprint
 
 ✅ **P1 is viable when**:
+
 - All P0 criteria met
 - SQLite WAL hot tier <10ms latency
 - LRU cache for sub-millisecond ops
 - Optional local Ollama daemon works
 
 ✅ **P2 is viable when**:
+
 - All P1 criteria met
 - Full 23+ host function set
 - Redis hot tier <1ms latency
@@ -723,7 +876,8 @@ uv run python -m agents.core.host_function_dispatcher \
 ## 📦 NEW DEPENDENCIES TO ADD
 
 ### Python Dependencies (add to requirements-upgraded.txt)
-```
+
+```text
 # For LRU cache hot tier
 cachetools>=5.5.0
 
@@ -738,6 +892,7 @@ apsw>=3.46.0  # Alternative SQLite wrapper with better WAL support
 ```
 
 ### Node.js Dependencies (add to package.json if needed)
+
 ```json
 {
   "dependencies": {
@@ -763,6 +918,7 @@ apsw>=3.46.0  # Alternative SQLite wrapper with better WAL support
 ## 💡 KEY TAKEAWAY
 
 **HLF's smallest viable organism (P0)**:
+
 - Python runtime
 - SQLite database
 - Direct Ollama Cloud API

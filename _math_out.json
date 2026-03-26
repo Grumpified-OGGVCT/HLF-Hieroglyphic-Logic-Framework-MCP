@@ -1,0 +1,489 @@
+{
+  "kind": "program",
+  "version": "3",
+  "statements": [
+    {
+      "kind": "assign_stmt",
+      "name": "sum",
+      "expr": {
+        "kind": "binop",
+        "op": "+",
+        "left": {
+          "kind": "value",
+          "type": "int",
+          "value": 2
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 3
+        }
+      },
+      "human_readable": "assign (mutable) sum = 2 + 3"
+    },
+    {
+      "kind": "assign_stmt",
+      "name": "diff",
+      "expr": {
+        "kind": "binop",
+        "op": "-",
+        "left": {
+          "kind": "value",
+          "type": "int",
+          "value": 10
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 4
+        }
+      },
+      "human_readable": "assign (mutable) diff = 10 - 4"
+    },
+    {
+      "kind": "assign_stmt",
+      "name": "prod",
+      "expr": {
+        "kind": "binop",
+        "op": "*",
+        "left": {
+          "kind": "value",
+          "type": "int",
+          "value": 6
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 7
+        }
+      },
+      "human_readable": "assign (mutable) prod = 6 * 7"
+    },
+    {
+      "kind": "assign_stmt",
+      "name": "quot",
+      "expr": {
+        "kind": "binop",
+        "op": "/",
+        "left": {
+          "kind": "value",
+          "type": "int",
+          "value": 20
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 4
+        }
+      },
+      "human_readable": "assign (mutable) quot = 20 / 4"
+    },
+    {
+      "kind": "assign_stmt",
+      "name": "rem",
+      "expr": {
+        "kind": "binop",
+        "op": "%",
+        "left": {
+          "kind": "value",
+          "type": "int",
+          "value": 17
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 5
+        }
+      },
+      "human_readable": "assign (mutable) rem = 17 % 5"
+    },
+    {
+      "kind": "assign_stmt",
+      "name": "precedence",
+      "expr": {
+        "kind": "binop",
+        "op": "+",
+        "left": {
+          "kind": "value",
+          "type": "int",
+          "value": 2
+        },
+        "right": {
+          "kind": "binop",
+          "op": "*",
+          "left": {
+            "kind": "value",
+            "type": "int",
+            "value": 3
+          },
+          "right": {
+            "kind": "value",
+            "type": "int",
+            "value": 4
+          }
+        }
+      },
+      "human_readable": "assign (mutable) precedence = 2 + 3 * 4"
+    },
+    {
+      "kind": "assign_stmt",
+      "name": "grouped",
+      "expr": {
+        "kind": "binop",
+        "op": "*",
+        "left": {
+          "kind": "paren_expr",
+          "expr": {
+            "kind": "binop",
+            "op": "+",
+            "left": {
+              "kind": "value",
+              "type": "int",
+              "value": 2
+            },
+            "right": {
+              "kind": "value",
+              "type": "int",
+              "value": 3
+            }
+          }
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 4
+        }
+      },
+      "human_readable": "assign (mutable) grouped = (2 + 3) * 4"
+    },
+    {
+      "kind": "assign_stmt",
+      "name": "neg",
+      "expr": {
+        "kind": "value",
+        "type": "int",
+        "value": -42
+      },
+      "human_readable": "assign (mutable) neg = -42"
+    },
+    {
+      "kind": "if_block_stmt",
+      "condition": {
+        "kind": "binop",
+        "op": "==",
+        "left": {
+          "kind": "value",
+          "type": "ident",
+          "value": "sum"
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 5
+        }
+      },
+      "body": {
+        "kind": "block",
+        "statements": [
+          {
+            "kind": "glyph_stmt",
+            "glyph": "╬ö",
+            "tag": "INTENT",
+            "arguments": [
+              {
+                "kind": "kv_arg",
+                "name": "goal",
+                "value": {
+                  "kind": "value",
+                  "type": "string",
+                  "value": "sum_correct"
+                }
+              }
+            ],
+            "human_readable": "analyze [INTENT]: goal=sum_correct"
+          }
+        ]
+      },
+      "elif_clauses": [],
+      "else_clause": null,
+      "human_readable": "if sum == 5 then block"
+    },
+    {
+      "kind": "if_block_stmt",
+      "condition": {
+        "kind": "binop",
+        "op": "==",
+        "left": {
+          "kind": "value",
+          "type": "ident",
+          "value": "precedence"
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 14
+        }
+      },
+      "body": {
+        "kind": "block",
+        "statements": [
+          {
+            "kind": "glyph_stmt",
+            "glyph": "╬ö",
+            "tag": "INTENT",
+            "arguments": [
+              {
+                "kind": "kv_arg",
+                "name": "goal",
+                "value": {
+                  "kind": "value",
+                  "type": "string",
+                  "value": "precedence_correct"
+                }
+              }
+            ],
+            "human_readable": "analyze [INTENT]: goal=precedence_correct"
+          }
+        ]
+      },
+      "elif_clauses": [],
+      "else_clause": null,
+      "human_readable": "if precedence == 14 then block"
+    },
+    {
+      "kind": "if_block_stmt",
+      "condition": {
+        "kind": "binop",
+        "op": "==",
+        "left": {
+          "kind": "value",
+          "type": "ident",
+          "value": "grouped"
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 20
+        }
+      },
+      "body": {
+        "kind": "block",
+        "statements": [
+          {
+            "kind": "glyph_stmt",
+            "glyph": "╬ö",
+            "tag": "INTENT",
+            "arguments": [
+              {
+                "kind": "kv_arg",
+                "name": "goal",
+                "value": {
+                  "kind": "value",
+                  "type": "string",
+                  "value": "grouping_correct"
+                }
+              }
+            ],
+            "human_readable": "analyze [INTENT]: goal=grouping_correct"
+          }
+        ]
+      },
+      "elif_clauses": [],
+      "else_clause": null,
+      "human_readable": "if grouped == 20 then block"
+    },
+    {
+      "kind": "if_block_stmt",
+      "condition": {
+        "kind": "binop",
+        "op": "AND",
+        "left": {
+          "kind": "binop",
+          "op": "==",
+          "left": {
+            "kind": "value",
+            "type": "ident",
+            "value": "sum"
+          },
+          "right": {
+            "kind": "value",
+            "type": "int",
+            "value": 5
+          }
+        },
+        "right": {
+          "kind": "binop",
+          "op": "==",
+          "left": {
+            "kind": "value",
+            "type": "ident",
+            "value": "prod"
+          },
+          "right": {
+            "kind": "value",
+            "type": "int",
+            "value": 42
+          }
+        }
+      },
+      "body": {
+        "kind": "block",
+        "statements": [
+          {
+            "kind": "glyph_stmt",
+            "glyph": "╬ö",
+            "tag": "INTENT",
+            "arguments": [
+              {
+                "kind": "kv_arg",
+                "name": "goal",
+                "value": {
+                  "kind": "value",
+                  "type": "string",
+                  "value": "conjunction_works"
+                }
+              }
+            ],
+            "human_readable": "analyze [INTENT]: goal=conjunction_works"
+          }
+        ]
+      },
+      "elif_clauses": [],
+      "else_clause": null,
+      "human_readable": "if sum == 5 AND prod == 42 then block"
+    },
+    {
+      "kind": "if_block_stmt",
+      "condition": {
+        "kind": "binop",
+        "op": "OR",
+        "left": {
+          "kind": "binop",
+          "op": "==",
+          "left": {
+            "kind": "value",
+            "type": "ident",
+            "value": "sum"
+          },
+          "right": {
+            "kind": "value",
+            "type": "int",
+            "value": 99
+          }
+        },
+        "right": {
+          "kind": "binop",
+          "op": "==",
+          "left": {
+            "kind": "value",
+            "type": "ident",
+            "value": "prod"
+          },
+          "right": {
+            "kind": "value",
+            "type": "int",
+            "value": 42
+          }
+        }
+      },
+      "body": {
+        "kind": "block",
+        "statements": [
+          {
+            "kind": "glyph_stmt",
+            "glyph": "╬ö",
+            "tag": "INTENT",
+            "arguments": [
+              {
+                "kind": "kv_arg",
+                "name": "goal",
+                "value": {
+                  "kind": "value",
+                  "type": "string",
+                  "value": "disjunction_works"
+                }
+              }
+            ],
+            "human_readable": "analyze [INTENT]: goal=disjunction_works"
+          }
+        ]
+      },
+      "elif_clauses": [],
+      "else_clause": null,
+      "human_readable": "if sum == 99 OR prod == 42 then block"
+    },
+    {
+      "kind": "assign_stmt",
+      "name": "complex",
+      "expr": {
+        "kind": "binop",
+        "op": "/",
+        "left": {
+          "kind": "binop",
+          "op": "*",
+          "left": {
+            "kind": "paren_expr",
+            "expr": {
+              "kind": "binop",
+              "op": "+",
+              "left": {
+                "kind": "value",
+                "type": "int",
+                "value": 2
+              },
+              "right": {
+                "kind": "value",
+                "type": "int",
+                "value": 3
+              }
+            }
+          },
+          "right": {
+            "kind": "paren_expr",
+            "expr": {
+              "kind": "binop",
+              "op": "-",
+              "left": {
+                "kind": "value",
+                "type": "int",
+                "value": 10
+              },
+              "right": {
+                "kind": "value",
+                "type": "int",
+                "value": 4
+              }
+            }
+          }
+        },
+        "right": {
+          "kind": "value",
+          "type": "int",
+          "value": 2
+        }
+      },
+      "human_readable": "assign (mutable) complex = (2 + 3) * (10 - 4) / 2"
+    },
+    {
+      "kind": "glyph_stmt",
+      "glyph": "Γêç",
+      "tag": "RESULT",
+      "arguments": [
+        {
+          "kind": "kv_arg",
+          "name": "message",
+          "value": {
+            "kind": "value",
+            "type": "string",
+            "value": "math_pipeline_validated"
+          }
+        }
+      ],
+      "human_readable": "source [RESULT]: message=math_pipeline_validated"
+    }
+  ],
+  "node_count": 15,
+  "human_readable": "HLF v3 program with 15 statement(s)",
+  "sha256": "431bea9212875ea250096e144147e84f3fc6e0b3728ea7b852adad340749fab3",
+  "env": {}
+}

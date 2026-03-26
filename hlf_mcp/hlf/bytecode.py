@@ -545,8 +545,226 @@ def _emit_stmt(
         idx = add_const(stmt.get("name", ""))
         instructions.append(_instr(Op.CALL_TOOL, idx))
 
+    elif kind == "assign_stmt":
+        _emit_expr(stmt.get("expr", {}), instructions, pool, add_const)
+        idx = add_const(stmt.get("name", ""))
+        instructions.append(_instr(Op.STORE, idx))
+
+    elif kind == "if_block_stmt":
+        _emit_if_block(stmt, instructions, pool, add_const)
+
+    elif kind == "for_stmt":
+        _emit_for(stmt, instructions, pool, add_const)
+
+    elif kind == "log_stmt":
+        expr = stmt.get("expr") or stmt.get("value")
+        if expr:
+            _emit_expr(expr, instructions, pool, add_const)
+        else:
+            idx = add_const(stmt.get("message", ""))
+            instructions.append(_instr(Op.PUSH_CONST, idx))
+        instructions.append(_instr(Op.CALL_HOST, add_const("__log__")))
+
+    elif kind == "result_stmt":
+        expr = stmt.get("expr") or stmt.get("value")
+        if expr:
+            _emit_expr(expr, instructions, pool, add_const)
+        instructions.append(_instr(Op.RESULT))
+
     else:
         instructions.append(_instr(Op.NOP))
+
+
+# ── Expression emitter ────────────────────────────────────────────────────────
+
+# binop operator → VM opcode
+_BINOP_TO_OP: dict[str, Op] = {
+    "+": Op.ADD,
+    "-": Op.SUB,
+    "*": Op.MUL,
+    "/": Op.DIV,
+    "%": Op.MOD,
+    "==": Op.CMP_EQ,
+    "!=": Op.CMP_NE,
+    "<": Op.CMP_LT,
+    "<=": Op.CMP_LE,
+    ">": Op.CMP_GT,
+    ">=": Op.CMP_GE,
+    "AND": Op.AND,
+    "OR": Op.OR,
+}
+
+
+def _emit_expr(
+    expr: dict[str, Any],
+    instructions: list[bytes],
+    pool: ConstantPool,
+    add_const,
+) -> None:
+    """Recursively emit bytecode for an expression AST node."""
+    if not expr:
+        return
+
+    kind = expr.get("kind", "")
+
+    if kind == "binop":
+        _emit_expr(expr["left"], instructions, pool, add_const)
+        _emit_expr(expr["right"], instructions, pool, add_const)
+        op = _BINOP_TO_OP.get(expr.get("op", ""), Op.NOP)
+        instructions.append(_instr(op))
+
+    elif kind == "unop":
+        _emit_expr(expr["operand"], instructions, pool, add_const)
+        op_str = expr.get("op", "")
+        if op_str == "NEG":
+            instructions.append(_instr(Op.NEG))
+        elif op_str == "NOT":
+            instructions.append(_instr(Op.NOT))
+
+    elif kind == "paren_expr":
+        _emit_expr(expr["expr"], instructions, pool, add_const)
+
+    elif kind == "value":
+        vtype = expr.get("type", "")
+        val = expr.get("value")
+        if vtype == "ident":
+            # Variable load
+            idx = add_const(str(val))
+            instructions.append(_instr(Op.LOAD, idx))
+        elif vtype == "var_ref":
+            # $VAR reference — strip leading $ for scope lookup
+            name = str(val)
+            if name.startswith("$"):
+                name = name[1:]
+            idx = add_const(name)
+            instructions.append(_instr(Op.LOAD, idx))
+        else:
+            # Literal: int, float, string, bool
+            if not isinstance(val, (bool, int, float)):
+                val = str(val) if val is not None else ""
+            idx = add_const(val)
+            instructions.append(_instr(Op.PUSH_CONST, idx))
+
+    else:
+        # Unknown expression kind — push as constant if it has a value
+        val = expr.get("value", "")
+        idx = add_const(val if val else "")
+        instructions.append(_instr(Op.PUSH_CONST, idx))
+
+
+# ── IF block emitter with jump patching ───────────────────────────────────────
+
+
+def _patch_jz(instructions: list[bytes], jz_index: int, target_index: int) -> None:
+    """Patch a JZ instruction at jz_index to jump to target_index (instruction count)."""
+    # Each instruction is 3 bytes; target PC = target_index * 3
+    target_pc = target_index * 3
+    instructions[jz_index] = _instr(Op.JZ, target_pc & 0xFFFF)
+
+
+def _patch_jmp(instructions: list[bytes], jmp_index: int, target_index: int) -> None:
+    """Patch a JMP instruction at jmp_index to jump to target_index."""
+    target_pc = target_index * 3
+    instructions[jmp_index] = _instr(Op.JMP, target_pc & 0xFFFF)
+
+
+def _emit_if_block(
+    stmt: dict[str, Any],
+    instructions: list[bytes],
+    pool: ConstantPool,
+    add_const,
+) -> None:
+    """Emit bytecode for if_block_stmt with elif/else and jump patching."""
+    # Collect all end-of-branch JMP indices that need patching to the final end
+    end_jumps: list[int] = []
+
+    # ── Main IF condition ──
+    _emit_expr(stmt.get("condition", {}), instructions, pool, add_const)
+    jz_idx = len(instructions)
+    instructions.append(_instr(Op.JZ, 0))  # placeholder
+
+    # ── Main IF body ──
+    body = stmt.get("body")
+    if body and body.get("kind") == "block":
+        for s in body.get("statements", []):
+            _emit_stmt(s, instructions, pool, add_const)
+
+    # ── elif / else present? ──
+    elif_clauses = stmt.get("elif_clauses") or []
+    else_clause = stmt.get("else_clause")
+
+    if elif_clauses or else_clause:
+        # Jump past remaining branches after main body
+        end_jumps.append(len(instructions))
+        instructions.append(_instr(Op.JMP, 0))  # placeholder
+
+    # Patch the main IF JZ to here (start of first elif or else or end)
+    _patch_jz(instructions, jz_idx, len(instructions))
+
+    # ── elif clauses ──
+    for i, elif_c in enumerate(elif_clauses):
+        _emit_expr(elif_c.get("condition", {}), instructions, pool, add_const)
+        elif_jz_idx = len(instructions)
+        instructions.append(_instr(Op.JZ, 0))  # placeholder
+
+        elif_body = elif_c.get("body")
+        if elif_body and elif_body.get("kind") == "block":
+            for s in elif_body.get("statements", []):
+                _emit_stmt(s, instructions, pool, add_const)
+
+        # Jump to end after elif body
+        end_jumps.append(len(instructions))
+        instructions.append(_instr(Op.JMP, 0))  # placeholder
+
+        # Patch this elif's JZ to the next clause
+        _patch_jz(instructions, elif_jz_idx, len(instructions))
+
+    # ── else clause ──
+    if else_clause:
+        else_body = else_clause.get("body")
+        if else_body and else_body.get("kind") == "block":
+            for s in else_body.get("statements", []):
+                _emit_stmt(s, instructions, pool, add_const)
+
+    # ── Patch all end-of-branch JMPs to here ──
+    end_target = len(instructions)
+    for jmp_idx in end_jumps:
+        _patch_jmp(instructions, jmp_idx, end_target)
+
+    # If there were no elif/else, the JZ already points to the right place
+    if not elif_clauses and not else_clause:
+        _patch_jz(instructions, jz_idx, len(instructions))
+
+
+# ── FOR loop emitter ──────────────────────────────────────────────────────────
+
+
+def _emit_for(
+    stmt: dict[str, Any],
+    instructions: list[bytes],
+    pool: ConstantPool,
+    add_const,
+) -> None:
+    """Emit bytecode for for_stmt: FOR var IN iterable { body }."""
+    var_name = stmt.get("var", stmt.get("name", ""))
+    iterable = stmt.get("iterable")
+
+    # Push iterable value/expression
+    if iterable:
+        _emit_expr(iterable, instructions, pool, add_const)
+    else:
+        idx = add_const("")
+        instructions.append(_instr(Op.PUSH_CONST, idx))
+
+    # Store loop variable name for runtime iteration
+    var_idx = add_const(var_name)
+    instructions.append(_instr(Op.STORE, var_idx))
+
+    # Emit body
+    body = stmt.get("body")
+    if body and body.get("kind") == "block":
+        for s in body.get("statements", []):
+            _emit_stmt(s, instructions, pool, add_const)
 
 
 def _emit_arg(arg: dict[str, Any], instructions: list[bytes], add_const) -> None:

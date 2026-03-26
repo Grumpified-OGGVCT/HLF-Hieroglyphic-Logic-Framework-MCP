@@ -65,6 +65,7 @@ The Chinese cognitive lane is launch-complete when the repo can do all of the fo
 - **REQ-006**: Routing must be able to select a Chinese-favoring lane only when workload evidence or benchmark policy supports it.
 - **REQ-007**: Sidecar reconstruction must preserve meaning strongly enough for operator review.
 - **REQ-008**: The system must fail closed on unsupported Chinese-specific extensions rather than improvising grammar.
+- **REQ-009**: Operators must be able to persist a cognitive-lane policy that keeps benchmark-gated multilingual handling, prefers English audit, or disallows Chinese ingress entirely.
 
 ## 5. What “Full And Complete For Launch” Actually Means
 

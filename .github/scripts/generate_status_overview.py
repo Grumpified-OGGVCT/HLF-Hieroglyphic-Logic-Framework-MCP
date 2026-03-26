@@ -23,13 +23,6 @@ HTML_OUTPUT = DOCS_DIR / "index.html"
 MERGE_HTML_OUTPUT = DOCS_DIR / "merge-readiness.html"
 CLAIMS_HTML_OUTPUT = DOCS_DIR / "claims-ledger.html"
 CSS_PATH = "assets/status-site.css"
-DOCS_BLOB_BASE = (
-    "https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP/blob/main/docs"
-)
-
-
-def _docs_blob_href(filename: str) -> str:
-    return f"{DOCS_BLOB_BASE}/{filename}"
 
 
 def _docs_blob_href(filename: str) -> str:
@@ -556,6 +549,7 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
         "",
         "- current packaged truth is strong enough to inspect and use now",
         "- weekly governance evidence is real and operational",
+        "- Instinct now exposes packaged proof-state, phase-completion, and mission-lineage summaries across operator review surfaces",
         "- broader coordination, operator, and ecosystem completion is still in active bridge work",
         "",
         "## 1. Whole HLF Status",
@@ -571,7 +565,7 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
         f"| Overall readiness | `{dashboard['overall_readiness']:.1f}%` |",
         f"| Interpretation band | `{dashboard['interpretation_band']}` |",
         "| Claim-lane label | current packaged truth plus bridge-qualified expansion |",
-        "| One-sentence repo status | the repo already has a strong semantic and governance core, but the broader coordination-and-operator zone still suppresses total readiness |",
+        "| One-sentence repo status | the repo already has a strong semantic and governance core, and Instinct now exposes packaged proof-state and mission-lineage summaries, but broader coordination-and-operator completion still suppresses total readiness |",
         "",
         "### Cluster Scores",
         "",
@@ -684,7 +678,7 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
         "",
         "1. strengthen typed effect and capability contracts",
         "2. deepen formal verification and routing proof",
-        "3. raise orchestration from partial lifecycle presence into stronger packaged coordination proof",
+        "3. extend shipped Instinct proof-state and mission-lineage evidence into thicker packaged coordination proof",
         "4. convert persona/operator doctrine into thicker workflow and runtime evidence",
         "5. keep memory governance and weekly evidence contracts converging without fragmenting the trust surface",
         "",
@@ -698,7 +692,7 @@ def render_status_overview_markdown(data: dict[str, Any]) -> str:
         "",
         "If you need the safest summary of this page, use this sentence:",
         "",
-        "HLF in this repo already has a strong current packaged core and real weekly governed evidence, while broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.",
+        "HLF in this repo already has a strong current packaged core, real weekly governed evidence, and packaged Instinct proof-state surfaces, while broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.",
         "",
         f"_Generated from repo sources on {data['generated_at']}._",
         "",
@@ -1206,10 +1200,10 @@ def render_status_index_html(data: dict[str, Any]) -> str:
             ),
             _render_lane_band(
                 "Bridge-True",
-                "Coordination, operator, and recovery work is real but still requires explicit qualification before promotion.",
+                "Coordination, operator, and recovery work is real; Instinct proof-state and mission-lineage surfaces are now packaged, but broader coordination promotion still requires explicit qualification.",
                 "bridge",
                 eyebrow="Lane reading",
-                supporting="Weekly governed evidence and branch-ready recovery work belong here until they earn stricter packaged truth.",
+                supporting="Weekly governed evidence now includes a stronger Instinct operator proof contract, but multi-agent coordination recovery still belongs here until it earns stricter packaged truth.",
             ),
             _render_lane_band(
                 "Still-Open",
@@ -1414,7 +1408,7 @@ def render_status_index_html(data: dict[str, Any]) -> str:
         <ol class="compact-list">
           <li>Strengthen typed effect and capability contracts.</li>
           <li>Deepen formal verification and routing proof.</li>
-          <li>Raise orchestration from partial lifecycle presence into stronger packaged coordination proof.</li>
+          <li>Extend shipped Instinct proof-state and mission-lineage evidence into thicker packaged coordination proof.</li>
           <li>Convert persona and operator doctrine into thicker workflow and runtime evidence.</li>
           <li>Keep memory governance and weekly evidence contracts converging without fragmenting the trust surface.</li>
         </ol>

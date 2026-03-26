@@ -58,9 +58,17 @@ It sharpens what should move next because those pillars are both weak and proof-
 #### Recursive build-assist bridge lane (`bridge_contract`)
 
 - [ ] Document the first packaged recursive build workflow around `stdio`, `hlf_do`, `hlf_test_suite_summary`, and `_toolkit.py status`
-- [ ] Fix the current `streamable-http` initialize fault so the smoke harness can complete beyond `/health`
-- [ ] Rerun the live HTTP smoke harness after the dependency/runtime repair and store the result as build evidence
+- [x] Revalidate the current `streamable-http` initialize lane beyond `/health`; live smoke now completes initialize, initialized notification, MCP list/read/call flow, and positive ingress resource proof
+- [x] Extend the live HTTP smoke harness with positive ingress proof via `hlf_run` plus `resources/read` on `hlf://status/ingress/{agent_id}`
 - [ ] Keep remote self-build claims out of current-truth docs until the repaired initialize path is proven end to end
+
+#### 2026-03-22 ingress/operator-surface checkpoint (`bridge_contract`)
+
+- [x] Thread shared ingress evidence into the remaining packaged non-route execution front doors
+- [x] Expose first-class ingress operator resources at `hlf://status/ingress` and `hlf://status/ingress/{agent_id}`
+- [x] Add named operator-shell parity through `hlf-operator ingress-status`
+- [x] Revalidate the packaged active transport lane by completing a stdio MCP `initialize` -> `hlf_run` -> `resources/read` proof for `hlf://status/ingress/{agent_id}` with a positive `ok` render
+- [x] Carry the same resource proof forward into the validated `streamable-http` smoke harness
 
 #### Self-healing parser and correction assist (`bridge_contract`)
 
@@ -197,8 +205,22 @@ It sharpens what should move next because those pillars are both weak and proof-
 - [x] Define round-trip rules between ASCII authoring, canonical AST/IR, Unicode symbolic projection, and plain-language explanation
 - [x] Define which symbolic surfaces are plain-text safe, which are Unicode-only, and which require rendered operator or gallery views
 - [x] Bind symbolic-surface work into grammar, translation, audit, and operator-surface plans without granting glyph renderings semantic authority
+- [ ] Execute the real Phase 1 symbolic-upgrade slice in `hlf_mcp/hlf/symbolic_surfaces.py`, `tests/test_symbolic_surfaces.py`, `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md`, and `plan/feature-symbolic-semantic-surfaces-1.md` before considering any new renderer or dependency
 - [ ] Add relation-edge compilation, projection, and explanation tests from `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md`
 - [ ] Decide whether relation edges stay generic tagged glyph statements or earn a dedicated AST node after proof exists
+
+Useful vs noise triage for this lane:
+
+| Bucket | Classification | Why | Next action |
+| --- | --- | --- | --- |
+| Relation-edge semantics for time, cause, dependency, scope, and agent roles | useful now | strengthens canonical machine-checkable meaning without changing the trust model | expand compilation, projection, explanation, and audit tests |
+| Side-by-side canonical source, symbolic projection, and plain-language explanation | useful now | improves operator legibility while preserving canonical authority | add audit-output proof and operator labeling |
+| Compression, determinism, translation-clarity, and legibility benchmark lanes | useful now | turns symbolic claims into measurable evidence instead of style claims | define benchmark fixtures and acceptance thresholds |
+| Optional rendered diagrams or gallery surfaces derived from canonical relations | useful later | can help operator understanding, but only after round-trip proof exists | keep display-only and defer until proof surfaces are green |
+| Fractal or shape-based renderers | defer | may be useful only as a derived operator surface, not as semantic or parser infrastructure | do not add dependencies until an operator/gallery seam explicitly requires them |
+| Gematria or deterministic numeric annotations | defer hard | at most optional metadata; not justified as a core meaning layer | require one narrow benchmarked use case before reopening |
+| QRNG, qutrit, or other quantum semantics in core symbolic paths | reject for current lane | adds complexity without strengthening deterministic governed meaning | keep out of compiler, memory, and audit contracts |
+| Claims about cognition rewrite, non-linear time perception, or already-built symbolic subsystems without repo proof | reject | violates current-truth discipline and creates claim drift | demand file-level evidence before planning any follow-on work |
 
 ### Working Rule
 
@@ -377,6 +399,7 @@ It sharpens what should move next because those pillars are both weak and proof-
 - [x] Add audit and translation requirements proving symbolic projections cannot drift from canonical meaning
 - [x] Define benchmark lanes for compression with fidelity, parse determinism, and operator legibility before promotion
 - [ ] Add the first regression tests for relation-edge round-trip and explanation fidelity
+- [ ] Require external symbolic research intake to include repo file targets, exact claim lane (`current-truth`, `bridge`, or `vision`), deterministic test proposals, and dependency cost before it can enter backlog promotion
 
 ---
 

@@ -56,6 +56,16 @@ Weekly mission for HKS:
 - feed more productive, accurate, and useful real-world HLF usage, repair, translation, orchestration, and governance
 - surface upgrade candidates across runtime, memory, tooling, verification, docs, and workflows whenever a credible improvement window appears
 
+Current repo-owned source-audit checkpoint for this intake lane:
+
+- [docs/HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md](HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md)
+
+Use that audit to determine which external baselines were actually source-checked, which remain partial, and which lane each item is allowed to influence.
+
+Current bounded implementation-slice plan for this lane:
+
+- [plan/architecture-hks-local-evaluation-bounded-comparator-1.md](../plan/architecture-hks-local-evaluation-bounded-comparator-1.md)
+
 ## Canonical Repo Authority Rules
 
 Treat these as the current repo authority model:
@@ -185,6 +195,70 @@ Research leading production-grade technical knowledge services, continuous RAG s
 
 You are not benchmarking for branding. You are extracting the strongest portable patterns and discarding weak product-specific assumptions.
 
+Research discipline for this lane:
+
+- if an external technique is not yet captured in the repo-owned source audit, treat it as unconfirmed until it is reviewed and added
+- preserve HLF-native naming in active implementation and planning surfaces even when external comparisons help the design
+- do not promote external technique names into current-truth claims without packaged proof and SSOT updates
+
+## Local Evaluation Authority Rule
+
+HKS must own its own evaluation method.
+
+That means the packaged knowledge substrate is responsible for deciding whether a memory record is:
+
+- grounded enough to trust
+- sufficiently cited or provenance-backed
+- fresh enough to retain in active governed use
+- eligible for exemplar promotion
+- still advisory only
+
+The correct target is not an external service deciding what HKS knows.
+
+The correct target is:
+
+- HKS-native evaluation for admission, recall, promotion, and weekly evidence
+- optional external comparison only when explicitly requested
+- explicit local re-evaluation before any external signal can influence governed truth
+
+## External Comparator Boundary
+
+External search or code-intelligence systems may be useful as comparators, bootstrap donors, or challenge sets.
+
+They are not allowed to become the governing authority for HKS.
+
+Use this hard boundary:
+
+1. external comparator use is optional
+2. external comparator use must be configuration-gated
+3. comparator results must be labeled as bridge-lane advisory output
+4. comparator results must not directly create promoted exemplars
+5. comparator results must not directly become route evidence or verifier evidence
+6. comparator results must pass back through local HKS evaluation before any governed write or promotion
+
+If a design makes HKS correctness depend on a comparator backend being reachable, that design is wrong for this repo.
+
+## WebCode-Style Method, HKS-Owned
+
+The portable pattern worth extracting from external code-research or web-research systems is the evaluation method, not the dependency shape.
+
+For this repo, that means:
+
+- recreate the useful parts of the method inside HKS
+- keep evaluation fields in packaged HKS contracts
+- produce operator-visible status and report surfaces for the evaluation chain
+- treat any outside backend as a bounded comparison source, not as core runtime authority
+
+In practical terms, the next slice should land in these seams:
+
+- `hlf_mcp/rag/memory.py`
+- `hlf_mcp/weekly_artifacts.py`
+- `hlf_mcp/server_context.py`
+- `hlf_mcp/server_memory.py`
+- `hlf_mcp/server_resources.py`
+- `tests/test_hks_memory.py`
+- `tests/test_fastmcp_frontdoor.py`
+
 ### Product and system identity
 
 For each relevant external baseline, capture:
@@ -313,26 +387,26 @@ Use the repo context above and answer these design questions.
 
 ### Knowledge-system design
 
-4. What would make an age-of-AI and swarm-native knowledge layer materially better than a normal developer KB?
-5. How should weekly refresh differ from on-demand ingest?
-6. What should be stored as raw knowledge versus canonicalized HLF-ready knowledge?
-7. What should be remembered as trusted exemplars, and what should remain advisory only?
-8. How should low-quality or stale material be prevented from poisoning the store?
+1. What would make an age-of-AI and swarm-native knowledge layer materially better than a normal developer KB?
+2. How should weekly refresh differ from on-demand ingest?
+3. What should be stored as raw knowledge versus canonicalized HLF-ready knowledge?
+4. What should be remembered as trusted exemplars, and what should remain advisory only?
+5. How should low-quality or stale material be prevented from poisoning the store?
 
 ### Schema and retrieval
 
-9. What should the freshness, provenance, confidence, and trust-tier schema look like?
-10. What retrieval contract should runtime systems use to reduce hallucination and improve immediate utility?
+1. What should the freshness, provenance, confidence, and trust-tier schema look like?
+2. What retrieval contract should runtime systems use to reduce hallucination and improve immediate utility?
 
 ### Evaluation
 
-11. What measurable evaluation loop proves this knowledge system is helping runtime systems rather than just growing storage volume?
-12. What weekly KPIs should be tracked for freshness, trusted-source coverage, exemplar yield, and retrieval quality?
+1. What measurable evaluation loop proves this knowledge system is helping runtime systems rather than just growing storage volume?
+2. What weekly KPIs should be tracked for freshness, trusted-source coverage, exemplar yield, and retrieval quality?
 
 ### Refactoring lens
 
-13. What repo-level refactors should accompany implementation so the knowledge substrate lands as a coherent HLF-native surface rather than a bolt-on?
-14. Which naming, package-boundary, workflow, and tool-contract refactors should happen first?
+1. What repo-level refactors should accompany implementation so the knowledge substrate lands as a coherent HLF-native surface rather than a bolt-on?
+2. Which naming, package-boundary, workflow, and tool-contract refactors should happen first?
 
 ## Best Practices To Gather
 
@@ -420,4 +494,3 @@ Provide the source list:
 ## Short Version
 
 Research continuous, code-aware, governance-first knowledge-system best practices to help design a weekly-refreshed, trust-tiered, Infinite-RAG-backed knowledge substrate for HLFMCP. Public GitHub will not show all local branch work. Treat the local branch facts in this document as real. The resulting design should deliver immediate, trusted, fresh, queryable, HLF-native known knowledge for translation, repair, orchestration, and swarm use.
-

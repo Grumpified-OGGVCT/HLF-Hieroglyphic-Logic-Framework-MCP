@@ -110,6 +110,7 @@ def test_witness_resource_and_tool_contracts_are_operator_legible() -> None:
     assert recorded["governance_event"]["event"]["kind"] == "witness_observation"
     assert recorded["memory_record"]["entry_kind"] == "witness_observation"
     assert resource["status"] == "ok"
+    assert resource["persona_review_summary"]["pending_gate_count"] >= 0
     assert resource["witness_status"]["subject"]["subject_agent_id"] == subject_agent_id
     assert (
         resource["witness_status"]["recent_observations"][0]["event_ref"]["event_id"] == "route-1"

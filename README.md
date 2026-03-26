@@ -2,6 +2,32 @@
 
 > **HLF is meant to become a governed language for turning intent into auditable machine action.** The MCP server is the easiest way into that system, but the vision is bigger than the server: language, governance, runtime, memory, coordination, explanation, and real-code output.
 
+---
+
+## 🚦 Current Truth (March 2026)
+
+- **Packaged FastMCP server** (`hlf_mcp/`): Runs as stdio and HTTP/streamable-http MCP server.
+- **Deterministic language core**: Compiler, grammar, formatter, linter, bytecode, runtime, and capsule execution are real and tested.
+- **Governed routing, memory, and audit**: Route traces, memory evidence, and audit surfaces are exposed and queryable.
+- **Operator-facing tools**: `hlf_do`, `_toolkit.py status`, and `hlf_test_suite_summary` provide bounded, local build-assist and regression summaries.
+- **Governed build loop**: The packaged HLF can inspect, test, and explain itself during further development (“dogfooding”).
+- **Health endpoint**: The packaged `hlf_mcp` HTTP/SSE lane returns `200 OK` from `/health` under explicit bring-up.
+- **All tests pass**: 816/816 tests passing as of this build.
+- **Local MCP wiring**: Workspace-local VS Code MCP config now targets the packaged `uv run hlf-mcp` entrypoint.
+
+---
+
+## 🐕 Dogfooding / Recursive Build-Assist
+
+HLF is now being used to help build, test, and explain itself:
+
+- **Bounded, governed self-use**: The packaged HLF MCP server is already useful for inspecting, testing, and explaining its own build state, regression health, and operator-facing evidence.
+- **Operator workflow**: Use `hlf_do`, `_toolkit.py status`, and the MCP tools/resources to drive the next build steps, record evidence, and surface gaps.
+- **Not full self-hosting**: The system is not yet “self-building” in the maximal sense, but it is already exercising its own governance, audit, and evidence surfaces in a real, bounded way.
+- **Bridge work**: Each new bridge slice (routing, verification, orchestration, persona, gallery, etc.) is added, tested, and then used to further assist the next round of build and recovery.
+
+See `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_OPERATOR_BUILD_NOTES_2026-03-19.md` for the authoritative current state and operator workflow.
+
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![HLF v0.5](https://img.shields.io/badge/HLF-v0.5.0-purple)](governance/bytecode_spec.yaml)
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
@@ -52,6 +78,8 @@ Quick reading guide for first-time readers:
 | the wording discipline | `docs/HLF_CLAIM_LANES.md` | `docs/HLF_MCP_POSITIONING.md` |
 
 For a broader document map after that first pass, use `HLF_IMPLEMENTATION_INDEX.md`, `HLF_SOURCE_EXTRACTION_LEDGER.md`, `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`, and `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md`.
+
+For source-verified external baseline intake, use `docs/HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md` together with `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` and `docs/HLF_ROBOTICS_EMBODIED_FIT_ASSESSMENT.md`.
 
 For branch-aware public review and PR reading, use:
 
@@ -279,9 +307,19 @@ Useful commands:
 uv run hlf-evidence list --status promoted
 uv run hlf-evidence show weekly_demo
 uv run hlf-evidence show weekly_demo --json
+uv run hlf-operator witness-status --json
+uv run hlf-operator governed-route --json
+uv run hlf-operator instinct-status --json
+uv run hlf-operator formal-verifier --json
+uv run hlf-operator entropy-anchor --json
+uv run hlf-operator approval-review --json
 ```
 
 Operator-facing `show` output is intentionally different from raw JSON. When a governed review is attached, the plain-text view exposes the persona handoff contract directly, including change class, owner persona, review personas, required gates, escalation target, operator summary, and the handoff template reference.
+
+The named `hlf-operator` review commands now give the routing, witness, lifecycle, proof, drift, and approval surfaces first-class shell entrypoints, so the repo's trust and orchestration lanes are inspectable without falling back to raw resource URIs.
+
+The Instinct/operator bridge is also stronger than a raw mission dump now: the packaged lifecycle surface exposes proof-state summaries, execution coverage, verification posture, blockers, CoVE gate state, and seal evidence so orchestration progress is reviewable as an operator proof contract rather than only a stored mission blob.
 
 See `docs/cli-tools.md` for the command reference.
 15. [Benchmark Results](#15-benchmark-results)

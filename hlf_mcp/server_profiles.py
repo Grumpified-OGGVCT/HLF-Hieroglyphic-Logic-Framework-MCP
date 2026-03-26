@@ -6,12 +6,15 @@ import platform
 import shutil
 import subprocess
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from hlf_mcp.hlf.governed_ingress import RateLimitRule
 from hlf_mcp.hlf.governed_routing import build_governed_route
+from hlf_mcp.hlf.translator import normalize_cognitive_lane_policy, resolve_language_with_policy
 from hlf_mcp.hlf.model_catalog import (
     build_lane_trace_context,
     evaluate_model_against_profile,
@@ -30,23 +33,111 @@ if TYPE_CHECKING:
     from hlf_mcp.server_context import ServerContext
 
 Workload = Literal[
+    # ── embedding / retrieval workloads ───────────────────────────────
     "translation_memory",
     "repair_pattern_recall",
     "governance_policy_retrieval",
     "code_pattern_retrieval",
     "agent_routing_context",
     "long_form_standards_ingestion",
+    # ── completion / generation workloads ─────────────────────────────
+    "reasoning_query",
+    "code_completion",
+    "planning_task",
+    "analysis_task",
+    "doer_task",
+    "universal_query",
+    "multimodal_query",
+    "verification_task",
+    "ethics_review",
 ]
+
+# Workloads that drive LLM completion rather than embedding/retrieval
+_COMPLETION_WORKLOADS: set[str] = {
+    "reasoning_query",
+    "code_completion",
+    "planning_task",
+    "analysis_task",
+    "doer_task",
+    "universal_query",
+    "multimodal_query",
+    "verification_task",
+    "ethics_review",
+}
 
 _ROUTE_READY_TIERS = {"launch-qualified", "promotion-qualified"}
 _QUALIFICATION_PROFILES = dict(load_model_qualification_profiles().get("profiles") or {})
-
-
+_ROUTER_SETTINGS_PATH = Path(__file__).resolve().parents[1] / "hlf_source" / "config" / "settings.json"
+_TRUST_STATE_SEVERITY = {
+    "healthy": 0,
+    "trusted": 0,
+    "approved": 0,
+    "watched": 1,
+    "probation": 2,
+    "restricted": 3,
+}
 def _normalized_filter(raw: str | None) -> str | None:
     if raw is None:
         return None
     normalized = raw.strip().lower()
     return normalized or None
+
+
+def _normalize_trust_state(raw: str | None) -> str:
+    normalized = str(raw or "").strip().lower()
+    aliases = {
+        "trusted": "healthy",
+        "approved": "healthy",
+    }
+    return aliases.get(normalized, normalized or "healthy")
+
+
+def _merge_trust_states(requested: str | None, observed: str | None) -> str:
+    requested_normalized = _normalize_trust_state(requested)
+    observed_normalized = _normalize_trust_state(observed)
+    requested_score = _TRUST_STATE_SEVERITY.get(requested_normalized, 0)
+    observed_score = _TRUST_STATE_SEVERITY.get(observed_normalized, 0)
+    if observed_score > requested_score:
+        return observed_normalized
+    return requested_normalized
+
+
+def _normalize_allowed_model_name(name: str) -> str:
+    normalized = str(name or "").strip().lower()
+    for suffix in (":cloud", "-cloud", ":latest"):
+        normalized = normalized.removesuffix(suffix)
+    return normalized.replace(":", "-")
+
+
+def _load_route_allowed_models(tier: str) -> set[str]:
+    normalized_tier = str(tier or "").strip().lower()
+    if not normalized_tier or not _ROUTER_SETTINGS_PATH.exists():
+        return set()
+    try:
+        payload = json.loads(_ROUTER_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return set()
+    allowlist = payload.get("ollama_allowed_models", {}) if isinstance(payload, dict) else {}
+    models = allowlist.get(normalized_tier, []) if isinstance(allowlist, dict) else []
+    return {
+        _normalize_allowed_model_name(str(model))
+        for model in models
+        if _normalize_allowed_model_name(str(model))
+    }
+
+
+def _is_route_model_allowed(model: str, allowed_models: set[str]) -> bool:
+    if not allowed_models:
+        return True
+    return _normalize_allowed_model_name(model) in allowed_models
+
+
+def _resolve_routing_deployment_tier(runtime_status: dict[str, Any] | None) -> str:
+    return str(
+        os.environ.get("HLF_DEPLOYMENT_TIER")
+        or (runtime_status or {}).get("deployment_tier")
+        or ""
+    ).strip().lower()
 
 
 def _resolve_profile_evidence_tier(
@@ -117,6 +208,9 @@ def _active_session_profile_entry(
     workload_profile = dict(profile.get("workload_profile") or {})
     workload = str(workload_profile.get("workload") or "")
     multilingual_required = bool(workload_profile.get("multilingual_required", False))
+    cognitive_lane_policy = str(
+        workload_profile.get("cognitive_lane_policy") or "benchmark_gated"
+    )
     selected_lane = _workload_to_catalog_lane(workload) if workload else None
     route_candidates = (
         _route_profile_candidates(workload, selected_lane, multilingual_required)
@@ -158,6 +252,7 @@ def _active_session_profile_entry(
         "cpu_only": bool(profile.get("hardware_summary", {}).get("cpu_only", False)),
         "gpu_vram_gb": profile.get("hardware_summary", {}).get("gpu_vram_gb"),
         "multilingual_required": multilingual_required,
+        "cognitive_lane_policy": cognitive_lane_policy,
         "long_context_required": bool(workload_profile.get("long_context_required", False)),
         "latency_priority": workload_profile.get("latency_priority"),
         "allowed_modes": dict(profile.get("allowed_modes") or {}),
@@ -353,6 +448,8 @@ def _qualification_profile_for(workload: Workload, multilingual_required: bool) 
         return "translation_memory_multilingual"
     if workload == "agent_routing_context" and multilingual_required:
         return "agent_routing_context_multilingual"
+    # Completion workloads do not yet have established qualification profiles;
+    # the model catalog lane selection is the routing authority.
     return None
 
 
@@ -361,13 +458,21 @@ def _route_profile_candidates(
 ) -> list[str]:
     profiles: list[str] = []
     # Map lane families to qualification profiles
-    lane_profile_map = {
+    lane_profile_map: dict[str, list[str]] = {
         "retrieval": [],
         "explainer": ["sidecar_quality_explainer"],
         "code-generation": ["code_pattern_retrieval_english"],
         "verifier": ["verifier_accuracy_multilingual"],
         "standards-ingestion": [],
         "multimodal": [],
+        # ── completion lanes — no benchmark profiles yet ──────────────
+        "reasoning": [],
+        "coding": [],
+        "planning": [],
+        "analysis": [],
+        "doer": [],
+        "universal": [],
+        "ethics": [],
     }
     # Add multilingual variants if required
     if multilingual_required:
@@ -557,66 +662,102 @@ def _normalize_ollama_endpoint(raw_host: str | None) -> str:
 
 
 def _load_remote_direct_entries() -> tuple[list[dict[str, Any]], str | None]:
+    """Load remote-direct model entries from env var and model_providers.toml.
+
+    Sources are merged (env var entries first, then TOML config entries).
+    Duplicate model names from the TOML source are skipped if already
+    present from the env var.
+    """
+    entries: list[dict[str, Any]] = []
+    env_error: str | None = None
+
+    # ── 1. Env-var source (HLF_REMOTE_MODEL_ENDPOINTS) ──────────────────
     raw_value = os.environ.get("HLF_REMOTE_MODEL_ENDPOINTS", "").strip()
-    if not raw_value:
-        return [], None
-    try:
-        payload = json.loads(raw_value)
-    except json.JSONDecodeError as exc:
-        return [], f"Invalid HLF_REMOTE_MODEL_ENDPOINTS JSON: {exc}"
+    if raw_value:
+        try:
+            payload = json.loads(raw_value)
+        except json.JSONDecodeError as exc:
+            env_error = f"Invalid HLF_REMOTE_MODEL_ENDPOINTS JSON: {exc}"
+            payload = None
 
-    if isinstance(payload, dict):
-        payload = payload.get("entries", [])
-    if not isinstance(payload, list):
-        return (
-            [],
-            "HLF_REMOTE_MODEL_ENDPOINTS must be a JSON list or an object with an 'entries' list.",
-        )
-
-    normalized: list[dict[str, Any]] = []
-    for index, entry in enumerate(payload):
-        if not isinstance(entry, dict):
-            return [], f"HLF_REMOTE_MODEL_ENDPOINTS entry {index} must be an object."
-        endpoint = str(entry.get("endpoint", "")).strip()
-        if not endpoint:
-            return [], f"HLF_REMOTE_MODEL_ENDPOINTS entry {index} is missing an endpoint."
-        normalized.append(
-            {
-                "name": str(entry.get("name") or f"remote-direct-{index + 1}"),
-                "family": str(entry.get("family") or "remote-direct"),
-                "endpoint": endpoint,
-                "lanes": [str(lane) for lane in entry.get("lanes", ["explainer"])],
-                "capabilities": [
-                    str(capability) for capability in entry.get("capabilities", ["remote-direct"])
-                ],
-                "reachable": bool(entry.get("reachable", True)),
-                "known_but_impractical": bool(entry.get("known_but_impractical", False)),
-                "privacy_preserving": bool(entry.get("privacy_preserving", False)),
-                "min_vram_gb": float(entry.get("min_vram_gb") or 0.0),
-                "rationale": [
-                    str(reason)
-                    for reason in entry.get(
-                        "rationale",
-                        [
-                            "Remote direct operator endpoint configured through HLF_REMOTE_MODEL_ENDPOINTS."
-                        ],
+        if payload is not None:
+            if isinstance(payload, dict):
+                payload = payload.get("entries", [])
+            if not isinstance(payload, list):
+                env_error = "HLF_REMOTE_MODEL_ENDPOINTS must be a JSON list or an object with an 'entries' list."
+            else:
+                for index, entry in enumerate(payload):
+                    if not isinstance(entry, dict):
+                        env_error = f"HLF_REMOTE_MODEL_ENDPOINTS entry {index} must be an object."
+                        break
+                    endpoint = str(entry.get("endpoint", "")).strip()
+                    if not endpoint:
+                        env_error = f"HLF_REMOTE_MODEL_ENDPOINTS entry {index} is missing an endpoint."
+                        break
+                    entries.append(
+                        {
+                            "name": str(entry.get("name") or f"remote-direct-{index + 1}"),
+                            "family": str(entry.get("family") or "remote-direct"),
+                            "endpoint": endpoint,
+                            "lanes": [str(lane) for lane in entry.get("lanes", ["explainer"])],
+                            "capabilities": [
+                                str(capability) for capability in entry.get("capabilities", ["remote-direct"])
+                            ],
+                            "reachable": bool(entry.get("reachable", True)),
+                            "known_but_impractical": bool(entry.get("known_but_impractical", False)),
+                            "privacy_preserving": bool(entry.get("privacy_preserving", False)),
+                            "min_vram_gb": float(entry.get("min_vram_gb") or 0.0),
+                            "rationale": [
+                                str(reason)
+                                for reason in entry.get(
+                                    "rationale",
+                                    [
+                                        "Remote direct operator endpoint configured through HLF_REMOTE_MODEL_ENDPOINTS."
+                                    ],
+                                )
+                            ],
+                        }
                     )
-                ],
-            }
-        )
-    return normalized, None
+
+    # ── 2. TOML config source (governance/model_providers.toml) ──────────
+    try:
+        from hlf_mcp.hlf.model_config import build_remote_direct_entries, load_model_config
+
+        toml_cfg = load_model_config()
+        toml_entries = build_remote_direct_entries(toml_cfg)
+
+        # Deduplicate: skip TOML entries whose name already exists from env var
+        existing_names = {e["name"] for e in entries}
+        for te in toml_entries:
+            if te["name"] not in existing_names:
+                entries.append(te)
+    except Exception as exc:
+        _log.debug("model_providers.toml config not loaded: %s", exc)
+
+    return entries, env_error
 
 
 def _workload_to_catalog_lane(workload: Workload) -> str:
-    lane_map: dict[Workload, str] = {
+    lane_map: dict[str, str] = {
+        # ── embedding / retrieval workloads ───────────────────────────
         "translation_memory": "retrieval",
         "repair_pattern_recall": "retrieval",
         "governance_policy_retrieval": "retrieval",
         "code_pattern_retrieval": "code-generation",
         "agent_routing_context": "explainer",
         "long_form_standards_ingestion": "standards-ingestion",
+        # ── completion / generation workloads ─────────────────────────
+        "reasoning_query": "reasoning",
+        "code_completion": "coding",
+        "planning_task": "planning",
+        "analysis_task": "analysis",
+        "doer_task": "doer",
+        "universal_query": "universal",
+        "multimodal_query": "multimodal",
+        "verification_task": "verifier",
+        "ethics_review": "ethics",
     }
-    return lane_map[workload]
+    return lane_map.get(workload, "universal")
 
 
 def _catalog_candidate_to_route(
@@ -796,6 +937,64 @@ def _recommend_model(
     return "embeddinggemma", "all-minilm", reasons
 
 
+# ── Completion workload default models ────────────────────────────────────
+# These are fallback defaults when the model catalog has no preferred
+# candidate for a completion lane.  The catalog's lane_recommendations
+# always take precedence when populated.
+
+_COMPLETION_WORKLOAD_DEFAULTS: dict[str, tuple[str, str]] = {
+    "reasoning_query":    ("qwen3:8b",             "cogito:latest"),
+    "code_completion":    ("devstral:latest",       "qwen2.5-coder:latest"),
+    "planning_task":      ("cogito:latest",         "qwen3:8b"),
+    "analysis_task":      ("qwen3:8b",             "cogito:latest"),
+    "doer_task":          ("devstral:latest",       "qwen3:8b"),
+    "universal_query":    ("qwen3:8b",             "cogito:latest"),
+    "multimodal_query":   ("gemma3:latest",         "qwen3:8b"),
+    "verification_task":  ("qwen3:8b",             "devstral:latest"),
+    "ethics_review":      ("qwen3:8b",             "cogito:latest"),
+}
+
+
+def _recommend_completion_model(
+    *,
+    workload: Workload,
+    gpu_vram_gb: float | None,
+    cpu_only: bool,
+) -> tuple[str, str, list[str]]:
+    """Return (recommended, fallback, reasons) for a completion workload.
+
+    These are best-effort defaults — the model catalog's lane-specific
+    selection will override whenever it finds a preferred candidate.
+    """
+    reasons: list[str] = []
+    defaults = _COMPLETION_WORKLOAD_DEFAULTS.get(workload, ("qwen3:8b", "cogito:latest"))
+
+    if cpu_only:
+        reasons.append(
+            f"CPU-only mode limits completion model options for '{workload}'; "
+            "the catalog lane selection is the real authority."
+        )
+        return defaults[0], defaults[1], reasons
+
+    vram = gpu_vram_gb or 0.0
+
+    if vram >= 12:
+        reasons.append(
+            f"Adequate GPU VRAM ({vram:.0f} GB) supports the default lane model for '{workload}'. "
+            "The model catalog lane selection will refine this from the synced catalog."
+        )
+    elif vram >= 6:
+        reasons.append(
+            f"Moderate GPU VRAM ({vram:.0f} GB) may constrain larger models for '{workload}'."
+        )
+    else:
+        reasons.append(
+            f"Limited or no GPU VRAM ({vram:.0f} GB); completion models will prefer smaller variants."
+        )
+
+    return defaults[0], defaults[1], reasons
+
+
 def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_probe_local_hardware() -> dict[str, Any]:
@@ -808,6 +1007,7 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         gpu_vram_gb: float | None = None,
         cpu_only: bool = False,
         multilingual_required: bool = False,
+        cognitive_lane_policy: str = "benchmark_gated",
         long_context_required: bool = False,
         latency_priority: str = "balanced",
         ollama_host: str | None = None,
@@ -833,15 +1033,25 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         normalized_latency = latency_priority.lower().strip()
         if normalized_latency not in {"speed", "balanced", "quality"}:
             normalized_latency = "balanced"
-
-        recommended_model, fallback_model, reasons = _recommend_model(
-            workload=workload,
-            gpu_vram_gb=detected_vram,
-            cpu_only=effective_cpu_only,
-            multilingual_required=multilingual_required,
-            long_context_required=long_context_required,
-            latency_priority=normalized_latency,
+        normalized_cognitive_lane_policy = normalize_cognitive_lane_policy(
+            cognitive_lane_policy
         )
+
+        if workload in _COMPLETION_WORKLOADS:
+            recommended_model, fallback_model, reasons = _recommend_completion_model(
+                workload=workload,
+                gpu_vram_gb=detected_vram,
+                cpu_only=effective_cpu_only,
+            )
+        else:
+            recommended_model, fallback_model, reasons = _recommend_model(
+                workload=workload,
+                gpu_vram_gb=detected_vram,
+                cpu_only=effective_cpu_only,
+                multilingual_required=multilingual_required,
+                long_context_required=long_context_required,
+                latency_priority=normalized_latency,
+            )
 
         constraints = [
             "Canonical governance retrieval remains deterministic-first.",
@@ -877,6 +1087,7 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "workload_profile": {
                 "workload": workload,
                 "multilingual_required": multilingual_required,
+                "cognitive_lane_policy": normalized_cognitive_lane_policy,
                 "long_context_required": long_context_required,
                 "latency_priority": normalized_latency,
             },
@@ -902,6 +1113,9 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "runtime_status": runtime_status,
             "reasons": reasons,
             "confidence": "medium",
+            "language_policy": {
+                "cognitive_lane_policy": normalized_cognitive_lane_policy,
+            },
         }
         if persist:
             recommendation = ctx.persist_embedding_profile(recommendation)
@@ -1012,12 +1226,41 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             if verdict.status == "warning"
             else 0.0,
         )
+        witness_observation = None
+        if verdict.status in {"warning", "blocked"} and agent_id:
+            severity = "critical" if verdict.status == "blocked" else "warning"
+            recommended_action = (
+                "restrict"
+                if verdict.action in {"DROP", "DROP_AND_QUARANTINE"}
+                else "review"
+            )
+            evidence_text = (
+                f"ALIGN {verdict.status} for agent '{agent_id}' under workload '{workload}' "
+                f"with action '{verdict.action}'."
+            )
+            witness_observation = ctx.record_witness_observation(
+                subject_agent_id=agent_id,
+                category="align_violation",
+                witness_id="align-governor",
+                severity=severity,
+                confidence=0.96 if verdict.status == "blocked" else 0.84,
+                source="server_profiles.hlf_align_check",
+                event_ref=governance_event.get("event_ref"),
+                evidence_text=evidence_text,
+                recommended_action=recommended_action,
+                details={
+                    "agent_id": agent_id,
+                    "workload": workload,
+                    "align_verdict": verdict.to_dict(),
+                },
+            )
         return {
             "status": "ok",
             "agent_id": agent_id,
             "workload": workload,
             "verdict": verdict.to_dict(),
             "governance_event": governance_event,
+            "witness_observation": witness_observation,
         }
 
     @mcp.tool()
@@ -1027,6 +1270,7 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         gpu_vram_gb: float | None = None,
         cpu_only: bool = False,
         multilingual_required: bool = False,
+        cognitive_lane_policy: str = "benchmark_gated",
         long_context_required: bool = False,
         latency_priority: str = "balanced",
         ollama_host: str | None = None,
@@ -1036,17 +1280,262 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         runtime_status: dict[str, Any] | None = None,
         hardware_summary: dict[str, Any] | None = None,
         benchmark_scores: dict[str, float] | None = None,
+        ingress_nonce: str = "",
+        require_hlf_validation: bool = False,
+        hlf_validated: bool = True,
         persist: bool = True,
     ) -> dict[str, Any]:
         """Produce a packaged governed-routing verdict by combining ALIGN, hardware, runtime, and policy posture."""
+        normalized_cognitive_lane_policy = normalize_cognitive_lane_policy(cognitive_lane_policy)
+        language_policy = resolve_language_with_policy(
+            "auto",
+            text=payload,
+            cognitive_lane_policy=normalized_cognitive_lane_policy,
+        )
+        if language_policy.blocked:
+            governance_mode = "language_policy_blocked"
+            governance_event = ctx.emit_governance_event(
+                kind="routing_decision",
+                source="server_profiles.hlf_route_governed_request",
+                action="route_governed_request",
+                status="blocked",
+                severity="critical",
+                subject_id=agent_id,
+                goal_id=workload,
+                details={
+                    "workload": workload,
+                    "decision": "deny",
+                    "governance_mode": governance_mode,
+                    "language_policy": language_policy.to_dict(),
+                },
+                agent_role="governed_router",
+                anomaly_score=1.0,
+            )
+            route_trace = RouteTraceRecord(
+                request_context={
+                    "agent_id": agent_id,
+                    "agent_role": agent_role,
+                    "workload": workload,
+                    "trust_state": _normalize_trust_state(trust_state),
+                    "language_policy": language_policy.to_dict(),
+                },
+                route_decision=RouteDecisionRecord(
+                    decision="deny",
+                    governance_mode=governance_mode,
+                    review_required=True,
+                    selected_lane="language-policy",
+                    primary_model="",
+                    fallback_model="",
+                ),
+                policy_basis={
+                    "language_policy": language_policy.to_dict(),
+                    "policy_constraints": [
+                        "Chinese ingress is blocked when cognitive_lane_policy is chinese_disallowed."
+                    ],
+                },
+            )
+            route_trace.operator_summary = build_operator_route_summary(route_trace)
+            persisted_route_trace = ctx.persist_governed_route(route_trace.to_dict())
+            return {
+                "status": "ok",
+                "agent_id": agent_id,
+                "workload": workload,
+                "align_verdict": {},
+                "align_governance_event": None,
+                "profile": None,
+                "model_catalog": None,
+                "routing_verdict": {
+                    "allowed": False,
+                    "decision": "deny",
+                    "governance_mode": governance_mode,
+                    "review_required": True,
+                    "selected_lane": "language-policy",
+                    "primary_model": "",
+                    "fallback_model": "",
+                    "rationale": [
+                        "The requested payload was denied by the operator cognitive lane policy."
+                    ],
+                    "policy_constraints": [
+                        "Chinese ingress is blocked when cognitive_lane_policy is chinese_disallowed."
+                    ],
+                },
+                "qualification_profile": None,
+                "applied_qualification_profiles": [],
+                "benchmark_scores": {},
+                "benchmark_artifacts": {},
+                "required_evidence_profiles": [],
+                "missing_evidence_profiles": [],
+                "primary_qualification": None,
+                "fallback_qualification": None,
+                "selected_primary_qualification": None,
+                "primary_profile_evaluations": {},
+                "fallback_profile_evaluations": {},
+                "selected_primary_profile_evaluations": {},
+                "route_trace": persisted_route_trace,
+                "governance_event": governance_event,
+                "language_policy": language_policy.to_dict(),
+                "ingress_contract": None,
+            }
+        observed_trust_state = ctx.get_effective_trust_state(subject_agent_id=agent_id, default="")
+        effective_trust_state = _merge_trust_states(trust_state, observed_trust_state)
+        trust_state_source = (
+            "witness_governance"
+            if _TRUST_STATE_SEVERITY.get(_normalize_trust_state(observed_trust_state), 0)
+            > _TRUST_STATE_SEVERITY.get(_normalize_trust_state(trust_state), 0)
+            else "request"
+        )
+        ingress_contract = ctx.ingress_controller.evaluate(
+            payload,
+            subject_key=f"{agent_id}:{workload}",
+            nonce=ingress_nonce,
+            rate_limit_rule=RateLimitRule(),
+            require_hlf_validation=require_hlf_validation,
+            hlf_validated=hlf_validated,
+            enable_rate_limit=bool(agent_id and agent_id != "unknown-agent"),
+            enable_replay_protection=bool(ingress_nonce),
+        )
+        if not ingress_contract.admitted:
+            ingress_contract_payload = ingress_contract.to_dict()
+            ingress_mode = f"ingress_{ingress_contract.blocked_stage or 'blocked'}"
+            governance_event = ctx.emit_governance_event(
+                kind="routing_decision",
+                source="server_profiles.hlf_route_governed_request",
+                action="route_governed_request",
+                status="blocked",
+                severity="critical",
+                subject_id=agent_id,
+                goal_id=workload,
+                details={
+                    "workload": workload,
+                    "trust_state": effective_trust_state,
+                    "observed_trust_state": _normalize_trust_state(observed_trust_state)
+                    if observed_trust_state
+                    else None,
+                    "trust_state_source": trust_state_source,
+                    "decision": "deny",
+                    "governance_mode": ingress_mode,
+                    "review_required": ingress_contract.review_required,
+                    "selected_lane": "ingress",
+                    "primary_model": "",
+                    "primary_access_mode": "",
+                    "fallback_model": "",
+                    "fallback_access_mode": "",
+                    "benchmark_scores": {},
+                    "ingress_contract": ingress_contract_payload,
+                },
+                agent_role="governed_router",
+                anomaly_score=1.0,
+            )
+            route_trace = RouteTraceRecord(
+                request_context={
+                    "agent_id": agent_id,
+                    "agent_role": agent_role,
+                    "workload": workload,
+                    "trust_state": effective_trust_state,
+                },
+                route_decision=RouteDecisionRecord(
+                    decision="deny",
+                    governance_mode=ingress_mode,
+                    review_required=ingress_contract.review_required,
+                    selected_lane="ingress",
+                    primary_model="",
+                    fallback_model="",
+                    align_status=(
+                        ingress_contract.policy_basis.get("align_gate", {}) or {}
+                    ).get("status"),
+                    align_rule_id=(
+                        ingress_contract.policy_basis.get("align_gate", {}) or {}
+                    ).get("decisive_rule_id"),
+                ),
+                policy_basis={
+                    "trust_state": effective_trust_state,
+                    "observed_trust_state": _normalize_trust_state(observed_trust_state)
+                    if observed_trust_state
+                    else None,
+                    "trust_state_source": trust_state_source,
+                    "governance_event_ref": governance_event.get("event_ref"),
+                    "route_governance_event_ref": governance_event.get("event_ref"),
+                    "align_governance_event_ref": None,
+                    "related_refs": list(governance_event.get("event", {}).get("related_refs") or []),
+                    "policy_constraints": [
+                        f"Ingress blocked governed routing at stage '{ingress_contract.blocked_stage}'."
+                    ],
+                    "route_justification": {
+                        "decision": "deny",
+                        "selected_lane": "ingress",
+                        "review_required": ingress_contract.review_required,
+                        "rationale": [
+                            f"Packaged ingress blocked governed routing at stage '{ingress_contract.blocked_stage}'."
+                        ],
+                        "policy_constraints": [
+                            f"Ingress contract denied routing before profile selection at stage '{ingress_contract.blocked_stage}'."
+                        ],
+                        "primary_reason": f"Packaged ingress blocked governed routing at stage '{ingress_contract.blocked_stage}'.",
+                    },
+                    "policy_basis_present": True,
+                    "required_evidence_profiles": [],
+                    "missing_evidence_profiles": [],
+                    "ingress_contract": ingress_contract_payload,
+                },
+            )
+            route_trace.operator_summary = build_operator_route_summary(route_trace)
+            persisted_route_trace = ctx.persist_governed_route(route_trace.to_dict())
+            return {
+                "status": "ok",
+                "agent_id": agent_id,
+                "workload": workload,
+                "align_verdict": {},
+                "align_governance_event": None,
+                "profile": None,
+                "model_catalog": None,
+                "routing_verdict": {
+                    "allowed": False,
+                    "decision": "deny",
+                    "governance_mode": ingress_mode,
+                    "review_required": ingress_contract.review_required,
+                    "selected_lane": "ingress",
+                    "primary_model": "",
+                    "fallback_model": "",
+                    "rationale": [
+                        f"Packaged ingress blocked governed routing at stage '{ingress_contract.blocked_stage}'."
+                    ],
+                    "policy_constraints": [
+                        f"Ingress contract denied routing before profile selection at stage '{ingress_contract.blocked_stage}'."
+                    ],
+                },
+                "qualification_profile": None,
+                "applied_qualification_profiles": [],
+                "benchmark_scores": {},
+                "benchmark_artifacts": {},
+                "required_evidence_profiles": [],
+                "missing_evidence_profiles": [],
+                "primary_qualification": None,
+                "fallback_qualification": None,
+                "selected_primary_qualification": None,
+                "primary_profile_evaluations": {},
+                "fallback_profile_evaluations": {},
+                "selected_primary_profile_evaluations": {},
+                "route_trace": persisted_route_trace,
+                "governance_event": governance_event,
+                "ingress_contract": ingress_contract_payload,
+            }
         align_result = hlf_align_check(payload=payload, agent_id=agent_id, workload=workload)
         align_verdict = align_result["verdict"]
+        knowledge_evidence = ctx.memory_store.query(
+            payload,
+            top_k=3,
+            min_confidence=0.0,
+            require_provenance=True,
+            purpose="routing_evidence",
+        )
+        knowledge_contract = dict(knowledge_evidence.get("governed_hks_contract") or {})
 
         profile = hlf_recommend_embedding_profile(
             workload=workload,
             gpu_vram_gb=gpu_vram_gb,
             cpu_only=cpu_only,
             multilingual_required=multilingual_required,
+            cognitive_lane_policy=normalized_cognitive_lane_policy,
             long_context_required=long_context_required,
             latency_priority=latency_priority,
             ollama_host=ollama_host,
@@ -1167,7 +1656,8 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         route_verdict = build_governed_route(
             workload=workload,
             align_status=str(align_verdict.get("status", "ok")),
-            trust_state=trust_state,
+            align_action=str(align_verdict.get("action", "ALLOW")),
+            trust_state=effective_trust_state,
             hardware_summary=catalog.get("hardware_summary", profile.get("hardware_summary", {})),
             runtime_status=catalog.get("runtime_status", profile.get("runtime_status", {})),
             embedding_recommendation=routing_primary,
@@ -1175,6 +1665,19 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             selected_lane=selected_lane,
             lane_candidate_summary=lane_summary,
         )
+        if bool(knowledge_contract.get("reference_allowed", False)):
+            route_verdict.rationale.append(
+                f"Governed HKS admitted {int(knowledge_contract.get('evidence_count') or 0)} routing evidence reference(s) via {str((knowledge_contract.get('graph_posture') or {}).get('source') or 'metadata-derived')}."
+            )
+        else:
+            if route_verdict.allowed:
+                route_verdict.review_required = True
+            route_verdict.rationale.append(
+                "No governed HKS routing-evidence contract cleared trust, freshness, and provenance thresholds for direct route reference."
+            )
+            route_verdict.policy_constraints.append(
+                "Routing may reference HKS evidence only through an admitted governed HKS contract."
+            )
         if active_profiles:
             for profile_name in active_profiles:
                 evaluation = primary_profile_evaluations.get(profile_name)
@@ -1201,6 +1704,52 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 route_verdict.primary_access_mode = str(
                     routing_primary.get("access_mode", route_verdict.primary_access_mode)
                 )
+        deployment_tier = _resolve_routing_deployment_tier(runtime_status)
+        allowed_models = _load_route_allowed_models(deployment_tier) if deployment_tier else set()
+        allowlist_policy: dict[str, Any] = {
+            "enforced": bool(deployment_tier and allowed_models),
+            "deployment_tier": deployment_tier,
+            "allowed_model_count": len(allowed_models),
+        }
+        if deployment_tier and allowed_models:
+            primary_allowed = _is_route_model_allowed(route_verdict.primary_model, allowed_models)
+            fallback_allowed = _is_route_model_allowed(route_verdict.fallback_model, allowed_models)
+            allowlist_policy.update(
+                {
+                    "primary_allowed": primary_allowed,
+                    "fallback_allowed": fallback_allowed,
+                    "selected_primary_model": route_verdict.primary_model,
+                    "selected_fallback_model": route_verdict.fallback_model,
+                }
+            )
+            if not primary_allowed and fallback_allowed:
+                route_verdict.review_required = True
+                route_verdict.governance_mode = "allowlist_constrained"
+                route_verdict.rationale.append(
+                    "The preferred route candidate is outside the active deployment-tier allowlist, so the governed route was downshifted to the allowed fallback candidate."
+                )
+                route_verdict.policy_constraints.append(
+                    f"Deployment tier '{deployment_tier}' only permits allowlisted models for governed routing."
+                )
+                route_verdict.primary_model = route_verdict.fallback_model
+                route_verdict.primary_access_mode = route_verdict.fallback_access_mode
+            elif not primary_allowed and not fallback_allowed:
+                route_verdict.allowed = False
+                route_verdict.decision = "deny"
+                route_verdict.governance_mode = "allowlist_constrained"
+                route_verdict.review_required = True
+                route_verdict.rationale.append(
+                    "Governed routing was denied because neither the preferred nor fallback model satisfied the active deployment-tier allowlist."
+                )
+                route_verdict.policy_constraints.append(
+                    f"Deployment tier '{deployment_tier}' requires an allowlisted model before route admission can proceed."
+                )
+        else:
+            allowlist_policy["reason"] = (
+                "deployment_tier_unset" if not deployment_tier else "allowlist_unavailable"
+            )
+        route_verdict.deployment_tier = deployment_tier
+        route_verdict.allowlist_policy = dict(allowlist_policy)
         policy_basis_present = bool(
             align_result.get("governance_event", {}).get("event_ref")
         ) and bool(align_verdict.get("status"))
@@ -1241,7 +1790,11 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             goal_id=str(profile.get("profile_id", "")),
             details={
                 "workload": workload,
-                "trust_state": trust_state,
+                "trust_state": effective_trust_state,
+                "observed_trust_state": _normalize_trust_state(observed_trust_state)
+                if observed_trust_state
+                else None,
+                "trust_state_source": trust_state_source,
                 "decision": route_verdict.decision,
                 "governance_mode": route_verdict.governance_mode,
                 "review_required": route_verdict.review_required,
@@ -1256,6 +1809,12 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "benchmark_scores": effective_benchmark_scores,
                 "align_status": align_verdict.get("status"),
                 "align_rule_id": align_verdict.get("decisive_rule_id"),
+                "align_action": align_verdict.get("action"),
+                "deployment_tier": deployment_tier,
+                "allowlist_policy": allowlist_policy,
+                "knowledge_evidence": knowledge_evidence,
+                "knowledge_contract": knowledge_contract,
+                "route_justification": route_verdict.to_dict().get("justification"),
             },
             agent_role="governed_router",
             anomaly_score=1.0
@@ -1270,7 +1829,8 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "agent_id": agent_id,
                 "agent_role": agent_role,
                 "workload": workload,
-                "trust_state": trust_state,
+                "trust_state": effective_trust_state,
+                "language_policy": language_policy.to_dict(),
             },
             route_decision=RouteDecisionRecord(
                 decision=route_verdict.decision,
@@ -1296,11 +1856,31 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             policy_basis={
                 "align_status": align_verdict.get("status"),
                 "align_rule_id": align_verdict.get("decisive_rule_id"),
+                "align_action": align_verdict.get("action"),
+                "trust_state": effective_trust_state,
+                "observed_trust_state": _normalize_trust_state(observed_trust_state)
+                if observed_trust_state
+                else None,
+                "trust_state_source": trust_state_source,
                 "governance_event_ref": governance_event.get("event_ref"),
+                "route_governance_event_ref": governance_event.get("event_ref"),
+                "align_governance_event_ref": align_result["governance_event"].get("event_ref"),
+                "related_refs": list(governance_event.get("event", {}).get("related_refs") or []),
                 "policy_constraints": list(route_verdict.policy_constraints),
+                "route_justification": {
+                    **dict(route_verdict.to_dict().get("justification") or {}),
+                    "rationale": list(route_verdict.rationale),
+                    "policy_constraints": list(route_verdict.policy_constraints),
+                },
                 "policy_basis_present": policy_basis_present,
+                "deployment_tier": deployment_tier,
+                "allowlist_policy": allowlist_policy,
+                "knowledge_evidence": knowledge_evidence,
+                "knowledge_contract": knowledge_contract,
                 "required_evidence_profiles": list(required_evidence_profiles),
                 "missing_evidence_profiles": list(missing_evidence_profiles),
+                "ingress_contract": ingress_contract.to_dict(),
+                "language_policy": language_policy.to_dict(),
             },
             fallback_chain=[
                 {
@@ -1336,8 +1916,12 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "primary_profile_evaluations": primary_profile_evaluations,
             "fallback_profile_evaluations": fallback_profile_evaluations,
             "selected_primary_profile_evaluations": selected_primary_profile_evaluations,
+            "knowledge_evidence": knowledge_evidence,
+            "knowledge_contract": knowledge_contract,
             "route_trace": persisted_route_trace,
             "governance_event": governance_event,
+            "language_policy": language_policy.to_dict(),
+            "ingress_contract": ingress_contract.to_dict(),
         }
 
     @mcp.tool()

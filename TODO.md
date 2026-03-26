@@ -28,7 +28,7 @@ Read in this order:
 - [ ] Batch 3: persona/operator doctrine, gallery/operator-legibility surfaces, and code-output proof surfaces
 - [ ] VS Code extension bridge: package HLF as a sidecar extension and operator shell over the packaged MCP surface, with HTTP transports as must-have first-class modes, multi-transport configuration, and honest lane-qualified UI
 - [ ] Ecosystem compatibility bridge: keep HLF first-class across JS/TS, Java, Go, Rust, and adjacent MCP ecosystems through one canonical core, explicit bridge plans, transport parity targets, and ongoing SDK-drift review
-- [ ] Symbolic-surface bridge: execute `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md` after completing the research run and locking the ASCII-first relation-edge contract
+- [ ] Symbolic-surface bridge: execute `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md` through the Phase 1 relation-edge proof slice, explicit useful-vs-noise triage, and evidence-gated research intake before entertaining new renderers or exotic dependencies
 - [ ] Dream-cycle reflection bridge: execute `docs/HLF_DREAM_CYCLE_BRIDGE_SPEC.md` as a bounded offline-synthesis lane over packaged memory, witness, and operator surfaces rather than as present-tense self-awareness
 - [ ] Multimodal evidence bridge: execute `docs/HLF_MULTIMODAL_MEDIA_RECOVERY_SPEC.md` so image, OCR, audio, and video evidence handling becomes a governed maintained capability rather than source-only ambition
 - [ ] Self-healing parser bridge: execute `plan/feature-self-healing-parser-1.md` so HLF gains bounded correction assist, plain-language diagnostics, and repair preview without sacrificing canonical compile discipline

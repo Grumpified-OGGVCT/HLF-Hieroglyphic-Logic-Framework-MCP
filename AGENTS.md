@@ -62,18 +62,22 @@ Before answering architectural questions, planning major changes, or deciding th
 
 For reconstruction, extraction, or architecture-recovery work, also read:
 
-10. [HLF_SOURCE_EXTRACTION_LEDGER.md](HLF_SOURCE_EXTRACTION_LEDGER.md)
-11. [HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md](HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md)
-12. [HLF_MCP_TODO.md](HLF_MCP_TODO.md)
+1. [HLF_SOURCE_EXTRACTION_LEDGER.md](HLF_SOURCE_EXTRACTION_LEDGER.md)
+2. [HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md](HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md)
+3. [HLF_MCP_TODO.md](HLF_MCP_TODO.md)
 
 When assessing architectural wording, MCP positioning, or maturity claims, also read:
 
-13. [docs/HLF_CLAIM_LANES.md](docs/HLF_CLAIM_LANES.md)
+1. [docs/HLF_CLAIM_LANES.md](docs/HLF_CLAIM_LANES.md)
+
+When assessing external baselines, context-rot techniques, HKS research donors, or robotics/domain-language comparisons, also read:
+
+1. [docs/HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md](docs/HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md)
 
 For source archaeology against the upstream Sovereign repo, use:
 
-14. [hlf_source/AGENTS.md](hlf_source/AGENTS.md)
-15. [hlf_source/.github/copilot-instructions.md](hlf_source/.github/copilot-instructions.md)
+1. [hlf_source/AGENTS.md](hlf_source/AGENTS.md)
+2. [hlf_source/.github/copilot-instructions.md](hlf_source/.github/copilot-instructions.md)
 
 ## Why This File Exists
 
@@ -153,10 +157,14 @@ These rules were established because earlier work drifted toward simplification 
    - wrongly replaced
    - wrongly deleted
 3. Ban pseudo-equivalents.
+   A pseudo-equivalent preserves the label of a stronger HLF surface while quietly removing constitutive semantics such as governance, routing, verifier linkage, provenance, or auditability.
 4. Ban fake stand-ins.
+   A fake stand-in is a thinner substitute presented as if it adequately replaces the original architectural role when it only mimics a small visible subset.
 5. Ban simplifications that replace stronger original architecture with easier packaged-core substitutes.
-6. Do not use standalone neatness as the deciding heuristic when a surface carries doctrine, routing, personas, governance workflow, verification, or ecosystem meaning.
+6. Do not use standalone neatness as the deciding heuristic when a surface carries doctrine, routing, personas, governance workflow, verification, memory, provenance, or ecosystem meaning.
 7. Rebuild from original intent outward, not from MVP inward.
+8. If a proposed replacement appears cleaner but weakens trust, doctrine, execution semantics, or operator legibility, treat it as suspect until equivalence is proven.
+9. If equivalence cannot be proven, keep the stronger classification in bridge or recovery planning rather than collapsing it into packaged current truth.
 
 ## What Counts As Constitutive, Not Merely Supportive
 
@@ -173,7 +181,18 @@ In this repo’s recovery work, the following have already been recognized as of
 - ecosystem integration plans and host-function worldview
 - human-legibility surfaces such as galleries, explainers, and operator references
 
-If removing a surface narrows HLF from governed agent language into a parser-only fragment, it is not merely supportive.
+Working test:
+
+If removing a surface narrows HLF from a governed coordination and execution language into a weaker parser-runtime fragment, it is not merely supportive.
+
+Practical examples:
+
+- If removing a gateway or routing surface removes admission, tiering, or governance-coupled execution behavior, that surface is constitutive.
+- If removing a verifier-linked surface breaks proof, invariant, or gas-bound trust semantics, that surface is constitutive.
+- If removing an operator-legibility surface makes HLF materially less inspectable, auditable, or governable, that surface is usually constitutive or bridge-critical.
+- If a surface only changes packaging convenience without changing meaning, execution, governance, provenance, or operator trust, it is more likely supportive.
+
+When uncertain, classify conservatively and check source, doctrine, and claim-lane context before dismissing the surface as optional.
 
 ## What Got Us Here
 
@@ -226,6 +245,15 @@ When operating in this workspace:
 5. Document why something stays source-only if it is constitutive but not yet restored.
 6. Keep planning artifacts updated when recovery understanding changes.
 
+## Work Type Definitions
+
+Use these labels explicitly before major architecture, recovery, doctrine, or claim-sensitive edits.
+
+- restoration: bringing back a constitutive surface that was omitted, wrongly removed, or materially downgraded relative to source or doctrine
+- faithful port: moving a constitutive surface into a new packaged boundary without flattening its original semantics
+- bridge implementation: adding a bounded surface that helps current truth converge toward the intended HLF target without overstating completion
+- current-truth validation: verifying that a claim matches what is actually implemented, tested, and safe to state in present tense now
+
 ## If You Are Planning New Work
 
 Use this sequence:
@@ -238,6 +266,7 @@ Use this sequence:
    - faithful port
    - bridge implementation
    - current-truth validation
+   If ambiguity materially affects architecture, scope, correctness, or claim lane, do not silently invent the missing definition. Stop, surface the ambiguity, and ask for clarification or classify the work conservatively in bridge planning rather than promoting it into current truth.
 5. Only then write or modify code.
 
 ## If You Are Reviewing The Repo
@@ -249,7 +278,23 @@ Default questions:
 3. Does this change preserve operator trust, governance legibility, and architectural intent?
 4. Does this move the repo toward full HLF completion professionally, or only toward a tidier package?
 
+Review discipline:
+
+- if the answer depends on wording, classify the claim with `docs/HLF_CLAIM_LANES.md` before reusing it
+- if the answer depends on whether a surface is constitutive, compare source, doctrine, and packaged truth before calling it optional or superseded
+- if exclusions were made during review, state them explicitly rather than implying full coverage
+
 If wording or positioning is part of the review, classify the claim explicitly with `docs/HLF_CLAIM_LANES.md` before reusing or promoting it.
+
+## Companion Guidance
+
+Use these documents as companion surfaces, not replacements for this handover:
+
+- [docs/HLF_AGENT_ONBOARDING.md](docs/HLF_AGENT_ONBOARDING.md)
+- [docs/HLF_MCP_AGENT_HANDOFF.md](docs/HLF_MCP_AGENT_HANDOFF.md)
+- [docs/HLF_AGENT_OPERATING_PROTOCOL.md](docs/HLF_AGENT_OPERATING_PROTOCOL.md)
+- [docs/HLF_AUDIT_SYSTEM.md](docs/HLF_AUDIT_SYSTEM.md)
+- [docs/HLF_AGENT_FLOW.md](docs/HLF_AGENT_FLOW.md)
 
 ## Final Directive
 

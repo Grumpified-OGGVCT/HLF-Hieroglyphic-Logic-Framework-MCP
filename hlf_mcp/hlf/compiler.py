@@ -78,9 +78,8 @@ def _human(node: dict[str, Any]) -> str:
     if kind == "assign_stmt":
         return f"assign (mutable) {node.get('name')} = {_expr_str(node.get('expr'))}"
     if kind == "if_block_stmt":
-        return f"if {_expr_str(node.get('condition'))} then block"
-    if kind == "if_flat_stmt":
-        return f"if {node.get('name')} {node.get('cmp')} {_val_str(node.get('value'))}"
+        suffix = "then block" if node.get("body") else "(flat)"
+        return f"if {_expr_str(node.get('condition'))} {suffix}"
     if kind == "for_stmt":
         return f"for {node.get('var')} in {_expr_str(node.get('iterable'))}"
     if kind == "parallel_stmt":
@@ -208,11 +207,19 @@ class HLFTransformer(Transformer):
         return n
 
     # ── Block-form control flow ──────────────────────────────────────────────
+    # With block? the grammar produces:
+    #   flat IF  → children = [KW_IF, expr]
+    #   block IF → children = [KW_IF, expr, block, elif_clause*, else_clause?]
 
-    def if_block_stmt(self, _kw, condition, body, *rest):
-        elif_clauses = [r for r in rest if isinstance(r, dict) and r.get("kind") == "elif_clause"]
+    def if_block_stmt(self, _kw, condition, *rest):
+        body = None
+        remaining = list(rest)
+        # First optional child after condition: the block (if present)
+        if remaining and isinstance(remaining[0], dict) and remaining[0].get("kind") == "block":
+            body = remaining.pop(0)
+        elif_clauses = [r for r in remaining if isinstance(r, dict) and r.get("kind") == "elif_clause"]
         else_clause = next(
-            (r for r in rest if isinstance(r, dict) and r.get("kind") == "else_clause"), None
+            (r for r in remaining if isinstance(r, dict) and r.get("kind") == "else_clause"), None
         )
         n = _node(
             "if_block_stmt",
@@ -237,13 +244,6 @@ class HLFTransformer(Transformer):
 
     def parallel_stmt(self, _kw, *blocks):
         n = _node("parallel_stmt", blocks=list(blocks))
-        n["human_readable"] = _human(n)
-        return n
-
-    # ── Flat single-line IF (backward compat) ────────────────────────────────
-
-    def if_flat_stmt(self, _kw, name, cmp, value):
-        n = _node("if_flat_stmt", name=str(name), cmp=str(cmp), value=value)
         n["human_readable"] = _human(n)
         return n
 
@@ -791,7 +791,6 @@ def _estimate_gas(statements: list[dict]) -> int:
         "set_stmt": 1,
         "assign_stmt": 2,
         "if_block_stmt": 2,
-        "if_flat_stmt": 1,
         "for_stmt": 3,
         "parallel_stmt": 5,
         "func_block_stmt": 2,

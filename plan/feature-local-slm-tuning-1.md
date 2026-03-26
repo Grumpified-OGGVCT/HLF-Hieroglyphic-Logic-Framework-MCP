@@ -2,7 +2,7 @@
 goal: Bridge plan for a local HLF-specialized SLM experiment using exact upstream Unsloth and Pinokio requirements while preserving MCP as the governed authority boundary
 version: 1.0
 date_created: 2026-03-20
-last_updated: 2026-03-20
+last_updated: 2026-03-23
 owner: GitHub Copilot
 status: Planned
 tags: [feature, bridge, local-models, tuning, evaluation, pinokio, unsloth]
@@ -13,6 +13,12 @@ tags: [feature, bridge, local-models, tuning, evaluation, pinokio, unsloth]
 ![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
 
 Define a bridge-lane experiment to test whether a locally tuned HLF-specialized small language model improves practical HLF fluency and operator usefulness over MCP-only routing, while keeping MCP as the authoritative governed execution, memory, and evidence boundary.
+
+Current dependency boundary:
+
+- the packaged MCP works today without any locally tuned HLF-specialized model
+- this plan is future-only bridge work and should not be cited as evidence that the current repo requires a local model to function
+- the intended future candidate is a bounded HLF-specialized local LoRA or QLoRA lane after the current build is complete and working, not before
 
 ## 1. Requirements & Constraints
 

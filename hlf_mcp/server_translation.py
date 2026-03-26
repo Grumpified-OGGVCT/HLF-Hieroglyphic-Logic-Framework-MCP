@@ -12,10 +12,105 @@ from hlf_mcp.hlf.translator import (
     hlf_to_english,
     hlf_to_language,
     language_to_hlf,
+    normalize_cognitive_lane_policy,
     resolve_language,
+    resolve_language_with_policy,
     translation_diagnostics,
 )
+from hlf_mcp.ingress_support import build_ingress_denial_reasons
+from hlf_mcp.ingress_support import persist_runtime_execution_admission
+from hlf_mcp.ingress_support import resolve_execution_ingress_contract
 from hlf_mcp.server_context import ServerContext
+
+
+def _build_translation_contract(
+    ctx: ServerContext,
+    *,
+    intent: str,
+    source: str,
+    resolved_language: str,
+    language_policy: dict[str, Any],
+    tier: str,
+    diagnostics: dict[str, Any],
+    compile_result: dict[str, Any],
+    capsule_violations: list[dict[str, Any]] | list[str],
+    align_violations: list[dict[str, Any]] | list[str],
+    localized_audit: str,
+    english_audit: str,
+    benchmark: dict[str, Any],
+) -> dict[str, Any]:
+    ast = compile_result["ast"]
+    bytecode = ctx.bytecoder.encode(ast)
+    validation = ctx.compiler.validate(source)
+    governed = len(capsule_violations) == 0 and len(align_violations) == 0
+    operator_summary = (
+        f"Intent was translated from {resolved_language} into canonical HLF and compiled "
+        f"to bytecode with governance status {'governed' if governed else 'review-required'}."
+    )
+
+    return {
+        "contract_version": "1.0",
+        "operator_summary": operator_summary,
+        "intent": {
+            "text": intent,
+            "language": resolved_language,
+            "tier": tier,
+        },
+        "language_policy": language_policy,
+        "canonical_hlf": {
+            "source": source,
+            "version": compile_result.get("version"),
+            "statement_count": compile_result.get("node_count", 0),
+            "ast_sha256": ast.get("sha256", ""),
+        },
+        "governance": {
+            "governed": governed,
+            "capsule_violations": list(capsule_violations),
+            "align_violations": list(align_violations),
+            "validation": validation,
+        },
+        "proof": {
+            "translation": diagnostics,
+            "compile": {
+                "node_count": compile_result.get("node_count", 0),
+                "gas_estimate": compile_result.get("gas_estimate", 0),
+                "normalization_changes": list(compile_result.get("normalization_changes", [])),
+            },
+            "math": {
+                "english_tokens": benchmark.get("nlp_tokens", 0),
+                "hlf_tokens": benchmark.get("hlf_tokens", 0),
+                "compression_pct": benchmark.get("compression_pct", 0.0),
+                "token_savings": benchmark.get("savings", 0),
+            },
+            "audit_surfaces": {
+                "localized_summary": localized_audit,
+                "english_summary": english_audit,
+                "bytecode_summary_en": insaits.decompile_bytecode(bytecode),
+            },
+        },
+        "artifacts": {
+            "primary_target": "hlf-bytecode",
+            "bytecode_hex": bytecode.hex(),
+            "bytecode_size_bytes": len(bytecode),
+            "runtime": "HLFRuntime",
+        },
+    }
+
+
+def _persist_translation_contract(
+    ctx: ServerContext,
+    *,
+    contract: dict[str, Any],
+    source: str,
+    memory_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not hasattr(ctx, "persist_translation_contract"):
+        return contract
+    return ctx.persist_translation_contract(
+        contract,
+        source=source,
+        memory_result=memory_result,
+    )
 
 
 def run_hlf_do(
@@ -26,6 +121,9 @@ def run_hlf_do(
     dry_run: bool = False,
     show_hlf: bool = False,
     language: str = "auto",
+    cognitive_lane_policy: str = "benchmark_gated",
+    agent_id: str = "",
+    ingress_nonce: str = "",
 ) -> dict[str, Any]:
     """Execute the packaged governed natural-language front door outside the MCP server."""
     normalized_intent = intent.strip()
@@ -43,10 +141,36 @@ def run_hlf_do(
         }
 
     try:
-        resolved_language = language if language != "auto" else "auto"
-        source = language_to_hlf(normalized_intent, language=language, version="3")
-        if language == "auto":
-            resolved_language = resolve_language("auto", text=normalized_intent)
+        policy_name = normalize_cognitive_lane_policy(cognitive_lane_policy)
+        language_policy = resolve_language_with_policy(
+            language,
+            text=normalized_intent,
+            cognitive_lane_policy=policy_name,
+        )
+        if language_policy.blocked:
+            return {
+                "success": False,
+                "phase": "translation",
+                "you_said": normalized_intent,
+                "tier": normalized_tier,
+                "governed": False,
+                "language": language_policy.resolved_language,
+                "audit_language": language_policy.audit_language,
+                "cognitive_lane_policy": policy_name,
+                "language_policy": language_policy.to_dict(),
+                "error": (
+                    "Blocked by cognitive lane policy: "
+                    f"{language_policy.blocked_reason or 'language_ingress_disallowed'}."
+                ),
+            }
+
+        resolved_language = language_policy.resolved_language
+        source = language_to_hlf(
+            normalized_intent,
+            language=resolved_language,
+            version="3",
+            cognitive_lane_policy=policy_name,
+        )
         validation = ctx.compiler.validate(source)
         if not validation.get("valid"):
             response = {
@@ -56,6 +180,9 @@ def run_hlf_do(
                 "tier": normalized_tier,
                 "governed": False,
                 "language": resolved_language,
+                "audit_language": language_policy.audit_language,
+                "cognitive_lane_policy": policy_name,
+                "language_policy": language_policy.to_dict(),
                 "error": validation.get("error", "Generated HLF did not validate."),
             }
             if show_hlf:
@@ -68,11 +195,31 @@ def run_hlf_do(
         capsule_violations = capsule.validate_ast(ast.get("statements", []))
         align_violations = compile_result.get("align_violations", [])
         benchmark = ctx.benchmark.analyze(source, compare_text=normalized_intent)
-        localized_audit = hlf_to_language(ast, language=resolved_language)
+        localized_audit = hlf_to_language(ast, language=language_policy.audit_language)
         english_audit = hlf_to_english(ast)
         diagnostics = translation_diagnostics(
             normalized_intent, language=resolved_language, source=source
         ).to_dict()
+        translation_contract = _build_translation_contract(
+            ctx,
+            intent=normalized_intent,
+            source=source,
+            resolved_language=resolved_language,
+            language_policy=language_policy.to_dict(),
+            tier=normalized_tier,
+            diagnostics=diagnostics,
+            compile_result=compile_result,
+            capsule_violations=capsule_violations,
+            align_violations=align_violations,
+            localized_audit=localized_audit,
+            english_audit=english_audit,
+            benchmark=benchmark,
+        )
+        translation_contract = _persist_translation_contract(
+            ctx,
+            contract=translation_contract,
+            source="server_translation.run_hlf_do",
+        )
 
         response: dict[str, Any] = {
             "success": len(capsule_violations) == 0 and len(align_violations) == 0,
@@ -86,6 +233,9 @@ def run_hlf_do(
             "tier": normalized_tier,
             "governed": len(capsule_violations) == 0 and len(align_violations) == 0,
             "language": resolved_language,
+            "audit_language": language_policy.audit_language,
+            "cognitive_lane_policy": policy_name,
+            "language_policy": language_policy.to_dict(),
             "dry_run": dry_run,
             "capsule_violations": capsule_violations,
             "align_violations": align_violations,
@@ -100,6 +250,7 @@ def run_hlf_do(
                 "fallback_used": diagnostics["fallback_used"],
             },
             "translation": diagnostics,
+            "translation_contract": translation_contract,
         }
         if show_hlf:
             response["hlf_source"] = source
@@ -123,6 +274,45 @@ def run_hlf_do(
             return response
 
         bc = ctx.bytecoder.encode(ast)
+        normalized_agent_id = str(agent_id or "unknown-agent")
+        ingress_contract = resolve_execution_ingress_contract(
+            ctx,
+            agent_id=normalized_agent_id,
+            payload=source,
+            subject_scope="hlf_do",
+            nonce=ingress_nonce,
+            require_hlf_validation=True,
+            hlf_validated=True,
+        )
+        response["ingress_contract"] = ingress_contract
+        denial_reasons = build_ingress_denial_reasons(
+            ingress_contract,
+            surface="hlf_do",
+        )
+        if denial_reasons:
+            execution_admission = persist_runtime_execution_admission(
+                ctx,
+                agent_id=normalized_agent_id,
+                execution_status="ingress_denied",
+                requested_tier=normalized_tier,
+                surface="hlf_do",
+                ingress_contract=ingress_contract,
+                reasons=denial_reasons,
+            )
+            response["execution"] = {
+                "status": "ingress_denied",
+                "error": "; ".join(denial_reasons),
+                "ingress_contract": ingress_contract,
+                "execution_admission": execution_admission,
+            }
+            response["execution_admission"] = execution_admission
+            response["success"] = False
+            response["governed"] = False
+            response["audit"] = (
+                f"Execution blocked by packaged ingress for tier '{normalized_tier}'. "
+                f"{'; '.join(denial_reasons)}"
+            )
+            return response
         run_result = ctx.runtime.run(
             bc,
             gas_limit=capsule.max_gas,
@@ -131,7 +321,19 @@ def run_hlf_do(
             source=source,
             tier=normalized_tier,
         )
+        run_result["ingress_contract"] = ingress_contract
+        execution_admission = persist_runtime_execution_admission(
+            ctx,
+            agent_id=normalized_agent_id,
+            execution_status=str(run_result.get("status") or "unknown"),
+            requested_tier=normalized_tier,
+            surface="hlf_do",
+            ingress_contract=ingress_contract,
+            run_result=run_result,
+        )
+        run_result["execution_admission"] = execution_admission
         response["execution"] = run_result
+        response["execution_admission"] = execution_admission
         response["success"] = run_result.get("status") == "ok"
         if run_result.get("status") == "ok":
             response["audit"] = (
@@ -171,6 +373,22 @@ def run_hlf_do(
 
 
 def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
+    def _query_translation_support(
+        *,
+        query: str,
+        top_k: int = 3,
+        min_confidence: float = 0.8,
+        topic: str = "hlf_translation_contracts",
+        purpose: str = "translation_memory",
+    ) -> dict[str, Any]:
+        return ctx.memory_store.query(
+            query,
+            top_k=top_k,
+            topic=topic,
+            min_confidence=min_confidence,
+            purpose=purpose,
+        )
+
     @mcp.tool()
     def hlf_do(
         intent: str,
@@ -178,6 +396,9 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         dry_run: bool = False,
         show_hlf: bool = False,
         language: str = "auto",
+        cognitive_lane_policy: str = "benchmark_gated",
+        agent_id: str = "",
+        ingress_nonce: str = "",
     ) -> dict[str, Any]:
         """Translate natural-language intent into governed HLF and optionally execute it."""
         return run_hlf_do(
@@ -187,6 +408,9 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             dry_run=dry_run,
             show_hlf=show_hlf,
             language=language,
+            cognitive_lane_policy=cognitive_lane_policy,
+            agent_id=agent_id,
+            ingress_nonce=ingress_nonce,
         )
 
     @mcp.tool()
@@ -260,31 +484,83 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         min_confidence: float = 0.8,
     ) -> dict[str, Any]:
         """Query known-good translation contract exemplars from Infinite RAG memory."""
-        return ctx.memory_store.query(
-            query,
+        return _query_translation_support(
+            query=query,
             top_k=top_k,
-            topic="hlf_translation_contracts",
             min_confidence=min_confidence,
+            purpose="translation_memory",
         )
 
     @mcp.tool()
     def hlf_translate_to_hlf(
-        text: str, version: str = "3", language: str = "auto"
+        text: str,
+        version: str = "3",
+        language: str = "auto",
+        cognitive_lane_policy: str = "benchmark_gated",
     ) -> dict[str, Any]:
         """Convert natural language instructions to HLF source code."""
         try:
-            source = language_to_hlf(text, language=language, version=version)
-            resolved_language = language
-            if language == "auto":
-                resolved_language = resolve_language("auto", text=text)
+            policy_name = normalize_cognitive_lane_policy(cognitive_lane_policy)
+            language_policy = resolve_language_with_policy(
+                language,
+                text=text,
+                cognitive_lane_policy=policy_name,
+            )
+            if language_policy.blocked:
+                return {
+                    "status": "error",
+                    "error": (
+                        "Blocked by cognitive lane policy: "
+                        f"{language_policy.blocked_reason or 'language_ingress_disallowed'}"
+                    ),
+                    "language_policy": language_policy.to_dict(),
+                }
+
+            resolved_language = language_policy.resolved_language
+            source = language_to_hlf(
+                text,
+                language=resolved_language,
+                version=version,
+                cognitive_lane_policy=policy_name,
+            )
             diagnostics = translation_diagnostics(
                 text, language=resolved_language, source=source
             ).to_dict()
+            compile_result = ctx.compiler.compile(source)
+            localized_audit = hlf_to_language(
+                compile_result["ast"], language=language_policy.audit_language
+            )
+            english_audit = hlf_to_english(compile_result["ast"])
+            benchmark = ctx.benchmark.analyze(source, compare_text=text)
+            translation_contract = _build_translation_contract(
+                ctx,
+                intent=text,
+                source=source,
+                resolved_language=resolved_language,
+                language_policy=language_policy.to_dict(),
+                tier="forge",
+                diagnostics=diagnostics,
+                compile_result=compile_result,
+                capsule_violations=[],
+                align_violations=compile_result.get("align_violations", []),
+                localized_audit=localized_audit,
+                english_audit=english_audit,
+                benchmark=benchmark,
+            )
+            translation_contract = _persist_translation_contract(
+                ctx,
+                contract=translation_contract,
+                source="server_translation.hlf_translate_to_hlf",
+            )
             return {
                 "status": "ok",
                 "source": source,
                 "language": resolved_language,
+                "audit_language": language_policy.audit_language,
+                "cognitive_lane_policy": policy_name,
+                "language_policy": language_policy.to_dict(),
                 "translation": diagnostics,
+                "translation_contract": translation_contract,
             }
         except Exception as exc:
             return {"status": "error", "error": str(exc)}
@@ -295,6 +571,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         failure_status: str = "",
         failure_error: str = "",
         language: str = "auto",
+        cognitive_lane_policy: str = "benchmark_gated",
     ) -> dict[str, Any]:
         """Build a deterministic next-step repair request for failed translation flows."""
         plan = build_translation_repair_plan(
@@ -303,9 +580,39 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             failure_status=failure_status,
             failure_error=failure_error,
         ).to_dict()
+        repair_memory = ctx.store_translation_repair_pattern(
+            original_text=text,
+            failure_status=failure_status,
+            failure_error=failure_error,
+            language=language,
+            repair_plan=plan,
+            provenance="server_translation.hlf_translate_repair",
+        )
+        retrieval_support = _query_translation_support(
+            query=f"{failure_status} {text}".strip() or text,
+            top_k=3,
+            min_confidence=0.7,
+            topic="hlf_repairs",
+            purpose="repair_pattern_recall",
+        )
+        governed_hks_contract = dict(retrieval_support.get("governed_hks_contract") or {})
+        invocation_gate = dict((retrieval_support.get("retrieval_contract") or {}).get("invocation_gate") or {})
+        plan["knowledge_support"] = {
+            "reference_allowed": bool(governed_hks_contract.get("reference_allowed", False)),
+            "evidence_count": int(governed_hks_contract.get("evidence_count") or 0),
+            "graph_source": str(
+                (governed_hks_contract.get("graph_posture") or {}).get("source")
+                or "metadata-derived"
+            ),
+            "decision": str(invocation_gate.get("decision") or "invoke"),
+            "review_required": bool(invocation_gate.get("review_required", False)),
+        }
         return {
             "status": "ok",
             "repair": plan,
+            "repair_memory": repair_memory,
+            "retrieval_support": retrieval_support,
+            "governed_hks_contract": governed_hks_contract,
         }
 
     @mcp.tool()
@@ -316,6 +623,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         max_attempts: int = 3,
         min_fidelity: float = 0.9,
         remember_success: bool = True,
+        cognitive_lane_policy: str = "benchmark_gated",
     ) -> dict[str, Any]:
         """Translate with deterministic retries, fallbacks, and fail-closed exits."""
         attempts: list[dict[str, Any]] = []
@@ -323,7 +631,11 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         current_language = language
 
         for attempt in range(1, max_attempts + 1):
-            translation = hlf_translate_to_hlf(current_text, language=current_language)
+            translation = hlf_translate_to_hlf(
+                current_text,
+                language=current_language,
+                cognitive_lane_policy=cognitive_lane_policy,
+            )
             attempt_record: dict[str, Any] = {
                 "attempt": attempt,
                 "text": current_text,
@@ -336,6 +648,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                     failure_status=translation.get("status", "error"),
                     failure_error=str(translation.get("error", "translation failure")),
                     language=current_language,
+                    cognitive_lane_policy=cognitive_lane_policy,
                 )["repair"]
                 attempt_record["repair"] = repair
                 attempts.append(attempt_record)
@@ -363,6 +676,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                     failure_status="compile_error",
                     failure_error=str(validation.get("error", "validation failure")),
                     language=str(translation.get("language", current_language)),
+                    cognitive_lane_policy=cognitive_lane_policy,
                 )["repair"]
                 attempt_record["repair"] = repair
                 attempts.append(attempt_record)
@@ -433,6 +747,33 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                         tier=tier,
                         provenance="hlf_translate_resilient",
                     )
+                translation_contract = _build_translation_contract(
+                    ctx,
+                    intent=text,
+                    source=source,
+                    resolved_language=str(translation.get("language", current_language)),
+                    language_policy=dict(translation.get("language_policy") or {}),
+                    tier=tier,
+                    diagnostics=dict(translation_meta),
+                    compile_result=compile_result,
+                    capsule_violations=[],
+                    align_violations=compile_result.get("align_violations", []),
+                    localized_audit=hlf_to_language(
+                        compile_result["ast"],
+                        language=str(
+                            translation.get("audit_language")
+                            or translation.get("language", current_language)
+                        ),
+                    ),
+                    english_audit=hlf_to_english(compile_result["ast"]),
+                    benchmark=ctx.benchmark.analyze(source, compare_text=text),
+                )
+                translation_contract = _persist_translation_contract(
+                    ctx,
+                    contract=translation_contract,
+                    source="server_translation.hlf_translate_resilient",
+                    memory_result=memory_result,
+                )
                 return {
                     "status": "ok",
                     "attempts": attempts,
@@ -440,6 +781,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                     "language": translation.get("language", current_language),
                     "translation": translation_meta,
                     "memory": memory_result,
+                    "translation_contract": translation_contract,
                 }
 
             repair = hlf_translate_repair(
@@ -447,6 +789,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 failure_status="low_fidelity",
                 failure_error=f"fallback_used={fallback_used}; fidelity={fidelity}",
                 language=str(translation.get("language", current_language)),
+                cognitive_lane_policy=cognitive_lane_policy,
             )["repair"]
             attempts[-1]["repair"] = repair
             if attempt == max_attempts:

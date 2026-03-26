@@ -121,6 +121,7 @@ These fields are not optional if the entry is used as route evidence, verifier e
 | TASK-007 | Add tests for stale artifact handling, supersession, revocation, and provenance-required recall. |  |  |
 | TASK-008 | Add tests proving benchmark or weekly artifacts cannot influence routing or promotion without required evidence fields. |  |  |
 | TASK-009 | Add operator-facing summaries that distinguish advisory retrieval from governed evidence. |  |  |
+| TASK-010 | Add tests and operator-facing proof that any optional external comparator output remains advisory until it is locally re-evaluated inside HKS. |  |  |
 
 ## Required Contract Additions
 
@@ -135,6 +136,8 @@ The local corpora and related recovery work now make the following additions man
 7. approval-ledger integration for privileged or destructive memory mutations
 8. audit-chain sealing for memory and execution adjacency, not memory in isolation
 9. witness-ready output contracts so future verifier/sentinel lanes can inspect memory lineage without reverse engineering ad hoc logs
+10. local HKS evaluation fields that distinguish governed admission authority from any optional external comparator
+11. explicit promotion-gating rules so comparator output cannot directly create exemplars or route evidence without local re-evaluation
 
 ## Refit Rule For Memory
 

@@ -8,6 +8,7 @@ from hlf_mcp.weekly_artifacts import (
     ALLOWED_ARTIFACT_STATUSES,
     ALLOWED_DECISION_TYPES,
     ALLOWED_TRIAGE_LANES,
+    build_persona_gate_status,
     find_weekly_artifact,
     load_verified_weekly_artifacts,
     record_weekly_artifact_decision,
@@ -36,6 +37,7 @@ def _render_artifact_detail(artifact: dict[str, object]) -> str:
     verification = artifact.get("verification") or {}
     distribution = artifact.get("distribution_contract") or {}
     governed_review = artifact.get("governed_review") or {}
+    persona_gate_status = build_persona_gate_status(artifact)
     lines = [
         f"Artifact: {artifact.get('artifact_id') or 'unknown'}",
         f"Status: {artifact.get('artifact_status') or 'unknown'}",
@@ -51,6 +53,32 @@ def _render_artifact_detail(artifact: dict[str, object]) -> str:
         ),
     ]
 
+    gate_status_counts = persona_gate_status.get("gate_status_counts") or {}
+    gate_status_text = (
+        ", ".join(
+            f"{gate_status}={count}"
+            for gate_status, count in sorted(gate_status_counts.items())
+            if isinstance(count, int)
+        )
+        if isinstance(gate_status_counts, dict) and gate_status_counts
+        else "none"
+    )
+    lines.extend(
+        [
+            "",
+            "Persona gate status:",
+            f"  Contract source: {persona_gate_status.get('contract_source') or 'unknown'}",
+            f"  Owner persona: {persona_gate_status.get('owner_persona') or 'unknown'}",
+            "  Review personas: " + _comma_join(persona_gate_status.get("review_personas")),
+            "  Required gates: " + _comma_join(persona_gate_status.get("required_gates")),
+            f"  Gate status counts: {gate_status_text}",
+            "  Pending gates: " + _comma_join(persona_gate_status.get("pending_gates")),
+            f"  Operator promotion gate: {persona_gate_status.get('operator_promotion_status') or 'not-required'}",
+            f"  Escalate to: {persona_gate_status.get('escalate_to_persona') or 'none'}",
+            "  Handoff template: " + str(persona_gate_status.get("handoff_template_ref") or "none"),
+        ]
+    )
+
     if isinstance(governed_review, dict) and governed_review:
         lines.extend(
             [
@@ -58,13 +86,13 @@ def _render_artifact_detail(artifact: dict[str, object]) -> str:
                 "Governed review:",
                 f"  Summary: {governed_review.get('summary') or 'none'}",
                 f"  Severity: {governed_review.get('severity') or 'unknown'}",
-                f"  Change class: {governed_review.get('change_class') or 'unknown'}",
-                f"  Owner persona: {governed_review.get('owner_persona') or 'unknown'}",
-                "  Review personas: " + _comma_join(governed_review.get("review_personas")),
-                "  Required gates: " + _comma_join(governed_review.get("required_gates")),
-                f"  Escalate to: {governed_review.get('escalate_to_persona') or 'none'}",
-                f"  Operator summary: {governed_review.get('operator_summary') or 'none'}",
-                "  Handoff template: " + str(governed_review.get("handoff_template_ref") or "none"),
+                f"  Change class: {persona_gate_status.get('change_class') or 'unknown'}",
+                f"  Owner persona: {persona_gate_status.get('owner_persona') or 'unknown'}",
+                "  Review personas: " + _comma_join(persona_gate_status.get("review_personas")),
+                "  Required gates: " + _comma_join(persona_gate_status.get("required_gates")),
+                f"  Escalate to: {persona_gate_status.get('escalate_to_persona') or 'none'}",
+                f"  Operator summary: {persona_gate_status.get('operator_summary') or 'none'}",
+                "  Handoff template: " + str(persona_gate_status.get("handoff_template_ref") or "none"),
             ]
         )
 
@@ -190,6 +218,21 @@ def _summary_command(args: argparse.Namespace) -> int:
     print(f"Verified: {summary['verified_count']}")
     print(f"Distribution eligible: {summary['distribution_eligible_count']}")
     print(f"History path: {summary['history_path']}")
+    persona_summary = summary.get("persona_review_summary") or {}
+    if isinstance(persona_summary, dict):
+        print(
+            "Persona review artifacts: "
+            f"{persona_summary.get('artifact_count', 0)} total, "
+            f"{persona_summary.get('attached_contract_count', 0)} attached, "
+            f"{persona_summary.get('fallback_contract_count', 0)} fallback"
+        )
+        owner_counts = persona_summary.get("owner_persona_counts") or {}
+        if isinstance(owner_counts, dict) and owner_counts:
+            owners = ", ".join(
+                f"{persona}={count}" for persona, count in sorted(owner_counts.items())
+            )
+            print(f"Owner personas: {owners}")
+        print(f"Pending persona gates: {persona_summary.get('pending_gate_count', 0)}")
     print(
         json.dumps(
             {"status_counts": summary["status_counts"], "source_counts": summary["source_counts"]},

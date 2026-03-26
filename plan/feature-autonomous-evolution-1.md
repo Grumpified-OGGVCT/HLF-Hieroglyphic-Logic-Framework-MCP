@@ -88,6 +88,7 @@ That is the path from inspirational recursive-improvement rhetoric to a professi
 | TASK-007 | Define a proposal schema covering source evidence, affected files, intended gain, risk class, required tests, and required governance review. |  |  |
 | TASK-008 | Connect friction logging, `SELF_OBSERVE`, and proposal-generation surfaces so the system can emit candidate improvements without claiming autonomous merge authority. |  |  |
 | TASK-009 | Classify proposals into safe buckets such as docs sync, benchmark refresh, schema normalization, test augmentation, or runtime change requiring stronger review. |  |  |
+| TASK-009A | Translate the audited `STaR` and `Think, Act, Learn` rows from `docs/HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md` into bounded bridge artifacts: one proposal-bootstrap path for verified exemplar accumulation and one closed-loop evidence-learning path that remains subordinate to `VERIFY -> MERGE` and never becomes a present-tense product claim by itself. |  |  |
 
 ### Implementation Phase 4
 
@@ -108,6 +109,7 @@ That is the path from inspirational recursive-improvement rhetoric to a professi
 | TASK-013 | Define benchmark tracks for cycle time, defect escape, replayability, audit completeness, and operator handoff speed. |  |  |
 | TASK-014 | Add a rule that any claim of orders-of-magnitude delivery improvement must cite a benchmark artifact, not only doctrine or examples. |  |  |
 | TASK-015 | Add a measured comparison lane between governed HLF execution and NLP-only orchestration for at least one representative workflow family. |  |  |
+| TASK-015A | Use the audited `STaR` row as the comparison donor for proposal-bootstrap experiments and the audited `Think, Act, Learn` row as the comparison donor for closed-loop evidence-learning experiments, while keeping all benchmark conclusions lane-bounded to bridge until packaged evidence and tests exist. |  |  |
 
 ## 3. Alternatives
 

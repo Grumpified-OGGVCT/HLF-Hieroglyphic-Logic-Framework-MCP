@@ -27,9 +27,9 @@ It exists so reconstruction work can be pointed at real gaps instead of vague am
 | Human-readable audit and trust layer | Damaged | Translation, reference docs, explanatory narrative, plain-language vision surfaces | More explicit operator-facing audit, effect previews, and execution explanations still need hardening | `hlf_mcp/hlf/translator.py`, `hlf_mcp/hlf/insaits.py`, `README.md`, `docs/HLF_VISION_PLAIN_LANGUAGE.md` |
 | Real-code bridge | Damaged | Code generation exists and the doctrine is explicit | Broader target-language output, proof of correctness, and stronger generated-output workflows are still thin | `hlf_mcp/hlf/codegen.py`, `docs/HLF_DESIGN_NORTH_STAR.md`, `HLF_MCP_TODO.md` |
 | Knowledge substrate and governed memory | Damaged | Packaged Infinite RAG, memory-node, and MCP memory surfaces exist, and the repo already carries an explicit HLF Knowledge Substrate (HKS) line above those subsystem pieces | Provenance, freshness, confidence, trust-tier, forgetting, weekly evidence discipline, and the full HKS package boundary are not yet locked down as first-class contracts | `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, `hlf_mcp/server_memory.py`, `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md`, `docs/HLF_MEMORY_GOVERNANCE_RECOVERY_SPEC.md`, `HLF_MCP_TODO.md`, `hlf_source/agents/core/memory_scribe.py` |
-| Formal verification surface | Source-only | Doctrine and TODOs point at verification needs | No packaged equivalent to the upstream verifier is in place yet | `hlf_source/agents/core/formal_verifier.py`, `HLF_SUPPORTIVE_SOURCE_CONTEXT_MAP.md`, `HLF_SOURCE_EXTRACTION_LEDGER.md` |
-| Gateway and routing fabric | Source-only | The current repo has MCP and runtime entry points, but not the fuller routing fabric | Validation chain, nonce/gas/routing middleware, richer provider selection, and routing traces are not restored | `hlf_source/agents/gateway/bus.py`, `hlf_source/agents/gateway/router.py`, `hlf_source/agents/gateway/sentinel_gate.py` |
-| Orchestration lifecycle and plan execution | Source-only | Some fixture and doctrine support exists | Spec-to-plan-to-execute lifecycle and DAG execution surfaces are not restored into the packaged repo | `hlf_source/agents/core/plan_executor.py`, `hlf_source/agents/core/crew_orchestrator.py`, `hlf_source/agents/core/task_classifier.py` |
+| Formal verification surface | Damaged | Packaged verifier result/report structures, AST normalization, constraint extraction, and MCP exposure scaffolding exist | Solver-backed proof execution, counterexample extraction, gas-feasibility proofs, and richer verifier admission semantics are still missing | `hlf_mcp/hlf/formal_verifier.py`, `hlf_mcp/server_verifier.py`, `hlf_mcp/hlf/execution_admission.py`, `hlf_source/agents/core/formal_verifier.py` |
+| Gateway and routing fabric | Damaged | The packaged repo already has evidence-backed profile selection, route traces, policy basis, and operator-visible route resources | Validation chain, nonce or gas-aware admission, richer provider selection, dynamic downshifting, and fuller gateway dispatch semantics are not restored | `hlf_mcp/server_profiles.py`, `hlf_mcp/hlf/model_catalog.py`, `hlf_mcp/server_resources.py`, `hlf_source/agents/gateway/bus.py`, `hlf_source/agents/gateway/router.py`, `hlf_source/agents/gateway/sentinel_gate.py` |
+| Orchestration lifecycle and plan execution | Damaged | Packaged lifecycle sequencing, mission state, DAG contracts, execution-trace structures, and instinct MCP surfaces already exist | The plan-to-execute path, task classification, agent dispatch, structured delegation or dissent handling, and fuller handoff contracts are not yet restored into packaged truth | `hlf_mcp/instinct/lifecycle.py`, `hlf_mcp/instinct/orchestration.py`, `hlf_mcp/server_instinct.py`, `hlf_source/agents/core/plan_executor.py`, `hlf_source/agents/core/crew_orchestrator.py`, `hlf_source/agents/core/task_classifier.py` |
 | Persona and operator doctrine | Source-only | Repo-level `AGENTS.md` and some handoff docs survive | The richer persona system that shaped governance, orchestration, and review is still mostly upstream-only | `AGENTS.md`, `docs/AGENTS_CATALOG.md`, `hlf_source/config/personas/steward.md`, `hlf_source/config/personas/sentinel.md`, `hlf_source/AGENTS.md` |
 | Ecosystem integration surface | Source-only | Bridge docs acknowledge broader ecosystem scope | External integration doctrine, unified ecosystem roadmap, and operational coordination remain upstream-only | `HLF_ACTIONABLE_PLAN.md`, `HLF_CANONICALIZATION_MATRIX.md`, `hlf_source/docs/UNIFIED_ECOSYSTEM_ROADMAP.md`, `hlf_source/docs/JULES_COORDINATION.md` |
 | Gallery and operator-legibility surface | Damaged | References, fixtures, and explainers exist in partial form | A full gallery/report surface and stronger operator demo path are not yet restored | `fixtures/README.md`, `docs/HLF_REFERENCE.md`, `hlf_source/scripts/run_hlf_gallery.py`, `hlf_source/docs/hlf_explainer.html` |
@@ -40,13 +40,13 @@ The important point is not that HLF is absent.
 
 It is not absent.
 
-The important point is that the repo already has a real semantic core, runtime, governance assets, docs, examples, and MCP delivery surface, but several of the larger constitutive pillars are still narrowed, damaged, or stranded in source-only form.
+The important point is that the repo already has a real semantic core, runtime, governance assets, docs, examples, and MCP delivery surface, but several of the larger constitutive pillars are still narrowed, damaged, or only partially packaged.
 
 The biggest under-recovered pillars are:
 
 1. gateway and routing fabric
-2. orchestration lifecycle
-3. formal verification
+2. formal verification
+3. orchestration lifecycle
 4. HLF knowledge substrate and richer governed memory contracts
 5. persona/operator doctrine
 6. ecosystem integration surfaces
@@ -58,7 +58,7 @@ Use this document to decide what kind of work a missing area needs:
 - restore it
 - port it faithfully
 - bridge to it explicitly
-- or record why it remains source-only for now
+- or record why it remains source-only for now when there is truly no meaningful packaged base
 
 If a pillar is constitutive, it should never be silently treated as optional just because the smaller story is easier to maintain.
 

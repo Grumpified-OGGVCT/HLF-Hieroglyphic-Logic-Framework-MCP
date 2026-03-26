@@ -29,6 +29,7 @@ from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.entropy_anchor import evaluate_entropy_anchor
 from hlf_mcp.server_capsule import register_capsule_tools
+from hlf_mcp.server_completion import register_completion_tools
 from hlf_mcp.server_context import build_server_context, check_governance_manifest
 from hlf_mcp.server_core import register_core_tools
 from hlf_mcp.server_instinct import register_instinct_tools
@@ -89,6 +90,7 @@ REGISTERED_TOOLS.update(register_profile_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_instinct_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_verifier_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_capsule_tools(mcp, _ctx))
+REGISTERED_TOOLS.update(register_completion_tools(mcp, _ctx))
 
 
 @mcp.tool()
@@ -97,6 +99,7 @@ def hlf_entropy_anchor(
     expected_intent: str = "",
     threshold: float = 0.5,
     policy_mode: str = "advisory",
+    subject_agent_id: str = "",
 ) -> dict[str, Any]:
     """Evaluate semantic drift between packaged HLF meaning and an operator-readable intent baseline."""
     try:
@@ -127,6 +130,7 @@ def hlf_entropy_anchor(
                 "similarity_score": anchor.similarity_score,
                 "threshold": anchor.threshold,
                 "baseline_source": anchor.baseline_source,
+                "audit_trace_id": audit.get("trace_id"),
             },
             agent_role="entropy_anchor",
             anomaly_score=1.0 if anchor.drift_detected else 0.0,
@@ -138,11 +142,44 @@ def hlf_entropy_anchor(
                 }
             ],
         )
+        witness_observation = None
+        normalized_subject_agent_id = str(subject_agent_id or "").strip()
+        if normalized_subject_agent_id and anchor.drift_detected:
+            witness_observation = _ctx.record_witness_observation(
+                subject_agent_id=normalized_subject_agent_id,
+                category="entropy_drift",
+                witness_id="entropy-anchor",
+                severity="critical" if anchor.policy_action == "halt_branch" else "warning",
+                confidence=min(1.0, max(0.75, anchor.similarity_score + 0.35)),
+                source="server.hlf_entropy_anchor",
+                event_ref=governance_event.get("event_ref"),
+                evidence_text=(
+                    f"Entropy-anchor drift detected with policy action '{anchor.policy_action}' "
+                    f"at similarity {anchor.similarity_score:.3f} against threshold {anchor.threshold:.3f}."
+                ),
+                recommended_action=(
+                    "restrict"
+                    if anchor.policy_action == "halt_branch"
+                    else "probation"
+                    if anchor.policy_action == "escalate_hitl"
+                    else "review"
+                ),
+                details={
+                    "policy_mode": anchor.policy_mode,
+                    "policy_action": anchor.policy_action,
+                    "source_hash": anchor.source_hash,
+                    "baseline_source": anchor.baseline_source,
+                    "similarity_score": anchor.similarity_score,
+                    "threshold": anchor.threshold,
+                },
+            )
         return {
             "status": "ok",
             "anchor": anchor.to_dict(),
             "audit": audit,
             "governance_event": governance_event,
+            "subject_agent_id": normalized_subject_agent_id,
+            "witness_observation": witness_observation,
         }
     except Exception as exc:
         return {"status": "error", "error": str(exc)}

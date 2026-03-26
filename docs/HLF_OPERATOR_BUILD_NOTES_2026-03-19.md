@@ -107,6 +107,7 @@ These are constitutive to the full HLF target. They are not honest present-tense
 - prefer `stdio` as the first credible transport for that workflow
 - keep remote `streamable-http` promotion gated until the venv-safe MCP initialize path is encoded in repo-owned smoke workflow and passes end to end repeatably
 - write the explicit operator workflow for using `hlf_do`, `hlf_test_suite_summary`, witness/audit surfaces, and `_toolkit.py status` together
+- **Current status:** This workflow is now real and in use. The packaged HLF MCP server is used to inspect, test, and explain itself during further development. Operator-facing evidence, audit, and regression surfaces are real and queryable. Each new bridge slice (routing, verification, orchestration, etc.) is added, tested, and then used to further assist the next round of build and recovery. This is not full self-hosting, but it is a real recursive build-assist loop.
 
 ### 1. Operator trust and routing proof
 

@@ -2,7 +2,7 @@
 goal: HLF language, knowledge, and execution convergence bridge plan
 version: 1.0
 date_created: 2026-03-22
-last_updated: 2026-03-23
+last_updated: 2026-03-24
 owner: GitHub Copilot
 status: In progress
 tags: [architecture, bridge, feature, governance, rag, codegen, routing, verification]
@@ -83,6 +83,7 @@ Lane classification:
 |---|---|---|---|
 |TASK-008|Audit `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, and `hlf_mcp/server_memory.py` against the missing-pillar requirements for provenance, freshness, confidence, trust tier, forgetting, and evidence discipline.|||
 |TASK-009|Design and implement stronger memory contracts that distinguish raw retrieval results, governed memory entries, trusted pointers, and HKS-level recall surfaces.|✅|2026-03-23|
+|TASK-009A|Translate the source-audit bridge findings from `docs/HLF_EXTERNAL_TECHNIQUE_SOURCE_AUDIT_2026-03-23.md` into explicit HKS contract work: multi-timescale recall and supersession from `MemER`, adaptive context-fit scoring from `TempoFit`, and long-context compression benchmark lanes from `QwenLong-L1.5` without importing vendor naming into packaged runtime contracts.|||
 |TASK-010|Add test coverage for trust-sensitive memory behavior including revocation, provenance gaps, stale evidence handling, and supersession semantics.|||
 |TASK-011|Expose at least one new operator-facing memory or HKS status surface that makes governed memory state legible without database archaeology.|✅|2026-03-23|
 
@@ -132,6 +133,12 @@ Lane classification:
 - 2026-03-23: Broader convergence validation completed with `uv run pytest tests/test_fastmcp_frontdoor.py tests/test_hks_memory.py tests/test_operator_cli.py tests/test_translator.py tests/test_codegen.py tests/test_workflow_support.py -q --tb=short` -> `143 passed`.
 - 2026-03-23: Validation completed with `uv run pytest tests/test_fastmcp_frontdoor.py tests/test_hks_memory.py -q --tb=short` -> `94 passed` and `uv run pytest tests/test_fastmcp_frontdoor.py tests/test_hks_memory.py tests/test_operator_cli.py tests/test_translator.py tests/test_codegen.py -q --tb=short` -> `134 passed`.
 - 2026-03-23: Additional focused convergence validation completed with `uv run pytest tests/test_codegen.py` -> `4 passed` and `uv run pytest tests/test_codegen.py tests/test_translator.py tests/test_fastmcp_frontdoor.py -q --tb=short` -> `110 passed`.
+- 2026-03-23: Full repository regression validation completed after the bounded HKS bridge slice with `uv run pytest -q --tb=short` -> `944 passed`.
+- 2026-03-24: Governed recall contracts now expose explicit per-path status, graph traversal totals, and surface-level filtering/truncation counts while keeping dense-semantic retrieval explicitly unshipped in current truth.
+- 2026-03-24: Focused validation for the retrieval-contract/operator-surface increment completed with `uv run pytest tests/test_hks_memory.py tests/test_fastmcp_frontdoor.py -q --tb=short` -> `121 passed` and adjacent operator-surface validation completed with `uv run pytest tests/test_operator_cli.py -q --tb=short` -> `18 passed`.
+- 2026-03-24: HKS now materializes first-class persisted graph nodes for governed semantic assets, and query-time graph scoring explicitly reports `persisted-hks-node-graph` when routing/repair/verifier flows consume admitted HKS evidence contracts.
+- 2026-03-24: Runtime consumers now carry governed HKS contracts directly in repair, routing, and verifier flows instead of depending only on raw query result lists.
+- 2026-03-24: Focused validation for the first-class graph/runtime-contract increment completed with `uv run pytest tests/test_hks_memory.py tests/test_fastmcp_frontdoor.py -q --tb=short` -> `122 passed` and adjacent operator validation completed with `uv run pytest tests/test_operator_cli.py -q --tb=short` -> `18 passed`.
 
 - **ALT-001**: Focus only on the drift harness next. Rejected because it is a must-return checkpoint, but not the full strategic use of the next PR lane.
 - **ALT-002**: Focus only on code generation. Rejected because it would under-serve routing, verification, and HKS/Infinite RAG convergence.

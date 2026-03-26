@@ -1,0 +1,58 @@
+# Golden dataset for quality assurance
+# These tests must pass before any prompt changes can be deployed
+
+- question: "What is the default max_connections in PostgreSQL 16?"
+  expected_min_confidence: 0.95
+  expected_sources_contain: "postgresql.org"
+  expected_answer_contains: "100"
+  expected_tier: "GOLD"
+  domain: "postgresql"
+
+- question: "How do I create an index in PostgreSQL?"
+  expected_min_confidence: 0.90
+  expected_sources_contain: "postgresql.org"
+  expected_answer_contains: "CREATE INDEX"
+  domain: "postgresql"
+
+- question: "What is the App Router in Next.js 14?"
+  expected_min_confidence: 0.90
+  expected_sources_contain: "nextjs.org"
+  domain: "nextjs"
+  note: "This may miss if KB doesn't have Next.js content yet"
+
+- question: "How do I use async/await in Python?"
+  expected_min_confidence: 0.90
+  expected_sources_contain: "python.org"
+  expected_answer_contains: "async"
+  domain: "python"
+
+- question: "What is the difference between let and const in TypeScript?"
+  expected_min_confidence: 0.90
+  expected_answer_contains: "const"
+  domain: "typescript"
+
+# Negative test cases - these should return misses
+- question: "What is the meaning of life?"
+  expected_miss: true
+  note: "Non-technical question should miss"
+
+- question: "Tell me about the latest gossip"
+  expected_miss: true
+  note: "Non-technical question should miss"
+
+# Version-specific tests
+- question: "What is the default max_connections in PostgreSQL 14?"
+  expected_min_confidence: 0.90
+  expected_answer_contains: "100"
+  software_version: "14"
+  note: "Should use version-specific entry if available"
+
+# Complex/nuanced queries
+- question: "What are the trade-offs between using partial indexes vs full indexes in PostgreSQL?"
+  expected_min_confidence: 0.80
+  note: "Complex query requiring synthesis"
+
+- question: "How does connection pooling interact with max_connections in PostgreSQL?"
+  expected_min_confidence: 0.80
+  note: "Multi-concept query"
+

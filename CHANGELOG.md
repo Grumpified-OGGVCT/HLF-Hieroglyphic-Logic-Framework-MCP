@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-03-21
+
+### Packaged Dogfooding Milestone
+
+This checkpoint moves the repo's recursive build-assist story from loosely documented intent to a verified packaged workflow. The packaged `hlf_mcp` server is now the explicit dogfooding entrypoint for VS Code MCP wiring, the HTTP liveness probe has been verified against the packaged runtime, and the current-truth/operator docs have been refreshed around what is actually working now.
+
+Short summary:
+
+> Verified the packaged `hlf_mcp` dogfooding loop, switched local MCP wiring to the packaged entrypoint, and updated the repo's plan/docs to reflect the real milestone boundary.
+
+Included in this pass:
+
+- verified packaged HTTP bring-up with `HLF_TRANSPORT=sse`, `HLF_PORT=8011`, and `GET /health -> 200 OK`
+- switched `.vscode/mcp.json` from the legacy compatibility server to the packaged `hlf-mcp` stdio entrypoint
+- refreshed `README.md`, `QUICKSTART.md`, `BUILD_GUIDE.md`, `SSOT_HLF_MCP.md`, and operator bridge docs around the bounded recursive build-assist workflow
+- updated the governed-build planning surface to record the 2026-03-21 dogfooding checkpoint as real bridge progress rather than implied future work
+
+Proof boundary retained in this release:
+
+- packaged `stdio` remains the primary local dogfooding lane
+- packaged HTTP health verification is current truth for bounded transport bring-up only
+- stronger remote self-hosting and end-to-end `streamable-http` claims remain gated behind fuller initialize/smoke proof
+
 ## 2026-03-19
 
 ### Documentation Governance

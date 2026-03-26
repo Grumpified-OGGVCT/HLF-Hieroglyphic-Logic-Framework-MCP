@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from hlf_mcp.hlf.translator import (
     Tone,
+    COGNITIVE_LANE_POLICIES,
     build_translation_repair_plan,
     canonicalize_translation_text,
     chinese_to_hlf,
@@ -14,7 +15,9 @@ from hlf_mcp.hlf.translator import (
     hlf_to_english,
     hlf_to_language,
     language_to_hlf,
+    normalize_cognitive_lane_policy,
     resolve_language,
+    resolve_language_with_policy,
     translation_diagnostics,
 )
 
@@ -109,6 +112,14 @@ def test_detect_system_language_honors_supported_preference() -> None:
     assert detect_system_language(preferred_language="zh_CN") == "zh"
 
 
+def test_normalize_cognitive_lane_policy_accepts_supported_values() -> None:
+    assert normalize_cognitive_lane_policy("english") == "english_preferred"
+    assert normalize_cognitive_lane_policy("disable_chinese") == "chinese_disallowed"
+    assert COGNITIVE_LANE_POLICIES == frozenset(
+        {"benchmark_gated", "english_preferred", "chinese_allowed", "chinese_disallowed"}
+    )
+
+
 def test_detect_input_language_prefers_text_cues() -> None:
     assert detect_input_language("analyser /var/log/app.log", default_language="en") == "fr"
     assert detect_input_language("analizar /var/log/app.log", default_language="en") == "es"
@@ -121,6 +132,31 @@ def test_resolve_language_auto_uses_text_over_default() -> None:
         resolve_language("auto", text="analyser /var/log/app.log", preferred_language="en_US")
         == "fr"
     )
+
+
+def test_resolve_language_with_policy_prefers_english_audit_without_rewriting_language() -> None:
+    decision = resolve_language_with_policy(
+        "auto",
+        text="analyser /var/log/app.log",
+        cognitive_lane_policy="english_preferred",
+    )
+
+    assert decision.resolved_language == "fr"
+    assert decision.effective_language == "fr"
+    assert decision.audit_language == "en"
+    assert decision.blocked is False
+
+
+def test_resolve_language_with_policy_blocks_chinese_when_disallowed() -> None:
+    decision = resolve_language_with_policy(
+        "auto",
+        text="分析 /var/log/app.log",
+        cognitive_lane_policy="chinese_disallowed",
+    )
+
+    assert decision.resolved_language == "zh"
+    assert decision.blocked is True
+    assert decision.blocked_reason == "detected_chinese_ingress_disallowed"
 
 
 def test_language_to_hlf_auto_respects_preferred_language_when_text_is_ambiguous() -> None:

@@ -185,14 +185,3 @@ def detect_rogue_signals(
 def signals_require_termination(signals: list[RogueSignal]) -> bool:
     """Any high-severity signal triggers a hard termination."""
     return any(s.severity == "high" for s in signals)
-
-
-def should_terminate(
-    ast: dict[str, Any] | None,
-    violations: list[Any],  # kept for API compat with old stub callers
-) -> bool:
-    """
-    Legacy-compat entry point: return False by default.
-    Prefer detect_rogue_signals + signals_require_termination directly.
-    """
-    return False

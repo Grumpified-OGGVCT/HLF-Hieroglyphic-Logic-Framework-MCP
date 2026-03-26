@@ -54,6 +54,8 @@ The recursive-build story is not a cute anecdote about using an unfinished syste
 
 It matters only if the governed surfaces are genuinely useful, bounded, and inspectable.
 
+**Current status:** The packaged HLF MCP server is now genuinely useful for bounded, governed build-assist. Operator-facing evidence, audit, and regression surfaces are real and queryable. The system is used to help build and verify itself, with each new bridge slice (routing, verification, orchestration, etc.) added, tested, and then used to further assist the next round of work. This is not full self-hosting, but it is a real recursive build-assist loop.
+
 ### 2. It is not a maximal self-hosting claim
 
 This repo should not imply that HLF already fully self-builds or self-hosts across all transports and all recovery surfaces.

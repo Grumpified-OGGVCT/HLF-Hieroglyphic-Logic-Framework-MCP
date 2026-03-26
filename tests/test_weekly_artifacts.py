@@ -353,6 +353,9 @@ def test_append_weekly_artifact_decision_promotes_distribution_eligibility(
     assert artifact["evidence_contract"]["promotion_state"] == "approved_for_distribution"
     assert artifact["distribution_contract"]["eligible_for_governed_distribution"] is True
     assert artifact["decision_records"][0]["decision"] == "promoted"
+    assert artifact["decision_records"][0]["persona_gate_status"]["owner_persona"]
+    assert artifact["decision_records"][0]["persona_gate_status"]["pending_gate_count"] >= 1
+    assert artifact["evidence_contract"]["persona_gate_status"]["required_gate_count"] >= 1
 
 
 def test_record_weekly_artifact_decision_persists_verified_update(
@@ -414,6 +417,8 @@ def test_record_weekly_artifact_decision_persists_verified_update(
     assert updated["artifact_status"] == "triaged"
     assert updated["verification"]["verified"] is True
     assert updated["decision_records"][-1]["triage_lane"] == "current_batch"
+    assert updated["decision_records"][-1]["persona_gate_status"]["owner_persona"]
+    assert updated["evidence_contract"]["persona_gate_status"]["pending_gate_count"] >= 1
 
 
 def test_build_hks_exemplar_from_weekly_artifact_returns_validated_entry(tmp_path: Path) -> None:

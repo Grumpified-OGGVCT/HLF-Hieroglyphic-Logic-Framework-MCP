@@ -20,6 +20,7 @@ def z3_available() -> bool:
 
 class VerificationStatus(Enum):
     PROVEN = "proven"
+    RUNTIME_CHECKED = "runtime_checked"
     COUNTEREXAMPLE = "counterexample"
     UNKNOWN = "unknown"
     SKIPPED = "skipped"
@@ -47,7 +48,7 @@ class VerificationResult:
     solver: str = ""
 
     def is_proven(self) -> bool:
-        return self.status == VerificationStatus.PROVEN
+        return self.status in (VerificationStatus.PROVEN, VerificationStatus.RUNTIME_CHECKED)
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -71,7 +72,12 @@ class VerificationReport:
 
     @property
     def proven_count(self) -> int:
-        return sum(1 for result in self.results if result.status == VerificationStatus.PROVEN)
+        return sum(
+            1
+            for result in self.results
+            if result.status
+            in (VerificationStatus.PROVEN, VerificationStatus.RUNTIME_CHECKED)
+        )
 
     @property
     def failed_count(self) -> int:
@@ -90,6 +96,20 @@ class VerificationReport:
     @property
     def skipped_count(self) -> int:
         return sum(1 for result in self.results if result.status == VerificationStatus.SKIPPED)
+
+    @property
+    def runtime_checked_count(self) -> int:
+        return sum(
+            1
+            for result in self.results
+            if result.status == VerificationStatus.RUNTIME_CHECKED
+        )
+
+    @property
+    def formally_proven_count(self) -> int:
+        return sum(
+            1 for result in self.results if result.status == VerificationStatus.PROVEN
+        )
 
     @property
     def error_count(self) -> int:
@@ -111,6 +131,8 @@ class VerificationReport:
         return {
             "total": self.total_count,
             "proven": self.proven_count,
+            "formally_proven": self.formally_proven_count,
+            "runtime_checked": self.runtime_checked_count,
             "failed": self.failed_count,
             "unknown": self.unknown_count,
             "skipped": self.skipped_count,
@@ -123,9 +145,13 @@ class VerificationReport:
         }
 
     def summary(self) -> str:
+        solver = "z3" if self.z3_enabled else "fallback"
+        formally = self.formally_proven_count
+        runtime = self.runtime_checked_count
+        detail = f"formally_proven={formally}, runtime_checked={runtime}"
         return (
-            f"Verification: {self.proven_count}/{self.total_count} proven; "
-            f"failed={self.failed_count}; solver={'z3' if self.z3_enabled else 'fallback'}; "
+            f"Verification: {self.proven_count}/{self.total_count} passed ({detail}); "
+            f"failed={self.failed_count}; solver={solver}; "
             f"duration_ms={self.total_duration_ms:.2f}"
         )
 
@@ -143,44 +169,117 @@ def extract_constraints(ast: dict[str, Any]) -> list[dict[str, Any]]:
 def normalize_ast(ast: Any) -> dict[str, Any]:
     if isinstance(ast, dict):
         if isinstance(ast.get("program"), list):
-            return {"program": list(ast.get("program", []))}
+            return {
+                "program": list(ast.get("program", [])),
+                "env": dict(ast.get("env", {})) if isinstance(ast.get("env"), dict) else {},
+            }
         if isinstance(ast.get("statements"), list):
-            return {"program": list(ast.get("statements", []))}
+            return {
+                "program": list(ast.get("statements", [])),
+                "env": dict(ast.get("env", {})) if isinstance(ast.get("env"), dict) else {},
+            }
         nested_ast = ast.get("ast")
         if nested_ast is not None:
             return normalize_ast(nested_ast)
         if isinstance(ast.get("body"), list):
-            return {"program": list(ast.get("body", []))}
-        return {"program": []}
+            return {
+                "program": list(ast.get("body", [])),
+                "env": dict(ast.get("env", {})) if isinstance(ast.get("env"), dict) else {},
+            }
+        return {"program": [], "env": {}}
     if isinstance(ast, list):
-        return {"program": list(ast)}
-    return {"program": []}
+        return {"program": list(ast), "env": {}}
+    return {"program": [], "env": {}}
+
+
+def _decode_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        if value.get("kind") == "value":
+            value_type = str(value.get("type", ""))
+            scalar = value.get("value")
+            if value_type == "ident":
+                text = str(scalar).strip().lower()
+                if text == "true":
+                    return True
+                if text == "false":
+                    return False
+                if text == "null":
+                    return None
+                return str(scalar)
+            if value_type == "var_ref":
+                return {"var_ref": str(scalar)}
+            return scalar
+        if value.get("kind") == "kv_arg":
+            return _decode_value(value.get("value"))
+    return value
+
+
+def _decode_arguments(arguments: Any) -> dict[str, Any]:
+    if not isinstance(arguments, list):
+        return {}
+    decoded: dict[str, Any] = {}
+    for argument in arguments:
+        if not isinstance(argument, dict):
+            continue
+        if argument.get("kind") == "kv_arg":
+            decoded[str(argument.get("name", ""))] = _decode_value(argument.get("value"))
+    return decoded
+
+
+def _numeric_value(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
 
 
 def _extract_from_node(node: Any, constraints: list[dict[str, Any]]) -> None:
     if not isinstance(node, dict):
         return
 
+    kind = str(node.get("kind", ""))
     tag = str(node.get("tag", ""))
+    arguments = _decode_arguments(node.get("arguments", []))
     if tag == "CONSTRAINT":
+        name = str(
+            arguments.get("name")
+            or node.get("name")
+            or f"constraint_{len(constraints)}"
+        )
+        range_value = arguments.get("value")
+        if range_value is None:
+            numeric_literals = [
+                value
+                for key, value in arguments.items()
+                if key not in {"min", "max"} and isinstance(value, (int, float))
+            ]
+            if len(numeric_literals) == 1:
+                range_value = numeric_literals[0]
         constraints.append(
             {
                 "kind": "range_check",
-                "name": str(node.get("name", f"constraint_{len(constraints)}")),
+                "name": name,
                 "condition": node.get("condition", {}),
                 "args": list(node.get("args", [])),
+                "value": range_value,
+                "low": arguments.get("min"),
+                "high": arguments.get("max"),
+                "fields": arguments,
             }
         )
-    elif tag == "SPEC_GATE":
+    elif tag == "SPEC_GATE" or kind == "spec_gate_stmt":
+        gate_name = str(node.get("tag") or node.get("name") or f"spec_gate_{len(constraints)}")
         constraints.append(
             {
                 "kind": "spec_gate",
-                "name": str(node.get("name", f"spec_gate_{len(constraints)}")),
+                "name": gate_name,
                 "condition": node.get("condition", {}),
+                "fields": arguments,
             }
         )
-    elif tag == "SET":
-        value = node.get("value")
+    elif tag == "SET" or kind == "set_stmt":
+        value = _decode_value(node.get("value"))
         name = str(node.get("name", f"value_{len(constraints)}"))
         if isinstance(value, bool):
             expected_type = "boolean"
@@ -204,8 +303,10 @@ def _extract_from_node(node: Any, constraints: list[dict[str, Any]]) -> None:
                     "value": value,
                 }
             )
-    elif tag == "PARALLEL":
+    elif tag == "PARALLEL" or kind == "parallel_stmt":
         tasks = list(node.get("tasks", []))
+        if not tasks:
+            tasks = list(node.get("blocks", []))
         constraints.append(
             {
                 "kind": "gas_bound",
@@ -214,7 +315,7 @@ def _extract_from_node(node: Any, constraints: list[dict[str, Any]]) -> None:
             }
         )
 
-    for key in ("then", "else", "body", "inner", "action"):
+    for key in ("then", "else", "body", "inner", "action", "else_clause"):
         child = node.get(key)
         if isinstance(child, dict):
             _extract_from_node(child, constraints)
@@ -222,10 +323,11 @@ def _extract_from_node(node: Any, constraints: list[dict[str, Any]]) -> None:
             for item in child:
                 _extract_from_node(item, constraints)
 
-    tasks = node.get("tasks")
-    if isinstance(tasks, list):
-        for child in tasks:
-            _extract_from_node(child, constraints)
+    for key in ("tasks", "blocks", "statements", "elif_clauses"):
+        children = node.get(key)
+        if isinstance(children, list):
+            for child in children:
+                _extract_from_node(child, constraints)
 
 
 class FallbackSolver:
@@ -269,9 +371,9 @@ class FallbackSolver:
             )
         return VerificationResult(
             property_name=name or "range_check",
-            status=VerificationStatus.PROVEN,
+            status=VerificationStatus.RUNTIME_CHECKED,
             kind=ConstraintKind.RANGE_CHECK,
-            message="Value within range bounds",
+            message="Value within range bounds (runtime check)",
             solver="fallback",
             duration_ms=(time.time() - start) * 1000,
         )
@@ -298,9 +400,9 @@ class FallbackSolver:
         if isinstance(value, expected):
             return VerificationResult(
                 property_name=name or "type_check",
-                status=VerificationStatus.PROVEN,
+                status=VerificationStatus.RUNTIME_CHECKED,
                 kind=ConstraintKind.TYPE_INVARIANT,
-                message=f"Value matches type '{expected_type}'",
+                message=f"Value matches type '{expected_type}' (runtime check)",
                 solver="fallback",
                 duration_ms=(time.time() - start) * 1000,
             )
@@ -322,9 +424,9 @@ class FallbackSolver:
         if total <= budget:
             return VerificationResult(
                 property_name=name or "gas_budget",
-                status=VerificationStatus.PROVEN,
+                status=VerificationStatus.RUNTIME_CHECKED,
                 kind=ConstraintKind.GAS_BOUND,
-                message=f"Total gas {total} <= budget {budget}",
+                message=f"Total gas {total} <= budget {budget} (runtime check)",
                 solver="fallback",
                 duration_ms=(time.time() - start) * 1000,
             )
@@ -363,6 +465,103 @@ class FormalVerifier:
     ) -> VerificationReport:
         return self.verify_ast(ast, gas_budget=gas_budget)
 
+    def verify_embodied_contract(self, contract: dict[str, Any] | None) -> VerificationReport:
+        report = VerificationReport(z3_enabled=_HAS_Z3)
+        if not isinstance(contract, dict) or not contract.get("embodied"):
+            return report
+
+        function_name = str(contract.get("function_name") or "embodied_contract")
+        action_envelope = (
+            dict(contract.get("action_envelope") or {})
+            if isinstance(contract.get("action_envelope"), dict)
+            else {}
+        )
+        spatial_bounds = (
+            dict(contract.get("spatial_bounds") or {})
+            if isinstance(contract.get("spatial_bounds"), dict)
+            else {}
+        )
+        evidence_refs = contract.get("evidence_refs") if isinstance(contract.get("evidence_refs"), list) else []
+        world_state_ref = str(contract.get("world_state_ref") or "")
+        simulation_only = bool(contract.get("simulation_only", False))
+        bounded_spatial_envelope = bool(contract.get("bounded_spatial_envelope", False))
+
+        report.add(
+            self.verify_spec_gate(
+                fields={"simulation_only": simulation_only},
+                property_name=f"{function_name.lower()}_simulation_mode",
+            )
+        )
+
+        if action_envelope:
+            timeout_ms = _numeric_value(action_envelope.get("timeout_ms"))
+            if timeout_ms is None:
+                report.add(
+                    VerificationResult(
+                        property_name=f"{function_name.lower()}_timeout_ms",
+                        status=VerificationStatus.COUNTEREXAMPLE,
+                        kind=ConstraintKind.RANGE_CHECK,
+                        message="Embodied action envelope timeout_ms must be a positive numeric literal.",
+                        counterexample={"timeout_ms": action_envelope.get("timeout_ms")},
+                        solver=self.solver_name,
+                    )
+                )
+            else:
+                report.add(
+                    self.verify_range(
+                        timeout_ms,
+                        low=1.0,
+                        property_name=f"{function_name.lower()}_timeout_ms",
+                    )
+                )
+
+            report.add(
+                self.verify_spec_gate(
+                    fields={"bounded_spatial_envelope": bounded_spatial_envelope},
+                    property_name=f"{function_name.lower()}_spatial_envelope",
+                )
+            )
+
+            for bound_name, bound_value in spatial_bounds.items():
+                numeric_bound = _numeric_value(bound_value)
+                if numeric_bound is None:
+                    report.add(
+                        VerificationResult(
+                            property_name=f"{function_name.lower()}_{bound_name}",
+                            status=VerificationStatus.COUNTEREXAMPLE,
+                            kind=ConstraintKind.RANGE_CHECK,
+                            message=f"Embodied spatial bound '{bound_name}' must be numeric.",
+                            counterexample={"bound": bound_name, "value": bound_value},
+                            solver=self.solver_name,
+                        )
+                    )
+                    continue
+                report.add(
+                    self.verify_range(
+                        numeric_bound,
+                        low=0.0,
+                        property_name=f"{function_name.lower()}_{bound_name}",
+                    )
+                )
+
+        if function_name in {"WORLD_STATE_RECALL", "TRAJECTORY_PROPOSE"}:
+            report.add(
+                self.verify_spec_gate(
+                    fields={"world_state_ref": bool(world_state_ref)},
+                    property_name=f"{function_name.lower()}_world_state_ref",
+                )
+            )
+
+        if function_name == "GUARDED_ACTUATE":
+            report.add(
+                self.verify_spec_gate(
+                    fields={"evidence_refs": bool(evidence_refs)},
+                    property_name="guarded_actuate_evidence_refs",
+                )
+            )
+
+        return report
+
     def verify_type(
         self, value: Any, expected_type: str, *, property_name: str = ""
     ) -> VerificationResult:
@@ -387,6 +586,91 @@ class FormalVerifier:
     ) -> VerificationResult:
         return self._fallback.check_gas_budget(task_costs, budget, name=property_name)
 
+    def verify_spec_gate(
+        self,
+        fields: dict[str, Any] | None = None,
+        *,
+        property_name: str = "",
+        condition: Any = None,
+    ) -> VerificationResult:
+        start = time.time()
+        effective_fields = dict(fields or {})
+        if effective_fields:
+            unresolved = [
+                name
+                for name, value in effective_fields.items()
+                if isinstance(value, dict) and "var_ref" in value
+            ]
+            if unresolved:
+                return VerificationResult(
+                    property_name=property_name or "spec_gate",
+                    status=VerificationStatus.UNKNOWN,
+                    kind=ConstraintKind.SPEC_GATE,
+                    message=(
+                        "SPEC_GATE depends on unresolved variable references: "
+                        + ", ".join(sorted(unresolved))
+                    ),
+                    solver=self.solver_name,
+                    duration_ms=(time.time() - start) * 1000,
+                )
+            false_fields = [
+                name for name, value in effective_fields.items() if isinstance(value, bool) and not value
+            ]
+            if false_fields:
+                field_name = false_fields[0]
+                return VerificationResult(
+                    property_name=property_name or "spec_gate",
+                    status=VerificationStatus.COUNTEREXAMPLE,
+                    kind=ConstraintKind.SPEC_GATE,
+                    message=f"SPEC_GATE literal '{field_name}' resolved to false.",
+                    counterexample={
+                        "field": field_name,
+                        "value": effective_fields[field_name],
+                    },
+                    solver=self.solver_name,
+                    duration_ms=(time.time() - start) * 1000,
+                )
+            return VerificationResult(
+                property_name=property_name or "spec_gate",
+                status=VerificationStatus.PROVEN if _HAS_Z3 else VerificationStatus.RUNTIME_CHECKED,
+                kind=ConstraintKind.SPEC_GATE,
+                message=(
+                    "SPEC_GATE resolved to deterministic literal fields: "
+                    + ", ".join(sorted(effective_fields))
+                ),
+                solver=self.solver_name,
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        if isinstance(condition, bool):
+            _status = (
+                (VerificationStatus.PROVEN if _HAS_Z3 else VerificationStatus.RUNTIME_CHECKED)
+                if condition
+                else VerificationStatus.COUNTEREXAMPLE
+            )
+            return VerificationResult(
+                property_name=property_name or "spec_gate",
+                status=_status,
+                kind=ConstraintKind.SPEC_GATE,
+                message=(
+                    "SPEC_GATE condition resolved deterministically."
+                    if condition
+                    else "SPEC_GATE condition resolved to false."
+                ),
+                counterexample=None if condition else {"condition": False},
+                solver=self.solver_name,
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        return VerificationResult(
+            property_name=property_name or "spec_gate",
+            status=VerificationStatus.SKIPPED,
+            kind=ConstraintKind.SPEC_GATE,
+            message="SPEC_GATE extraction is present, but no deterministic literal proof contract was available.",
+            solver=self.solver_name,
+            duration_ms=(time.time() - start) * 1000,
+        )
+
     def verify_ast(self, ast: dict[str, Any], *, gas_budget: int = 10_000) -> VerificationReport:
         ast = normalize_ast(ast)
         report = VerificationReport(z3_enabled=_HAS_Z3)
@@ -402,12 +686,20 @@ class FormalVerifier:
                 )
                 continue
             if kind == "range_check":
+                value = constraint.get("value")
+                low = _numeric_value(constraint.get("low"))
+                high = _numeric_value(constraint.get("high"))
                 args = list(constraint.get("args", []))
-                if args and isinstance(args[0], (int, float)):
+                if value is None and args and isinstance(args[0], (int, float)):
+                    value = args[0]
+                    if low is None:
+                        low = 0.0
+                if isinstance(value, (int, float)):
                     report.add(
                         self.verify_range(
-                            args[0],
-                            low=0,
+                            value,
+                            low=low,
+                            high=high,
                             property_name=str(constraint.get("name", "range_check")),
                         )
                     )
@@ -434,12 +726,10 @@ class FormalVerifier:
                 continue
             if kind == "spec_gate":
                 report.add(
-                    VerificationResult(
+                    self.verify_spec_gate(
+                        fields=constraint.get("fields") if isinstance(constraint.get("fields"), dict) else None,
                         property_name=str(constraint.get("name", "spec_gate")),
-                        status=VerificationStatus.SKIPPED,
-                        kind=ConstraintKind.SPEC_GATE,
-                        message="SPEC_GATE extraction is present; theorem proving is advisory-only in the packaged bridge slice",
-                        solver=self.solver_name,
+                        condition=constraint.get("condition"),
                     )
                 )
                 continue

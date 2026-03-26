@@ -3,8 +3,10 @@
     "hlf-mcp": {
       "type": "stdio",
       "command": "uv",
-      "args": ["run", "python", "-m", "hlf.mcp_server_complete", "--stdio"],
-      "cwd": "${workspaceFolder}"
+      "args": ["run", "hlf-mcp"],
+      "cwd": "${workspaceFolder}",
+      "description": "HLF packaged MCP server (stdio dogfooding entrypoint)",
+      "icon": "🪶"
     }
   }
 }

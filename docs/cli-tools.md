@@ -207,6 +207,14 @@ Supported subcommands:
 - `decide ARTIFACT_ID`
 - `summary`
 
+Current `summary` behavior:
+
+- reports artifact, verification, and distribution counts
+- includes persona-review rollups for the recorded weekly artifacts:
+	- total artifacts with attached vs normalized-fallback persona contracts
+	- owner persona counts
+	- pending persona gate count
+
 Current `show` behavior:
 
 - `--json` prints the full stored artifact payload.
@@ -241,6 +249,87 @@ Governed review:
 	Operator summary: Owner persona sentinel; review personas strategist, steward, cove; required gates strategist_review, sentinel_review, steward_review, cove_review, operator_promotion.
 	Handoff template: governance/templates/persona_review_handoff.md
 ```
+
+## `hlf-operator`
+
+Run packaged operator-facing governance and review surfaces without starting the MCP server.
+
+```bash
+uv run hlf-operator weekly-evidence-summary --json
+uv run hlf-operator witness-status --json
+uv run hlf-operator governed-route --json
+uv run hlf-operator instinct-status --json
+uv run hlf-operator formal-verifier --json
+uv run hlf-operator entropy-anchor --json
+uv run hlf-operator approval-review --json
+uv run hlf-operator approval-bypass-review --json
+uv run hlf-operator persona-review --json
+uv run hlf-operator persona-review --artifact-id weekly_demo --json
+uv run hlf-operator daemon-transparency --json
+```
+
+Current operator-focused subcommands include:
+
+- `weekly-evidence-summary`
+- `provenance-summary`
+- `witness-status`
+- `governed-route`
+- `instinct-status`
+- `formal-verifier`
+- `entropy-anchor`
+- `approval-review`
+- `approval-bypass-review`
+- `persona-review`
+- `daemon-transparency`
+- `daemon-transparency-report`
+- `memory-govern`
+- `resource`
+
+Current `provenance-summary` behavior:
+
+- renders the packaged provenance contract summary used by the operator status resources
+- includes the shared `persona_contract_summary` rollup used by provenance, witness, and approval-review surfaces
+- reports how many weekly artifacts are currently tracked by persona review and how many persona gates remain pending
+
+Current witness-status behavior:
+
+- use `uv run hlf-operator witness-status --json` for the global witness summary
+- use `uv run hlf-operator witness-status --subject-agent-id AGENT_ID --json` for a subject-specific view
+- both witness resources now include `persona_review_summary`, so trust-state review and persona gate posture share one visible operator contract
+
+Current governed-route behavior:
+
+- use `uv run hlf-operator governed-route --json` for the latest packaged routing trace
+- use `uv run hlf-operator governed-route --agent-id AGENT_ID --json` for an agent-scoped route trace
+- the named command surfaces the same operator summary, fallback summary, and policy-basis summary used by the route resources
+
+Current instinct-status behavior:
+
+- use `uv run hlf-operator instinct-status --json` for the current mission list
+- use `uv run hlf-operator instinct-status --mission-id MISSION_ID --json` for mission-specific lifecycle state
+- the packaged resource now summarizes proof state, phase completion, execution coverage, verification posture, CoVE gate state, seal state, and active blockers instead of only dumping raw mission state
+
+Current formal-verifier behavior:
+
+- use `uv run hlf-operator formal-verifier --json` for the packaged formal-verification surface
+- the named command exposes solver status plus recent proof events and audit-linked evidence refs without requiring the generic `resource` command
+
+Current entropy-anchor behavior:
+
+- use `uv run hlf-operator entropy-anchor --json` for the packaged drift-review surface
+- the named command exposes recent entropy-anchor evaluations, policy actions, similarity thresholds, and audit-linked evidence refs without requiring the generic `resource` command
+
+Current approval-review behavior:
+
+- use `uv run hlf-operator approval-review --json` for the queue summary
+- use `uv run hlf-operator approval-review --request-id REQUEST_ID --json` for a single request history
+- approval queue resources now include the same `persona_review_summary` rollup surfaced by provenance and witness status, without inventing per-request persona authority
+
+Current `persona-review` behavior:
+
+- without `--artifact-id`, renders the packaged `hlf://status/persona_review` surface
+- with `--artifact-id`, renders `hlf://status/persona_review/{artifact_id}`
+- reports owner persona counts, review personas, required gates, gate status rollups, and whether each artifact used an attached governed review or a normalized fallback contract
 
 ## Related References
 

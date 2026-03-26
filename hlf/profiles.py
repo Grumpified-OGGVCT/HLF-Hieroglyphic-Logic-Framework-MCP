@@ -3,14 +3,14 @@ HLF Profile Management
 
 P0: Cloud-only Core
     - Python + SQLite only
-    - Direct Ollama Cloud API
+    - Direct Ollama Cloud API only when no local daemon is available
     - SQLite hot tier
     - 5 minimal host functions
     - ~50MB RAM idle
 
 P1: Cloud-assisted Workstation  
     - P0 + LRU cache hot tier
-    - Optional local Ollama daemon
+    - Local Ollama daemon primary, cloud backup allowed
     - Extended host functions
     - ~75MB RAM idle
 
@@ -77,7 +77,7 @@ class ProfileManager:
             use_redis=False,
             use_docker=False,
             use_lru_cache=False,
-            ollama_mode="cloud_direct",
+            ollama_mode="local_or_cloud_backup",
             default_model="gpt-oss:20b-cloud",
             hot_tier="sqlite",
             warm_tier="sqlite",
@@ -93,7 +93,7 @@ class ProfileManager:
             use_redis=False,
             use_docker=False,
             use_lru_cache=True,
-            ollama_mode="hybrid",
+            ollama_mode="local_daemon",
             default_model="gpt-oss:20b-cloud",
             hot_tier="lru",
             warm_tier="sqlite",

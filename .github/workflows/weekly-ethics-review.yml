@@ -1,16 +1,16 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  HLF — Weekly Ethics Alignment Review                                        ║
 # ║                                                                              ║
-# ║  Model: deepseek-r1:14b (DeepSeek)                                          ║
+# ║  Routing policy: packaged named ethics chain                                 ║
 # ║  Why: ethics review still benefits from reasoning, but issue creation is    ║
-# ║        now gated to concrete regressions in changed governance surfaces      ║
-# ║        instead of recurring baseline philosophy reports.                     ║
+# ║        gated to concrete regressions in changed governance surfaces rather   ║
+# ║        than recurring baseline philosophy reports or frozen model choices.   ║
 # ║                                                                              ║
 # ║  Triggers: Weekly Tuesday 02:00 UTC                                         ║
 # ║  Output: GitHub Issue only when changed ethics surfaces produce an           ║
 # ║          actionable, code-grounded finding                                  ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
-name: "Weekly — Ethics Alignment Review (deepseek-r1:14b)"
+name: "Weekly — Ethics Alignment Review (policy-routed ethics chain)"
 
 on:
   schedule:
@@ -82,7 +82,7 @@ jobs:
           echo "$ALIGN_CONTENT" > /tmp/align_rules.txt
           printf "$ETHICS_FILES" > /tmp/ethics_stubs.txt
 
-      - name: "deepseek-r1:14b — Current-change ethics review"
+      - name: "Ethics chain — Current-change ethics review"
         if: steps.ethics_scope.outputs.has_relevant_changes == 'true'
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
@@ -134,8 +134,7 @@ jobs:
           PROMPT_EOF
 
           python .github/scripts/ollama_client.py \
-            --model "deepseek-r1:14b" \
-            --fallback-model "nemotron-3-super" \
+            --chain "ethics" \
             --system "You are a constitutional AI ethics reviewer. Review current changed surfaces only, ground every finding in the provided code, and avoid turning standing philosophical gaps into recurring issues." \
             --prompt "@/tmp/ethics_prompt.txt" \
             --output /tmp/ethics_review.json \
@@ -175,7 +174,7 @@ jobs:
           cat > /tmp/ethics_issue.md << ISSUE_EOF
           ## ⚖️ HLF Ethics Alignment Review — ${WEEK}
 
-          **Reviewed by**: \`deepseek-r1:14b\` (changed-surface ethics review)
+          **Reviewed by**: packaged named \`ethics\` chain (changed-surface ethics review)
           **Workflow**: [Weekly Ethics Review]($RUN_URL)
 
           > _This report is emitted only when changed governance/ethics/runtime surfaces produce a concrete actionable finding._
@@ -190,7 +189,7 @@ jobs:
 
           ---
 
-          ## 🧠 AI Ethics Review (deepseek-r1:14b)
+          ## 🧠 AI Ethics Review (ethics chain)
 
           ISSUE_EOF
 

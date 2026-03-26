@@ -17,7 +17,7 @@ Recover the first trust-bearing constitutive cluster:
 | Pillar | Recovery Mode | Upstream Files | Target Files | Owner Module |
 | --- | --- | --- | --- | --- |
 | Routing fabric | faithful port | `hlf_source/agents/gateway/bus.py`, `hlf_source/agents/gateway/router.py`, `hlf_source/agents/gateway/sentinel_gate.py` | `hlf_mcp/server_profiles.py`, `hlf_mcp/hlf/model_catalog.py`, `hlf_mcp/server_resources.py`, packaged routing helper under `hlf_mcp/hlf/` if needed | packaged routing layer |
-| Formal verification lane boundary | faithful port start | `hlf_source/agents/core/formal_verifier.py` | packaged verifier module under `hlf_mcp/hlf/`, adjacent touch points in `hlf_mcp/hlf/runtime.py` and `hlf_mcp/hlf/capsules.py` | packaged verifier layer |
+| Formal verification lane boundary | faithful port start | `hlf_source/agents/core/formal_verifier.py` | packaged verifier module under `hlf_mcp/hlf/`, plus `hlf_mcp/server_verifier.py`, `hlf_mcp/hlf/execution_admission.py`, and adjacent touch points in `hlf_mcp/hlf/runtime.py` and `hlf_mcp/hlf/capsules.py` | packaged verifier layer |
 | HLF knowledge-substrate and memory-evidence normalization | faithful port / bridge | `hlf_source/agents/core/memory_scribe.py`, `hlf_source/agents/core/context_pruner.py`, `hlf_source/scripts/verify_chain.py` | `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, `hlf_mcp/server_memory.py`, `hlf_mcp/server_context.py` | packaged memory layer |
 | Governance control skeleton | bridge contract | `hlf_source/governance/ALIGN_LEDGER.yaml`, `hlf_source/agents/gateway/sentinel_gate.py` | `docs/HLF_GOVERNANCE_CONTROL_MATRIX.md` and associated packaged references | bridge docs and governance surface |
 | Operator proof surfaces | bridge contract | route, verifier, and memory source clusters above | `hlf_mcp/server_resources.py`, related docs and tests | operator surface layer |
@@ -26,7 +26,7 @@ Recover the first trust-bearing constitutive cluster:
 
 | Pillar | Reason Not In Batch 1 |
 | --- | --- |
-| Orchestration lifecycle | Depends on verifier and route proof surfaces so execution admission is not restored on a weaker base |
+| Orchestration lifecycle | The packaged lifecycle and orchestration base is already real, but plan-to-execute, delegation, dissent, escalation, and execution-admission completion should follow verifier and routing proof work rather than landing on a weaker trust base |
 | Persona and operator doctrine integration | Needs Batch 1 proof surfaces first so roles map onto real controls rather than abstractions |
 | Gallery/operator-legibility expansion | Must follow real route/verifier/memory evidence objects to avoid decorative stand-ins |
 | Real-code bridge proof expansion | Lower trust priority than verifier and routing proof |

@@ -108,6 +108,125 @@ def test_operator_cli_provenance_summary_uses_server_context(monkeypatch, capsys
     assert payload["provenance_contract"]["summary"]["memory_fact_count"] == 3
 
 
+def test_operator_cli_witness_status_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["witness-status", "--subject-agent-id", "agent-7", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/witness_governance/agent-7"
+
+
+def test_operator_cli_governed_route_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["governed-route", "--agent-id", "router-9", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/governed_route/router-9"
+
+
+def test_operator_cli_ingress_status_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["ingress-status", "--agent-id", "router-9", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/ingress/router-9"
+
+
+def test_operator_cli_instinct_status_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["instinct-status", "--mission-id", "mission-3", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/instinct/mission-3"
+
+
+def test_operator_cli_formal_verifier_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["formal-verifier", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/formal_verifier"
+
+
+def test_operator_cli_entropy_anchor_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["entropy-anchor", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/entropy_anchor"
+
+
+def test_operator_cli_approval_review_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["approval-review", "--request-id", "req-5", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/approval_queue/req-5"
+
+
 def test_operator_cli_memory_govern_uses_shared_helper(monkeypatch, capsys) -> None:
     from hlf_mcp import operator_cli
 
@@ -177,3 +296,74 @@ def test_operator_cli_resource_uses_packaged_renderer(monkeypatch, capsys) -> No
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["resource_uri"] == "hlf://status/formal_verifier"
+
+
+def test_operator_cli_approval_bypass_review_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(
+        ["approval-bypass-review", "--subject-agent-id", "agent-42", "--json"]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/approval_bypass/agent-42"
+
+
+def test_operator_cli_persona_review_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["persona-review", "--artifact-id", "weekly_demo", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/persona_review/weekly_demo"
+
+
+def test_operator_cli_daemon_transparency_uses_named_resource(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: json.dumps({"status": "ok", "resource_uri": resource_uri}),
+    )
+
+    exit_code = operator_cli.main(["daemon-transparency", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://status/daemon_transparency"
+
+
+def test_operator_cli_daemon_transparency_report_wraps_markdown(monkeypatch, capsys) -> None:
+    from hlf_mcp import operator_cli
+
+    monkeypatch.setattr(operator_cli, "build_server_context", object)
+    monkeypatch.setattr(
+        operator_cli,
+        "render_resource_uri",
+        lambda ctx, resource_uri: "# HLF Daemon Transparency Report\n",
+    )
+
+    exit_code = operator_cli.main(["daemon-transparency-report", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resource_uri"] == "hlf://reports/daemon_transparency"
+    assert payload["report"].startswith("# HLF Daemon Transparency Report")

@@ -163,6 +163,71 @@ HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
         "desc": "CoVE adversarial validation",
     },
     "z3_verify": {"tier": "operators", "gas": 10, "effects": [], "desc": "Z3 formal verification"},
+    "sensor_read": {
+        "tier": "operators",
+        "gas": 4,
+        "effects": ["sensor_read"],
+        "desc": "Simulation-only embodied sensor evidence read",
+        "effect_class": "sensor_read",
+        "failure_type": "io_error",
+        "audit_requirement": "standard",
+        "safety_class": "bounded",
+        "review_posture": "none",
+        "execution_mode": "simulation_only",
+        "supervisory_only": True,
+    },
+    "world_state_recall": {
+        "tier": "operators",
+        "gas": 4,
+        "effects": ["memory_read"],
+        "desc": "Supervisory world-state recall through governed pointers",
+        "effect_class": "world_state_read",
+        "failure_type": "memory_error",
+        "audit_requirement": "standard",
+        "safety_class": "bounded",
+        "review_posture": "none",
+        "execution_mode": "direct",
+        "supervisory_only": True,
+    },
+    "trajectory_propose": {
+        "tier": "operators",
+        "gas": 6,
+        "effects": ["trajectory_plan"],
+        "desc": "Simulation-only supervisory trajectory proposal",
+        "effect_class": "trajectory_plan",
+        "failure_type": "verification_error",
+        "audit_requirement": "full",
+        "safety_class": "high",
+        "review_posture": "operator_review",
+        "execution_mode": "simulation_only",
+        "supervisory_only": True,
+    },
+    "guarded_actuate": {
+        "tier": "operators",
+        "gas": 8,
+        "effects": ["guarded_actuation"],
+        "desc": "Simulation-only guarded actuation envelope",
+        "effect_class": "guarded_actuation",
+        "failure_type": "policy_denied",
+        "audit_requirement": "full",
+        "safety_class": "critical",
+        "review_posture": "operator_review",
+        "execution_mode": "simulation_only",
+        "supervisory_only": True,
+    },
+    "emergency_stop": {
+        "tier": "operators",
+        "gas": 3,
+        "effects": ["safety_stop"],
+        "desc": "Simulation-only emergency-stop contract",
+        "effect_class": "safety_stop",
+        "failure_type": "execution_error",
+        "audit_requirement": "full",
+        "safety_class": "critical",
+        "review_posture": "post_action_review",
+        "execution_mode": "simulation_only",
+        "supervisory_only": True,
+    },
 }
 
 _HOST_FUNCTION_ALIASES: dict[str, str] = {
@@ -405,29 +470,57 @@ def _resolve_pointer_argument(
 
     from hlf_mcp.hlf.memory_node import lookup_pointer_registry_entry, verify_pointer_ref
 
-    verification = verify_pointer_ref(
-        value,
-        registry_entry=lookup_pointer_registry_entry(value, scope.get("_trusted_pointers")),
-    )
-    if verification["status"] == "not_pointer":
+    resolver = scope.get("_pointer_resolver")
+    purpose = str(scope.get("_pointer_resolution_purpose", "execution") or "execution")
+    if callable(resolver):
+        outcome = resolver(
+            value,
+            purpose=purpose,
+            trust_mode=str(scope.get("_pointer_trust_mode", "enforce") or "enforce"),
+            registry_entry=lookup_pointer_registry_entry(value, scope.get("_trusted_pointers")),
+            emit_event=False,
+        )
+    else:
+        verification = verify_pointer_ref(
+            value,
+            registry_entry=lookup_pointer_registry_entry(value, scope.get("_trusted_pointers")),
+        )
+        outcome = {
+            "status": verification["status"],
+            "admitted": verification["status"] == "ok",
+            "pointer": value,
+            "purpose": purpose,
+            "trust_mode": str(scope.get("_pointer_trust_mode", "enforce") or "enforce"),
+            "trust_tier": verification.get("trust_tier", "unknown"),
+            "governance_status": verification.get("governance_status", "unknown"),
+            "freshness_status": verification.get("freshness_status", "unknown"),
+            "resolved_value": verification.get("resolved_value"),
+            "reason": str(verification.get("reason") or verification["status"]),
+        }
+
+    if outcome["status"] == "not_pointer":
         return value
 
     side_effects.append(
         {
             "type": "pointer_validation",
             "pointer": value[:120],
-            "status": verification["status"],
-            "alias": verification.get("alias", ""),
-            "trust_tier": verification.get("trust_tier", "unknown"),
+            "status": outcome["status"],
+            "alias": ((outcome.get("resolution") or {}).get("verification") or {}).get("alias", ""),
+            "trust_tier": outcome.get("trust_tier", "unknown"),
+            "governance_status": outcome.get("governance_status", "unknown"),
+            "freshness_status": outcome.get("freshness_status", "unknown"),
+            "reason": outcome.get("reason", ""),
+            "purpose": outcome.get("purpose", purpose),
         }
     )
-    if verification["status"] != "ok":
+    if not outcome.get("admitted", False):
         if str(scope.get("_pointer_trust_mode", "enforce")) == "audit":
             return value
         raise HLFRuntimeError(
-            f"Pointer trust failed for {value}: {verification.get('reason', verification['status'])}"
+            f"Pointer trust failed for {value}: {outcome.get('reason', outcome['status'])}"
         )
-    resolved = verification.get("resolved_value")
+    resolved = outcome.get("resolved_value")
     return value if resolved in (None, "") else resolved
 
     def _execute_code(self, code: bytes, pool: ConstantPool) -> None:
@@ -592,7 +685,9 @@ def _resolve_pointer_argument(
                 fn_args: list[Any] = []
                 while self.stack and len(fn_args) < 4:
                     fn_args.insert(0, self.stack.pop())
-                self.stack.append(_dispatch_host(fn_key, fn_args, self.scope, self._side_effects))
+                self.stack.append(
+                    _dispatch_host(fn_key, fn_args, self.scope, self._side_effects, tier=self.tier)
+                )
 
             elif op == Op.CALL_TOOL:
                 tool_name = pool.get(operand) or ""
@@ -981,16 +1076,19 @@ def _dispatch_host(
     args: list[Any],
     scope: dict[str, Any],
     side_effects: list[dict[str, Any]],
+    *,
+    tier: str = "hearth",
 ) -> Any:
     """
     Dispatch a CALL_HOST opcode.
 
     Execution order:
       1. Look up fn_name in HOST_FUNCTIONS for effect/gas metadata.
-      2. Record all declared side-effects in the side_effects audit list.
-      3. Route to the appropriate backend handler.
-      4. Hash outputs of sensitive functions (SHA-256 prefix for logs).
-      5. Return the result onto the VM stack.
+      2. Enforce tier restriction — reject if the caller's tier is insufficient.
+      3. Record all declared side-effects in the side_effects audit list.
+      4. Route to the appropriate backend handler.
+      5. Hash outputs of sensitive functions (SHA-256 prefix for logs).
+      6. Return the result onto the VM stack.
     """
     import hashlib as _hashlib
     import os as _os
@@ -999,6 +1097,13 @@ def _dispatch_host(
     requested_fn_name = str(fn_name or "")
     fn_name = _normalize_host_function_name(requested_fn_name)
     fn_info = HOST_FUNCTIONS.get(fn_name, {})
+
+    # ── Tier enforcement ─────────────────────────────────────────────────
+    # Resolve effective tier: explicit kwarg > scope _tier > default "hearth"
+    effective_tier = tier
+    if effective_tier == "hearth" and scope.get("_tier"):
+        effective_tier = str(scope["_tier"])
+
     # Record all declared effects for the audit trail
     for eff in fn_info.get("effects", []):
         side_effects.append({"type": eff, "fn": fn_name, "args": [str(a)[:80] for a in args[:2]]})
@@ -1006,6 +1111,29 @@ def _dispatch_host(
     sensitive = fn_info.get("sensitive", False)
 
     try:
+        # Gate: reject if caller's tier is insufficient for this function
+        fn_tier = fn_info.get("tier", "all")
+        if fn_tier == "operators" and effective_tier not in ("forge", "sovereign"):
+            raise PermissionError(
+                f"Host function '{fn_name}' requires operator tier "
+                f"(forge/sovereign); current tier is '{effective_tier}'."
+            )
+
+        # Gate: capsule denied-tools enforcement ─────────────────────────
+        # Only enforce denied_tools at runtime (hard block list).
+        # allowed_tools enforcement remains at AST validation time because
+        # CALL_HOST is used for both tag-compiled calls (DELEGATE, ROUTE, etc.)
+        # and explicit tool invocations — and allowed_tools would incorrectly
+        # block tag-derived host calls that are already permitted by allowed_tags.
+        capsule_dict = scope.get("_capsule")
+        if capsule_dict and isinstance(capsule_dict, dict):
+            denied = capsule_dict.get("denied_tools") or []
+            check_name = requested_fn_name or fn_name
+            if check_name in denied or fn_name in denied:
+                raise PermissionError(
+                    f"Capsule denies host function '{check_name}'"
+                )
+
         result: Any
 
         # ── Crypto / hash ────────────────────────────────────────────────────
@@ -1284,6 +1412,60 @@ def _dispatch_host(
             req = _req.Request(url, data=body.encode("utf-8"), method="POST")
             with _req.urlopen(req, timeout=10) as resp:  # noqa: S310
                 result = resp.read().decode("utf-8")[:4096]
+
+        elif fn_name in {
+            "sensor_read",
+            "world_state_recall",
+            "trajectory_propose",
+            "guarded_actuate",
+            "emergency_stop",
+        }:
+            from hlf_mcp.hlf.embodied import (
+                assess_embodied_host_call,
+                build_simulated_embodied_result,
+            )
+
+            effective_tier = str(scope.get("_tier", _os.environ.get("HLF_TIER", "hearth")) or "hearth")
+            if effective_tier not in {"forge", "sovereign"}:
+                raise PermissionError(
+                    f"Embodied host function '{requested_fn_name or fn_name}' not available in tier '{effective_tier}'"
+                )
+
+            policy_trace = {
+                "function_name": requested_fn_name or fn_name,
+                "effect_class": str(fn_info.get("effect_class") or fn_name),
+                "failure_type": str(fn_info.get("failure_type") or "policy_denied"),
+                "audit_requirement": str(fn_info.get("audit_requirement") or "full"),
+                "safety_class": str(fn_info.get("safety_class") or "bounded"),
+                "review_posture": str(fn_info.get("review_posture") or "none"),
+                "execution_mode": str(fn_info.get("execution_mode") or "simulation_only"),
+                "supervisory_only": bool(fn_info.get("supervisory_only", True)),
+            }
+            assessment = assess_embodied_host_call(requested_fn_name or fn_name, args, policy_trace)
+            side_effects.append(
+                {
+                    "type": "embodied_contract",
+                    "fn": fn_name,
+                    "safety_class": assessment.safety_class,
+                    "review_posture": assessment.review_posture,
+                    "simulation_only": assessment.simulation_only,
+                }
+            )
+            if not assessment.admitted:
+                raise PermissionError("; ".join(assessment.reasons))
+            result = build_simulated_embodied_result(
+                requested_fn_name or fn_name,
+                assessment.normalized_args,
+                assessment,
+            )
+            side_effects.append(
+                {
+                    "type": "embodied_simulation",
+                    "fn": fn_name,
+                    "status": result.get("status", "simulation_only"),
+                    "safety_class": assessment.safety_class,
+                }
+            )
 
         # ── Unknown host function — structured error, never silent ───────────
         else:

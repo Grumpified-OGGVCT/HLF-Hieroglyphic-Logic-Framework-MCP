@@ -6,9 +6,10 @@
 # ║                                                                              ║
 # ║  Architecture:                                                               ║
 # ║  Python script (scripts/monitor_model_drift.py) runs structured semantic    ║
-# ║  probes against the HLF specification using Ollama Cloud API with:           ║
+# ║  probes against the HLF specification using the packaged named reasoning     ║
+# ║  chain with:                                                                 ║
 # ║    • Structured outputs (JSON schema enforcement for parseable results)      ║
-# ║    • Tiered fallback: nemotron-3-super → kimi-k2:1t-cloud → qwen3.5:cloud   ║
+# ║    • Policy-routed model fallback owned by packaged HLF model selection      ║
 # ║    • Closed-book probe mode (no web search or tool-use contamination)       ║
 # ║    • Non-streaming JSON calls for stricter structured-output stability      ║
 # ║    • Circuit breaker + exponential backoff retries                          ║
@@ -43,7 +44,7 @@ permissions:
 
 jobs:
   drift-detection:
-    name: "Semantic drift probes (nemotron-3-super)"
+    name: "Semantic drift probes (policy-routed reasoning chain)"
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -78,8 +79,8 @@ jobs:
           PYTHONPATH: .github/scripts
         run: |
           echo "Running HLF semantic drift probes..."
-          echo "Primary model: nemotron-3-super (120B MoE, LatentMoE+Mamba)"
-          echo "Fallback chain: kimi-k2:1t-cloud -> qwen3.5:cloud -> deepseek-r1:14b"
+          echo "Named chain: reasoning"
+          echo "Routing policy: packaged HLF model policy selects the live model sequence"
           echo "Capabilities: structured outputs + closed-book probe mode + circuit breaker"
           echo ""
 
@@ -221,8 +222,8 @@ jobs:
              from the HLF specification. Consider updating the spec documentation or adding
              training examples to correct the model's understanding.
            5. If an error occurred: check that the Ollama Cloud API is accessible and
-             \`OLLAMA_API_KEY\` is valid. The fallback chain was:
-             \`nemotron-3-super → kimi-k2:1t-cloud → qwen3.5:cloud → deepseek-r1:14b\`
+             \`OLLAMA_API_KEY\` is valid. The workflow uses the packaged named
+             \`reasoning\` chain; see the run logs for the exact model sequence used.
            6. If status persists as ALERT for 2+ weeks, open a Phase 2 issue to add
              a model fine-tuning checkpoint with HLF-specific examples.
 

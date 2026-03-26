@@ -1,20 +1,18 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  HLF — Weekly Test Health + Coverage Analysis                                ║
 # ║                                                                              ║
-# ║  Model: devstral:24b (Mistral × AllHands AI)                                ║
-# ║  Best-in-class: Agentic coding, multi-file codebase comprehension           ║
-# ║  Why: Test gap analysis IS a coding task — devstral understands the code    ║
-# ║        paths that need exercising and writes the actual missing test stubs.  ║
-# ║        It was trained specifically on SWE-Bench (real-world repo tasks),    ║
-# ║        including identifying under-tested code paths.                        ║
+# ║  Routing policy: packaged named coding chain                                 ║
+# ║  Why: test gap analysis is a coding task, so this workflow should follow    ║
+# ║       the strongest currently qualified implementation route instead of      ║
+# ║       pinning a single model identity into issue text and workflow names.    ║
 # ║                                                                              ║
 # ║  Stage 1: pytest + coverage (deterministic, no AI)                          ║
-# ║  Stage 2: devstral:24b — analyze gaps, draft advisory test candidates       ║
+# ║  Stage 2: coding chain — analyze gaps, draft advisory test candidates       ║
 # ║                                                                              ║
 # ║  Triggers: Weekly Thursday 02:00 UTC                                        ║
 # ║  Output: GitHub Issue with deterministic coverage + advisory AI candidates   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
-name: "Weekly — Test Health + Coverage (devstral:24b)"
+name: "Weekly — Test Health + Coverage (policy-routed coding chain)"
 
 on:
   schedule:
@@ -241,7 +239,7 @@ jobs:
           print(f"Existing test context: {len(matched)} files, {len(excerpt)} chars")
           PYEOF
 
-      - name: "devstral:24b — Test gap analysis + advisory test drafting"
+      - name: "Coding chain — Test gap analysis + advisory test drafting"
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
@@ -251,8 +249,7 @@ jobs:
           TEST_OUTPUT=$(tail -30 /tmp/test_output.txt)
 
           python .github/scripts/ollama_client.py \
-            --model "devstral:24b" \
-            --fallback-model "qwen3.5:cloud" \
+            --chain "coding" \
             --system "You are an HLF test engineer producing governed advisory pytest recommendations for the HLF Python codebase. Deterministic coverage data is authoritative; your output is never merge-ready by itself. You must prefer extending existing suites over inventing new umbrella files, and you must call out duplicate-risk or fixture assumptions explicitly." \
             --prompt "Analyze the HLF test coverage and produce advisory test candidates for the highest-risk uncovered code paths.
 
@@ -323,7 +320,7 @@ jobs:
           ## 🧪 HLF Test Health Report — ${WEEK}
 
           **Coverage analysis**: deterministic (pytest-cov)
-          **Test gap analysis + advisory drafting**: \`devstral:24b\` (Mistral × AllHands AI, SWE-Bench 46.8%)
+          **Test gap analysis + advisory drafting**: packaged named \`coding\` chain
           **Workflow**: [Weekly Test Health]($RUN_URL)
 
           ---
@@ -344,7 +341,7 @@ jobs:
 
           ---
 
-          ## AI Advisory Test Candidates (devstral:24b)
+          ## AI Advisory Test Candidates (coding chain)
 
           > Deterministic coverage numbers above are authoritative.
           > The AI material below is advisory candidate code only, not merge-ready truth.
@@ -392,8 +389,8 @@ jobs:
         run: |
           WEEK=$(date +"%Y-W%V")
           python .github/scripts/create_github_issue.py \
-            --title "🧪 [Test Health] HLF coverage + AI-generated tests" \
+            --title "🧪 [Test Health] HLF coverage + advisory test candidates" \
             --body "@/tmp/test_issue.md" \
             --labels "testing,automated,coverage" \
-            --conflict-title-substrings "test health,coverage + ai-generated tests" \
+            --conflict-title-substrings "test health,coverage + advisory test candidates,coverage + ai-generated tests" \
             --conflict-labels "coverage"

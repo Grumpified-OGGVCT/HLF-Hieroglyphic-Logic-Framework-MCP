@@ -8,7 +8,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 from hlf_mcp.dream_cycle import DreamCycleReport, build_dream_findings
 from hlf_mcp.hlf.align_governor import AlignGovernor
@@ -42,6 +42,10 @@ from hlf_mcp.hlf.witness_governance import (
 )
 from hlf_mcp.instinct.lifecycle import InstinctLifecycle
 from hlf_mcp.media_evidence import MediaEvidenceRecord, normalize_media_evidence
+import os
+import urllib.error
+import urllib.request
+
 from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar, RAGMemory
 from hlf_mcp.weekly_artifacts import (
     build_weekly_artifact_memory_record,
@@ -3129,6 +3133,104 @@ class ServerContext:
         }
 
 
+def _build_ollama_embed_fn() -> Callable[[str], list[float]] | None:
+    """Probe local Ollama and return an embedding callable if a model is available.
+
+    Resolution order:
+      1. ``OLLAMA_HOST`` env var (default: http://localhost:11434)
+      2. Preferred embed models in priority order:
+         nomic-embed-text, nomic-embed-text-v2-moe, mxbai-embed-large, all-minilm
+
+    Returns None (silently) when Ollama is unreachable or no embedding model
+    is installed — RAGMemory will fall back to sparse BM25 scoring.
+    """
+    _log = logging.getLogger(__name__)
+    _OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    _CANDIDATE_MODELS = [
+        "nomic-embed-text",
+        "nomic-embed-text-v2-moe",
+        "mxbai-embed-large",
+        "all-minilm",
+    ]
+
+    # 1. Check if local Ollama is reachable
+    try:
+        req = urllib.request.Request(f"{_OLLAMA_BASE}/api/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            data = json.loads(resp.read().decode())
+        available_names = {m.get("name", "").split(":")[0] for m in data.get("models", [])}
+    except Exception:
+        _log.debug(
+            "Ollama not reachable at %s — RAGMemory using sparse BM25", _OLLAMA_BASE
+        )
+        return None
+
+    # 2. Pick the first candidate that is installed
+    model: str | None = None
+    for candidate in _CANDIDATE_MODELS:
+        if candidate in available_names:
+            model = candidate
+            break
+
+    if model is None:
+        _log.info(
+            "Ollama reachable but no embedding model found (checked: %s). "
+            "RAGMemory using sparse BM25.",
+            ", ".join(_CANDIDATE_MODELS),
+        )
+        return None
+
+    # 3. Build the callable (closure captures model + base URL)
+    def _embed(text: str) -> list[float]:
+        payload = json.dumps({"model": model, "prompt": text}).encode()
+        request = urllib.request.Request(
+            f"{_OLLAMA_BASE}/api/embeddings",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=10) as resp:
+            result = json.loads(resp.read().decode())
+        return result.get("embedding") or []
+
+    # 4. Validate the model produces non-empty output before committing
+    try:
+        test_vec = _embed("health check")
+        if not test_vec:
+            raise ValueError("empty embedding response")
+    except Exception as exc:
+        _log.warning(
+            "Ollama embed model %r failed validation (%s) — RAGMemory using sparse BM25.",
+            model,
+            exc,
+        )
+        return None
+
+    _log.info(
+        "RAGMemory: Ollama dense embeddings active (model=%s, dim=%d, host=%s)",
+        model,
+        len(test_vec),
+        _OLLAMA_BASE,
+    )
+    return _embed
+
+
+def _resolve_memory_db_path() -> str:
+    """Return the RAGMemory DB path, defaulting to db/hlf_memory.db next to the repo root.
+
+    Resolution order:
+      1. ``HLF_MEMORY_DB`` environment variable (operator override)
+      2. ``<repo_root>/db/hlf_memory.db`` (persistent on-disk default)
+    """
+    env_path = os.environ.get("HLF_MEMORY_DB", "").strip()
+    if env_path:
+        return env_path
+    # repo root is two levels up from this file (hlf_mcp/server_context.py)
+    db_dir = Path(__file__).resolve().parents[1] / "db"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return str(db_dir / "hlf_memory.db")
+
+
 def build_server_context() -> ServerContext:
     align_governor = AlignGovernor()
     return ServerContext(
@@ -3138,7 +3240,7 @@ def build_server_context() -> ServerContext:
         runtime=HLFRuntime(),
         bytecoder=HLFBytecode(),
         benchmark=HLFBenchmark(),
-        memory_store=RAGMemory(),
+        memory_store=RAGMemory(_resolve_memory_db_path(), embed_fn=_build_ollama_embed_fn()),
         instinct_mgr=InstinctLifecycle(),
         host_registry=HostFunctionRegistry(),
         tool_registry=ToolRegistry(),

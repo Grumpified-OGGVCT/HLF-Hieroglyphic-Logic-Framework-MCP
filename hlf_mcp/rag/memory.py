@@ -25,7 +25,7 @@ import sqlite3
 import threading
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from hlf_mcp.hlf.memory_node import build_pointer_ref, parse_pointer_ref, verify_pointer_ref
 
@@ -62,6 +62,18 @@ def _cosine(a: dict[str, float], b: dict[str, float]) -> float:
     dot = sum(a[k] * b[k] for k in keys)
     mag_a = math.sqrt(sum(v * v for v in a.values()))
     mag_b = math.sqrt(sum(v * v for v in b.values()))
+    if mag_a == 0 or mag_b == 0:
+        return 0.0
+    return dot / (mag_a * mag_b)
+
+
+def _dense_cosine(a: list[float], b: list[float]) -> float:
+    """Cosine similarity between two dense float vectors (no numpy required)."""
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    mag_a = math.sqrt(sum(x * x for x in a))
+    mag_b = math.sqrt(sum(x * x for x in b))
     if mag_a == 0 or mag_b == 0:
         return 0.0
     return dot / (mag_a * mag_b)
@@ -1271,8 +1283,13 @@ class HKSValidatedExemplar:
 class RAGMemory:
     """Infinite RAG memory with hot/warm tiering."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | None = None,
+        embed_fn: Callable[[str], list[float]] | None = None,
+    ) -> None:
         self._db_path = db_path or os.environ.get("HLF_MEMORY_DB", ":memory:")
+        self._embed_fn = embed_fn
         self._lock = threading.Lock()
         # Hot tier: topic → list of recent entries
         self._hot: dict[str, list[dict[str, Any]]] = {}
@@ -1301,6 +1318,7 @@ class RAGMemory:
         self._ensure_column("fact_store", "artifact_form", "TEXT NOT NULL DEFAULT 'raw_intake'")
         self._ensure_column("fact_store", "source_authority_label", "TEXT NOT NULL DEFAULT 'advisory'")
         self._ensure_column("fact_store", "source_type", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("fact_store", "embedding_blob", "TEXT NOT NULL DEFAULT ''")
         self._backfill_evidence_columns()
 
     def _ensure_column(self, table: str, column: str, ddl: str) -> None:
@@ -2404,6 +2422,14 @@ class RAGMemory:
         tags_json = json.dumps(tags or [])
         vec = _bow_vector(content)
         vec_json = json.dumps(vec)
+        # Dense embedding — computed when an embed_fn is wired (e.g. Ollama)
+        dense_vec: list[float] = []
+        if self._embed_fn is not None:
+            try:
+                dense_vec = self._embed_fn(content)
+            except Exception as _embed_exc:
+                logger.debug("embed_fn failed during store (falling back to sparse): %s", _embed_exc)
+        dense_blob = json.dumps(dense_vec) if dense_vec else ""
         metadata_json = json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True)
         now = time.time()
         normalized_metadata = self._normalize_metadata(
@@ -2455,13 +2481,21 @@ class RAGMemory:
 
             # Vector race protection: check cosine similarity > 0.98
             recent = conn.execute(
-                "SELECT id, sha256, vector_json FROM fact_store "
+                "SELECT id, sha256, vector_json, embedding_blob FROM fact_store "
                 "WHERE topic = ? ORDER BY created_at DESC LIMIT 100",
                 (topic,),
             ).fetchall()
             for row in recent:
                 existing_vec = json.loads(row["vector_json"] or "{}")
                 sim = _cosine(vec, existing_vec)
+                # Prefer dense cosine when both sides have embeddings
+                if dense_vec and row["embedding_blob"]:
+                    try:
+                        existing_dense = json.loads(row["embedding_blob"])
+                        if existing_dense:
+                            sim = _dense_cosine(dense_vec, existing_dense)
+                    except (json.JSONDecodeError, TypeError, ValueError):
+                        pass
                 if sim >= _DEDUP_THRESHOLD:
                     return {
                         "id": row["id"],
@@ -2480,9 +2514,10 @@ class RAGMemory:
                         supersedes_sha256, metadata_json,
                         memory_stratum, storage_tier, revoked, tombstoned,
                         provenance_grade, salience_score,
-                        artifact_form, source_authority_label, source_type
+                        artifact_form, source_authority_label, source_type,
+                        embedding_blob
                     )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     sha256,
@@ -2508,6 +2543,7 @@ class RAGMemory:
                     col_artifact_form,
                     col_source_authority_label,
                     col_source_type,
+                    dense_blob,
                 ),
             )
             row_id = cursor.lastrowid
@@ -2958,6 +2994,13 @@ class RAGMemory:
     ) -> dict[str, Any]:
         """Query memory by semantic similarity."""
         query_vec = _bow_vector(query_text)
+        # Dense query embedding — used when embed_fn is active
+        query_dense: list[float] = []
+        if self._embed_fn is not None:
+            try:
+                query_dense = self._embed_fn(query_text)
+            except Exception as _qembed_exc:
+                logger.debug("embed_fn failed during query (falling back to sparse): %s", _qembed_exc)
         now = time.time()
         decay_cutoff = now - (_DECAY_DAYS * 86400)
         normalized_domain = self._normalize_domain(domain)
@@ -3029,7 +3072,8 @@ class RAGMemory:
             sql = """
                 SELECT id, content, topic, confidence, provenance, tags,
                       sha256, vector_json, created_at, accessed_at, entry_kind,
-                       domain, solution_kind, supersedes_sha256, metadata_json
+                       domain, solution_kind, supersedes_sha256, metadata_json,
+                       embedding_blob
                 FROM fact_store
                 WHERE confidence >= ?
                   AND created_at >= ?
@@ -3072,6 +3116,16 @@ class RAGMemory:
                 continue
             vec = json.loads(row["vector_json"] or "{}")
             sim = _cosine(query_vec, vec)
+            # Dense scoring: blend dense cosine with sparse when available
+            if query_dense and row["embedding_blob"]:
+                try:
+                    existing_dense = json.loads(row["embedding_blob"])
+                    if existing_dense:
+                        dense_sim = _dense_cosine(query_dense, existing_dense)
+                        # Dense takes priority; sparse fills in when dense is weak
+                        sim = dense_sim if dense_sim > 0 else sim
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
             metadata = json.loads(row["metadata_json"] or "{}")
             evidence = self._build_evidence(
                 row=row,

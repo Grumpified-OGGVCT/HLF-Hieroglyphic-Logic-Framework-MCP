@@ -298,6 +298,14 @@ def _startup_self_index() -> None:
 
 def main() -> None:
     """Start the HLF MCP server with the configured transport."""
+    _db_path = _ctx.memory_store._db_path  # type: ignore[attr-defined]
+    if _db_path == ":memory:":
+        _log.warning(
+            "RAGMemory is using ':memory:' — knowledge will NOT persist across restarts. "
+            "Set HLF_MEMORY_DB=<path> or ensure db/hlf_memory.db is writable."
+        )
+    else:
+        _log.info("RAGMemory persistent DB: %s", _db_path)
     _startup_self_index()
     transport = os.environ.get("HLF_TRANSPORT", "stdio").lower().strip()
 

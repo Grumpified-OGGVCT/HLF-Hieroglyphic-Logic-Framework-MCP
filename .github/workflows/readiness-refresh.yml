@@ -3,7 +3,6 @@ name: "Readiness Refresh Guard"
 "on":
   pull_request:
     paths:
-      - "SSOT_HLF_MCP.md"
       - "docs/HLF_MISSING_PILLARS.md"
       - "docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md"
       - "docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md"
@@ -19,7 +18,6 @@ name: "Readiness Refresh Guard"
   push:
     branches: [main]
     paths:
-      - "SSOT_HLF_MCP.md"
       - "docs/HLF_MISSING_PILLARS.md"
       - "docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md"
       - "docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md"

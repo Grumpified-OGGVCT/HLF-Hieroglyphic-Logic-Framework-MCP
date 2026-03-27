@@ -1,6 +1,13 @@
 """Canonical public HLF surface for the packaged product."""
 
 from hlf_mcp.hlf.benchmark import HLFBenchmark
+from hlf_mcp.hlf.embodied import (
+    EmbodiedContractAssessment,
+    assess_embodied_host_call,
+    build_embodied_action_envelope,
+    build_simulated_embodied_result,
+    is_embodied_policy_trace,
+)
 from hlf_mcp.hlf.bytecode import HLFBytecode
 from hlf_mcp.hlf.codegen import HLFCodeGenerator
 from hlf_mcp.hlf.compiler import HLFCompiler
@@ -41,7 +48,11 @@ __all__ = [
     "HLFFormatter",
     "HLFLinter",
     "HLFRuntime",
+    "EmbodiedContractAssessment",
+    "assess_embodied_host_call",
     "audit_symbolic_surface",
+    "build_embodied_action_envelope",
+    "build_simulated_embodied_result",
     "Tone",
     "TranslationRepairPlan",
     "build_translation_repair_plan",
@@ -58,6 +69,7 @@ __all__ = [
     "hlf_source_to_english",
     "hlf_to_language",
     "hlf_to_english",
+    "is_embodied_policy_trace",
     "language_to_hlf",
     "project_relation_edges",
     "resolve_language",

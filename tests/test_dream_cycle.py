@@ -117,13 +117,21 @@ def test_dream_resources_reflect_structured_media_aware_findings() -> None:
     assert status_resource["status"] == "ok"
     assert status_resource["dream_cycle_status"]["total_cycles"] >= 1
     assert list_resource["status"] == "ok"
+    assert list_resource["operator_summary"]
+    assert list_resource["evidence_refs"]
     assert any(
         finding["finding_id"] == media_finding["finding_id"]
         for finding in list_resource["findings"]
     )
     assert detail_resource["status"] == "ok"
+    assert detail_resource["operator_summary"]
+    assert detail_resource["evidence_refs"]
+    assert "evidence_lineage" in detail_resource
+    assert isinstance(detail_resource["evidence_lineage"], list)
     assert detail_resource["finding"]["media_evidence_present"] is True
     assert detail_resource["finding"]["media_types"] == ["diagram_image"]
+    assert detail_resource["finding"]["operator_summary"]
+    assert isinstance(detail_resource["finding"].get("evidence_lineage"), list)
 
 
 def test_shared_media_evidence_is_persisted_in_memory_surface() -> None:
@@ -162,7 +170,13 @@ def test_shared_media_evidence_is_persisted_in_memory_surface() -> None:
     assert fetched["status"] == "ok"
     assert fetched["media_evidence"]["memory_ref"]["sha256"]
     assert resource["status"] == "ok"
+    assert resource["operator_summary"]
+    assert resource["evidence_refs"]
+    assert "evidence_lineage" in resource
+    assert isinstance(resource["evidence_lineage"], list)
     assert resource["media_evidence"]["media_type"] == "audio_transcript"
+    assert resource["media_evidence"]["operator_summary"]
+    assert isinstance(resource["media_evidence"].get("evidence_lineage"), list)
 
 
 def test_dream_proposal_enforces_observe_propose_verify_promote_chain() -> None:
@@ -219,4 +233,10 @@ def test_dream_proposal_enforces_observe_propose_verify_promote_chain() -> None:
         item["proposal_id"] == proposal["proposal"]["proposal_id"] for item in listed["proposals"]
     )
     assert detail["status"] == "ok"
+    assert detail["operator_summary"]
+    assert detail["evidence_refs"]
+    assert "evidence_lineage" in detail
+    assert isinstance(detail["evidence_lineage"], list)
     assert detail["proposal"]["lane"] == "bridge"
+    assert detail["proposal"]["operator_summary"]
+    assert isinstance(detail["proposal"].get("evidence_lineage"), list)

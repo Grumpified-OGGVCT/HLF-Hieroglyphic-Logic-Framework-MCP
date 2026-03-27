@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from hlf_mcp.hlf.bytecode import BytecodeCompiler, Disassembler
 from hlf_mcp.hlf.compiler import HLFCompiler
+from hlf_mcp.hlf.insaits import decompile_bytecode
 
 
 class HLFCodeGenerator:
@@ -81,6 +83,34 @@ class HLFCodeGenerator:
     def build_and_compile(self) -> dict[str, Any]:
         compiler = HLFCompiler()
         return compiler.compile(self.build())
+
+    def build_target_artifact(self, target: str = "hlf-bytecode") -> dict[str, Any]:
+        source = self.build()
+        compile_result = HLFCompiler().compile(source)
+
+        if target != "hlf-bytecode":
+            raise ValueError(
+                f"Unsupported code generation target '{target}'. Supported targets: hlf-bytecode."
+            )
+
+        bytecode = BytecodeCompiler().encode(compile_result["ast"])
+        return {
+            "target": target,
+            "source": source,
+            "compile": {
+                "version": compile_result.get("version"),
+                "node_count": compile_result.get("node_count", 0),
+                "gas_estimate": compile_result.get("gas_estimate", 0),
+                "ast_sha256": compile_result["ast"].get("sha256", ""),
+            },
+            "artifact": {
+                "bytecode_hex": bytecode.hex(),
+                "bytecode_size_bytes": len(bytecode),
+                "runtime": "HLFRuntime",
+                "disassembly": Disassembler().disassemble(bytecode),
+                "bytecode_summary_en": decompile_bytecode(bytecode),
+            },
+        }
 
     def __repr__(self) -> str:
         return f"HLFCodeGenerator(version={self._version!r}, statements={len(self._lines)})"

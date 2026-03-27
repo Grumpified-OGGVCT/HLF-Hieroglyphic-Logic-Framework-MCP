@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import uuid
 
 import pytest
 
+from hlf_mcp import server
 from hlf_mcp.hlf.tool_dispatch import ToolDispatchError, ToolLifecycleState, ToolRegistry
+from hlf_mcp.hlf.tool_dispatch import ToolApprovalBypassError
 
 
 def test_register_creates_pending_hitl_tool_with_approval_token() -> None:
@@ -21,8 +24,36 @@ def test_approval_requires_matching_token() -> None:
     registry = ToolRegistry()
     registry.register("demo.tool", {})
 
-    with pytest.raises(ToolDispatchError, match="token mismatch"):
+    with pytest.raises(ToolApprovalBypassError, match="token mismatch"):
         registry.approve_forged_tool("demo.tool", approval_token="wrong-token")
+
+
+def test_tool_approval_bypass_can_feed_witness_governance() -> None:
+    registry = ToolRegistry()
+    tool_name = f"demo.tool.{uuid.uuid4().hex}"
+    subject_agent_id = f"forged-tool:{tool_name}"
+    registry.register(tool_name, {})
+
+    with pytest.raises(ToolApprovalBypassError) as exc_info:
+        registry.approve_forged_tool(tool_name, operator="tester", approval_token="wrong-token")
+
+    error = exc_info.value
+    bypass_record = server._ctx.persist_approval_bypass_attempt(
+        subject_agent_id=subject_agent_id,
+        source="hlf.tool_dispatch.approve_forged_tool",
+        witness_id="tool-registry",
+        evidence_text=f"Forged tool approval token mismatch for '{tool_name}'.",
+        details={
+            **error.to_dict(),
+            "domain": "forged_tool_approval",
+        },
+        recommended_action="review",
+    )
+    witness_status = server.REGISTERED_TOOLS["hlf_witness_status"](subject_agent_id)
+
+    assert error.reason_code == "tool_approval_token_mismatch"
+    assert bypass_record["witness_observation"]["observation"]["category"] == "approval_bypass_attempt"
+    assert witness_status["witness_status"]["subject"]["trust_state"] == "watched"
 
 
 def test_dispatch_requires_activation_then_returns_simulated_result() -> None:

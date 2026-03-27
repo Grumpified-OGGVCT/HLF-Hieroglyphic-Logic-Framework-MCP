@@ -7,11 +7,10 @@
 # ║    Why: documentation accuracy is a verification task, so issue creation    ║
 # ║          should be driven by measured drift rather than inferred omissions.  ║
 # ║                                                                              ║
-# ║  Job 2 — security-patterns: deepseek-r1:14b (DeepSeek)                    ║
-# ║    Best-in-class: Chain-of-thought adversarial reasoning                   ║
-# ║    Why: Security review is thinking-intensive. Reasoning through "could     ║
-# ║          an adversary bypass ALIGN rule X by doing Y?" requires explicit    ║
-# ║          chain-of-thought, not just pattern matching.                       ║
+# ║  Job 2 — security-patterns: packaged named analysis chain                  ║
+# ║    Why: security review is adversarial-analysis heavy, so this workflow     ║
+# ║          should follow the strongest currently qualified analysis route      ║
+# ║          instead of pinning a single model identity into automation.         ║
 # ║                                                                              ║
 # ║  Triggers: Weekly Wednesday 02:00 UTC                                       ║
 # ║  Output: Separate GitHub Issues per job                                     ║
@@ -30,7 +29,7 @@ permissions:
 jobs:
   # ── Job 1: Documentation accuracy ─────────────────────────────────────────────
   doc-accuracy:
-    name: "Doc accuracy check (qwen3.5:cloud)"
+    name: "Doc accuracy check (machine-verified)"
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -167,7 +166,7 @@ jobs:
 
   # ── Job 2: Security pattern review ────────────────────────────────────────────
   security-patterns:
-    name: "Security pattern review (deepseek-r1:14b)"
+    name: "Security pattern review (policy-routed analysis chain)"
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -214,15 +213,14 @@ jobs:
           head -c 15000 /tmp/security_context.txt > /tmp/security_context_trunc.txt
           echo "Security context: $(wc -c < /tmp/security_context_trunc.txt) chars"
 
-      - name: "deepseek-r1:14b — Adversarial security triage"
+      - name: "Analysis chain — Adversarial security triage"
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           SEC_CONTEXT=$(cat /tmp/security_context_trunc.txt)
 
           python .github/scripts/ollama_client.py \
-            --model "deepseek-r1:14b" \
-            --fallback-model "nemotron-3-super" \
+            --chain "analysis" \
             --system "You are a defensive security reviewer. Use only the provided current code and tests. Do not invent components, hidden flows, or attack paths that require behavior not evidenced in the provided files. If a mitigation already exists, mark it mitigated and exclude it from open findings." \
             --prompt "Review the current HLF ALIGN Ledger and runtime/stdlib security surfaces and report only actionable findings supported by the provided code.
 
@@ -274,7 +272,7 @@ jobs:
           cat > /tmp/security_issue.md << ISSUE_EOF
           ## 🔐 HLF Security Pattern Review — ${WEEK}
 
-          **Reviewed by**: \`deepseek-r1:14b\` (adversarial reasoning, thinking traces enabled)
+          **Reviewed by**: packaged named \`analysis\` chain (current-code-grounded adversarial review)
           **Workflow**: [Weekly Doc + Security Review]($RUN_URL)
 
           > _Red-hat authorized review. All findings are for defensive improvement only._

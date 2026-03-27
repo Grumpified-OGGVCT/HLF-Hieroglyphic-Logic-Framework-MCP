@@ -11,6 +11,19 @@
 secrets/
 credentials/
 
+# Imported donor subtree: keep live-key local setup artifacts out of VCS
+donor/AgentKB_MCP/.env
+donor/AgentKB_MCP/ANTIGRAVITY_SETUP.md
+donor/AgentKB_MCP/CURSOR_SETUP.md
+donor/AgentKB_MCP/MANUAL_FIX.md
+donor/AgentKB_MCP/MIGRATION_NOTES.md
+donor/AgentKB_MCP/PRO_TIER_SETUP.md
+donor/AgentKB_MCP/SETUP.md
+donor/AgentKB_MCP/SETUP_SIMPLE.md
+donor/AgentKB_MCP/VSCODE_SETUP.md
+donor/AgentKB_MCP/fix-cursor-config.ps1
+donor/AgentKB_MCP/fix-mcp-json.ps1
+
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[codz]

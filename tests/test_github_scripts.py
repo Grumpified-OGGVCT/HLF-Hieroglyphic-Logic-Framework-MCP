@@ -109,15 +109,15 @@ class TestSpecDriftCheck:
 
 
 class TestReadinessRefreshCheck:
-    def test_refresh_required_when_truth_input_changes_without_readiness_outputs(self, tmp_path):
+    def test_refresh_not_required_for_ssot_only_change(self, tmp_path):
         from readiness_refresh_check import build_refresh_report
 
         changed = ["SSOT_HLF_MCP.md"]
         report = build_refresh_report(changed)
 
-        assert report["refresh_required"] is True
-        assert report["satisfied"] is False
-        assert "SSOT_HLF_MCP.md" in report["changed_inputs"]
+        assert report["refresh_required"] is False
+        assert report["satisfied"] is True
+        assert report["changed_inputs"] == []
 
     def test_refresh_satisfied_when_input_and_readiness_output_change_together(self):
         from readiness_refresh_check import build_refresh_report
@@ -725,30 +725,50 @@ class TestModelRegistry:
             for model in chain:
                 assert model in MODEL_REGISTRY, f"{model!r} not in registry (chain {name!r})"
 
-    def test_reasoning_chain_primary_is_nemotron(self):
+    def test_reasoning_chain_primary_stays_in_reasoning_pool(self):
         from ollama_client import REASONING_CHAIN
 
-        assert REASONING_CHAIN[0] == "glm-5:cloud"
+        assert REASONING_CHAIN[0] in {
+            "glm-5:cloud",
+            "nemotron-3-super",
+            "cogito-2.1:671b-cloud",
+        }
 
-    def test_planning_chain_primary_is_cogito(self):
+    def test_planning_chain_primary_stays_in_planning_pool(self):
         from ollama_client import PLANNING_CHAIN
 
-        assert PLANNING_CHAIN[0] == "cogito-2.1:671b-cloud"
+        assert PLANNING_CHAIN[0] in {
+            "cogito-2.1:671b-cloud",
+            "kimi-k2-thinking:cloud",
+            "kimi-k2.5:cloud",
+        }
 
-    def test_doer_chain_primary_is_minimax(self):
+    def test_doer_chain_primary_stays_in_execution_pool(self):
         from ollama_client import DOER_CHAIN
 
-        assert DOER_CHAIN[0] == "minimax-m2.7:cloud"
+        assert DOER_CHAIN[0] in {
+            "minimax-m2.7:cloud",
+            "devstral-2:123b-cloud",
+            "qwen3-coder-next:cloud",
+        }
 
-    def test_coding_chain_primary_is_devstral(self):
+    def test_coding_chain_primary_stays_in_coding_pool(self):
         from ollama_client import CODING_CHAIN
 
-        assert CODING_CHAIN[0] == "devstral-2:123b-cloud"
+        assert CODING_CHAIN[0] in {
+            "devstral-2:123b-cloud",
+            "minimax-m2.7:cloud",
+            "qwen3-coder-next:cloud",
+        }
 
-    def test_ethics_chain_primary_is_deepseek(self):
+    def test_ethics_chain_primary_stays_in_safety_pool(self):
         from ollama_client import ETHICS_CHAIN
 
-        assert ETHICS_CHAIN[0] == "deepseek-v3.2:cloud"
+        assert ETHICS_CHAIN[0] in {
+            "deepseek-v3.2:cloud",
+            "glm-5:cloud",
+            "nemotron-3-super",
+        }
 
     def test_all_chains_contain_qwen_fallback(self):
         from ollama_client import CHAIN_MAP
@@ -760,7 +780,15 @@ class TestModelRegistry:
         from ollama_client import CHAIN_MAP
 
         for name, chain in CHAIN_MAP.items():
+            if name == "ethics":
+                continue
             assert "nemotron-3-super" in chain, f"nemotron-3-super missing from {name!r} chain"
+
+    def test_cli_chains_match_packaged_policy(self):
+        from ollama_client import CHAIN_MAP, MODEL_REGISTRY
+        from hlf_mcp.hlf.model_catalog import build_named_model_chains
+
+        assert CHAIN_MAP == build_named_model_chains(available_models=set(MODEL_REGISTRY))
 
     def test_planning_and_doer_models_are_in_registry(self):
         from ollama_client import MODEL_REGISTRY

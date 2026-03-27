@@ -58,6 +58,17 @@ Use this as the first credible recursive-build milestone:
 
 Current transport stance:
 
+---
+
+## 🐕 Recursive Build-Assist (Dogfooding)
+
+The packaged HLF MCP server is now used to help build, test, and explain itself:
+
+- Use `hlf_do`, `_toolkit.py status`, and MCP tools/resources to inspect, test, and explain the system during further development.
+- Operator-facing evidence, audit, and regression surfaces are real and queryable.
+- `/health` endpoint has been verified on the packaged `hlf_mcp` HTTP/SSE lane with `HLF_TRANSPORT=sse`, `HLF_PORT=8011`, and `GET /health -> 200 OK`.
+- This workflow is not full self-hosting, but it is a real recursive build-assist loop: the system is used to help build and verify itself, with each new bridge slice (routing, verification, orchestration, etc.) added and then used to further assist the next round of work.
+
 - `stdio` is the preferred first transport for this recursive build workflow
 - `sse` and `streamable-http` health endpoints are still useful for transport bring-up
 - do not center the self-build story on remote `streamable-http` until MCP `initialize` succeeds end to end
@@ -131,6 +142,12 @@ Keep these two layers separate:
 
 The packaged MCP surface may use local Ollama models and explicit remote-direct endpoints when admitted by policy.
 That is not the same thing as the repo's stronger cloud guidance for planner, doer, or controller roles.
+
+Current dependency boundary:
+
+- the packaged MCP server works without any locally tuned HLF-specialized model
+- current operator guidance is cloud-first for planning, doer, coding, reasoning, and controller roles unless policy or runtime fit requires a different admitted lane
+- any future HLF-specialized local LoRA or QLoRA candidate remains bridge work under `plan/feature-local-slm-tuning-1.md`; it is not a present-tense runtime dependency for `hlf_mcp`
 
 Current packaged MCP-local priorities:
 

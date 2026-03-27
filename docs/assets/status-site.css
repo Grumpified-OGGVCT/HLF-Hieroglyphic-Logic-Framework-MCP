@@ -536,6 +536,26 @@ h3 {
   );
 }
 
+.score-875 { --score: 87.5%; }
+.score-825 { --score: 82.5%; }
+.score-708 { --score: 70.8%; }
+.score-705 { --score: 70.5%; }
+.score-598 { --score: 59.8%; }
+.score-575 { --score: 57.5%; }
+.score-560 { --score: 56.0%; }
+.score-510 { --score: 51.0%; }
+.score-485 { --score: 48.5%; }
+.score-455 { --score: 45.5%; }
+.score-413 { --score: 41.3%; }
+.score-395 { --score: 39.5%; }
+.score-385 { --score: 38.5%; }
+.score-225 { --score: 22.5%; }
+
+.trend-current-589-prev-589 {
+  --current: 58.9%;
+  --previous: 58.9%;
+}
+
 .readiness-strip {
   height: 12px;
 }

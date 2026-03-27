@@ -209,3 +209,133 @@ def test_fetch_code_scanning_summary_falls_back_when_api_unavailable(
     assert exit_code == 0
     assert payload["collection_state"] == "metadata_only"
     assert payload["summary"]["total_alerts"] is None
+
+
+def test_monitor_model_drift_normalizes_fenced_json_response() -> None:
+    module = _load_module(REPO_ROOT / "scripts" / "monitor_model_drift.py", "monitor_model_drift")
+
+    parsed, metadata = module._normalize_probe_response(
+        """```json
+        {"answer": "IMMUTABLE", "confidence": "0.8", "reasoning": "SET binds immutably."}
+        ```"""
+    )
+
+    assert parsed is not None
+    assert parsed["answer"] == "IMMUTABLE"
+    assert parsed["confidence"] == 0.8
+    assert parsed["reasoning"] == "SET binds immutably."
+    assert metadata["normalization"] == "fenced_json"
+
+
+def test_monitor_model_drift_normalizes_nested_fenced_json_response() -> None:
+    module = _load_module(
+        REPO_ROOT / "scripts" / "monitor_model_drift.py", "monitor_model_drift_nested"
+    )
+
+    candidate, source = module._extract_json_candidate(
+        """```json
+        {
+            "answer": "MUTABLE",
+            "confidence": "0.95",
+            "reasoning": "Map supports updates {even with braces}.",
+            "meta": {
+                "a": 1,
+                "b": {
+                    "c": 2
+                }
+            }
+        }
+        ```"""
+    )
+    parsed, metadata = module._normalize_probe_response(
+        """```json
+        {
+            "answer": "MUTABLE",
+            "confidence": "0.95",
+            "reasoning": "Map supports updates {even with braces}.",
+            "meta": {
+                "a": 1,
+                "b": {
+                    "c": 2
+                }
+            }
+        }
+        ```"""
+    )
+
+    assert candidate is not None
+    assert '"meta": {' in candidate
+    assert '"c": 2' in candidate
+    assert source == "fenced_json"
+    assert parsed is not None
+    assert parsed["answer"] == "MUTABLE"
+    assert parsed["confidence"] == 0.95
+    assert parsed["reasoning"] == "Map supports updates {even with braces}."
+    assert metadata["normalization"] == "fenced_json"
+
+
+def test_run_drift_probes_disables_search_and_classifies_outcomes(monkeypatch) -> None:
+    module = _load_module(
+        REPO_ROOT / "scripts" / "monitor_model_drift.py", "monitor_model_drift_cases"
+    )
+
+    monkeypatch.setattr(module, "_CLIENT_AVAILABLE", True)
+    monkeypatch.setattr(
+        module,
+        "PROBES",
+        [
+            {"id": "P1", "category": "grammar", "weight": 1.0, "prompt": "a", "expected": "RIGHT"},
+            {"id": "P2", "category": "grammar", "weight": 1.0, "prompt": "b", "expected": "RIGHT"},
+            {"id": "P3", "category": "grammar", "weight": 1.0, "prompt": "c", "expected": "RIGHT"},
+            {"id": "P4", "category": "grammar", "weight": 1.0, "prompt": "d", "expected": "RIGHT"},
+        ],
+    )
+
+    captured: dict[str, object] = {}
+
+    class _FakeResult:
+        def __init__(self, content: str, tool_calls: list[dict[str, object]] | None = None) -> None:
+            self.content = content
+            self.model_used = "fake-model"
+            self.tier_index = 0
+            self.thinking = ""
+            self.tool_calls = tool_calls or []
+            self.latency_s = 0.01
+
+    class _FakeOrchestrator:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+            self._results = [
+                _FakeResult('{"answer": "RIGHT", "confidence": 1.0, "reasoning": "ok"}'),
+                _FakeResult('{"answer": "WRONG", "confidence": 1.0, "reasoning": "wrong"}'),
+                _FakeResult("not json at all"),
+                _FakeResult(
+                    '{"answer": "RIGHT", "confidence": 1.0, "reasoning": "tool"}',
+                    tool_calls=[{"name": "web_search"}],
+                ),
+            ]
+
+        def complete(self, system: str, prompt: str):
+            return self._results.pop(0)
+
+    monkeypatch.setattr(module, "FallbackOrchestrator", _FakeOrchestrator)
+
+    result = module.run_drift_probes(api_key="test-key")
+
+    assert captured["web_search"] is False
+    assert captured["use_streaming"] is False
+    assert result["correct"] == 1
+    assert result["total"] == 4
+    assert result["driftScore"] == 0.75
+    assert result["outcomeCounts"] == {
+        "correct": 1,
+        "semantic_wrong_answer": 1,
+        "protocol_shape_failure": 1,
+        "tool_call_behavior_failure": 1,
+    }
+    assert [probe["outcomeClass"] for probe in result["probes"]] == [
+        "correct",
+        "semantic_wrong_answer",
+        "protocol_shape_failure",
+        "tool_call_behavior_failure",
+    ]

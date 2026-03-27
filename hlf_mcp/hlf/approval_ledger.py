@@ -11,8 +11,53 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from hlf_mcp.hlf.governance_events import governance_event_ref
+
 _DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "db" / "hlf_capsule_approvals.sqlite3"
 _ZERO_HASH = "0" * 64
+
+
+class ApprovalDecisionError(ValueError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        request_id: str = "",
+        capsule_id: str = "",
+        agent_id: str = "",
+        operator: str = "",
+        decision: str = "",
+        status: str = "",
+        reason_code: str = "approval_decision_error",
+        latest_event_ref: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.request_id = request_id
+        self.capsule_id = capsule_id
+        self.agent_id = agent_id
+        self.operator = operator
+        self.decision = decision
+        self.status = status
+        self.reason_code = reason_code
+        self.latest_event_ref = dict(latest_event_ref or {})
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "capsule_id": self.capsule_id,
+            "agent_id": self.agent_id,
+            "operator": self.operator,
+            "decision": self.decision,
+            "status": self.status,
+            "reason_code": self.reason_code,
+            "latest_event_ref": dict(self.latest_event_ref),
+            "error": str(self),
+        }
+
+
+class ApprovalTokenMismatchError(ApprovalDecisionError):
+    def __init__(self, message: str = "approval token mismatch", **kwargs: Any) -> None:
+        super().__init__(message, reason_code="approval_token_mismatch", **kwargs)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS approval_requests (
@@ -93,6 +138,10 @@ class ApprovalRequest:
     decision_reason: str
     created_at: float
     updated_at: float
+    latest_event_ref: dict[str, str] | None = None
+    latest_trace_id: str = ""
+    latest_event_type: str = ""
+    approval_event_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -108,6 +157,41 @@ class ApprovalRequest:
             "decision_reason": self.decision_reason,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "latest_event_ref": dict(self.latest_event_ref) if self.latest_event_ref else None,
+            "latest_trace_id": self.latest_trace_id,
+            "latest_event_type": self.latest_event_type,
+            "approval_event_count": self.approval_event_count,
+        }
+
+
+@dataclass(slots=True)
+class ApprovalEvent:
+    request_id: str
+    event_type: str
+    actor: str
+    data: dict[str, Any]
+    prev_hash: str
+    trace_id: str
+    created_at: float
+
+    @property
+    def event_ref(self) -> dict[str, str]:
+        return governance_event_ref(
+            kind="approval_transition",
+            event_id=self.trace_id[:16],
+            trace_id=self.trace_id,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "event_type": self.event_type,
+            "actor": self.actor,
+            "data": dict(self.data),
+            "prev_hash": self.prev_hash,
+            "trace_id": self.trace_id,
+            "created_at": self.created_at,
+            "event_ref": self.event_ref,
         }
 
 
@@ -126,9 +210,50 @@ class ApprovalLedger:
     def _connect(self) -> sqlite3.Connection:
         return self._conn
 
-    def _row_to_request(self, row: sqlite3.Row | None) -> ApprovalRequest | None:
+    def _request_event_summary(
+        self, conn: sqlite3.Connection, request_id: str
+    ) -> tuple[dict[str, str] | None, str, str, int]:
+        latest = conn.execute(
+            """
+            SELECT event_type, trace_id
+            FROM approval_events
+            WHERE request_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (request_id,),
+        ).fetchone()
+        count_row = conn.execute(
+            "SELECT COUNT(*) AS event_count FROM approval_events WHERE request_id = ?",
+            (request_id,),
+        ).fetchone()
+        latest_trace_id = str(latest["trace_id"]) if latest else ""
+        latest_event_type = str(latest["event_type"]) if latest else ""
+        latest_event_ref = (
+            governance_event_ref(
+                kind="approval_transition",
+                event_id=latest_trace_id[:16],
+                trace_id=latest_trace_id,
+            )
+            if latest_trace_id
+            else None
+        )
+        return (
+            latest_event_ref,
+            latest_trace_id,
+            latest_event_type,
+            int(count_row["event_count"]) if count_row else 0,
+        )
+
+    def _row_to_request(
+        self, row: sqlite3.Row | None, conn: sqlite3.Connection | None = None
+    ) -> ApprovalRequest | None:
         if row is None:
             return None
+        active_conn = conn or self._connect()
+        latest_event_ref, latest_trace_id, latest_event_type, approval_event_count = (
+            self._request_event_summary(active_conn, str(row["request_id"]))
+        )
         return ApprovalRequest(
             request_id=str(row["request_id"]),
             capsule_id=str(row["capsule_id"]),
@@ -142,6 +267,10 @@ class ApprovalLedger:
             decision_reason=str(row["decision_reason"] or ""),
             created_at=float(row["created_at"]),
             updated_at=float(row["updated_at"]),
+            latest_event_ref=latest_event_ref,
+            latest_trace_id=latest_trace_id,
+            latest_event_type=latest_event_type,
+            approval_event_count=approval_event_count,
         )
 
     def _last_trace_id(self, conn: sqlite3.Connection) -> str:
@@ -158,7 +287,7 @@ class ApprovalLedger:
         event_type: str,
         actor: str,
         data: dict[str, Any],
-    ) -> dict[str, Any]:
+    ) -> ApprovalEvent:
         prev_hash = self._last_trace_id(conn)
         payload = _canonical_json({"event": event_type, "data": data})
         trace_id = _compute_trace_id(prev_hash, payload)
@@ -170,15 +299,15 @@ class ApprovalLedger:
             """,
             (request_id, event_type, actor, _canonical_json(data), prev_hash, trace_id, created_at),
         )
-        return {
-            "request_id": request_id,
-            "event_type": event_type,
-            "actor": actor,
-            "data": data,
-            "prev_hash": prev_hash,
-            "trace_id": trace_id,
-            "created_at": created_at,
-        }
+        return ApprovalEvent(
+            request_id=request_id,
+            event_type=event_type,
+            actor=actor,
+            data=data,
+            prev_hash=prev_hash,
+            trace_id=trace_id,
+            created_at=created_at,
+        )
 
     def ensure_request(
         self,
@@ -202,7 +331,7 @@ class ApprovalLedger:
                 (capsule_id, requirement_hash),
             ).fetchone()
             if existing is not None:
-                return self._row_to_request(existing)  # type: ignore[return-value]
+                return self._row_to_request(existing, conn)  # type: ignore[return-value]
 
             now = time.time()
             request_id = str(uuid.uuid4())
@@ -246,7 +375,7 @@ class ApprovalLedger:
                 "SELECT * FROM approval_requests WHERE request_id = ?",
                 (request_id,),
             ).fetchone()
-            return self._row_to_request(row)  # type: ignore[return-value]
+            return self._row_to_request(row, conn)  # type: ignore[return-value]
 
     def get_request(self, request_id: str) -> ApprovalRequest | None:
         with self._lock, self._connect() as conn:
@@ -254,7 +383,7 @@ class ApprovalLedger:
                 "SELECT * FROM approval_requests WHERE request_id = ?",
                 (request_id,),
             ).fetchone()
-            return self._row_to_request(row)
+            return self._row_to_request(row, conn)
 
     def list_requests(
         self,
@@ -279,9 +408,34 @@ class ApprovalLedger:
         with self._lock, self._connect() as conn:
             rows = conn.execute(sql, params).fetchall()
             return [
-                self._row_to_request(row).to_dict()
+                self._row_to_request(row, conn).to_dict()
                 for row in rows
-                if self._row_to_request(row) is not None
+                if self._row_to_request(row, conn) is not None
+            ]
+
+    def list_events(self, request_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT request_id, event_type, actor, data_json, prev_hash, trace_id, created_at
+                FROM approval_events
+                WHERE request_id = ?
+                ORDER BY id ASC
+                LIMIT ?
+                """,
+                (request_id, max(1, min(limit, 200))),
+            ).fetchall()
+            return [
+                ApprovalEvent(
+                    request_id=str(row["request_id"]),
+                    event_type=str(row["event_type"]),
+                    actor=str(row["actor"]),
+                    data=json.loads(row["data_json"] or "{}"),
+                    prev_hash=str(row["prev_hash"]),
+                    trace_id=str(row["trace_id"]),
+                    created_at=float(row["created_at"]),
+                ).to_dict()
+                for row in rows
             ]
 
     def decide(
@@ -295,7 +449,13 @@ class ApprovalLedger:
     ) -> ApprovalRequest:
         normalized = decision.strip().lower()
         if normalized not in {"approve", "reject"}:
-            raise ValueError("decision must be 'approve' or 'reject'")
+            raise ApprovalDecisionError(
+                "decision must be 'approve' or 'reject'",
+                request_id=request_id,
+                operator=operator,
+                decision=normalized,
+                reason_code="invalid_approval_decision",
+            )
         with self._lock, self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM approval_requests WHERE request_id = ?",
@@ -303,15 +463,39 @@ class ApprovalLedger:
             ).fetchone()
             request = self._row_to_request(row)
             if request is None:
-                raise ValueError(f"unknown approval request: {request_id}")
+                raise ApprovalDecisionError(
+                    f"unknown approval request: {request_id}",
+                    request_id=request_id,
+                    operator=operator,
+                    decision=normalized,
+                    reason_code="unknown_approval_request",
+                )
             if request.status == "approved" and normalized == "approve":
                 return request
             if request.status == "rejected" and normalized == "reject":
                 return request
             if request.status != "pending":
-                raise ValueError(f"approval request {request_id} is already {request.status}")
+                raise ApprovalDecisionError(
+                    f"approval request {request_id} is already {request.status}",
+                    request_id=request.request_id,
+                    capsule_id=request.capsule_id,
+                    agent_id=request.agent_id,
+                    operator=operator,
+                    decision=normalized,
+                    status=request.status,
+                    reason_code="approval_request_already_resolved",
+                    latest_event_ref=request.latest_event_ref,
+                )
             if normalized == "approve" and approval_token != request.approval_token:
-                raise ValueError("approval token mismatch")
+                raise ApprovalTokenMismatchError(
+                    request_id=request.request_id,
+                    capsule_id=request.capsule_id,
+                    agent_id=request.agent_id,
+                    operator=operator,
+                    decision=normalized,
+                    status=request.status,
+                    latest_event_ref=request.latest_event_ref,
+                )
             updated_at = time.time()
             new_status = "approved" if normalized == "approve" else "rejected"
             conn.execute(
@@ -337,7 +521,7 @@ class ApprovalLedger:
                 "SELECT * FROM approval_requests WHERE request_id = ?",
                 (request_id,),
             ).fetchone()
-            return self._row_to_request(updated)  # type: ignore[return-value]
+            return self._row_to_request(updated, conn)  # type: ignore[return-value]
 
     def verify_chain(self) -> tuple[bool, list[str]]:
         errors: list[str] = []

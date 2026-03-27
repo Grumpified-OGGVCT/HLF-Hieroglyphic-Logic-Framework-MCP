@@ -68,6 +68,28 @@ WHEN HLF IS THE WRONG TOOL
   x Ultra-low-latency edges where even parser and governance overhead matters.
 """
 
+_AGENT_ARRIVAL = """\
+  AGENT ARRIVAL
+    Start here if you are encountering HLF for the first time in this server.
+
+    1. Read hlf://agent/protocol to understand HLF as a shared meaning-and-handoff
+      protocol for agents, tools, and governed execution.
+    2. Read hlf://agent/current_authority before assuming forge or sovereign
+      capability. Capsule tier, ingress posture, and approval surfaces are real
+      authority boundaries in this checkout.
+    3. Read hlf://agent/quickstart for the minimum working loop: establish
+      authority, translate intent into governed HLF, inspect coordination and
+      memory posture, then hand off canonical units instead of prose.
+    4. Read hlf://agent/handoff_contract before treating conversational summaries
+      as sufficient inter-agent payloads.
+
+    Immediate next actions:
+     - hlf_do                     for the packaged natural-language front door
+     - hlf_translate_to_hlf       for explicit intent-to-HLF translation
+     - hlf://status/ingress       to inspect current admission posture
+     - hlf://status/operator_surfaces for packaged status/report discovery
+  """
+
 _OUTRO = """
 
 Example HLF program (security audit):
@@ -108,6 +130,7 @@ def build_server_instructions(
     ]
     sections = [
         _INTRO.rstrip(),
+        _AGENT_ARRIVAL.rstrip(),
         _render_section("Available tools", tool_lines),
         _render_section("Resources", resource_lines),
         _OUTRO.rstrip(),

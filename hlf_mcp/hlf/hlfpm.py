@@ -54,15 +54,13 @@ class HlfPackageManager:
             return {"status": "already_installed", "package": str(ref), "path": str(target_path)}
         try:
             module_path = self.oci_client.pull(ref)
-        except OCIError:
-            # Offline: create a stub module
-            target_path.mkdir(parents=True, exist_ok=True)
-            stub_meta = {"name": ref.module, "version": ref.tag, "ref": str(ref), "status": "stub"}
-            (target_path / "module.json").write_text(json.dumps(stub_meta, indent=2))
-            return {"status": "stub_installed", "package": str(ref), "path": str(target_path)}
-        # Validate checksum
-        expected = self.oci_client.get_checksum(ref)
+        except OCIError as exc:
+            raise HlfPmError(
+                f"OCI pull failed for {package_ref}: {exc}. "
+                f"Cannot install without a live registry connection."
+            ) from exc
         actual = self._compute_checksum(module_path)
+        expected = self.oci_client.get_checksum(ref)
         if expected and actual != expected:
             raise HlfPmError(
                 f"Checksum mismatch for {package_ref}: expected={expected[:16]}... actual={actual[:16]}..."

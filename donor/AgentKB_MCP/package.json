@@ -1,0 +1,27 @@
+{
+  "name": "agentskb-mcp",
+  "version": "1.0.0",
+  "description": "Give your AI expert-level knowledge. Researched answers to any problem. Your AI, upgraded.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "cursor",
+    "cline",
+    "ai",
+    "developer-tools",
+    "agentskb"
+  ],
+  "homepage": "https://agentskb.com",
+  "license": "MIT",
+  "author": "AgentsKB",
+  "scripts": {
+    "start": "npx @agentskb/cli mcp"
+  },
+  "dependencies": {
+    "@agentskb/cli": "^0.1.0-beta.8"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,445 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# HLF Model Substrate Configuration — Governed Provider Authority
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# User-adjustable cloud model provider, routing, and escalation settings.
+#
+# Override precedence (highest first):
+#   1. HLF_MODEL_CONFIG env var → path to user override TOML
+#   2. ~/.hlf/model_providers.toml (per-user)
+#   3. This file (governance authority default)
+#
+# All API keys are read from environment variables — never stored in config.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[meta]
+version = "1.0"
+description = "HLF cloud model substrate — Ollama Cloud + OpenRouter hybrid"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Provider Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+[providers.ollama_cloud]
+enabled = true
+base_url = "https://ollama.com/api"
+api_key_env = "OLLAMA_API_KEY"
+priority = 1
+timeout_connect_s = 20
+timeout_read_s = 60
+timeout_total_s = 600
+max_retries = 3
+backoff_base_s = 2.0
+backoff_max_s = 90.0
+circuit_breaker_threshold = 4
+circuit_breaker_recovery_s = 300
+
+[providers.openrouter]
+enabled = true
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+priority = 2
+timeout_connect_s = 20
+timeout_read_s = 60
+timeout_total_s = 300
+max_retries = 3
+backoff_base_s = 2.0
+backoff_max_s = 90.0
+circuit_breaker_threshold = 4
+circuit_breaker_recovery_s = 300
+# OpenRouter app identification headers
+app_name = "HLF-MCP"
+app_url = ""
+# Prefer free-tier models when available (user's discretion)
+prefer_free = false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Escalation Rules
+# ─────────────────────────────────────────────────────────────────────────────
+
+[escalation]
+# "priority" — providers tried in priority order
+# "round-robin" — rotate across providers
+# "cost-optimized" — cheapest viable provider first
+strategy = "priority"
+fallback_on_auth_failure = false
+fallback_on_rate_limit = true
+fallback_on_model_not_found = true
+fallback_on_timeout = true
+fallback_on_server_error = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model Discovery
+# ─────────────────────────────────────────────────────────────────────────────
+
+[discovery]
+# Auto-discover models from provider APIs at startup
+auto_discover_ollama = true
+auto_discover_openrouter = true
+# Cache discovery results for this many seconds (0 = no cache)
+discovery_cache_ttl_s = 3600
+# OpenRouter model filters (empty = all models)
+openrouter_family_filter = []
+# Include free-tier OpenRouter models in discovery
+openrouter_include_free = true
+# Maximum models to discover per provider (0 = unlimited)
+openrouter_max_models = 200
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ollama Cloud Models — Default Registry
+# ─────────────────────────────────────────────────────────────────────────────
+# These are populated by auto-discovery OR manually overridden here.
+# Set enabled = false to exclude a discovered model.
+
+[ollama_cloud_models.nemotron-3-super]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "planning", "doer", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "tool-use", "agentic", "coding"]
+languages = ["en"]
+context_k = 256
+supports_think = false
+description = "NVIDIA 120B LatentMoE — broad agentic fallback"
+
+[ollama_cloud_models."glm-5:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "planning", "analysis", "universal"]
+capabilities = ["reasoning", "systems-engineering", "long-context"]
+languages = ["en", "zh"]
+context_k = 198
+supports_think = false
+description = "Z.ai 744B/40B active MoE — strong reasoning and systems engineering"
+
+[ollama_cloud_models."cogito-2.1:671b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "planning", "analysis"]
+capabilities = ["reasoning", "planning", "math", "strategic-decomposition"]
+languages = ["en"]
+context_k = 160
+supports_think = false
+description = "Deep Cogito 671B — planning and math specialist"
+
+[ollama_cloud_models."kimi-k2-thinking:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "planning", "analysis"]
+capabilities = ["planning", "tool-use", "long-context", "reasoning"]
+languages = ["en"]
+context_k = 256
+supports_think = true
+description = "Moonshot thinking specialist — long-horizon planning"
+
+[ollama_cloud_models."kimi-k2.5:cloud"]
+enabled = true
+family = "multimodal"
+lanes = ["planning", "analysis", "multimodal", "universal"]
+capabilities = ["planning", "multimodal", "tool-use", "ui-synthesis"]
+languages = ["en"]
+context_k = 256
+supports_think = false
+description = "Moonshot multimodal — planning and UI synthesis"
+
+[ollama_cloud_models."minimax-m2.7:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["doer", "coding", "universal"]
+capabilities = ["coding", "execution", "agentic", "productivity"]
+languages = ["en"]
+context_k = 200
+supports_think = false
+description = "MiniMax — execution-focused SWE specialist"
+
+[ollama_cloud_models."devstral-2:123b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer", "verifier"]
+capabilities = ["coding", "review", "tool-use", "repository-navigation"]
+languages = ["en"]
+context_k = 256
+supports_think = false
+description = "Mistral 123B — coding and repo-scale editing"
+
+[ollama_cloud_models."qwen3-coder-next:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer", "analysis"]
+capabilities = ["coding", "tool-use", "repository-navigation", "efficiency"]
+languages = ["en", "zh"]
+context_k = 256
+supports_think = false
+description = "Alibaba 80B/3B active — efficient repo-scale coder"
+
+[ollama_cloud_models."qwen3.5:cloud"]
+enabled = true
+family = "multimodal"
+lanes = ["reasoning", "analysis", "multimodal", "universal"]
+capabilities = ["structured-output", "multimodal", "generalist", "reasoning"]
+languages = ["en", "zh"]
+context_k = 256
+supports_think = false
+description = "Alibaba multimodal — universal structured-output fallback"
+
+[ollama_cloud_models."deepseek-v3.2:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "analysis", "ethics", "universal"]
+capabilities = ["reasoning", "adversarial-analysis", "efficiency", "safety-backstop"]
+languages = ["en", "zh"]
+context_k = 160
+supports_think = true
+description = "DeepSeek — adversarial backstop with strong efficiency"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OpenRouter Models — Default Registry
+# ─────────────────────────────────────────────────────────────────────────────
+# These are populated by auto-discovery OR manually configured here.
+# Use the full OpenRouter model ID as the key (e.g. "deepseek/deepseek-r1").
+# Set is_free = true for free-tier models.
+
+[openrouter_models."deepseek/deepseek-r1"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "analysis", "ethics"]
+capabilities = ["reasoning", "adversarial-analysis", "long-context", "thinking"]
+languages = ["en", "zh"]
+context_k = 164
+is_free = false
+description = "DeepSeek-R1 671B — deep reasoning via OpenRouter"
+
+[openrouter_models."nvidia/nemotron-3-super-120b-a12b:free"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "analysis", "coding", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "agentic"]
+languages = ["en"]
+context_k = 262
+is_free = true
+description = "NVIDIA Nemotron 3 Super 120B free tier — strong free tier — strong reasoning fallback"
+
+[openrouter_models."google/gemini-2.5-flash"]
+enabled = true
+family = "multimodal"
+lanes = ["reasoning", "coding", "multimodal", "universal"]
+capabilities = ["reasoning", "coding", "multimodal", "tool-use", "structured-output"]
+languages = ["en", "fr", "es", "de", "zh", "ja", "ko", "ar"]
+context_k = 1048
+is_free = false
+description = "Google Gemini 2.5 Flash — fast multimodal via OpenRouter"
+
+[openrouter_models."qwen/qwen3-next-80b-a3b-instruct:free"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "thinking", "multilingual"]
+languages = ["en", "zh", "ja", "ko", "fr", "es", "de", "ar"]
+context_k = 262
+is_free = true
+description = "Qwen3-Next 80B MoE free tier — strong multilingual reasoningultilingual reasoning fallback"
+
+[openrouter_models."anthropic/claude-sonnet-4"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "structured-output", "agentic"]
+languages = ["en", "fr", "es", "de", "zh", "ja", "ko"]
+context_k = 200
+is_free = false
+description = "Anthropic Claude Sonnet 4 — strong coding and reasoning"
+
+[openrouter_models."openai/gpt-4.1-mini"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "structured-output"]
+languages = ["en", "fr", "es", "de", "zh", "ja", "ko"]
+context_k = 1047
+is_free = false
+description = "OpenAI GPT-4.1 Mini — cost-effective reasoning via OpenRouter"
+
+[openrouter_models."meta-llama/llama-4-maverick"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "multilingual"]
+languages = ["en", "fr", "es", "de", "zh", "ja", "ko", "ar"]
+context_k = 1048
+is_free = false
+description = "Meta Llama 4 Maverick — open-weight frontier via OpenRouter"
+
+[openrouter_models."meta-llama/llama-3.3-70b-instruct:free"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "universal"]
+capabilities = ["reasoning", "coding", "multilingual"]
+languages = ["en", "fr", "es", "de", "zh", "ja", "ko", "ar"]
+context_k = 65
+is_free = true
+description = "Llama 3.3 70B Instructstruct free tier — open-weight reasoning fallback"
+
+[openrouter_models."qwen/qwen3-235b-a22b"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis"]
+capabilities = ["reasoning", "coding", "tool-use", "thinking"]
+languages = ["en", "zh", "ja", "ko", "fr", "es", "de", "ar"]
+context_k = 40
+is_free = false
+description = "Qwen3 235B MoE — strong multilingual reasoning via OpenRouter"
+
+[openrouter_models."qwen/qwen3-coder:free"]
+enabled = true
+family = "coding"
+lanes = ["coding", "reasoning", "doer"]
+capabilities = ["coding", "reasoning", "thinking", "tool-use"]
+languages = ["en", "zh", "ja", "ko", "fr", "es", "de", "ar"]
+context_k = 262
+is_free = true
+description = "Qwen3-Coder free tier — strong codback"
+
+[openrouter_models."mistralai/devstral-small"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer"]
+capabilities = ["coding", "tool-use", "repository-navigation"]
+languages = ["en"]
+context_k = 128
+is_free = false
+description = "Mistral Devstral Small — efficient coding via OpenRouter"
+
+[openrouter_models."google/gemma-3-27b-it"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "universal"]
+capabilities = ["reasoning", "coding", "structured-output"]
+languages = ["en", "fr", "es", "de", "zh", "ja"]
+context_k = 96
+is_free = false
+description = "Google Gemma 3 27B — open-weight workhorse via OpenRouter"
+
+[openrouter_models."google/gemma-3-27b-it:free"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "universal"]
+capabilities = ["reasoning", "coding"]
+languages = ["en", "fr", "es", "de", "zh", "ja"]
+context_k = 96
+is_free = true
+description = "Gemma 3 27B free tier — open-weight fallback"
+
+[openrouter_models."nvidia/nemotron-3-super-120b-a12b"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "planning", "analysis", "universal"]
+capabilities = ["reasoning", "planning", "coding", "tool-use", "agentic"]
+languages = ["en"]
+context_k = 262
+is_free = false
+description = "NVIDIA Nemotron 3 Super 120B MoE0B MoE — frontier reasoning via OpenRouter"
+
+[openrouter_models."mistralai/mistral-medium-3"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "structured-output"]
+languages = ["en", "fr", "es", "de"]
+context_k = 128
+is_free = false
+description = "Mistral Medium 3 — balanced reasoning and coding"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chain Overrides (Optional)
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-lane chain preferences. If not set, uses model_catalog.py defaults.
+# Models from any provider can be mixed in a chain.
+# Use provider prefix for OpenRouter: "openrouter:deepseek/deepseek-r1"
+# Ollama Cloud models use their native names: "nemotron-3-super"
+
+# [chain_overrides.reasoning]
+# models = ["nemotron-3-super", "cogito-2.1:671b-cloud", "openrouter:deepseek/deepseek-r1"]
+
+# [chain_overrides.coding]
+# models = ["devstral-2:123b-cloud", "qwen3-coder-next:cloud", "openrouter:anthropic/claude-sonnet-4"]
+
+# [chain_overrides.analysis]
+# models = ["deepseek-v3.2:cloud", "openrouter:google/gemini-2.5-flash"]
+
+# [chain_overrides.ethics]
+# models = ["deepseek-v3.2:cloud", "openrouter:anthropic/claude-sonnet-4"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Provider Preferences (OpenRouter provider routing)
+# ─────────────────────────────────────────────────────────────────────────────
+# Controls how OpenRouter routes requests across backend providers.
+# Maps directly to the OpenRouter `provider` object in the request body.
+# See: https://openrouter.ai/docs/features/provider-routing
+
+[provider_preferences]
+# Require the backend provider to support all parameters we send
+# (e.g., tool_choice, response_format). If false, some params may be silently ignored.
+require_parameters = true
+
+# Data collection policy: "allow" or "deny"
+# "deny" = opt out of training data collection at the provider level.
+data_collection = "deny"
+
+# Sort strategy: "price" | "throughput" | "latency"
+# For governed paths, "price" keeps costs deterministic.
+# For latency-sensitive paths, use "throughput" or "latency".
+sort = "price"
+
+# Allow fallback to other providers if the primary is unavailable
+allow_fallbacks = true
+
+# Optional: restrict to specific quantization levels
+# quantizations = ["fp16", "bf16"]
+
+# Optional: max price caps (USD per token). Uncomment and adjust as needed.
+# [provider_preferences.max_price]
+# prompt = "0.00003"
+# completion = "0.00006"
+
+# Optional: provider whitelist — only use these providers
+# Uncomment to restrict to specific backend providers.
+# only = ["Anthropic", "Google", "DeepInfra", "Together"]
+
+# Optional: provider blacklist — never use these providers
+# ignore = ["SomeProvider"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Governed Path Controls
+# ─────────────────────────────────────────────────────────────────────────────
+# Settings for knowledge-critical / governed execution paths.
+
+[governed_paths]
+# Auto/free router models are NEVER allowed for governed knowledge paths.
+# This cannot be overridden — it is a hard safety constraint.
+excluded_routers = ["openrouter/auto", "openrouter/free"]
+
+# When true, verify that the response model matches the requested model.
+# Reject responses where the model was silently re-routed.
+strict_model_verification = true
+
+# When true, only models that pass the availability cache check are used.
+require_live_availability = true
+
+# ─── Response quality gates (apply to ALL providers incl. Ollama) ────────────
+
+# Reject truncated responses (done_reason="length" / finish_reason="length").
+# Truncated output is unreliable for knowledge absorption.
+reject_truncated = true
+
+# Minimum content length (chars) for governed paths. Responses shorter than
+# this are rejected — prevents absorbing empty or trivially short answers.
+min_content_chars = 1
+
+# Require model name match between request and response.
+# Ollama may append ":latest" suffix — that is allowed automatically.
+require_model_match = true
+
+# Require nonzero token counts in response metadata.
+# Zero eval_count with non-empty content indicates broken token counting.
+require_nonzero_tokens = true

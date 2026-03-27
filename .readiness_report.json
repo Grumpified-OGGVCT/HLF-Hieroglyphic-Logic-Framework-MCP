@@ -1,0 +1,22 @@
+{
+  "refresh_required": true,
+  "satisfied": true,
+  "changed_inputs": [
+    "SSOT_HLF_MCP.md"
+  ],
+  "changed_outputs": [
+    "docs/claims-ledger.html",
+    "docs/merge-readiness.html"
+  ],
+  "required_outputs": [
+    "docs/HLF_INTERNAL_READINESS_DASHBOARD_2026-03-20.md",
+    "docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md",
+    "docs/HLF_READINESS_REFRESH_PROCEDURE.md",
+    "docs/HLF_STATUS_OVERVIEW.md",
+    "docs/claims-ledger.html",
+    "docs/index.html",
+    "docs/merge-readiness.html"
+  ],
+  "missing_outputs": [],
+  "note": "Readiness refresh contract satisfied."
+}

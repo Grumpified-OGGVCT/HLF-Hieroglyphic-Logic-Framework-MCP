@@ -1,0 +1,17 @@
+{
+  "pack_id": "t3-stack",
+  "name": "T3 Stack",
+  "version": "1.0.0",
+  "description": "Virtual collection of KB entries for a Next.js + TypeScript + Prisma + tRPC stack. Constrains retrieval context to relevant entries only.",
+  "entry_ids": [],
+  "domains": [
+    "nextjs",
+    "typescript",
+    "prisma",
+    "trpc",
+    "tailwind"
+  ],
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z",
+  "notes": "Populate entry_ids after curating production KB entries for these domains."
+}

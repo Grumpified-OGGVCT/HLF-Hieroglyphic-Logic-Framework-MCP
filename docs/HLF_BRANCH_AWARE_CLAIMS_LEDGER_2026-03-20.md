@@ -2,6 +2,13 @@
 
 Status: public-facing branch-aware review aid for 2026-03-20.
 
+2026-03-21 local checkpoint addendum:
+
+- active branch in this checkout: `rescue/governed-review-recovery-2026-03-21`
+- repo-wide regression snapshot on 2026-03-21: `816 passed`
+- packaged `hlf_mcp` HTTP/SSE bring-up verified with `GET /health -> 200 OK`
+- workspace-local VS Code MCP wiring now targets the packaged `hlf-mcp` entrypoint
+
 Purpose:
 
 - give reviewers and PR readers a compact way to distinguish public-main perception from current branch reality
@@ -16,7 +23,7 @@ Reading rule:
 
 Verified branch facts used here:
 
-- active branch: `integrate/vscode-operator-governed-review`
+- active branch: `rescue/governed-review-recovery-2026-03-21`
 - divergence from `main`: `0` behind, `10` ahead
 - packaged surface count in this checkout: `69` tools, `31` resources
 
@@ -29,6 +36,7 @@ Verified branch facts used here:
 | The repo has no symbolic bridge lane at all | `hlf_mcp/hlf/symbolic_surfaces.py` provides tested relation-edge extraction, projection, explanation, and audit logging | Broader symbolic-semantic restoration remains bridge work |
 | Dream/media evidence is absent as a governed branch lane | Bounded dream-cycle, media evidence, citation-chain proposal, and multimodal contract surfaces now exist in this checkout | The lane is still advisory and not yet a fully restored autonomous-evolution subsystem |
 | There is no VS Code bridge or operator shell work | `extensions/hlf-vscode/` now contains a real claim-lane-aware operator bridge scaffold | It remains a scaffold, not Marketplace-shipped completion |
+| The packaged MCP currently depends on a local tuned model or a DeepSeek-style local runtime to function | Packaged backend selection already separates `local-via-ollama`, `cloud-via-ollama`, and `remote-direct`, the current operator guidance is cloud-first, and the future HLF-specialized local LoRA lane is only a planned bridge experiment | Local tuning remains future bridge work and an optional candidate lane, not a present-tense runtime dependency |
 
 ## 2. Valid Public Gaps
 
@@ -39,6 +47,7 @@ Verified branch facts used here:
 | Memory governance is still incomplete | Correct | Still open: freshness, revocation, supersession, trust-tier, and unified evidence contracts still need stronger completion |
 | Gallery/operator legibility is not yet fully restored | Correct | Still open: current operator-readable resources are stronger, but gallery-grade and end-to-end operator surfaces remain bridge work |
 | Signed disclosure and ALS-style audit sealing are still missing | Correct | Still open |
+| Container/runtime hardening is not yet complete | Correct | Still open: non-root Docker runtime, dependency CVE scanning, SBOM, and release/rollback hygiene still need stronger closure |
 
 ## 3. Branch-Resolved Gaps
 
@@ -61,6 +70,7 @@ Verified branch facts used here:
 | Operator/gallery-grade trust surfaces | Current resources are useful but not yet the full operator trust product |
 | Governance integrity cleanup | The host-function registry drift was resolved by re-manifesting `governance/host_functions.json`, but integrity still depends on keeping `MANIFEST.sha256` refreshed when tracked governance files change |
 | Remote recursive-build promotion | Local bounded build assistance is real, but remote `streamable-http` self-hosting remains gated until the full initialize path is proven |
+| Container and release hardening closure | The repo still needs a non-root Docker runtime, dependency CVE scanning, SBOM or release artifact discipline, and a clearer rollback surface before those claims can be treated as mature |
 
 ## Bottom Line
 

@@ -12,10 +12,10 @@ over week. Drift score is computed by comparing expected vs actual classificatio
 Ollama features used:
     • Structured outputs  — format: JSON schema on every probe call
     • Tiered fallback     — glm-5:cloud -> nemotron-3-super -> cogito-2.1:671b-cloud -> qwen3.5:cloud
-  • Web search          — inject web_search tool to let model check for HLF
-                          spec updates or known issues
-  • Streaming           — default streaming with buffer protection
-  • Circuit breaker     — automatic failover if any model is unavailable
+    • Closed-book probes  — web search disabled so the baseline reflects model
+                            understanding rather than live retrieval behavior
+    • Deterministic calls — non-streaming requests for stricter JSON stability
+    • Circuit breaker     — automatic failover if any model is unavailable
 
 Output: JSON written to stdout or --output file, consumed by the workflow.
 {
@@ -34,9 +34,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +45,7 @@ SCRIPTS_DIR = Path(__file__).parent.parent / ".github" / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 try:
-    from ollama_client import FallbackOrchestrator, REASONING_CHAIN
+    from ollama_client import REASONING_CHAIN, FallbackOrchestrator
     _CLIENT_AVAILABLE = True
 except ImportError:
     _CLIENT_AVAILABLE = False
@@ -167,8 +168,126 @@ metering, zero-trust security (ALIGN Ledger), and a people-first ethos.
 
 Answer ALL questions based strictly on the HLF specification. Be precise and use the exact
 terminology of the specification. Your answers will be used to detect specification drift.
+Do not use external search, tool calls, or retrieval behavior for these probes; they are a
+closed-book baseline on the model's own understanding.
 Always respond in the JSON format requested, with an "answer", "confidence", and "reasoning" field.
 """
+
+OUTCOME_CORRECT = "correct"
+OUTCOME_SEMANTIC_WRONG = "semantic_wrong_answer"
+OUTCOME_PROTOCOL_FAILURE = "protocol_shape_failure"
+OUTCOME_TOOL_CALL_FAILURE = "tool_call_behavior_failure"
+
+
+def _scan_balanced_json_object(text: str, start: int = 0) -> str | None:
+    depth = 0
+    in_string = False
+    escape = False
+    for idx in range(start, len(text)):
+        char = text[idx]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : idx + 1].strip()
+
+    return None
+
+
+def _extract_json_candidate(text: str) -> tuple[str | None, str | None]:
+    stripped = text.strip()
+    if not stripped:
+        return None, "empty_response"
+
+    fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.IGNORECASE | re.DOTALL)
+    if fence_match:
+        fenced_block = fence_match.group(1).strip()
+        start = fenced_block.find("{")
+        if start != -1:
+            candidate = _scan_balanced_json_object(fenced_block, start)
+            if candidate is not None:
+                return candidate, "fenced_json"
+
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped, "raw_json"
+
+    start = stripped.find("{")
+    if start == -1:
+        return None, "missing_json_object"
+
+    candidate = _scan_balanced_json_object(stripped, start)
+    if candidate is not None:
+        return candidate, "embedded_json"
+
+    return None, "unterminated_json_object"
+
+
+def _normalize_probe_response(raw_content: str) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    candidate, source = _extract_json_candidate(raw_content)
+    metadata: dict[str, Any] = {
+        "normalization": source,
+        "raw_excerpt": raw_content.strip()[:200],
+    }
+    if candidate is None:
+        metadata["error"] = source or "missing_json_object"
+        return None, metadata
+
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError as exc:
+        metadata["error"] = f"json_decode_error:{exc.msg}"
+        return None, metadata
+
+    if not isinstance(parsed, dict):
+        metadata["error"] = "json_not_object"
+        return None, metadata
+
+    answer = parsed.get("answer")
+    if not isinstance(answer, str) or not answer.strip():
+        metadata["error"] = "missing_answer"
+        return None, metadata
+
+    confidence_raw = parsed.get("confidence", 0.0)
+    try:
+        confidence = float(confidence_raw)
+    except (TypeError, ValueError):
+        confidence = 0.0
+        metadata["confidence_normalized_from"] = str(confidence_raw)[:60]
+    confidence = max(0.0, min(1.0, confidence))
+
+    reasoning = parsed.get("reasoning", "")
+    if reasoning is None:
+        reasoning = ""
+    elif not isinstance(reasoning, str):
+        reasoning = str(reasoning)
+        metadata["reasoning_normalized"] = True
+
+    return {
+        "answer": answer.strip(),
+        "confidence": confidence,
+        "reasoning": reasoning.strip(),
+    }, metadata
+
+
+def _empty_outcome_counts() -> dict[str, int]:
+    return {
+        OUTCOME_CORRECT: 0,
+        OUTCOME_SEMANTIC_WRONG: 0,
+        OUTCOME_PROTOCOL_FAILURE: 0,
+        OUTCOME_TOOL_CALL_FAILURE: 0,
+    }
 
 
 def _check_probe(probe: dict[str, Any], answer: str) -> bool:
@@ -176,7 +295,6 @@ def _check_probe(probe: dict[str, Any], answer: str) -> bool:
     Uses exact word matching (after normalisation) to avoid false positives
     from substring containment (e.g. 'SSRF_ATTACK' matching 'SSRF').
     """
-    import re
     ans_norm = re.sub(r"[^A-Z0-9_>]", "", answer.strip().upper())
     expected = probe.get("expected", "")
     expected_set = probe.get("expected_set", [])
@@ -202,16 +320,16 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
         raise RuntimeError("ollama_client not available — check PYTHONPATH includes .github/scripts")
 
     resolved_key = api_key or os.environ.get("OLLAMA_API_KEY", "")
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
 
-    # Use REASONING_CHAIN: glm-5:cloud -> nemotron-3-super -> cogito-2.1:671b-cloud -> qwen3.5:cloud
-    # Structured outputs + web search enabled
+    # Weekly drift probes are intentionally closed-book: schema enforcement stays on,
+    # but search and tool-use are disabled and streaming is turned off.
     orch = FallbackOrchestrator(
         chain=REASONING_CHAIN,
         temperature=0.0,          # zero temp for deterministic answers
-        use_streaming=True,       # streaming with buffer protection
+        use_streaming=False,
         format_schema=PROBE_RESPONSE_SCHEMA,  # enforce JSON schema on responses
-        web_search=True,          # let model check for spec updates
+        web_search=False,
         api_key=resolved_key,
         max_retries_per_tier=2,
     )
@@ -221,6 +339,7 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
     drift_weight = 0.0
     model_used = "unknown"
     tier_used = 0
+    outcome_counts = _empty_outcome_counts()
 
     for probe in PROBES:
         try:
@@ -231,19 +350,58 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
             model_used = result.model_used
             tier_used = result.tier_index
 
-            # Parse structured output
-            try:
-                parsed = json.loads(result.content)
-                answer = parsed.get("answer", "")
-                confidence = float(parsed.get("confidence", 0.0))
-                reasoning = parsed.get("reasoning", "")
-            except (json.JSONDecodeError, ValueError):
-                # Model didn't honour the schema — treat as partial answer
-                answer = result.content[:100].strip()
-                confidence = 0.5
-                reasoning = "(unstructured response)"
+            if result.tool_calls:
+                drift_weight += probe["weight"]
+                outcome_counts[OUTCOME_TOOL_CALL_FAILURE] += 1
+                probe_results.append({
+                    "id": probe["id"],
+                    "category": probe["category"],
+                    "weight": probe["weight"],
+                    "expected": probe.get("expected") or probe.get("expected_set"),
+                    "answer": "",
+                    "confidence": 0.0,
+                    "reasoning": "",
+                    "correct": False,
+                    "outcomeClass": OUTCOME_TOOL_CALL_FAILURE,
+                    "failureDetail": "unexpected_tool_call",
+                    "model": model_used,
+                    "tier": tier_used,
+                    "thinking": result.thinking[:200] if result.thinking else "",
+                    "tool_calls": result.tool_calls,
+                    "latency_s": result.latency_s,
+                })
+                continue
 
+            parsed, normalization = _normalize_probe_response(result.content)
+            if parsed is None:
+                drift_weight += probe["weight"]
+                outcome_counts[OUTCOME_PROTOCOL_FAILURE] += 1
+                probe_results.append({
+                    "id": probe["id"],
+                    "category": probe["category"],
+                    "weight": probe["weight"],
+                    "expected": probe.get("expected") or probe.get("expected_set"),
+                    "answer": result.content[:100].strip(),
+                    "confidence": 0.0,
+                    "reasoning": "",
+                    "correct": False,
+                    "outcomeClass": OUTCOME_PROTOCOL_FAILURE,
+                    "failureDetail": normalization.get("error", "protocol_shape_failure"),
+                    "normalization": normalization,
+                    "model": model_used,
+                    "tier": tier_used,
+                    "thinking": result.thinking[:200] if result.thinking else "",
+                    "tool_calls": result.tool_calls,
+                    "latency_s": result.latency_s,
+                })
+                continue
+
+            answer = parsed["answer"]
+            confidence = parsed["confidence"]
+            reasoning = parsed["reasoning"]
             correct = _check_probe(probe, answer)
+            outcome_class = OUTCOME_CORRECT if correct else OUTCOME_SEMANTIC_WRONG
+            outcome_counts[outcome_class] += 1
             if not correct:
                 drift_weight += probe["weight"]
 
@@ -256,6 +414,8 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
                 "confidence": confidence,
                 "reasoning": reasoning,
                 "correct": correct,
+                "outcomeClass": outcome_class,
+                "normalization": normalization,
                 "model": model_used,
                 "tier": tier_used,
                 "thinking": result.thinking[:200] if result.thinking else "",
@@ -266,12 +426,15 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
         except Exception as exc:
             # Probe failed entirely — counts as maximum drift for its weight
             drift_weight += probe["weight"]
+            outcome_counts[OUTCOME_PROTOCOL_FAILURE] += 1
             probe_results.append({
                 "id": probe["id"],
                 "category": probe["category"],
                 "weight": probe["weight"],
                 "answer": "",
                 "correct": False,
+                "outcomeClass": OUTCOME_PROTOCOL_FAILURE,
+                "failureDetail": "runtime_exception",
                 "error": str(exc)[:300],
                 "traceback": traceback.format_exc()[-500:],
             })
@@ -303,6 +466,7 @@ def run_drift_probes(api_key: str | None = None) -> dict[str, Any]:
         "summary":     summary,
         "correct":     correct_count,
         "total":       len(PROBES),
+        "outcomeCounts": outcome_counts,
     }
 
 
@@ -321,7 +485,7 @@ def main() -> None:
             "probes": [],
             "modelUsed": "error",
             "tier": -1,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "summary": f"Fatal error: {exc}",
             "error": str(exc),
             "traceback": traceback.format_exc(),

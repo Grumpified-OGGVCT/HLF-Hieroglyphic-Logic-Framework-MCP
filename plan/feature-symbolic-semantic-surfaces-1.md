@@ -2,7 +2,7 @@
 goal: Add governed symbolic and semasiographic HLF surfaces without weakening canonical semantics
 version: 1.0
 date_created: 2026-03-20
-last_updated: 2026-03-20
+last_updated: 2026-03-22
 owner: GitHub Copilot
 status: 'In progress'
 tags: [feature, bridge, symbolic, semasiographic, glyph, unicode, grammar, operator]
@@ -134,7 +134,56 @@ This is a bridge plan, not a present-tense claim that HLF already ships full sym
 - **TEST-003**: Add audit-surface tests proving the symbolic display cannot drift from canonical semantics.
 - **TEST-004**: Add translation tests showing relation-rich symbolic structures can be explained back in plain language without semantic loss claims beyond measured reality.
 
-## 7. Risks & Assumptions
+## 7. Phase 1 Implementation Seam Map
+
+The next implementation slice is deliberately narrow.
+
+It is not a renderer sprint, a numerology sprint, or a quantum-language sprint.
+
+It is a proof-surface sprint around the already-real relation-edge bridge.
+
+### Exact file seams
+
+- `hlf_mcp/hlf/symbolic_surfaces.py`: keep the implementation centered on `extract_relation_edges(...)`, `project_relation_edges(...)`, `explain_relation_edges(...)`, `compile_symbolic_surface(...)`, and `audit_symbolic_surface(...)`
+- `tests/test_symbolic_surfaces.py`: add the first proof-bearing regression cases for endpoint preservation, explanation fidelity, projection-only labeling, and audit side-by-side output
+- `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md`: keep Phase 2 task language and test requirements synchronized with what is actually implemented
+- `HLF_MCP_TODO.md`: keep the active backlog synchronized with the exact Phase 1 proof slice and research-intake gate
+- `HLF_ACTIONABLE_PLAN.md`: keep near-term symbolic prioritization scoped to proof surfaces instead of speculative symbolic expansion
+
+### Exact deliverables
+
+| Deliverable | File seam | Purpose |
+| --- | --- | --- |
+| Relation-edge round-trip proof | `tests/test_symbolic_surfaces.py` | prove `from`, `relation`, and `to` survive extraction, projection, and explanation without endpoint drift |
+| Projection-lane proof | `tests/test_symbolic_surfaces.py` | prove Unicode and other symbolic forms remain display-only and do not become executable authority |
+| Audit side-by-side proof | `hlf_mcp/hlf/symbolic_surfaces.py`, `tests/test_symbolic_surfaces.py` | show canonical source, projection, and explanation together for operator trust |
+| Backlog and spec synchronization | `HLF_MCP_TODO.md`, `HLF_ACTIONABLE_PLAN.md`, `docs/HLF_SYMBOLIC_SEMASIOGRAPHIC_RECOVERY_SPEC.md` | prevent claim drift while the slice is being implemented |
+
+### Explicit non-goals for Phase 1
+
+- no fractal-generation dependency stack
+- no gematria-driven semantic layer
+- no QRNG, qutrit, or quantum-memory experiments
+- no claim that HLF already supports movie-style non-linear cognition
+
+## 8. Research Intake Response Template
+
+Use this response when outside research bundles drift into speculation or fabricated implementation status:
+
+> Bring back only evidence that can survive repo-grounded promotion.
+>
+> For each proposed symbolic upgrade, include:
+> 1. the exact target files in this repo
+> 2. whether the claim is `current-truth`, `bridge`, or `vision`
+> 3. the canonical semantic contract being extended
+> 4. the deterministic tests or benchmark dimensions it must satisfy
+> 5. the dependency and operational cost
+>
+> Do not send more speculative dumps that claim features are already implemented unless you can point to the current branch files and tests that prove it.
+>
+> For this Phase 1 lane, useful evidence is relation-edge semantics, round-trip proof, audit visibility, and operator legibility. Fractal rendering, gematria, QRNG, qutrits, and cognition claims are out of scope unless a later bridge slice requests them with concrete repo seams and measurable value.
+
+## 9. Risks & Assumptions
 
 - **RISK-001**: The lane can collapse into fiction-inspired overclaiming unless the canonical-authority rule stays explicit.
 - **RISK-002**: Symbolic notation can become unreadable or brittle if keyboard-safe authoring is not designed first.
@@ -142,7 +191,7 @@ This is a bridge plan, not a present-tense claim that HLF already ships full sym
 - **ASSUMPTION-001**: A governed semasiographic layer can increase leverage if it improves compression, relation clarity, and operator trust without weakening determinism.
 - **ASSUMPTION-002**: The right first step is disciplined research plus bridge design, not immediate runtime mutation.
 
-## 8. Related Specifications / Further Reading
+## 10. Related Specifications / Further Reading
 
 [plan/feature-research-scaffold-integration-1.md](../plan/feature-research-scaffold-integration-1.md)
 [plan/architecture-hlf-reconstruction-2.md](../plan/architecture-hlf-reconstruction-2.md)

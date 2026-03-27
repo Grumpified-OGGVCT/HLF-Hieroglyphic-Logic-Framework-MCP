@@ -4,7 +4,7 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Mapping, Sequence, cast
 
 GovernanceEventKind = Literal[
     "routing_decision",
@@ -12,11 +12,13 @@ GovernanceEventKind = Literal[
     "align_verdict",
     "capsule_verdict",
     "pointer_resolution",
+    "memory_governance",
     "memory_store",
     "validated_solution_capture",
     "entropy_anchor",
     "witness_observation",
     "verification_result",
+    "formal_verification",
     "approval_transition",
     "dream_cycle",
     "proposal_lane",
@@ -32,6 +34,48 @@ def _canonical_json(payload: dict[str, Any]) -> str:
 
 def _event_id(seed_payload: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(seed_payload).encode("utf-8")).hexdigest()[:16]
+
+
+def governance_event_ref(
+    *, kind: GovernanceEventKind, event_id: str, trace_id: str = ""
+) -> dict[str, str]:
+    return GovernanceEventRef(kind=kind, event_id=event_id, trace_id=trace_id).to_dict()
+
+
+def normalize_governance_ref(
+    value: GovernanceEventRef | Mapping[str, Any] | None,
+    *,
+    default_kind: GovernanceEventKind | None = None,
+) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if isinstance(value, GovernanceEventRef):
+        return value.to_dict()
+    kind_raw = str(value.get("kind") or default_kind or "").strip()
+    event_id = str(value.get("event_id") or value.get("id") or "").strip()
+    trace_id = str(value.get("trace_id") or "").strip()
+    if not event_id and trace_id:
+        event_id = trace_id[:16]
+    if not kind_raw or not event_id:
+        return None
+    return governance_event_ref(
+        kind=cast(GovernanceEventKind, kind_raw),
+        event_id=event_id,
+        trace_id=trace_id,
+    )
+
+
+def normalize_related_refs(
+    values: Sequence[GovernanceEventRef | Mapping[str, Any]] | None,
+) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    if not values:
+        return normalized
+    for value in values:
+        ref = normalize_governance_ref(value)
+        if ref is not None:
+            normalized.append(ref)
+    return normalized
 
 
 @dataclass(slots=True)

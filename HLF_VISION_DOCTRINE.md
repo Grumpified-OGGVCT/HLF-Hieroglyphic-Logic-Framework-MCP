@@ -86,6 +86,20 @@ This lane translates ambition into implementable structure.
 
 ## 3. What The Full HLF Target Actually Includes
 
+The domain examples used in this repo are intentionally illustrative, not exhaustive.
+
+HLF is not being built for one user's current list of use cases, one transport, one product wrapper, or one domain such as coding, robotics, memory, or orchestration.
+
+The intended target is a governed meaning layer that can keep absorbing additional domains without changing its core story:
+
+- intent enters through bounded translation or structured authoring
+- intent becomes canonical HLF meaning
+- execution stays capability-bounded and auditable
+- new domain knowledge is researched, governed, remembered, and promoted through explicit evidence and trust contracts
+- human-readable ingress and egress remain operator surfaces, not the underlying ontology
+
+That means future use-case families should be treated as candidates for disciplined absorption into HLF, not as exhaustive limits on what HLF is for.
+
 If HLF is taken all the way down its intended road, the target stack includes at least these layers.
 
 ### 3.1 Semantic core
@@ -179,6 +193,19 @@ Meaning:
 - portable deterministic execution appears at VM
 
 That layered adoption model is one of HLF's strongest strategic advantages. It allows the language to scale from a laptop-tier local model to a full sovereign swarm without splitting into unrelated products.
+
+It also means the packaged HLF MCP surface can legitimately become the main operational access path for that broader stack.
+
+The important distinction is not "MCP versus HLF."
+
+The important distinction is:
+
+- HLF remains the governed meaning, memory, execution, and audit substrate
+- HLF MCP is the packaged server surface through which agents, robots, operator tools, and other systems access those capabilities
+
+So saying "HLF is larger than MCP" should never be read as "the system will not use HLF MCP."
+
+The intended outcome is that HLF MCP exposes as much of the real HLF stack as can be packaged honestly.
 
 ---
 

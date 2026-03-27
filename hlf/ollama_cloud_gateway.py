@@ -1,14 +1,9 @@
 """
-Direct Ollama Cloud API Gateway for HLF
+Ollama gateways for HLF.
 
-Bypasses local Ollama daemon entirely.
-Uses https://ollama.com/api directly with API key authentication.
-
-Key Features:
-- Lower latency (no local daemon hop)
-- Native structured outputs
-- Tool calling support
-- Automatic fallback handling
+This module keeps the direct cloud gateway available for authenticated backup and
+cloud-only capability paths, while the higher-level ModelGateway defaults to the
+local Ollama server on port 11434 for normal runtime calls.
 """
 
 import os
@@ -383,19 +378,21 @@ class OllamaCloudGateway:
 
 class ModelGateway:
     """
-    Unified model gateway with Ollama Cloud as primary.
-    
-    Falls back to local Ollama daemon if cloud unavailable.
+    Unified model gateway with local Ollama primary.
+
+    Falls back to direct Ollama Cloud API when explicitly enabled and available.
     """
     
     def __init__(
         self,
         use_cloud_direct: bool = True,
         cloud_api_key: Optional[str] = None,
-        local_base_url: str = "http://localhost:11434"
+        local_base_url: str = "http://localhost:11434",
+        prefer_local: bool = True,
     ):
         self.use_cloud_direct = use_cloud_direct
         self.local_base_url = local_base_url
+        self.prefer_local = prefer_local
         self.cloud = OllamaCloudGateway(api_key=cloud_api_key) if use_cloud_direct else None
         self._cloud_available = None
     
@@ -406,11 +403,18 @@ class ModelGateway:
         return self._cloud_available
     
     def chat(self, messages: List[Dict[str, str]], **kwargs) -> OllamaResponse:
-        """Chat with automatic fallback"""
+        """Chat with local-first fallback."""
+        if self.prefer_local:
+            local_response = self._local_chat(messages, **kwargs)
+            if local_response.success:
+                return local_response
+            if self.use_cloud_direct and self._check_cloud():
+                return self.cloud.chat(messages, **kwargs)
+            return local_response
+
         if self.use_cloud_direct and self._check_cloud():
             return self.cloud.chat(messages, **kwargs)
-        
-        # Fallback to local Ollama daemon
+
         return self._local_chat(messages, **kwargs)
     
     def _local_chat(self, messages: List[Dict[str, str]], **kwargs) -> OllamaResponse:
@@ -459,11 +463,10 @@ class ModelGateway:
             )
     
     def generate_structured(self, prompt: str, schema: Dict[str, Any], **kwargs) -> OllamaResponse:
-        """Generate structured output with fallback"""
-        if self.use_cloud_direct and self._check_cloud():
+        """Generate structured output with local-first fallback."""
+        if not self.prefer_local and self.use_cloud_direct and self._check_cloud():
             return self.cloud.generate_structured(prompt, schema, **kwargs)
-        
-        # Local fallback - try to parse JSON from text
+
         messages = [
             {"role": "user", "content": f"{prompt}\n\nRespond with valid JSON only."}
         ]
@@ -476,6 +479,12 @@ class ModelGateway:
             except json.JSONDecodeError:
                 response.success = False
                 response.error = "Failed to parse JSON from local model"
+
+        if response.success:
+            return response
+
+        if self.use_cloud_direct and self._check_cloud():
+            return self.cloud.generate_structured(prompt, schema, **kwargs)
         
         return response
 
@@ -491,12 +500,24 @@ def create_gateway(profile: str = "P0") -> ModelGateway:
     Returns:
         Configured ModelGateway instance
     """
+    local_base_url = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    cloud_enabled = bool(os.getenv("OLLAMA_API_KEY"))
+
     if profile == "P0":
-        # P0: Cloud-only, direct API
-        return ModelGateway(use_cloud_direct=True)
-    elif profile == "P1":
-        # P1: Cloud preferred, local fallback
-        return ModelGateway(use_cloud_direct=True)
-    else:
-        # P2: Full stack, local preferred
-        return ModelGateway(use_cloud_direct=False)
+        return ModelGateway(
+            use_cloud_direct=cloud_enabled,
+            local_base_url=local_base_url,
+            prefer_local=True,
+        )
+    if profile == "P1":
+        return ModelGateway(
+            use_cloud_direct=cloud_enabled,
+            local_base_url=local_base_url,
+            prefer_local=True,
+        )
+
+    return ModelGateway(
+        use_cloud_direct=cloud_enabled,
+        local_base_url=local_base_url,
+        prefer_local=True,
+    )

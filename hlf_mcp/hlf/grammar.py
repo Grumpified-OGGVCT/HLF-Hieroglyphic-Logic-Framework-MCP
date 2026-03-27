@@ -49,7 +49,6 @@ _hlf_version: INT ("." INT)*
           | assign_stmt
           | set_stmt
           | if_block_stmt
-          | if_flat_stmt
           | for_stmt
           | parallel_stmt
           | func_block_stmt
@@ -95,7 +94,8 @@ assign_stmt: KW_ASSIGN IDENT "=" expr
 
 // ── Block-form control flow ───────────────────────────────────────────────────
 // IF expr { ... } (ELIF expr { ... })* (ELSE { ... })?
-if_block_stmt: KW_IF expr block elif_clause* else_clause?
+// Block is optional: flat "IF expr" (no body) is backward-compat shorthand.
+if_block_stmt: KW_IF expr block? elif_clause* else_clause?
 
 elif_clause: KW_ELIF expr block
 else_clause: KW_ELSE block
@@ -105,9 +105,6 @@ for_stmt: KW_FOR IDENT KW_IN expr block
 
 // PARALLEL { ... } { ... }+
 parallel_stmt: KW_PARALLEL block block+
-
-// ── Flat single-line IF (backward compat) ────────────────────────────────────
-if_flat_stmt: KW_IF IDENT CMP value
 
 // ── Function and Intent blocks ────────────────────────────────────────────────
 func_block_stmt: KW_FUNCTION IDENT param_list? block
@@ -158,7 +155,7 @@ expr_and: expr_not (KW_AND expr_not)*
 
 expr_cmp: expr_add (CMP expr_add)*
 
-expr_add: expr_mul ((ADDOP) expr_mul)*
+expr_add: expr_mul ((ADDOP | MINUS) expr_mul)*
 expr_mul: expr_unary ((MULOP) expr_unary)*
 
 ?expr_unary: MINUS expr_primary -> neg_expr
@@ -172,7 +169,7 @@ expr_mul: expr_unary ((MULOP) expr_unary)*
              | IDENT          -> ident_val
              | "(" expr ")"   -> paren_expr
 
-ADDOP: "+" | "-"
+ADDOP: "+"
 MULOP: "*" | "/" | "%"
 MINUS: "-"
 

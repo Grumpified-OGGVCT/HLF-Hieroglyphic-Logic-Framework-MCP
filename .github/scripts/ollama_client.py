@@ -53,15 +53,7 @@ Model registry (exact Ollama names from ollama.com/library, March 2025):
                                             Best: high-efficiency reasoning, agent performance, adversarial and analytical backstop
                                             https://ollama.com/library/deepseek-v3.2
 
-Pre-defined tiered chains — each tier is independently capable, and overrides are only valid if the substitute meets or exceeds the displaced role's capability floor and HLF proficiency requirements:
-
-        REASONING_CHAIN   glm-5:cloud -> nemotron-3-super -> cogito-2.1:671b-cloud -> qwen3.5:cloud
-        PLANNING_CHAIN    cogito-2.1:671b-cloud -> kimi-k2-thinking:cloud -> kimi-k2.5:cloud -> nemotron-3-super -> qwen3.5:cloud
-        DOER_CHAIN        minimax-m2.7:cloud -> devstral-2:123b-cloud -> qwen3-coder-next:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud
-        CODING_CHAIN      devstral-2:123b-cloud -> minimax-m2.7:cloud -> qwen3-coder-next:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud
-    ANALYSIS_CHAIN    qwen3.5:cloud -> kimi-k2.5:cloud -> glm-5:cloud -> nemotron-3-super -> deepseek-v3.2:cloud
-    ETHICS_CHAIN      deepseek-v3.2:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud
-    UNIVERSAL_CHAIN   nemotron-3-super -> qwen3.5:cloud -> glm-5:cloud -> deepseek-v3.2:cloud
+Named chains are derived from the packaged HLF model policy instead of being frozen in this client.
 
 Usage:
     from ollama_client import FallbackOrchestrator, REASONING_CHAIN
@@ -96,6 +88,8 @@ import urllib.error
 import urllib.request
 from collections import deque
 from typing import Any
+
+from hlf_mcp.hlf.model_catalog import build_named_model_chains
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -195,65 +189,32 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
     ),
 }
 
-# Tiered chains — ordered strongest -> final safety net
-REASONING_CHAIN: list[str] = [
-    "glm-5:cloud",
-    "nemotron-3-super",
-    "cogito-2.1:671b-cloud",
-    "qwen3.5:cloud",
-]
-PLANNING_CHAIN: list[str] = [
-    "cogito-2.1:671b-cloud",
-    "kimi-k2-thinking:cloud",
-    "kimi-k2.5:cloud",
-    "nemotron-3-super",
-    "qwen3.5:cloud",
-]
-DOER_CHAIN: list[str] = [
-    "minimax-m2.7:cloud",
-    "devstral-2:123b-cloud",
-    "qwen3-coder-next:cloud",
-    "glm-5:cloud",
-    "nemotron-3-super",
-    "qwen3.5:cloud",
-]
-CODING_CHAIN: list[str] = [
-    "devstral-2:123b-cloud",
-    "minimax-m2.7:cloud",
-    "qwen3-coder-next:cloud",
-    "glm-5:cloud",
-    "nemotron-3-super",
-    "qwen3.5:cloud",
-]
-ANALYSIS_CHAIN: list[str] = [
-    "qwen3.5:cloud",
-    "kimi-k2.5:cloud",
-    "glm-5:cloud",
-    "nemotron-3-super",
-    "deepseek-v3.2:cloud",
-]
-ETHICS_CHAIN: list[str] = [
-    "deepseek-v3.2:cloud",
-    "glm-5:cloud",
-    "nemotron-3-super",
-    "qwen3.5:cloud",
-]
-UNIVERSAL_CHAIN: list[str] = [
-    "nemotron-3-super",
-    "qwen3.5:cloud",
-    "glm-5:cloud",
-    "deepseek-v3.2:cloud",
-]
+def _build_chain_map() -> dict[str, list[str]]:
+    return build_named_model_chains(available_models=set(MODEL_REGISTRY))
 
-CHAIN_MAP: dict[str, list[str]] = {
-    "reasoning": REASONING_CHAIN,
-    "planning": PLANNING_CHAIN,
-    "doer": DOER_CHAIN,
-    "coding": CODING_CHAIN,
-    "analysis": ANALYSIS_CHAIN,
-    "ethics": ETHICS_CHAIN,
-    "universal": UNIVERSAL_CHAIN,
-}
+
+CHAIN_MAP: dict[str, list[str]] = _build_chain_map()
+REASONING_CHAIN: list[str] = list(CHAIN_MAP["reasoning"])
+PLANNING_CHAIN: list[str] = list(CHAIN_MAP["planning"])
+DOER_CHAIN: list[str] = list(CHAIN_MAP["doer"])
+CODING_CHAIN: list[str] = list(CHAIN_MAP["coding"])
+ANALYSIS_CHAIN: list[str] = list(CHAIN_MAP["analysis"])
+ETHICS_CHAIN: list[str] = list(CHAIN_MAP["ethics"])
+UNIVERSAL_CHAIN: list[str] = list(CHAIN_MAP["universal"])
+
+
+def _render_chain_help() -> str:
+    lines = ["Chains:"]
+    for name, chain in CHAIN_MAP.items():
+        lines.append(f"  {name:<11} {' -> '.join(chain)}")
+    lines.append("")
+    lines.append(
+        "Overrides are allowed only when the replacement meets or exceeds the role capability floor,"
+    )
+    lines.append(
+        "context needs, tool competence, and HLF-specific proficiency required by the displaced model."
+    )
+    return "\n".join(lines)
 
 # ---------------------------------------------------------------------------
 # Result dataclass
@@ -475,14 +436,13 @@ class StreamingBuffer:
 
             try:
                 chunk = self._resp.read(STREAM_CHUNK_SIZE)
+            except StopIteration:
+                chunk = b""
             except (ConnectionResetError, http.client.IncompleteRead, OSError) as exc:
                 log.warning("[%s] Network error mid-stream: %s — keeping partial", self._model, exc)
                 break
-
             if not chunk:
                 break
-
-            last_chunk_at = time.monotonic()
             remainder += chunk
             lines = remainder.split(b"\n")
             remainder = lines[-1]  # potentially partial line
@@ -571,59 +531,45 @@ class StreamingBuffer:
 
 
 class ResponseValidator:
-    _ERROR_INDICATORS = (
-        "rate limit exceeded",
-        "model not found",
-        "unauthorized",
-        "quota exceeded",
-        "service unavailable",
-        "internal server error",
-        "context length exceeded",
-        "model is not available",
-    )
+    """Lightweight quality gate for individual model responses."""
 
-    @classmethod
-    def validate(cls, content: str, model: str) -> tuple[bool, str]:
-        if not content or len(content.strip()) < MIN_RESPONSE_CHARS:
-            return False, f"Response too short ({len(content)} chars)"
-        lower = content.lower().strip()
-        for indicator in cls._ERROR_INDICATORS:
-            if lower.startswith(indicator) or (len(lower) < 250 and indicator in lower):
-                return False, f"Error body detected: {content[:120]!r}"
+    @staticmethod
+    def validate(content: str, model: str) -> tuple[bool, str]:
+        stripped = content.strip()
+        if len(stripped) < MIN_RESPONSE_CHARS:
+            return False, f"response from {model} was too short"
+        lowered = stripped.lower()
+        if lowered in {"null", "none"}:
+            return False, f"response from {model} was empty"
+        error_markers = (
+            '{"error"',
+            "{'error'",
+            "rate limit",
+            "unauthorized",
+            "forbidden",
+            "invalid api key",
+            "authentication failed",
+        )
+        if any(marker in lowered for marker in error_markers):
+            return False, f"Error body from {model}"
         return True, ""
 
 
-# ---------------------------------------------------------------------------
-# Low-level single call
-# ---------------------------------------------------------------------------
-
-
 def _call_single(
+    *,
     model: str,
     system: str,
     prompt: str,
-    temperature: float = 0.2,
-    think: bool = False,
-    api_key: str = "",
-    use_streaming: bool = True,
-    tools: list[dict[str, Any]] | None = None,
-    format_schema: dict[str, Any] | None = None,
-    web_search: bool = False,
+    temperature: float,
+    think: bool,
+    api_key: str,
+    use_streaming: bool,
+    tools: list[dict[str, Any]] | None,
+    format_schema: dict[str, Any] | None,
+    web_search: bool,
 ) -> tuple[str, bool, dict[str, Any]]:
-    """
-    One attempt against one model.
-    Returns (content, is_complete, raw_meta).
-    Raises on hard/non-retriable failures.
-
-    Parameters:
-        tools         — OpenAI-style tool definitions array for tool calling.
-        format_schema — JSON schema dict for structured output enforcement.
-        web_search    — If True, inject a web_search tool automatically so
-                        the model can fetch live search results during inference.
-    """
     cb = CircuitBreaker(model)
     mon = ConnectionMonitor(model)
-
     if cb.is_open:
         raise RuntimeError(f"Circuit OPEN for {model!r}")
 
@@ -638,18 +584,13 @@ def _call_single(
         "stream": use_streaming,
         "options": {"temperature": temperature, "num_predict": 4096},
     }
-    # Thinking mode — deepseek-r1, qwen3 etc.
     if think and spec and spec.supports_think:
         payload["think"] = True
-
-    # Structured outputs — pass JSON schema in format field
     if format_schema:
         payload["format"] = format_schema
 
-    # Tool calling — define callable functions for the model to invoke
     resolved_tools = list(tools) if tools else []
     if web_search:
-        # Inject the built-in Ollama web_search tool definition
         resolved_tools.append(
             {
                 "type": "function",
@@ -716,7 +657,6 @@ def _call_single(
                     if choices:
                         content = choices[0].get("message", {}).get("content", "")
                 is_complete = True
-                # Capture thinking and tool_calls from batch response
                 if isinstance(msg, dict):
                     raw_meta["thinking"] = msg.get("thinking", "")
                     raw_meta["tool_calls"] = msg.get("tool_calls", [])
@@ -1007,6 +947,9 @@ def call_ollama(
         think=think,
         api_key=api_key or os.environ.get("OLLAMA_API_KEY", ""),
         use_streaming=True,
+        tools=None,
+        format_schema=None,
+        web_search=False,
     )
     raw["_content"] = content
     raw["_complete"] = is_complete
@@ -1062,18 +1005,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Ollama Cloud — tiered fallback client",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Chains:\n"
-            "  reasoning   glm-5:cloud -> nemotron-3-super -> cogito-2.1:671b-cloud -> qwen3.5:cloud\n"
-            "  planning    cogito-2.1:671b-cloud -> kimi-k2-thinking:cloud -> kimi-k2.5:cloud -> nemotron-3-super -> qwen3.5:cloud\n"
-            "  doer        minimax-m2.7:cloud -> devstral-2:123b-cloud -> qwen3-coder-next:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud\n"
-            "  coding      devstral-2:123b-cloud -> minimax-m2.7:cloud -> qwen3-coder-next:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud\n"
-            "  analysis    qwen3.5:cloud -> kimi-k2.5:cloud -> glm-5:cloud -> nemotron-3-super -> deepseek-v3.2:cloud\n"
-            "  ethics      deepseek-v3.2:cloud -> glm-5:cloud -> nemotron-3-super -> qwen3.5:cloud\n"
-            "  universal   nemotron-3-super -> qwen3.5:cloud -> glm-5:cloud -> deepseek-v3.2:cloud\n\n"
-            "Overrides are allowed only when the replacement meets or exceeds the role capability floor,"
-            " context needs, tool competence, and HLF-specific proficiency required by the displaced model."
-        ),
+        epilog=_render_chain_help(),
     )
     grp = parser.add_mutually_exclusive_group(required=True)
     grp.add_argument("--chain", choices=list(CHAIN_MAP), help="Named tiered chain")

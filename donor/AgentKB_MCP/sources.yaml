@@ -1,0 +1,67 @@
+domains:
+  postgresql:
+    name: PostgreSQL
+    sources:
+    - url: https://www.postgresql.org/docs/current/release.html
+      type: release_notes
+      check_interval: daily
+    - url: https://www.postgresql.org/docs/current/runtime-config.html
+      type: configuration
+      check_interval: weekly
+  nextjs:
+    name: Next.js
+    sources:
+    - url: https://nextjs.org/docs
+      type: api_reference
+      check_interval: daily
+    - url: https://github.com/vercel/next.js/releases.atom
+      type: rss_feed
+      check_interval: hourly
+  python:
+    name: Python
+    sources:
+    - url: https://docs.python.org/3/whatsnew/index.html
+      type: changelog
+      check_interval: weekly
+  fastapi:
+    name: FastAPI
+    sources:
+    - url: https://fastapi.tiangolo.com/release-notes/
+      type: release_notes
+      check_interval: daily
+  docker:
+    name: Docker
+    sources:
+    - url: https://docs.docker.com/engine/release-notes/
+      type: release_notes
+      check_interval: weekly
+  typescript:
+    name: TypeScript
+    sources:
+    - url: https://www.typescriptlang.org/docs/handbook/release-notes/overview.html
+      type: release_notes
+      check_interval: weekly
+  react:
+    name: React
+    sources:
+    - url: https://react.dev/blog
+      type: changelog
+      check_interval: daily
+  kubernetes:
+    name: Kubernetes
+    sources:
+    - url: https://kubernetes.io/docs/setup/release/notes/
+      type: release_notes
+      check_interval: weekly
+  aws:
+    name: AWS
+    sources:
+    - url: https://aws.amazon.com/new/
+      type: changelog
+      check_interval: daily
+  rust:
+    name: Rust
+    sources:
+    - url: https://blog.rust-lang.org/
+      type: changelog
+      check_interval: weekly

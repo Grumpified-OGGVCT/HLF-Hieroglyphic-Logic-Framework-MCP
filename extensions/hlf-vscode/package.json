@@ -32,6 +32,26 @@
     "onStartupFinished"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "hlf",
+        "aliases": [
+          "HLF",
+          "Hieroglyphic Logic Framework"
+        ],
+        "extensions": [
+          ".hlf"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "hlf",
+        "scopeName": "source.hlf",
+        "path": "./syntaxes/hlf.tmLanguage.json"
+      }
+    ],
     "commands": [
       {
         "command": "hlf.startServer",

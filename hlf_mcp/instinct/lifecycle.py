@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from hlf_mcp.instinct.orchestration import (
+    build_orchestration_contract,
     execution_ready_for_verification,
     normalize_execution_trace,
     normalize_task_dag,
@@ -170,16 +171,38 @@ class InstinctLifecycle:
                     )
                     and not override
                 ):
+                    execution_summary = summarize_execution_trace(
+                        mission.get("execution_trace", []),
+                        task_dag=mission.get("task_dag", []),
+                    )
+                    orchestration_contract = build_orchestration_contract(
+                        mission.get("task_dag", []),
+                        mission.get("execution_trace", []),
+                    )
+                    mission["execution_summary"] = execution_summary
+                    mission["orchestration_contract"] = orchestration_contract
                     return {
                         "mission_id": mission_id,
                         "status": "blocked",
+                        "topic": mission.get("topic", ""),
                         "current_phase": current,
                         "allowed_next": _ALLOWED_NEXT.get(current, []),
                         "error": "Execution trace is incomplete or contains failed nodes. Mission halted before verify.",
-                        "execution_summary": summarize_execution_trace(
-                            mission.get("execution_trace", []),
-                            task_dag=mission.get("task_dag", []),
-                        ),
+                        "sealed": mission.get("sealed", False),
+                        "seal_hash": mission.get("seal_hash"),
+                        "cove_gate": {
+                            "passed": mission.get("cove_gate_passed", False),
+                            "failures": mission.get("cove_failures", 0),
+                        },
+                        "phase_history": mission.get("phase_history", []),
+                        "spec": copy.deepcopy(mission.get("spec")),
+                        "task_dag": copy.deepcopy(mission.get("task_dag", [])),
+                        "execution_trace": copy.deepcopy(mission.get("execution_trace", [])),
+                        "execution_summary": copy.deepcopy(execution_summary),
+                        "orchestration_contract": copy.deepcopy(orchestration_contract),
+                        "verification_report": copy.deepcopy(mission.get("verification_report")),
+                        "realignment_events": copy.deepcopy(mission.get("realignment_events", [])),
+                        "gate_info": _GATES.get(current, {}),
                     }
 
             # Advance phase
@@ -207,6 +230,10 @@ class InstinctLifecycle:
                     mission["spec"] = copy.deepcopy(payload)
                 if isinstance(payload.get("task_dag"), list):
                     mission["task_dag"] = normalize_task_dag(payload.get("task_dag", []))
+                mission["orchestration_contract"] = build_orchestration_contract(
+                    mission.get("task_dag", []),
+                    mission.get("execution_trace", []),
+                )
             elif phase == "execute":
                 if isinstance(payload.get("task_dag"), list):
                     mission["task_dag"] = normalize_task_dag(payload.get("task_dag", []))
@@ -219,6 +246,10 @@ class InstinctLifecycle:
                         mission["execution_trace"],
                         task_dag=mission.get("task_dag", []),
                     )
+                mission["orchestration_contract"] = build_orchestration_contract(
+                    mission.get("task_dag", []),
+                    mission.get("execution_trace", []),
+                )
             elif phase == "verify" and payload:
                 mission["verification_report"] = copy.deepcopy(payload)
 
@@ -320,6 +351,11 @@ class InstinctLifecycle:
 
 
 def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    normalized_task_dag = (
+        normalize_task_dag(payload.get("task_dag", []))
+        if isinstance(payload.get("task_dag"), list)
+        else []
+    )
     return {
         "mission_id": mission_id,
         "topic": str(payload.get("topic") or mission_id),
@@ -335,22 +371,29 @@ def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             }
         },
         "spec": copy.deepcopy(payload),
-        "task_dag": list(payload.get("task_dag", []))
-        if isinstance(payload.get("task_dag"), list)
-        else [],
+        "task_dag": normalized_task_dag,
         "execution_trace": [],
         "execution_summary": {
-            "total_nodes": len(payload.get("task_dag", []))
-            if isinstance(payload.get("task_dag"), list)
-            else 0,
+            "total_nodes": len(normalized_task_dag),
             "recorded_nodes": 0,
             "completed_nodes": 0,
             "failed_nodes": 0,
             "delegated_nodes": 0,
             "escalated_nodes": 0,
+            "dissenting_nodes": 0,
+            "allowed_nodes": 0,
+            "denied_nodes": 0,
+            "pending_nodes": 0,
+            "handoff_nodes": 0,
             "all_nodes_recorded": False,
             "all_nodes_succeeded": False,
+            "all_nodes_allowed": False,
+            "all_decisions_resolved": False,
         },
+        "orchestration_contract": build_orchestration_contract(
+            normalized_task_dag,
+            [],
+        ),
         "verification_report": None,
         "realignment_events": [],
         "created_at": time.time(),
@@ -380,6 +423,7 @@ def _ok_state(mission: dict[str, Any], note: str | None = None) -> dict[str, Any
         "task_dag": copy.deepcopy(mission.get("task_dag", [])),
         "execution_trace": copy.deepcopy(mission.get("execution_trace", [])),
         "execution_summary": copy.deepcopy(mission.get("execution_summary", {})),
+        "orchestration_contract": copy.deepcopy(mission.get("orchestration_contract", {})),
         "verification_report": copy.deepcopy(mission.get("verification_report")),
         "realignment_events": copy.deepcopy(mission.get("realignment_events", [])),
         "gate_info": _GATES.get(phase, {}),

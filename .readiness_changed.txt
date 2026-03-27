@@ -1,0 +1,9 @@
+.github/workflows/weekly-model-drift-detect.yml
+SSOT_HLF_MCP.md
+docs/claims-ledger.html
+docs/merge-readiness.html
+hlf_mcp/hlf/registry.py
+plan/architecture-hlf-language-knowledge-convergence-1.md
+scripts/monitor_model_drift.py
+tests/test_host_function_contracts.py
+tests/test_workflow_support.py

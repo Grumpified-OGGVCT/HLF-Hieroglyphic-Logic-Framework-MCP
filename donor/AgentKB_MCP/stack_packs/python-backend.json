@@ -1,0 +1,23 @@
+{
+  "pack_id": "python-backend",
+  "name": "Python Backend Stack",
+  "version": "1.0.0",
+  "description": "Virtual collection for Python backend development with FastAPI, PostgreSQL, and Redis.",
+  "entry_ids": [
+    "python-asyncio-basics-0001",
+    "python-type-hints-basics-0002",
+    "postgresql-max-connections-default-0001",
+    "postgresql-create-index-basic-0002",
+    "postgresql-jsonb-query-0003"
+  ],
+  "domains": [
+    "python",
+    "fastapi",
+    "postgresql",
+    "redis",
+    "docker"
+  ],
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}
+

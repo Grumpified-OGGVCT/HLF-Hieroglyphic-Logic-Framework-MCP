@@ -35,8 +35,8 @@ def generate_host_functions_reference(path: Path | None = None) -> str:
         "",
         f"Registry version: `{data.get('version', 'unknown')}`",
         "",
-        "| Name | Args | Returns | Input Schema | Output Schema | Tiers | Gas | Effect | Failure | Audit | Backend | Sensitive |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Name | Args | Returns | Input Schema | Output Schema | Tiers | Gas | Effect | Failure | Audit | Safety | Review | Mode | Supervisory | Backend | Sensitive |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
 
     def _schema_summary(schema: Any) -> str:
@@ -58,7 +58,7 @@ def generate_host_functions_reference(path: Path | None = None) -> str:
         arg_text = ", ".join(f"`{arg['name']}: {arg['type']}`" for arg in args) or "none"
         tiers = ", ".join(function.get("tier", [])) or "none"
         lines.append(
-            "| {name} | {args} | `{returns}` | {input_schema} | {output_schema} | {tiers} | {gas} | `{effect}` | `{failure}` | `{audit}` | `{backend}` | `{sensitive}` |".format(
+            "| {name} | {args} | `{returns}` | {input_schema} | {output_schema} | {tiers} | {gas} | `{effect}` | `{failure}` | `{audit}` | `{safety}` | `{review}` | `{mode}` | `{supervisory}` | `{backend}` | `{sensitive}` |".format(
                 name=function["name"],
                 args=arg_text,
                 returns=function.get("returns", "unknown"),
@@ -69,6 +69,10 @@ def generate_host_functions_reference(path: Path | None = None) -> str:
                 effect=function.get("effect_class", "unknown"),
                 failure=function.get("failure_type", "unknown"),
                 audit=function.get("audit_requirement", "unknown"),
+                safety=function.get("safety_class", "none"),
+                review=function.get("review_posture", "none"),
+                mode=function.get("execution_mode", "direct"),
+                supervisory=str(function.get("supervisory_only", False)).lower(),
                 backend=function.get("backend", "unknown"),
                 sensitive=str(function.get("sensitive", False)).lower(),
             )

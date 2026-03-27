@@ -164,6 +164,8 @@ The MCP server is important, but it is not the whole vision.
 
 It is the easiest adoption path.
 
+It is also the expected packaged access surface for that vision.
+
 For the fuller positioning statement, read `docs/HLF_MCP_POSITIONING.md`.
 
 The idea is:
@@ -171,9 +173,12 @@ The idea is:
 - any agent can connect
 - the agent gets HLF compile, validate, execute, translate, explain, and memory capabilities
 - the user gets safer and clearer execution without learning the whole language first
+- a robot, assistant, or other external system can use the HLF MCP surface as its live operational interface while the underlying cognition, memory, and audit contracts remain HLF-native
 
 So the MCP server is the front door.
-It is not the house.
+It is not the whole ontology.
+
+But it may still be the main way real systems enter and use the house.
 
 ## Why The Recursive Build Story Matters
 

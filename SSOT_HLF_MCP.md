@@ -1,8 +1,8 @@
 # Single Source of Truth - HLF-Hieroglyphic-Logic-Framework-MCP
 
-**Generated on:** 2026-03-20
-**Branch:** integrate/vscode-operator-governed-review
-**Purpose:** Authoritative current-state document for this local checkout, grounded in code present in this branch plus targeted verification run on 2026-03-20, with explicit notes on extraction completeness relative to the Sovereign source repo.
+**Generated on:** 2026-03-24
+**Branch:** rescue/governed-review-recovery-2026-03-21
+**Purpose:** Authoritative current-state document for this local checkout, grounded in code present in this branch plus targeted verification runs on 2026-03-20, 2026-03-21, and 2026-03-24, with explicit notes on extraction completeness relative to the Sovereign source repo.
 
 ## Truth Boundary
 
@@ -12,7 +12,21 @@ This document separates three classes of truth:
 2. **Partial now**: present as code or scaffolding, but not complete enough to claim as finished.
 3. **Roadmap / vision**: valuable design direction, but not default present-tense product truth.
 
-If a claim is not backed by files in this repo or a command run in this workspace on 2026-03-17, it does not belong in the "implemented now" section.
+## Operator Workflow (Dogfooding)
+
+The packaged HLF MCP server is now used for bounded, governed build-assist:
+
+- Use `hlf_do`, `_toolkit.py status`, and `hlf_test_suite_summary` to inspect, test, and explain the system during further development.
+- All operator-facing evidence, audit, and regression surfaces are real and queryable.
+- The packaged `hlf_mcp` HTTP/SSE lane has been verified with `HLF_TRANSPORT=sse`, `HLF_PORT=8011`, and `GET /health -> 200 OK`.
+- This workflow is not full self-hosting, but it is a real recursive build-assist loop: the system is used to help build and verify itself, with each new bridge slice (routing, verification, orchestration, etc.) added and then used to further assist the next round of work.
+
+2026-03-21 verification addendum:
+
+- `uv run pytest tests/ -q --tb=short` passed with `816 passed`
+- workspace-local MCP wiring now targets `uv run hlf-mcp` rather than the legacy compatibility entrypoint
+
+If a claim is not backed by files in this repo or a command run in this workspace on the verification dates named above, it does not belong in the "implemented now" section.
 
 This document also now distinguishes between:
 
@@ -187,6 +201,7 @@ The following claims are grounded in code present in this checkout.
 - `hlf_mcp/hlf/compiler.py` implements a real multi-pass compiler.
 - Implemented passes present in code: normalization, LALR parsing, immutable env collection, ethics hook, variable expansion, ALIGN validation, gas estimation, AST cache.
 - `hlf_mcp/hlf/translator.py` implements English-to-HLF and HLF-to-English translation helpers.
+- The packaged translation front door now exposes a first-class cognitive lane policy surface with benchmark-gated default handling, English-audit preference, and fail-closed Chinese-ingress disallow mode.
 - `hlf_mcp/hlf/formatter.py` and `hlf_mcp/hlf/linter.py` provide canonical formatting and static analysis.
 - The packaged CLI surface now also includes `hlfpm`, `hlfsh`, and `hlftest` entry points for package management, interactive authoring, and fixture/snippet validation.
 
@@ -203,6 +218,13 @@ The following claims are grounded in code present in this checkout.
 - Implemented transports: `stdio`, `sse`, and `streamable-http`.
 - Implemented health endpoint wrapper: `/health` for HTTP transports.
 - Implemented resources: grammar, opcodes, host functions, examples, governance files, stdlib listing.
+
+### Model backend selection and dependency boundary
+
+- The packaged routing and model-catalog surface already distinguishes `local-via-ollama`, `cloud-via-ollama`, and `remote-direct` backend lanes.
+- The packaged MCP server works without any locally tuned HLF-specialized model.
+- Current operator guidance for planner, doer, coding, reasoning, and controller roles is cloud-first; admitted local lanes remain optional runtime choices rather than a build dependency.
+- The future HLF-specialized local LoRA or QLoRA experiment remains `bridge-true` under `plan/feature-local-slm-tuning-1.md`; it is not current packaged truth and not required for MCP operation.
 
 ### Current recursive build-assist truth
 
@@ -225,6 +247,9 @@ Current truth rule:
 
 - `hlf_mcp/rag/memory.py` provides the repo's current packaged Infinite RAG memory subsystem.
 - HLF Knowledge Substrate (HKS)-facing governed knowledge surfaces also exist above that subsystem through `hlf_mcp/server_memory.py`, `hlf_mcp/server_context.py`, and `hlf_mcp/weekly_artifacts.py`.
+- Packaged HKS memory now materializes first-class persisted graph nodes rather than relying only on per-record graph metadata at query time.
+- Packaged HKS retrieval now emits reusable `governed_hks_contract` payloads backed by lexical, sparse-semantic, metadata-filtered, and persisted graph-linked scoring paths.
+- Benchmark artifacts and weekly artifact memory records now emit reusable HKS graph entities for prompt assets, code patterns, upgrade opportunities, and weekly evidence state.
 - `hlf_mcp/instinct/lifecycle.py` provides the current Instinct lifecycle state machine surface.
 
 ### Governance artifacts
@@ -241,6 +266,21 @@ Current truth rule:
 - `hlf_mcp/server_profiles.py` and `hlf_mcp/hlf/routing_trace.py` now provide real packaged route-evidence, profile-capability, and fallback-trace surfaces.
 - `hlf_mcp/governed_review.py` now provides normalized governed-review contracts for spec drift, test health, ethics review, code quality, doc accuracy, and security-pattern review.
 - `hlf_mcp/evidence_query.py` and `hlf_mcp/weekly_artifacts.py` now provide operator-facing evidence listing, summary, and decision persistence over verified weekly artifacts.
+
+### 2026-03-24 HKS bridge addendum
+
+- route, repair, verifier, and execution-admission seams now consume admitted HKS governed-knowledge contracts directly rather than depending only on raw recall result lists
+- capsule execution now denies elevated execution when the routed HKS contract is not admitted
+- formal verifier admission now upgrades elevated requests to `knowledge_review_required` when governed verifier evidence is missing or inadmissible
+- focused HKS bridge validation is green in `tests/test_hks_memory.py`, `tests/test_capsule_pointer_trust.py`, and `tests/test_fastmcp_frontdoor.py` (`149 passed`)
+- adjacent evidence and weekly-governance validation is green in `tests/test_weekly_artifacts.py`, `tests/test_evidence_query.py`, `tests/test_workflow_support.py`, `tests/test_extracted_support_tools.py`, and `tests/test_witness_governance.py` (`31 passed`)
+
+### Weekly drift harness current truth
+
+- `scripts/monitor_model_drift.py` now runs the weekly semantic drift probes in a closed-book mode: schema enforcement remains on, but web search is disabled and streaming is turned off for stricter JSON stability.
+- The weekly drift harness now normalizes fenced JSON and embedded JSON object responses before classification.
+- The weekly drift harness now separates three failure classes from true semantic misses: `semantic_wrong_answer`, `protocol_shape_failure`, and `tool_call_behavior_failure`.
+- Focused proof for this slice now exists in `tests/test_workflow_support.py`, including regression coverage for fenced-JSON normalization and outcome-class separation.
 
 ### Merged forward in this pass
 
@@ -307,6 +347,14 @@ These areas are real, but should not be overstated.
 - `hlf_mcp/dream_cycle.py`, `hlf_mcp/media_evidence.py`, `hlf_mcp/server_context.py`, `hlf_mcp/server_memory.py`, and `hlf_mcp/server_resources.py` provide a bounded dream-cycle and media-evidence bridge slice, but that lane remains advisory and bridge-qualified rather than full autonomous-evolution completion.
 - `hlf_mcp/server_profiles.py` and `governance/model_qualification_profiles.json` now expose multimodal host-function and qualification-contract surfaces, but multimodal remains a governed bridge lane rather than a complete packaged media stack.
 - `extensions/hlf-vscode/` now contains a real operator-bridge scaffold for VS Code, but it remains a bridge scaffold rather than a current-truth claim of Marketplace-shipped extension completion.
+
+### Embodied execution boundary
+
+- `governance/host_functions.json` now includes a first embodied host-function family, and the packaged runtime/front-door surfaces recognize that contract through `hlf_mcp/hlf/embodied.py`, `hlf_mcp/server_capsule.py`, and `hlf_mcp/hlf/runtime.py`.
+- Current proof in this checkout covers supervisory host-contract metadata, approval-required guarded actuation, missing-evidence denial, tier-gated runtime dispatch, and structured simulation-only runtime results.
+- Truthful claim: **the embodied slice is supervisory and simulation-scoped, not a claim of production robotics execution.**
+- Truthful claim: **embodied action envelopes are not yet threaded through deeper verifier-backed spatial or motion proof.**
+- Truthful claim: **execution-admission, route, witness, and operator-resource integration for embodied actions is not yet complete beyond the current host-call and runtime slice.**
 
 ### Language evolution and bytecode trust bridge
 

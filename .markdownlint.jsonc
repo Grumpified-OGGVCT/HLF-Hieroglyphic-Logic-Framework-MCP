@@ -1,0 +1,17 @@
+{
+  // Suppress markdownlint noise on non-project files
+  // MD007: unordered list indentation
+  // MD012: multiple consecutive blank lines
+  // MD022: headings should be surrounded by blank lines
+  // MD025: multiple top-level headings
+  // MD032: lists should be surrounded by blank lines
+  // MD040: fenced code blocks should have a language specified
+  // MD047: files should end with a single newline
+  "MD007": false,
+  "MD012": false,
+  "MD022": false,
+  "MD025": false,
+  "MD032": false,
+  "MD040": false,
+  "MD047": false
+}

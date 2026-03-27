@@ -1,8 +1,8 @@
 ---
 goal: Recover HLF routing fabric without flattening upstream gateway semantics into a thin packaged selector
-version: 1.0
+version: 1.1
 date_created: 2026-03-19
-last_updated: 2026-03-19
+last_updated: 2026-03-21
 owner: GitHub Copilot
 status: 'Planned'
 tags: [routing, recovery, gateway, bridge, governance, orchestration, hlf]
@@ -15,6 +15,14 @@ tags: [routing, recovery, gateway, bridge, governance, orchestration, hlf]
 This spec defines how to recover the routing fabric as a constitutive HLF surface. The packaged repo already has evidence-backed model selection work in `hlf_mcp/server_profiles.py`, `hlf_mcp/hlf/model_catalog.py`, and `hlf_mcp/server_resources.py`, but that is still narrower than the upstream gateway fabric.
 
 The target is not a generic model picker. The target is a governed routing layer that carries route admission, tier discipline, benchmark evidence, policy basis, and operator-visible traces.
+
+Current packaged checkpoint on 2026-03-21:
+
+- route traces now persist explicit route and ALIGN governance refs in `policy_basis`
+- route resources resolve and expose the persisted route-governance event plus the upstream ALIGN basis instead of only dumping the stored trace blob
+- route admission remains fail-closed when evidence or policy basis is missing, and those denial reasons are preserved in the operator-visible trace
+- witness-governance trust states now constrain packaged routing automatically: `watched` and `probation` force reviewable deterministic-local routing, while `restricted` fails closed into route denial and downstream capsule containment
+- route resources now emit top-level operator summaries, evidence refs, fallback summaries, and readable policy-basis summaries instead of requiring callers to interpret nested trace blobs manually
 
 ## 1. Requirements & Constraints
 
@@ -101,37 +109,50 @@ Every route trace must eventually serialize:
 - `fallback_chain`
 - `operator_summary`
 
+Current packaged `policy_basis` minimum:
+
+- `align_status`
+- `align_rule_id`
+- `governance_event_ref`
+- `route_governance_event_ref`
+- `align_governance_event_ref`
+- `related_refs`
+- `policy_constraints`
+- `policy_basis_present`
+- `required_evidence_profiles`
+- `missing_evidence_profiles`
+
 ## 5. Implementation Steps
 
 ### Implementation Phase 1
 
 - **GOAL-001**: Lock the routing contract and ownership boundary.
 
-| Task | Description | Completed | Date |
-|------|-------------|-----------|------|
-| TASK-001 | Document the current packaged routing path across `hlf_mcp/server_profiles.py`, `hlf_mcp/hlf/model_catalog.py`, and `hlf_mcp/server_resources.py`. |  |  |
-| TASK-002 | Define the packaged route-decision schema and route-trace schema. |  |  |
-| TASK-003 | Define which route semantics from `hlf_source/agents/gateway/router.py` must be faithfully ported versus only referenced. |  |  |
+|Task|Description|Completed|Date|
+|---|---|---|---|
+|TASK-001|Document the current packaged routing path across `hlf_mcp/server_profiles.py`, `hlf_mcp/hlf/model_catalog.py`, and `hlf_mcp/server_resources.py`.|||
+|TASK-002|Define the packaged route-decision schema and route-trace schema.|||
+|TASK-003|Define which route semantics from `hlf_source/agents/gateway/router.py` must be faithfully ported versus only referenced.|||
 
 ### Implementation Phase 2
 
 - **GOAL-002**: Recover governance-backed routing behavior.
 
-| Task | Description | Completed | Date |
-|------|-------------|-----------|------|
-| TASK-004 | Port policy and allowlist gating semantics into the packaged route path. |  |  |
-| TASK-005 | Add fail-closed handling when route evidence or policy basis is missing. |  |  |
-| TASK-006 | Add deterministic route rationale generation and operator summaries. |  |  |
+|Task|Description|Completed|Date|
+|---|---|---|---|
+|TASK-004|Port policy and allowlist gating semantics into the packaged route path.|✅|2026-03-21|
+|TASK-005|Add fail-closed handling when route evidence or policy basis is missing.|✅|2026-03-21|
+|TASK-006|Add deterministic route rationale generation and operator summaries.|✅|2026-03-21|
 
 ### Implementation Phase 3
 
 - **GOAL-003**: Prove the routing fabric through tests and operator surfaces.
 
-| Task | Description | Completed | Date |
-|------|-------------|-----------|------|
-| TASK-007 | Add regression coverage for lane-family selection, fallback ordering, and profile readiness. |  |  |
-| TASK-008 | Add regression coverage for policy-backed route denial and evidence-required route denial. |  |  |
-| TASK-009 | Add operator-facing resource checks for route evidence, selected profiles, and fallback explanation. |  |  |
+|Task|Description|Completed|Date|
+|---|---|---|---|
+|TASK-007|Add regression coverage for lane-family selection, fallback ordering, and profile readiness.|✅|2026-03-21|
+|TASK-008|Add regression coverage for policy-backed route denial and evidence-required route denial.|✅|2026-03-21|
+|TASK-009|Add operator-facing resource checks for route evidence, selected profiles, and fallback explanation.|✅|2026-03-21|
 
 ## 6. Files
 

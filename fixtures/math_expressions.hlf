@@ -1,0 +1,112 @@
+# HLF v3 — Governing Algorithm Fixture
+# Exercises the specific formulas and algorithms that HLF uses internally:
+#   Gas budget verification, salience scoring, compression ratio,
+#   similarity thresholds, entropy drift policy, Merkle chain linkage.
+# Each ASSIGN and IF maps to a real HLF governing computation.
+[HLF-v3]
+
+# ── Gas Budget Verification ──────────────────────────────────────────────────
+# Real formula: total_gas = sum(op_gas) per statement, checked against tier max.
+# Capsule tier budgets: hearth=100, forge=500, sovereign=1000.
+# Host function gas: hash_sha256=2, merkle_chain=3, cosine_similarity=2,
+#   formal_verify=10, memory_store=5, memory_recall=5, summarize=8, embed_text=5.
+ASSIGN hash_gas = 2
+ASSIGN merkle_gas = 3
+ASSIGN similarity_gas = 2
+ASSIGN verify_gas = 10
+ASSIGN audit_pipeline_gas = hash_gas + merkle_gas + similarity_gas + verify_gas
+ASSIGN hearth_max = 100
+ASSIGN forge_max = 500
+IF audit_pipeline_gas <= hearth_max {
+  Δ [INTENT] goal="gas_budget_hearth_ok"
+}
+IF audit_pipeline_gas <= forge_max {
+  Δ [INTENT] goal="gas_budget_forge_ok"
+}
+
+# ── Salience Scoring ─────────────────────────────────────────────────────────
+# Real formula from rag/memory.py _compute_salience_score():
+#   score = confidence*0.25 + groundedness*0.25 + citation_coverage*0.2
+#         + freshness*0.15 + provenance*0.15 + semantic_bonus + promotion_bonus
+# Archive threshold: score < 0.45 → eligible for long-term archival.
+ASSIGN confidence = 8
+ASSIGN groundedness = 9
+ASSIGN citation_coverage = 7
+ASSIGN freshness = 10
+ASSIGN provenance = 10
+ASSIGN weighted_score = confidence * 25 + groundedness * 25 + citation_coverage * 20 + freshness * 15 + provenance * 15
+ASSIGN archive_threshold = 450
+IF weighted_score >= archive_threshold {
+  Δ [INTENT] goal="salience_above_archive_threshold"
+}
+
+# ── Token Compression Ratio ──────────────────────────────────────────────────
+# Real formula from hlf/benchmark.py:
+#   compression_pct = hlf_tokens * 100 / nlp_tokens
+# HLF claims 12-30% compression over equivalent NLP (tiktoken cl100k_base).
+ASSIGN hlf_tokens = 42
+ASSIGN nlp_tokens = 58
+ASSIGN compression_pct = hlf_tokens * 100 / nlp_tokens
+ASSIGN target_ceiling = 88
+IF compression_pct <= target_ceiling {
+  Δ [INTENT] goal="compression_ratio_within_target"
+}
+
+# ── Similarity Gate Thresholds ───────────────────────────────────────────────
+# Real thresholds:
+#   Dedup gate:    cosine > 0.98 → block duplicate storage
+#   Entropy anchor: cosine >= 0.95 → no drift
+#   InsAIts round-trip: cosine >= 0.95 → semantic fidelity preserved
+# Scaled to integer percentages for expression system.
+ASSIGN similarity_score = 96
+ASSIGN dedup_threshold = 98
+ASSIGN drift_threshold = 95
+IF similarity_score >= drift_threshold {
+  Δ [INTENT] goal="entropy_anchor_no_drift"
+}
+IF similarity_score < dedup_threshold {
+  Δ [INTENT] goal="dedup_gate_allows_storage"
+}
+
+# ── Entropy Drift Policy ─────────────────────────────────────────────────────
+# Real policy from hlf/entropy_anchor.py:
+#   default_threshold = 50 (0.5 scaled)
+#   high_risk_threshold = 65 (0.65 scaled)
+#   drift_detected = similarity < threshold → escalate
+ASSIGN observed_similarity = 48
+ASSIGN default_threshold = 50
+ASSIGN high_risk_threshold = 65
+IF observed_similarity < default_threshold {
+  Δ [INTENT] goal="drift_detected_escalate"
+}
+IF observed_similarity < high_risk_threshold {
+  Δ [INTENT] goal="drift_high_risk_halt_branch"
+}
+
+# ── Governance Retrieval Thresholds ──────────────────────────────────────────
+# Real thresholds from rag/memory.py retrieval purpose policies:
+#   translation_memory: min_rank_score = 12 (0.12 scaled to 100)
+#   routing_evidence:   min_rank_score = 35 (0.35 scaled)
+#   verifier_evidence:  min_rank_score = 30 (0.30 scaled)
+ASSIGN query_rank = 28
+ASSIGN translation_min = 12
+ASSIGN routing_min = 35
+ASSIGN verifier_min = 30
+IF query_rank >= translation_min AND query_rank < routing_min {
+  Δ [INTENT] goal="qualifies_translation_not_routing"
+}
+
+# ── Capsule Gas Boundary Check ───────────────────────────────────────────────
+# Validates that a proposed operation chain fits within the capsule tier.
+# memory_store=5, memory_recall=5, embed_text=5, cosine_similarity=2 = 17 total
+ASSIGN mem_store = 5
+ASSIGN mem_recall = 5
+ASSIGN embed = 5
+ASSIGN cosine = 2
+ASSIGN rag_pipeline_gas = mem_store + mem_recall + embed + cosine
+IF rag_pipeline_gas <= hearth_max {
+  Δ [INTENT] goal="rag_pipeline_fits_hearth"
+}
+
+∇ [RESULT] message="governing_algorithms_validated"
+Ω

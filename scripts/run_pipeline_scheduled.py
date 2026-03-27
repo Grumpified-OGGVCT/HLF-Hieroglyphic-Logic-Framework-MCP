@@ -12,6 +12,7 @@ from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, run_pytest_suite
 from hlf_mcp.weekly_artifacts import (
     attach_weekly_artifact_verification,
     build_hks_exemplar_from_weekly_artifact,
+    build_weekly_artifact_memory_record,
     build_weekly_artifact,
     validate_weekly_artifact,
 )
@@ -78,8 +79,40 @@ def run_pipeline(
         "tests_triggered": run_tests,
         "toolkit_command": toolkit_command,
     }
-    exemplar = build_hks_exemplar_from_weekly_artifact(payload, artifact_path=target_path)
+    payload, written_path = _write_verified_artifacts(payload, metrics_dir, target_path)
     memory_db_path = os.environ.get("HLF_MEMORY_DB")
+    weekly_memory_record = build_weekly_artifact_memory_record(payload, artifact_path=written_path)
+    exemplar = build_hks_exemplar_from_weekly_artifact(payload, artifact_path=written_path)
+    if not memory_db_path:
+        payload["memory_capture"] = {
+            "attempted": False,
+            "stored": False,
+            "reason": "HLF_MEMORY_DB not configured",
+        }
+    elif weekly_memory_record is None:
+        payload["memory_capture"] = {
+            "attempted": False,
+            "stored": False,
+            "reason": "verified_weekly_artifact_required",
+        }
+    else:
+        weekly_store_result = RAGMemory(db_path=memory_db_path).store(
+            weekly_memory_record["content"],
+            topic=str(weekly_memory_record["topic"]),
+            confidence=float(weekly_memory_record["confidence"]),
+            provenance=str(weekly_memory_record["provenance"]),
+            tags=list(weekly_memory_record["tags"]),
+            entry_kind=str(weekly_memory_record["entry_kind"]),
+            metadata=dict(weekly_memory_record["metadata"]),
+        )
+        payload["memory_capture"] = {
+            "attempted": True,
+            "stored": bool(weekly_store_result.get("stored")),
+            "fact_id": weekly_store_result.get("id"),
+            "sha256": weekly_store_result.get("sha256"),
+            "db_path": memory_db_path,
+        }
+
     if exemplar is None:
         payload["hks_capture"] = {"attempted": False, "stored": False, "reason": "latest_suite_summary_not_passed"}
     elif not memory_db_path:
@@ -104,8 +137,6 @@ def run_pipeline(
             "duplicate_reason": store_result.get("duplicate_reason"),
             "db_path": memory_db_path,
         }
-
-    payload, written_path = _write_verified_artifacts(payload, metrics_dir, target_path)
     return suite_exit_code, payload, written_path
 
 

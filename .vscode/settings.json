@@ -1,5 +1,52 @@
 {
     "github-actions.workflows.pinned.workflows": [
         
+    ],
+    "vscode-ollama.maxTokens": 1000000,
+    "vscode-ollama.model": "nemotron-3-super:cloud",
+    "chat.mcp.serverSampling": {
+        "HLF_MCP/.vscode/mcp.json: hlf-mcp": {
+            "allowedModels": [
+                "copilot/auto"
+            ]
+        }
+    },
+    "ollamaCloud.showStartupTips": true,
+    "chat.agent.maxRequests": 50,
+    "chat.checkpoints.showFileChanges": true,
+    "chat.planAgent.defaultModel": "GPT-5.4 (copilot)",
+    "github.copilot.chat.switchAgent.enabled": true,
+    "github.copilot.chat.agent.autoFix": true,
+    "github.copilot.chat.rateLimitAutoSwitchToAuto": true,
+    "github.copilot.chat.scopeSelection": true,
+    "github.copilot.chat.anthropic.toolSearchTool.mode": "client",
+    "github.copilot.chat.backgroundCompaction": true,
+    "github.copilot.chat.codesearch.enabled": true,
+    "github.copilot.chat.conversationTranscriptLookup.enabled": true,
+    "github.copilot.chat.copilotMemory.enabled": true,
+    "github.copilot.chat.alternateGeminiModelFPrompt.enabled": false,
+    "github.copilot.chat.anthropic.tools.websearch.enabled": true,
+    "github.copilot.chat.anthropic.tools.websearch.maxUses": 3,
+    "github.copilot.chat.getSearchViewResultsSkill.enabled": true,
+    "github.copilot.chat.notebook.enhancedNextEditSuggestions.enabled": false,
+    "github.copilot.chat.notebook.followCellExecution.enabled": false,
+    "github.copilot.chat.responsesApiContextManagement.enabled": true,
+    "chat.unifiedAgentsBar.enabled": false,
+
+    "markdownlint.ignore": [
+        "**/node_modules/**",
+        "**/AppData/**",
+        "**/.vscode/**",
+        "**/agentPlugins/**",
+        "**/globalStorage/**"
+    ],
+
+    "json.schemas": [
+        {
+            "fileMatch": [
+                "extensions/hlf-vscode/package.json"
+            ],
+            "url": "vscode://schemas/vscode-extensions"
+        }
     ]
 }

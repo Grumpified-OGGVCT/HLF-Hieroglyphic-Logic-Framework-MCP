@@ -206,6 +206,86 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         notes=("Stronger coding and verification lane when reachable via cloud-via-ollama.",),
     ),
     ModelSpec(
+        name="glm-5:cloud",
+        family="reasoning",
+        lanes=("reasoning", "planning", "analysis", "universal"),
+        capabilities=("reasoning", "systems-engineering", "long-context"),
+        supported_languages=("en", "zh"),
+        notes=("Strong reasoning and complex systems engineering donor model.",),
+    ),
+    ModelSpec(
+        name="nemotron-3-super",
+        family="reasoning",
+        lanes=("reasoning", "planning", "doer", "coding", "analysis", "universal"),
+        capabilities=("reasoning", "tool-use", "agentic", "coding"),
+        supported_languages=("en",),
+        notes=("Broad agentic fallback with strong long-horizon tool-use behavior.",),
+    ),
+    ModelSpec(
+        name="cogito-2.1:671b-cloud",
+        family="reasoning",
+        lanes=("reasoning", "planning", "analysis"),
+        capabilities=("reasoning", "planning", "math", "strategic-decomposition"),
+        supported_languages=("en",),
+        notes=("Specialist planning and math-heavy decomposition donor model.",),
+    ),
+    ModelSpec(
+        name="kimi-k2-thinking:cloud",
+        family="reasoning",
+        lanes=("reasoning", "planning", "analysis"),
+        capabilities=("planning", "tool-use", "long-context", "reasoning"),
+        supported_languages=("en",),
+        notes=("Long-horizon planning and sequential tool-use specialist.",),
+    ),
+    ModelSpec(
+        name="kimi-k2.5:cloud",
+        family="multimodal",
+        lanes=("planning", "analysis", "multimodal", "universal"),
+        capabilities=("planning", "multimodal", "tool-use", "ui-synthesis"),
+        supported_languages=("en",),
+        notes=("Multimodal planning and UI/repo synthesis donor model.",),
+    ),
+    ModelSpec(
+        name="minimax-m2.7:cloud",
+        family="reasoning",
+        lanes=("doer", "coding", "universal"),
+        capabilities=("coding", "execution", "agentic", "productivity"),
+        supported_languages=("en",),
+        notes=("Execution-focused software engineering and doer specialist.",),
+    ),
+    ModelSpec(
+        name="devstral-2:123b-cloud",
+        family="reasoning",
+        lanes=("coding", "doer", "verifier"),
+        capabilities=("coding", "review", "tool-use", "repository-navigation"),
+        supported_languages=("en",),
+        notes=("High-capability coding and repository-scale editing specialist.",),
+    ),
+    ModelSpec(
+        name="qwen3-coder-next:cloud",
+        family="reasoning",
+        lanes=("coding", "doer", "analysis"),
+        capabilities=("coding", "tool-use", "repository-navigation", "efficiency"),
+        supported_languages=("en", "zh"),
+        notes=("Efficient repo-scale coding specialist and fallback.",),
+    ),
+    ModelSpec(
+        name="qwen3.5:cloud",
+        family="multimodal",
+        lanes=("reasoning", "analysis", "multimodal", "universal"),
+        capabilities=("structured-output", "multimodal", "generalist", "reasoning"),
+        supported_languages=("en", "zh"),
+        notes=("Universal structured-output and multimodal fallback.",),
+    ),
+    ModelSpec(
+        name="deepseek-v3.2:cloud",
+        family="reasoning",
+        lanes=("reasoning", "analysis", "ethics", "universal"),
+        capabilities=("reasoning", "adversarial-analysis", "efficiency", "safety-backstop"),
+        supported_languages=("en", "zh"),
+        notes=("Adversarial and analytical backstop with strong efficiency.",),
+    ),
+    ModelSpec(
         name="llava:7b",
         family="multimodal",
         lanes=("multimodal", "explainer"),
@@ -214,6 +294,77 @@ _DEFAULT_MODEL_SPECS: tuple[ModelSpec, ...] = (
         min_vram_gb=10.0,
     ),
 )
+
+
+_NAMED_CHAIN_PROFILES: dict[str, dict[str, Any]] = {
+    "reasoning": {
+        "required_lanes": ("reasoning",),
+        "preferred_lanes": ("analysis", "universal"),
+        "preferred_capabilities": ("reasoning", "long-context", "systems-engineering"),
+        "fallback_models": ("qwen3.5:cloud",),
+    },
+    "planning": {
+        "required_lanes": ("planning",),
+        "preferred_lanes": ("reasoning", "analysis", "universal"),
+        "preferred_capabilities": (
+            "planning",
+            "strategic-decomposition",
+            "tool-use",
+            "multimodal",
+            "long-context",
+        ),
+        "fallback_models": ("nemotron-3-super", "qwen3.5:cloud"),
+    },
+    "doer": {
+        "required_lanes": ("doer",),
+        "preferred_lanes": ("coding", "universal"),
+        "preferred_capabilities": ("execution", "agentic", "coding", "productivity"),
+        "fallback_models": ("glm-5:cloud", "qwen3.5:cloud"),
+    },
+    "coding": {
+        "required_lanes": ("coding",),
+        "preferred_lanes": ("doer", "verifier", "universal"),
+        "preferred_capabilities": (
+            "coding",
+            "repository-navigation",
+            "tool-use",
+            "review",
+        ),
+        "fallback_models": ("glm-5:cloud", "qwen3.5:cloud"),
+    },
+    "analysis": {
+        "required_lanes": ("analysis",),
+        "preferred_lanes": ("reasoning", "multimodal", "universal"),
+        "preferred_capabilities": (
+            "structured-output",
+            "multimodal",
+            "reasoning",
+            "adversarial-analysis",
+        ),
+        "fallback_models": ("deepseek-v3.2:cloud",),
+    },
+    "ethics": {
+        "required_lanes": ("ethics", "analysis"),
+        "preferred_lanes": ("reasoning", "universal"),
+        "preferred_capabilities": (
+            "safety-backstop",
+            "adversarial-analysis",
+            "reasoning",
+        ),
+        "fallback_models": ("glm-5:cloud", "qwen3.5:cloud"),
+    },
+    "universal": {
+        "required_lanes": ("universal",),
+        "preferred_lanes": ("reasoning", "analysis", "planning"),
+        "preferred_capabilities": (
+            "generalist",
+            "reasoning",
+            "tool-use",
+            "structured-output",
+        ),
+        "fallback_models": ("deepseek-v3.2:cloud",),
+    },
+}
 
 
 def evaluate_model_requirements(
@@ -510,6 +661,129 @@ def _pick_best_entry(
     if not candidates:
         return None
     return sorted(candidates, key=_entry_sort_key, reverse=True)[0]
+
+
+def _spec_map() -> dict[str, ModelSpec]:
+    return {spec.name: spec for spec in _DEFAULT_MODEL_SPECS}
+
+
+def _build_model_chain_sort_key(
+    spec: ModelSpec,
+    *,
+    required_lanes: tuple[str, ...],
+    preferred_lanes: tuple[str, ...],
+    preferred_capabilities: tuple[str, ...],
+    benchmark_scores: dict[str, float] | None,
+) -> tuple[float, int, int, int, int, float, str]:
+    lane_set = set(spec.lanes)
+    capability_set = set(spec.capabilities)
+    benchmark_score = float((benchmark_scores or {}).get(spec.name, 0.0))
+    required_lane_hits = sum(1 for lane in required_lanes if lane in lane_set)
+    preferred_lane_hits = sum(1 for lane in preferred_lanes if lane in lane_set)
+    preferred_capability_hits = sum(1 for capability in preferred_capabilities if capability in capability_set)
+    language_breadth = len(spec.supported_languages)
+    cloud_ready = 0 if spec.requires_local else 1
+    return (
+        benchmark_score,
+        required_lane_hits,
+        preferred_capability_hits,
+        preferred_lane_hits,
+        cloud_ready,
+        language_breadth,
+        spec.min_vram_gb,
+        spec.name,
+    )
+
+
+def build_named_model_chain(
+    chain_name: str,
+    *,
+    available_models: list[str] | tuple[str, ...] | set[str] | None = None,
+    benchmark_scores: dict[str, float] | None = None,
+) -> list[str]:
+    """Build a named workflow chain from packaged policy instead of static winner lists."""
+    profile = _NAMED_CHAIN_PROFILES.get(chain_name)
+    if profile is None:
+        raise ValueError(f"Unknown named model chain: {chain_name}")
+
+    available = {str(name) for name in available_models} if available_models is not None else None
+    specs = _spec_map()
+    candidates = []
+    for spec in _DEFAULT_MODEL_SPECS:
+        if available is not None and spec.name not in available:
+            continue
+        if not any(lane in spec.lanes for lane in profile["required_lanes"]):
+            continue
+        candidates.append(spec)
+
+    ordered = sorted(
+        candidates,
+        key=lambda spec: _build_model_chain_sort_key(
+            spec,
+            required_lanes=tuple(profile["required_lanes"]),
+            preferred_lanes=tuple(profile["preferred_lanes"]),
+            preferred_capabilities=tuple(profile["preferred_capabilities"]),
+            benchmark_scores=benchmark_scores,
+        ),
+        reverse=True,
+    )
+
+    chain: list[str] = []
+    seen: set[str] = set()
+
+    def add_model(model_name: str) -> None:
+        if available is not None and model_name not in available:
+            return
+        if model_name in seen or model_name not in specs:
+            return
+        seen.add(model_name)
+        chain.append(model_name)
+
+    for spec in ordered:
+        add_model(spec.name)
+
+    for fallback_name in profile.get("fallback_models", ()):
+        add_model(str(fallback_name))
+
+    if len(chain) < 2:
+        universal_profile = _NAMED_CHAIN_PROFILES["universal"]
+        universal_candidates = sorted(
+            [
+                spec
+                for spec in _DEFAULT_MODEL_SPECS
+                if available is None or spec.name in available
+            ],
+            key=lambda spec: _build_model_chain_sort_key(
+                spec,
+                required_lanes=tuple(universal_profile["required_lanes"]),
+                preferred_lanes=tuple(universal_profile["preferred_lanes"]),
+                preferred_capabilities=tuple(universal_profile["preferred_capabilities"]),
+                benchmark_scores=benchmark_scores,
+            ),
+            reverse=True,
+        )
+        for spec in universal_candidates:
+            add_model(spec.name)
+            if len(chain) >= 2:
+                break
+
+    return chain
+
+
+def build_named_model_chains(
+    *,
+    available_models: list[str] | tuple[str, ...] | set[str] | None = None,
+    benchmark_scores: dict[str, float] | None = None,
+) -> dict[str, list[str]]:
+    """Return all named workflow chains from packaged policy."""
+    return {
+        chain_name: build_named_model_chain(
+            chain_name,
+            available_models=available_models,
+            benchmark_scores=benchmark_scores,
+        )
+        for chain_name in _NAMED_CHAIN_PROFILES
+    }
 
 
 def _recommend_lane(entries: list[ModelCatalogEntry], lane: str) -> dict[str, Any]:

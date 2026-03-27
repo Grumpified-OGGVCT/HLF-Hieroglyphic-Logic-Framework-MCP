@@ -2,7 +2,7 @@
 goal: Recover governed symbolic and semasiographic HLF surfaces as projections over canonical semantics
 version: 1.0
 date_created: 2026-03-20
-last_updated: 2026-03-20
+last_updated: 2026-03-22
 owner: GitHub Copilot
 status: 'In progress'
 tags: [recovery, bridge, symbolic, semasiographic, glyph, grammar, audit, operator]
@@ -198,6 +198,11 @@ Plain-language explanations remain the trust surface for non-expert operators.
 - **TEST-003**: prove projection-only symbols cannot be accepted as executable source unless normalized back through canonical source rules
 - **TEST-004**: verify translation output names relation type and endpoints explicitly
 - **TEST-005**: verify operator views label which symbols are canonical and which are display-only
+- **TEST-006**: cover the full starter relation vocabulary from the bridge contract: `time.before`, `time.after`, `cause.enables`, `cause.blocks`, `depends.on`, `agent.owns`, `agent.delegates`, and `scope.within`
+- **TEST-007**: verify multiple relation edges preserve canonical order, per-edge family labeling, and per-edge side-by-side artifact output
+- **TEST-008**: verify the bounded MCP resource `hlf://status/symbolic_surface` exposes symbolic artifacts as inspectable proof with explicit authority labels and `bridge-true` claim labeling
+- **TEST-009**: verify the paired markdown report `hlf://reports/symbolic_surface` is generated from the same symbolic proof bundle and preserves the current authority boundary in operator-readable form
+- **TEST-010**: verify a runtime-generated symbolic bundle overrides the packaged fallback sample across `hlf://status/symbolic_surface`, `hlf://reports/symbolic_surface`, and the display-only explainer `hlf://explainer/symbolic_surface`
 
 ## 10. Implementation Phases
 
@@ -217,9 +222,37 @@ Plain-language explanations remain the trust surface for non-expert operators.
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-004 | Add tests for relation-edge compilation and round-trip explanation. |  |  |
-| TASK-005 | Add projection serializers for plain-text-safe and Unicode display lanes. |  |  |
-| TASK-006 | Add audit output that shows canonical source, projection, and explanation together. |  |  |
+| TASK-004 | Add proof tests for AST field preservation, endpoint-stable explanation output, and rejection of display-only Unicode projection as executable source. | ✅ | 2026-03-22 |
+| TASK-005 | Add relation-artifact serializers that emit canonical source, plain-text-safe projection, Unicode projection, explanation, and authority labels side by side. | ✅ | 2026-03-22 |
+| TASK-006 | Add audit payload output that records canonical source, projection, explanation, relation family, relation assertion, and display-only authority labels together. | ✅ | 2026-03-22 |
+| TASK-006A | Expand proof coverage across the full starter relation vocabulary: `time.before`, `time.after`, `cause.enables`, `cause.blocks`, `depends.on`, `agent.owns`, `agent.delegates`, and `scope.within`. | ✅ | 2026-03-22 |
+| TASK-006B | Add a bounded MCP status resource that exposes symbolic artifacts as inspectable proof without granting them executable authority. | ✅ | 2026-03-22 |
+| TASK-006C | Add a paired markdown report surface derived from the same symbolic proof bundle and explicitly keep runtime provenance marked pending until non-static symbolic data exists. | ✅ | 2026-03-22 |
+| TASK-006D | Add a packaged runtime capture path so symbolic operator surfaces can prefer the latest audited non-static bundle while preserving the same `relation_artifacts` contract. | ✅ | 2026-03-22 |
+| TASK-006E | Add a display-only explainer surface derived from the same `relation_artifacts` contract and prove it tracks runtime overrides without gaining executable authority. | ✅ | 2026-03-22 |
+
+### Current insertion decision
+
+Thread `relation_artifacts` outward through a tightly bounded operator trio:
+
+- `hlf://status/symbolic_surface`
+- `hlf://reports/symbolic_surface`
+- `hlf://explainer/symbolic_surface`
+
+Reason:
+
+- the proof slice now covers the full starter vocabulary across dependency, temporal, causal, agent-role, and scope families
+- the status resource, markdown report, and explainer all consume the same relation-artifact contract without adding alternate semantic authority
+- packaged runtime capture can now record a non-static symbolic bundle and let operator surfaces prefer live audited data over the fallback sample
+- this adds an operator seam without promoting Unicode projection or rendered symbolism into alternate executable authority
+
+Remaining promotion gate for broader outward threading:
+
+1. relation-family proof must remain green for the canonical starter vocabulary
+2. operator labeling must preserve `canonical-executable` versus `display-only`
+3. any future gallery or report surface must consume the same artifact shape without inventing new semantic authority
+4. real audit or runtime provenance refs must only be added once packaged symbolic workflows emit non-static symbolic bundles
+5. explainer surfaces must remain display-only even when they render a live runtime-generated symbolic bundle
 
 ### Implementation Phase 3
 
@@ -227,9 +260,9 @@ Plain-language explanations remain the trust surface for non-expert operators.
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-007 | Evaluate whether `RELATE` should become a first-class AST node instead of a generic glyph statement. |  |  |
-| TASK-008 | Evaluate whether additional relation kinds or projection glyphs have enough evidence for promotion. |  |  |
-| TASK-009 | Gate any promotion through grammar, formatter, translator, linter, audit, and operator proof. |  |  |
+| TASK-007 | Evaluate whether `RELATE` should become a first-class AST node instead of a generic glyph statement. | pending | - |
+| TASK-008 | Evaluate whether additional relation kinds or projection glyphs have enough evidence for promotion. | pending | - |
+| TASK-009 | Gate any promotion through grammar, formatter, translator, linter, audit, and operator proof. | pending | - |
 
 ## 11. Risks & Assumptions
 

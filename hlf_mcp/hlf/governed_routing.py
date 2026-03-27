@@ -9,7 +9,22 @@ RoutingDecision = Literal[
     "advisory_local_retrieval",
     "governed_multilingual_gpu",
     "governed_long_context_gpu",
+    "governed_cloud_completion",  # completion / generation workloads via Ollama Cloud
 ]
+
+# Workloads that drive LLM completion rather than embedding/retrieval.
+# Kept in sync with _COMPLETION_WORKLOADS in server_profiles.py.
+_COMPLETION_WORKLOAD_KEYS: frozenset[str] = frozenset({
+    "reasoning_query",
+    "code_completion",
+    "planning_task",
+    "analysis_task",
+    "doer_task",
+    "universal_query",
+    "multimodal_query",
+    "verification_task",
+    "ethics_review",
+})
 
 
 @dataclass(slots=True)
@@ -23,10 +38,26 @@ class GovernedRouteVerdict:
     fallback_model: str
     primary_access_mode: str = ""
     fallback_access_mode: str = ""
+    align_action: str = "ALLOW"
+    deployment_tier: str = ""
+    allowlist_policy: dict[str, Any] = field(default_factory=dict)
     rationale: list[str] = field(default_factory=list)
     policy_constraints: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        justification = {
+            "allowance_state": "allowed" if self.allowed else "denied",
+            "decision": self.decision,
+            "selected_lane": self.selected_lane,
+            "governance_mode": self.governance_mode,
+            "review_required": self.review_required,
+            "align_action": self.align_action,
+            "deployment_tier": self.deployment_tier,
+            "rationale_count": len(self.rationale),
+            "constraint_count": len(self.policy_constraints),
+            "primary_reason": self.rationale[0] if self.rationale else "",
+            "primary_constraint": self.policy_constraints[0] if self.policy_constraints else "",
+        }
         return {
             "allowed": self.allowed,
             "decision": self.decision,
@@ -37,8 +68,12 @@ class GovernedRouteVerdict:
             "fallback_model": self.fallback_model,
             "primary_access_mode": self.primary_access_mode,
             "fallback_access_mode": self.fallback_access_mode,
+            "align_action": self.align_action,
+            "deployment_tier": self.deployment_tier,
+            "allowlist_policy": dict(self.allowlist_policy),
             "rationale": self.rationale,
             "policy_constraints": self.policy_constraints,
+            "justification": justification,
         }
 
 
@@ -46,6 +81,7 @@ def build_governed_route(
     *,
     workload: str,
     align_status: str,
+    align_action: str = "ALLOW",
     trust_state: str,
     hardware_summary: dict[str, Any],
     runtime_status: dict[str, Any],
@@ -81,16 +117,111 @@ def build_governed_route(
         rationale.append(
             "ALIGN produced a blocking verdict, so routing is denied before any profile expansion."
         )
+        if align_action == "DROP_AND_QUARANTINE":
+            rationale.append(
+                "The decisive sentinel action requires quarantine semantics instead of reviewable execution."
+            )
         return GovernedRouteVerdict(
             allowed=False,
             decision="deny",
-            governance_mode="deterministic_containment",
+            governance_mode="deterministic_quarantine"
+            if align_action == "DROP_AND_QUARANTINE"
+            else "deterministic_containment",
             review_required=True,
             selected_lane=selected_lane,
             primary_model=primary_model,
             fallback_model=fallback_model,
             primary_access_mode=primary_access_mode,
             fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
+            rationale=rationale,
+            policy_constraints=constraints,
+        )
+
+    if align_action == "ROUTE_TO_HUMAN_APPROVAL":
+        rationale.append(
+            "Sentinel policy explicitly routes this request to human approval before any broader execution lane is used."
+        )
+        constraints.append(
+            "Human-approval sentinel actions must remain review-required even when the route is otherwise locally admissible."
+        )
+        return GovernedRouteVerdict(
+            allowed=True,
+            decision="deterministic_local_only",
+            governance_mode="human_approval_required",
+            review_required=True,
+            selected_lane=selected_lane,
+            primary_model=primary_model,
+            fallback_model=fallback_model,
+            primary_access_mode=primary_access_mode,
+            fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
+            rationale=rationale,
+            policy_constraints=constraints,
+        )
+
+    if normalized_trust_state == "restricted":
+        rationale.append(
+            "Witness governance has restricted this subject, so execution routing is denied pending operator recovery."
+        )
+        constraints.append(
+            "Restricted trust states must fail closed before any broader execution lane or fallback model is considered."
+        )
+        return GovernedRouteVerdict(
+            allowed=False,
+            decision="deny",
+            governance_mode="trust_restricted",
+            review_required=True,
+            selected_lane=selected_lane,
+            primary_model=primary_model,
+            fallback_model=fallback_model,
+            primary_access_mode=primary_access_mode,
+            fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
+            rationale=rationale,
+            policy_constraints=constraints,
+        )
+
+    if normalized_trust_state == "probation":
+        rationale.append(
+            "Witness governance placed this subject on probation, so routing is constrained to a reviewable deterministic local lane."
+        )
+        constraints.append(
+            "Probation trust states require operator review before execution can proceed beyond the smallest deterministic lane."
+        )
+        return GovernedRouteVerdict(
+            allowed=True,
+            decision="deterministic_local_only",
+            governance_mode="trust_probation",
+            review_required=True,
+            selected_lane=selected_lane,
+            primary_model=primary_model,
+            fallback_model=fallback_model,
+            primary_access_mode=primary_access_mode,
+            fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
+            rationale=rationale,
+            policy_constraints=constraints,
+        )
+
+    if normalized_trust_state == "watched":
+        rationale.append(
+            "Witness governance is actively watching this subject, so routing stays in a reviewable deterministic local lane until stronger evidence clears it."
+        )
+        constraints.append(
+            "Watched trust states remain review-required and should not silently promote into heavier routing lanes."
+        )
+        return GovernedRouteVerdict(
+            allowed=True,
+            decision="deterministic_local_only",
+            governance_mode="trust_watched",
+            review_required=True,
+            selected_lane=selected_lane,
+            primary_model=primary_model,
+            fallback_model=fallback_model,
+            primary_access_mode=primary_access_mode,
+            fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
             rationale=rationale,
             policy_constraints=constraints,
         )
@@ -109,6 +240,7 @@ def build_governed_route(
             fallback_model=fallback_model,
             primary_access_mode=primary_access_mode,
             fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
             rationale=rationale,
             policy_constraints=constraints,
         )
@@ -127,6 +259,7 @@ def build_governed_route(
             fallback_model=fallback_model,
             primary_access_mode=primary_access_mode,
             fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
             rationale=rationale,
             policy_constraints=constraints,
         )
@@ -145,6 +278,7 @@ def build_governed_route(
             fallback_model=fallback_model,
             primary_access_mode=primary_access_mode,
             fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
             rationale=rationale,
             policy_constraints=constraints,
         )
@@ -168,6 +302,7 @@ def build_governed_route(
             fallback_model=fallback_model,
             primary_access_mode=primary_access_mode,
             fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
             rationale=rationale,
             policy_constraints=constraints,
         )
@@ -186,6 +321,31 @@ def build_governed_route(
             fallback_model=fallback_model,
             primary_access_mode=primary_access_mode,
             fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
+            rationale=rationale,
+            policy_constraints=constraints,
+        )
+
+    # ── Completion workloads ──────────────────────────────────────────────────
+    # When ALIGN, trust, and hardware gates are all clear and the workload is
+    # a completion/generation type, route to the governed cloud completion lane
+    # (Ollama Cloud primary, OpenRouter fallback via ModelOrchestrator).
+    if workload in _COMPLETION_WORKLOAD_KEYS:
+        rationale.append(
+            f"Completion workload '{workload}' maps to the '{selected_lane}' lane; "
+            "routing to governed cloud completion with Ollama-primary orchestration."
+        )
+        return GovernedRouteVerdict(
+            allowed=True,
+            decision="governed_cloud_completion",
+            governance_mode="governed_completion",
+            review_required=False,
+            selected_lane=selected_lane,
+            primary_model=primary_model,
+            fallback_model=fallback_model,
+            primary_access_mode=primary_access_mode,
+            fallback_access_mode=fallback_access_mode,
+            align_action=align_action,
             rationale=rationale,
             policy_constraints=constraints,
         )
@@ -203,6 +363,7 @@ def build_governed_route(
         fallback_model=fallback_model,
         primary_access_mode=primary_access_mode,
         fallback_access_mode=fallback_access_mode,
+        align_action=align_action,
         rationale=rationale,
         policy_constraints=constraints,
     )

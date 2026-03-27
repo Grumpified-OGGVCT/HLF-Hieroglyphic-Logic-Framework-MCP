@@ -76,6 +76,8 @@ def test_evidence_query_list_and_show_commands(capsys, tmp_path: Path) -> None:
     assert exit_code == 0
     human_output = capsys.readouterr().out
     assert "Artifact: weekly_demo" in human_output
+    assert "Persona gate status:" in human_output
+    assert "Operator promotion gate: pending" in human_output
     assert "Governed review:" in human_output
     assert "Owner persona: sentinel" in human_output
     assert "Handoff template: governance/templates/persona_review_handoff.md" in human_output
@@ -118,6 +120,9 @@ def test_evidence_query_summary_reports_distribution_eligibility(capsys, tmp_pat
     output = capsys.readouterr().out
     assert "Artifacts: 2" in output
     assert "Distribution eligible: 1" in output
+    assert "Persona review artifacts: 2 total, 0 attached, 2 fallback" in output
+    assert "Owner personas: sentinel=1, steward=1" in output
+    assert "Pending persona gates: 11" in output
 
 
 def test_evidence_query_decide_appends_decision_and_updates_latest(capsys, tmp_path: Path) -> None:

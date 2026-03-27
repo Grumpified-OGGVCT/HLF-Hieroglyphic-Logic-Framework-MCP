@@ -23,7 +23,7 @@ class ProfileConfig:
     """Configuration for a specific HLF profile."""
     profile: HLFProfile
     hot_store_type: str       # 'lru', 'sqlite', or 'redis'
-    use_cloud_direct: bool    # Direct Ollama Cloud API
+    use_cloud_direct: bool    # Explicit direct Ollama Cloud API override
     use_local_daemon: bool    # Local Ollama daemon
     host_functions: list      # List of enabled host functions
     gas_tolerance_ms: int     # Gas metering tolerance
@@ -35,7 +35,7 @@ PROFILE_DEFAULTS = {
     HLFProfile.P0_CLOUD_CORE: ProfileConfig(
         profile=HLFProfile.P0_CLOUD_CORE,
         hot_store_type='lru',
-        use_cloud_direct=True,
+        use_cloud_direct=False,
         use_local_daemon=False,
         host_functions=['READ_FILE', 'WRITE_FILE', 'WEB_SEARCH', 'STRUCTURED_OUTPUT', 'SELF_OBSERVE'],
         gas_tolerance_ms=50,
@@ -44,8 +44,8 @@ PROFILE_DEFAULTS = {
     HLFProfile.P1_WORKSTATION: ProfileConfig(
         profile=HLFProfile.P1_WORKSTATION,
         hot_store_type='sqlite',
-        use_cloud_direct=True,
-        use_local_daemon=True,  # Fallback available
+        use_cloud_direct=False,
+        use_local_daemon=True,
         host_functions=['READ_FILE', 'WRITE_FILE', 'WEB_SEARCH', 'STRUCTURED_OUTPUT', 'SELF_OBSERVE',
                        'MEMORY_STORE', 'MEMORY_RECALL', 'SPEC_VALIDATE'],
         gas_tolerance_ms=20,
@@ -177,14 +177,18 @@ def get_ollama_base_url(config: Optional[ProfileConfig] = None) -> str:
     """
     if config is None:
         config = get_profile_config()
+
+    explicit_host = os.getenv('OLLAMA_HOST')
+    if explicit_host:
+        return explicit_host
     
     if config.use_cloud_direct:
         return "https://ollama.com/api"
     
     if config.use_local_daemon:
-        return os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+        return 'http://localhost:11434'
     
-    # Default to cloud direct if no local daemon
+    # Use direct cloud only when no local daemon path is configured.
     return "https://ollama.com/api"
 
 

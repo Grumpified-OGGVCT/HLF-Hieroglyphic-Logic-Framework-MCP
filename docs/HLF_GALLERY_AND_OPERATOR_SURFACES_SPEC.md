@@ -118,7 +118,8 @@ Until GUI/operator-shell work lands, any such asset should be documented as a br
 - **GOAL-002**: Build the first generated operator artifacts.
 
 - **TASK-004**: Add a packaged gallery/report generator or equivalent report workflow for fixture health. Completed: Yes. Date: 2026-03-20.
-- **TASK-005**: Add generated summaries for routing, verification, and memory-evidence surfaces. Completed: No.
+- **TASK-004A**: Add a bounded symbolic report surface derived from the symbolic proof bundle without changing executable authority boundaries. Completed: Yes. Date: 2026-03-22.
+- **TASK-005**: Add generated summaries for routing, verification, and memory-evidence surfaces. Completed: Partial. Date: 2026-03-22.
 - **TASK-006**: Add smoke validation for generated operator artifacts. Completed: No.
 
 ## 6. Files
@@ -151,6 +152,23 @@ The first packaged recovery step is implemented as a resource-backed fixture gal
 - `hlf://reports/fixture_gallery` for human-readable markdown review
 
 This preserves reproducibility while keeping the generated artifact bound to current packaged truth.
+
+The next bridge-aligned generated artifact is the symbolic surface pair in `hlf_mcp/server_resources.py`:
+
+- `hlf://status/symbolic_surface` for structured operator and agent consumption
+- `hlf://reports/symbolic_surface` for human-readable markdown review
+- `hlf://explainer/symbolic_surface` for a display-only explainer card built from the same relation-artifact contract
+
+These surfaces reuse the same `relation_artifacts` proof bundle and keep canonical ASCII source as executable authority, while Unicode projection, report rendering, and explainer-card presentation remain display-only operator surfaces.
+
+When no live symbolic bundle has been recorded, the trio renders the packaged proof sample. Once a packaged runtime path emits and audits a non-static symbolic bundle, the trio prefers that latest session bundle and threads its provenance and audit refs through the status and report surfaces without changing the authority boundary.
+
+The next additive operator-discovery step is the packaged operator-surface index in `hlf_mcp/server_resources.py`:
+
+- `hlf://status/operator_surfaces` for structured discovery across packaged operator-facing status surfaces
+- `hlf://reports/operator_surfaces` for human-readable markdown review of the same discovery index
+
+This index does not introduce a new authority layer. It points back to the already-governed packaged surfaces for symbolic proof review, fixture-gallery truth, daemon transparency, formal verification, governed routing, memory governance, approval review and bypass monitoring, and witness-governance status.
 
 ## 9. Related Specifications / Further Reading
 

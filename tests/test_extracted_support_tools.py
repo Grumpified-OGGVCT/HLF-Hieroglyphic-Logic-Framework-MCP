@@ -331,5 +331,7 @@ def test_run_pipeline_scheduled_stores_hks_exemplar_when_memory_db_configured(
     )
 
     assert exit_code == 0
+    assert payload["memory_capture"]["attempted"] is True
+    assert payload["memory_capture"]["db_path"] == str(memory_db)
     assert payload["hks_capture"]["attempted"] is True
     assert payload["hks_capture"]["db_path"] == str(memory_db)

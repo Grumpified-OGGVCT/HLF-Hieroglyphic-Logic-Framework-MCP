@@ -52,6 +52,39 @@ class ImprovementSuggestion:
     votes: int = 0
     submitter_tier: str = "unknown"
 
+@dataclass
+class EvidenceFact:
+    """Governed evidence fact linking routing decision → execution → outcome.
+    
+    Used for:
+    1. Proving the path from intent classification to final result
+    2. Tracking whether execution matched routing predictions
+    3. Supporting governed evidence facts with full audit trail
+    4. Enabling promotion/demotion of HKS exemplars based on fidelity
+    """
+    fact_id: str
+    timestamp: float
+    task_type: str
+    task_category: str
+    task_size: str
+    workload_string: str
+    selected_lane: str
+    routing_decision: str  # "allow", "deny", "advisory", etc.
+    routing_allowed: bool
+    predicted_primary_model: str
+    actual_model_used: str
+    actual_provider_used: str
+    predicted_primary_matched: bool
+    escalation_depth: int
+    escalation_attempts: int
+    advisory_mode: bool
+    governance_mode: str
+    deployment_tier: str
+    latency_s: float = 0.0
+    rationale: str = ""
+    policy_constraints: str = ""
+    details: Dict[str, Any] = field(default_factory=dict)
+
 class HLFMetrics:
     """
     Metrics collection and reporting for the legacy HLF MCP stack.
@@ -86,6 +119,7 @@ class HLFMetrics:
         self.tests_file = self.metrics_dir / 'tests.jsonl'
         self.suggestions_file = self.metrics_dir / 'suggestions.jsonl'
         self.stats_file = self.metrics_dir / 'stats.json'
+        self.evidence_facts_file = self.metrics_dir / 'evidence_facts.jsonl'
         
         self._lock = threading.Lock()
         
@@ -104,7 +138,11 @@ class HLFMetrics:
             "suggestions_resolved": 0,
             "sessions": 0,
             "first_use": None,
-            "last_use": None
+            "last_use": None,
+            "evidence_facts_recorded": 0,
+            "evidence_facts_predictions_matched": 0,
+            "evidence_facts_escalated": 0,
+            "evidence_facts_advisory": 0,
         }
         
         self._load_stats()
@@ -277,6 +315,129 @@ class HLFMetrics:
                     f.write(json.dumps(sugg) + '\n')
         
         return found
+
+    def record_evidence_fact(
+        self,
+        task_type: str,
+        task_category: str,
+        task_size: str,
+        workload_string: str,
+        selected_lane: str,
+        routing_decision: str,
+        routing_allowed: bool,
+        predicted_primary_model: str,
+        actual_model_used: str,
+        actual_provider_used: str,
+        predicted_primary_matched: bool,
+        escalation_depth: int,
+        escalation_attempts: int,
+        advisory_mode: bool,
+        governance_mode: str,
+        deployment_tier: str,
+        latency_s: float = 0.0,
+        rationale: str = "",
+        policy_constraints: str = "",
+        details: Dict[str, Any] = None,
+    ) -> str:
+        """Record a governed evidence fact linking routing → execution → outcome.
+        
+        Parameters
+        ----------
+        task_type : str
+            The task type (e.g. "code_completion", "reasoning_query")
+        task_category : str
+            Task category (e.g. "generation", "analysis")
+        task_size : str
+            Task size estimate ("small", "medium", "large")
+        workload_string : str
+            Classified workload type
+        selected_lane : str
+            The execution lane decided by routing
+        routing_decision : str
+            The routing verdict decision ("allow", "deny", "advisory", etc.)
+        routing_allowed : bool
+            Whether routing authorized execution
+        predicted_primary_model : str
+            Model predicted by routing
+        actual_model_used : str
+            Model actually used for execution
+        actual_provider_used : str
+            Provider actually used ("ollama" | "openrouter")
+        predicted_primary_matched : bool
+            Whether prediction matched actual execution
+        escalation_depth : int
+            How many fallbacks were needed (0 = primary succeeded)
+        escalation_attempts : int
+            Total number of execution attempts
+        advisory_mode : bool
+            Whether execution proceeded in advisory mode despite denial
+        governance_mode : str
+            Governance posture used
+        deployment_tier : str
+            Execution tier used
+        latency_s : float
+            Wall-clock execution time
+        rationale : str
+            Routing rationale explanation
+        policy_constraints : str
+            Policy constraints that applied
+        details : dict | None
+            Additional contextual details
+
+        Returns
+        -------
+        str
+            Fact ID for tracking
+        """
+        import hashlib
+
+        fact_id = hashlib.sha256(
+            f"{task_type}:{workload_string}:{time.time()}".encode()
+        ).hexdigest()[:12]
+
+        fact = EvidenceFact(
+            fact_id=fact_id,
+            timestamp=time.time(),
+            task_type=task_type,
+            task_category=task_category,
+            task_size=task_size,
+            workload_string=workload_string,
+            selected_lane=selected_lane,
+            routing_decision=routing_decision,
+            routing_allowed=routing_allowed,
+            predicted_primary_model=predicted_primary_model,
+            actual_model_used=actual_model_used,
+            actual_provider_used=actual_provider_used,
+            predicted_primary_matched=predicted_primary_matched,
+            escalation_depth=escalation_depth,
+            escalation_attempts=escalation_attempts,
+            advisory_mode=advisory_mode,
+            governance_mode=governance_mode,
+            deployment_tier=deployment_tier,
+            latency_s=latency_s,
+            rationale=rationale,
+            policy_constraints=policy_constraints,
+            details=details or {},
+        )
+
+        # Append to evidence facts log
+        with self.evidence_facts_file.open('a') as f:
+            f.write(json.dumps(asdict(fact)) + '\n')
+
+        # Update stats
+        with self._lock:
+            self._stats["evidence_facts_recorded"] += 1
+            if predicted_primary_matched:
+                self._stats["evidence_facts_predictions_matched"] += 1
+            if escalation_depth > 0:
+                self._stats["evidence_facts_escalated"] += 1
+            if advisory_mode:
+                self._stats["evidence_facts_advisory"] += 1
+
+        self._save_stats()
+
+        return fact_id
+    
     
     def resolve_improvement(self, suggestion_id: str, status: str = "resolved") -> bool:
         """Mark an improvement as resolved or rejected."""

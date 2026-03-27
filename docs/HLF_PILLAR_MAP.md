@@ -46,9 +46,9 @@ This file is doctrine-first and reconstruction-first.
 | Human-readable audit and trust layer | Strong but misaligned | `hlf_mcp/hlf/translator.py`, `hlf_mcp/hlf/insaits.py`, `hlf_mcp/hlf/audit_chain.py`, `hlf_mcp/server_resources.py` | `hlf_source/docs/hlf_explainer.html`, `hlf_source/gui/app.py` | `bridge_contract` | P1 | Operator trust depends on readable route, policy, and execution evidence before more invisible runtime growth |
 | Real-code bridge | Strong but misaligned | `hlf_mcp/hlf/codegen.py`, `hlf_mcp/hlf/compiler.py` | `hlf_source/hlf/translator.py`, `hlf_source/scripts/run_hlf_gallery.py` | `bridge_contract` | P5 | Present codegen is real, but proof of output correctness and broader target coverage remain bridge work |
 | HLF knowledge substrate and governed memory | Strong but misaligned | `hlf_mcp/rag/memory.py`, `hlf_mcp/hlf/memory_node.py`, `hlf_mcp/server_memory.py`, `docs/HLF_KNOWLEDGE_SUBSTRATE_RESEARCH_HANDOFF.md` | `hlf_source/agents/core/memory_scribe.py`, `hlf_source/agents/core/context_pruner.py`, `hlf_source/scripts/verify_chain.py` | `faithful_port` | P2 | Infinite RAG is a real packaged memory subsystem, and HLF Knowledge Substrate (HKS) bridge surfaces now integrate with it, but the broader governed knowledge substrate still needs stronger provenance, freshness, confidence, revocation, package-boundary, and weekly-evidence contracts |
-| Formal verification surface | Wrongly deleted | no packaged authority; bridge traces exist in `hlf_mcp/hlf/entropy_anchor.py` | `hlf_source/agents/core/formal_verifier.py` | `faithful_port` | P1 | This is constitutive for governed claims and cannot stay an aspiration-only surface |
+| Formal verification surface | Strong but misaligned | `hlf_mcp/hlf/formal_verifier.py`, `hlf_mcp/server_verifier.py`, `hlf_mcp/hlf/execution_admission.py` | `hlf_source/agents/core/formal_verifier.py` | `faithful_port` | P1 | A packaged verifier boundary exists, but the actual solver-backed proof semantics remain too thin to support strong governed-language claims |
 | Gateway and routing fabric | Strong but not yet packaged | `hlf_mcp/server_profiles.py`, `hlf_mcp/hlf/model_catalog.py`, `hlf_mcp/server_resources.py` | `hlf_source/agents/gateway/bus.py`, `hlf_source/agents/gateway/router.py`, `hlf_source/agents/gateway/sentinel_gate.py` | `faithful_port` | P1 | Advisory routing exists, but upstream routing fabric carries multi-agent and policy semantics that remain under-modeled |
-| Orchestration lifecycle and plan execution | Wrongly deleted | `hlf_mcp/instinct/lifecycle.py`, `hlf_mcp/server_instinct.py` | `hlf_source/agents/core/plan_executor.py`, `hlf_source/agents/core/crew_orchestrator.py`, `hlf_source/agents/core/task_classifier.py` | `faithful_port` | P1 | Lifecycle fragments exist, but plan-to-execute and handoff contracts are not packaged |
+| Orchestration lifecycle and plan execution | Strong but misaligned | `hlf_mcp/instinct/lifecycle.py`, `hlf_mcp/instinct/orchestration.py`, `hlf_mcp/server_instinct.py` | `hlf_source/agents/core/plan_executor.py`, `hlf_source/agents/core/crew_orchestrator.py`, `hlf_source/agents/core/task_classifier.py` | `faithful_port` | P1 | The packaged lifecycle and orchestration base is real, but the plan-to-execute, delegation, dissent, escalation, and handoff contracts remain incomplete |
 | Persona and operator doctrine | Strong but not yet packaged | `AGENTS.md`, `docs/AGENTS_CATALOG.md`, `docs/ETHICAL_GOVERNOR_HANDOFF.md` | `hlf_source/AGENTS.md`, `hlf_source/config/personas/steward.md`, `hlf_source/config/personas/sentinel.md`, `hlf_source/config/personas/strategist.md` | `bridge_contract` | P3 | Persona doctrine should shape review and operator flows now, but must not become uncontrolled runtime authority |
 | Ecosystem integration surface | Source-only | `HLF_ACTIONABLE_PLAN.md`, `HLF_CANONICALIZATION_MATRIX.md`, `HLF_IMPLEMENTATION_INDEX.md` | `hlf_source/docs/UNIFIED_ECOSYSTEM_ROADMAP.md`, `hlf_source/docs/JULES_COORDINATION.md` | `source_only_for_now` | P5 | Constitutive to the full vision, but operator trust and core governed execution proofs have higher immediate value |
 | Gallery and operator-legibility surface | Strong but not yet packaged | `docs/HLF_REFERENCE.md`, `docs/HLF_GRAMMAR_REFERENCE.md`, `fixtures/README.md` | `hlf_source/scripts/run_hlf_gallery.py`, `hlf_source/docs/hlf_explainer.html` | `bridge_contract` | P3 | Needed for demonstrations and operator trust, but should follow route/audit proof work |
@@ -58,6 +58,12 @@ This file is doctrine-first and reconstruction-first.
 ### 1. Gateway and Routing Fabric
 
 Target disposition: `faithful_port`
+
+---
+
+## 🐕 Recursive Build-Assist (Dogfooding)
+
+The recursive build-assist lane is now real and in use. The packaged HLF MCP server is used to inspect, test, and explain itself during further development. Operator-facing evidence, audit, and regression surfaces are real and queryable. Each new bridge slice (routing, verification, orchestration, etc.) is added, tested, and then used to further assist the next round of build and recovery. This is not full self-hosting, but it is a real recursive build-assist loop.
 
 - Create `docs/HLF_ROUTING_RECOVERY_SPEC.md` with upstream-to-packaged ownership for `hlf_source/agents/gateway/bus.py`, `hlf_source/agents/gateway/router.py`, and `hlf_source/agents/gateway/sentinel_gate.py`.
 - Define packaged module boundaries across `hlf_mcp/server_profiles.py`, `hlf_mcp/hlf/model_catalog.py`, `hlf_mcp/server_resources.py`, and a new packaged routing trace surface if required.
@@ -83,7 +89,7 @@ Target disposition: `faithful_port`
 - Define ownership boundaries between `hlf_mcp/instinct/lifecycle.py`, packaged MCP surfaces, and any restored DAG or handoff logic.
 - Add explicit contracts for delegation, dissent, escalation, and handoff lineage.
 - Add tests for plan decomposition, deterministic step ordering, and multi-agent role boundaries.
-- Add operator-facing lifecycle notes that explain what orchestration is implemented now versus still source-only.
+- Add operator-facing lifecycle notes that explain what orchestration is implemented now versus what still remains outside packaged execution semantics.
 
 ### 4. HLF Knowledge Substrate and Governed Memory
 
@@ -163,6 +169,7 @@ Target disposition: `source_only_for_now`
 ### Batch 2: Multi-Agent Execution and Memory Proof
 
 - orchestration lifecycle recovery
+- delegation, dissent, escalation, and structured handoff-lineage proof
 - typed effect algebra packaging
 - verifier-backed execution admission
 - memory freshness and supersession enforcement

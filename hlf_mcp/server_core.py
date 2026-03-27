@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -7,7 +8,11 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from hlf_mcp.hlf import audit_symbolic_surface, compile_symbolic_surface
 from hlf_mcp.hlf.compiler import CompileError
+from hlf_mcp.ingress_support import build_ingress_denial_reasons
+from hlf_mcp.ingress_support import persist_runtime_execution_admission
+from hlf_mcp.ingress_support import resolve_execution_ingress_contract
 from hlf_mcp.server_context import ServerContext
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
 
@@ -117,6 +122,8 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         source: str,
         gas_limit: int = 1000,
         variables: dict[str, Any] | None = None,
+        agent_id: str = "",
+        ingress_nonce: str = "",
     ) -> dict[str, Any]:
         """Execute an HLF program in the stack-machine VM."""
         try:
@@ -131,14 +138,59 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 }
             bc = ctx.bytecoder.encode(result["ast"])
             runtime_variables = variables or {}
-            return ctx.runtime.run(
+            normalized_agent_id = str(agent_id or "unknown-agent")
+            runtime_tier = str(runtime_variables.get("DEPLOYMENT_TIER", "hearth"))
+            ingress_contract = resolve_execution_ingress_contract(
+                ctx,
+                agent_id=normalized_agent_id,
+                payload=source,
+                subject_scope="hlf_run",
+                nonce=ingress_nonce,
+                require_hlf_validation=True,
+                hlf_validated=True,
+            )
+            denial_reasons = build_ingress_denial_reasons(
+                ingress_contract,
+                surface="hlf_run",
+            )
+            if denial_reasons:
+                execution_admission = persist_runtime_execution_admission(
+                    ctx,
+                    agent_id=normalized_agent_id,
+                    execution_status="ingress_denied",
+                    requested_tier=runtime_tier,
+                    surface="hlf_run",
+                    ingress_contract=ingress_contract,
+                    reasons=denial_reasons,
+                )
+                return {
+                    "status": "ingress_denied",
+                    "error": "; ".join(denial_reasons),
+                    "gas_used": 0,
+                    "trace": [],
+                    "side_effects": [],
+                    "ingress_contract": ingress_contract,
+                    "execution_admission": execution_admission,
+                }
+            run_result = ctx.runtime.run(
                 bc,
                 gas_limit=gas_limit,
                 variables=runtime_variables,
                 ast=result["ast"],
                 source=source,
-                tier=str(runtime_variables.get("DEPLOYMENT_TIER", "hearth")),
+                tier=runtime_tier,
             )
+            run_result["ingress_contract"] = ingress_contract
+            run_result["execution_admission"] = persist_runtime_execution_admission(
+                ctx,
+                agent_id=normalized_agent_id,
+                execution_status=str(run_result.get("status") or "unknown"),
+                requested_tier=runtime_tier,
+                surface="hlf_run",
+                ingress_contract=ingress_contract,
+                run_result=run_result,
+            )
+            return run_result
         except CompileError as exc:
             return {
                 "status": "compile_error",
@@ -249,6 +301,49 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         return load_test_suite_summary(metrics_dir, include_output=include_output)
 
     @mcp.tool()
+    def hlf_capture_symbolic_surface(
+        source: str,
+        surface_id: str = "",
+        goal_id: str = "",
+    ) -> dict[str, Any]:
+        """Compile and audit a symbolic proof bundle from canonical HLF source and persist it for operator surfaces."""
+        try:
+            symbolic_surface = compile_symbolic_surface(source, compiler=ctx.compiler)
+            resolved_surface_id = surface_id.strip() or hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
+            resolved_goal_id = goal_id.strip() or resolved_surface_id
+            audit_entries = audit_symbolic_surface(
+                symbolic_surface,
+                ctx.audit_chain,
+                goal_id=resolved_goal_id,
+                agent_role="hlf_symbolic_surface",
+            )
+            persisted = ctx.persist_symbolic_surface(
+                {
+                    "surface_id": resolved_surface_id,
+                    "goal_id": resolved_goal_id,
+                    "source": source,
+                    "symbolic_surface": symbolic_surface,
+                    "audit_entries": audit_entries,
+                    "operator_summary": (
+                        f"Runtime-generated symbolic surface '{resolved_surface_id}' recorded "
+                        f"{len(symbolic_surface.get('relation_edges', []))} relation edge(s)."
+                    ),
+                }
+            )
+            return {
+                "status": "ok",
+                "surface_id": resolved_surface_id,
+                "goal_id": resolved_goal_id,
+                "symbolic_surface": symbolic_surface,
+                "audit_entries": audit_entries,
+                "persisted": persisted,
+            }
+        except CompileError as exc:
+            return {"status": "error", "error": str(exc), "surface_id": surface_id or None}
+        except Exception as exc:
+            return {"status": "error", "error": str(exc), "surface_id": surface_id or None}
+
+    @mcp.tool()
     def hlf_weekly_evidence_summary(
         metrics_dir: str | None = None,
     ) -> dict[str, Any]:
@@ -269,5 +364,6 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_disassemble": hlf_disassemble,
         "hlf_submit_ast": hlf_submit_ast,
         "hlf_test_suite_summary": hlf_test_suite_summary,
+        "hlf_capture_symbolic_surface": hlf_capture_symbolic_surface,
         "hlf_weekly_evidence_summary": hlf_weekly_evidence_summary,
     }

@@ -32,6 +32,35 @@ class ToolDispatchError(Exception):
     pass
 
 
+class ToolApprovalBypassError(ToolDispatchError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        tool_name: str,
+        operator: str = "",
+        tool_status: str = "",
+        step_id: int = 0,
+        reason_code: str = "tool_approval_bypass",
+    ) -> None:
+        super().__init__(message)
+        self.tool_name = tool_name
+        self.operator = operator
+        self.tool_status = tool_status
+        self.step_id = step_id
+        self.reason_code = reason_code
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "tool_name": self.tool_name,
+            "operator": self.operator,
+            "tool_status": self.tool_status,
+            "step_id": self.step_id,
+            "reason_code": self.reason_code,
+            "error": str(self),
+        }
+
+
 class ToolLifecycleState:
     ACTIVE = "active"
     PENDING = "pending_hitl"
@@ -95,9 +124,23 @@ class ToolRegistry:
         if not entry:
             raise ToolDispatchError(f"Unknown tool: {name}")
         if entry.get("status") != ToolLifecycleState.PENDING:
-            raise ToolDispatchError(f"Tool {name!r} is not pending HITL approval")
+            raise ToolApprovalBypassError(
+                f"Tool {name!r} is not pending HITL approval",
+                tool_name=name,
+                operator=operator,
+                tool_status=str(entry.get("status") or ""),
+                step_id=int(entry.get("step_id") or 0),
+                reason_code="tool_not_pending_hitl",
+            )
         if approval_token is not None and approval_token != entry.get("approval_token"):
-            raise ToolDispatchError(f"Invalid approval token for {name!r}: token mismatch")
+            raise ToolApprovalBypassError(
+                f"Invalid approval token for {name!r}: token mismatch",
+                tool_name=name,
+                operator=operator,
+                tool_status=str(entry.get("status") or ""),
+                step_id=int(entry.get("step_id") or 0),
+                reason_code="tool_approval_token_mismatch",
+            )
         step = self._next_step()
         entry["status"] = ToolLifecycleState.ACTIVE
         entry["approved_by"] = operator

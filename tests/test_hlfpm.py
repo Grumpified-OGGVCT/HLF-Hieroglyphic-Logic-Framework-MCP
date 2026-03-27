@@ -34,18 +34,14 @@ class FakeOCIClient:
         return list(self.tags)
 
 
-def test_install_offline_creates_stub_module(tmp_path: Path) -> None:
+def test_install_offline_raises_hlfpm_error(tmp_path: Path) -> None:
     install_root = tmp_path / "modules"
     pm = HlfPackageManager(
         install_root=install_root, lockfile=tmp_path / "hlf.lock.json", oci_client=FakeOCIClient()
     )
 
-    result = pm.install("math@v1.0.0")
-
-    assert result["status"] == "stub_installed"
-    meta = json.loads((install_root / "math" / "module.json").read_text(encoding="utf-8"))
-    assert meta["name"] == "math"
-    assert meta["status"] == "stub"
+    with pytest.raises(HlfPmError, match="OCI pull failed"):
+        pm.install("math@v1.0.0")
 
 
 def test_install_copies_pulled_module_and_respects_checksum(tmp_path: Path) -> None:
@@ -135,4 +131,4 @@ def test_search_and_update_behave_against_client_and_installed_state(tmp_path: P
     pm.oci_client.checksum = pm._compute_checksum(source_root)
 
     update_result = pm.update("math")
-    assert update_result["status"] in {"installed", "stub_installed"}
+    assert update_result["status"] == "installed"

@@ -2,6 +2,13 @@
 
 Status: branch-aware merge/readiness summary for 2026-03-20.
 
+2026-03-21 local checkpoint addendum:
+
+- active branch in this checkout: `rescue/governed-review-recovery-2026-03-21`
+- repo-wide regression snapshot on 2026-03-21: `816 passed`
+- packaged `hlf_mcp` HTTP/SSE bring-up verified with `GET /health -> 200 OK`
+- workspace-local VS Code MCP wiring now targets the packaged `hlf-mcp` entrypoint
+
 Purpose:
 
 - summarize what this branch can honestly claim now
@@ -25,6 +32,7 @@ These are implemented and verified enough to claim in present tense for this loc
 - packaged governed routing/profile surfaces with route traces, capability catalogs, evidence-aware selection, and fail-closed denial when required evidence is missing
 - packaged weekly artifact handling with decision persistence and evidence-query surfaces
 - packaged governed-review normalization for spec drift, test health, ethics review, code quality, doc accuracy, and security-pattern review
+- packaged backend selection is not locked to a local tuned model; current runtime truth distinguishes `local-via-ollama`, `cloud-via-ollama`, and `remote-direct`, while cloud-first user-agent guidance remains separate from packaged MCP dependency claims
 
 ## Bridge-True But Real In This Branch
 
@@ -52,6 +60,7 @@ These remain open even after counting the branch improvements.
 - gallery-grade operator legibility and richer trust surfaces
 - ALS-style audit sealing and signed disclosure surfaces
 - full remote recursive-build promotion through proven `streamable-http` initialize/smoke flow
+- non-root Docker runtime, dependency CVE scanning, versioned release or rollback hygiene, and stronger artifact bill-of-materials discipline
 
 ## Near-Term Merge Risks
 
@@ -60,6 +69,7 @@ These are the most concrete current risks for merge or public promotion.
 - governance integrity is only as strong as manifest discipline; `governance/host_functions.json` was re-manifested in this pass after branch changes widened the registry to 32 functions
 - public-facing docs can still lag branch reality if the new ledger and summary are not linked and kept current
 - some branch work is easy to overstate unless claim-lane discipline is preserved
+- packaging and release posture still need hardening: the Docker runtime is not yet explicitly non-root, dependency CVE scanning is not yet closed, and rollback or release targets remain thinner than the governance layer itself
 
 ## Merge Reading
 

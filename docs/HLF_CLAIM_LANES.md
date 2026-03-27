@@ -130,6 +130,25 @@ When you encounter a claim:
 3. check whether the phrasing shrinks HLF into a weaker substitute
 4. relabel or rewrite the claim before reusing it
 
+## Use-Case Interpretation Rule
+
+Use-case examples in this repo are illustrative, not exhaustive.
+
+That includes examples such as:
+
+- robotics and embodied execution
+- coding and build assistance
+- memory and knowledge substrate work
+- orchestration, routing, or multi-agent delegation
+- multilingual translation and audit
+
+These examples should all receive the same depth of interpretation:
+
+- they are not the outer boundary of what HLF may eventually absorb
+- they do not become current-truth product claims merely because they are named often
+- when they are partially real, they belong in the bridge lane until contracts, proof, and packaged authority catch up
+- when they are doctrinally important but not yet shipped, they belong in vision-true or bridge-true wording, not inflated present tense
+
 ## Compact Matrix
 
 | Label | Meaning | Safe Present-Tense Use | Typical Home |

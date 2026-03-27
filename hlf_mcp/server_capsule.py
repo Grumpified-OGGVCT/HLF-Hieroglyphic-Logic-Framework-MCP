@@ -6,10 +6,15 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf import insaits
+from hlf_mcp.hlf.approval_ledger import ApprovalDecisionError, ApprovalTokenMismatchError
 from hlf_mcp.hlf.capsules import capsule_for_tier
 from hlf_mcp.hlf.compiler import CompileError
+from hlf_mcp.hlf.embodied import assess_embodied_host_call
 from hlf_mcp.hlf.execution_admission import evaluate_verifier_admission
 from hlf_mcp.hlf.memory_node import verify_pointer_ref
+from hlf_mcp.instinct.orchestration import build_orchestration_contract
+from hlf_mcp.ingress_support import build_ingress_denial_reasons as _build_ingress_denial_reasons
+from hlf_mcp.ingress_support import resolve_execution_ingress_contract as _resolve_execution_ingress_contract
 from hlf_mcp.server_context import ServerContext
 
 _TAG_EFFECT_CLASS_MAP = {
@@ -73,12 +78,32 @@ def _resolve_approval_request(
     )
 
     if approved_by and approval_token and request.status == "pending":
-        request = ctx.approval_ledger.decide(
-            request_id=request.request_id,
-            decision="approve",
-            operator=approved_by,
-            approval_token=approval_token,
-        )
+        try:
+            request = ctx.approval_ledger.decide(
+                request_id=request.request_id,
+                decision="approve",
+                operator=approved_by,
+                approval_token=approval_token,
+            )
+        except ApprovalTokenMismatchError as exc:
+            ctx.persist_approval_bypass_attempt(
+                subject_agent_id=exc.agent_id or capsule.agent_id,
+                source="server_capsule._resolve_approval_request",
+                witness_id="approval-ledger",
+                evidence_text=(
+                    f"Approval token mismatch while attempting to approve capsule request '{exc.request_id}' "
+                    f"for capsule '{exc.capsule_id}'."
+                ),
+                details={
+                    **exc.to_dict(),
+                    "domain": "capsule_approval",
+                    "requested_tier": capsule.requested_tier,
+                    "base_tier": capsule.base_tier,
+                },
+                related_refs=[exc.latest_event_ref] if exc.latest_event_ref else None,
+                recommended_action="review",
+            )
+            raise
 
     if request.status == "approved":
         capsule = capsule_for_tier(
@@ -107,9 +132,40 @@ def _effective_verification_admission(
         effective["admitted"] = True
         effective["verdict"] = "verification_review_approved"
         effective["operator_review_approved"] = True
+        effective["policy_posture"] = "review_approved"
         reasons = [str(reason) for reason in effective.get("reasons", []) if reason]
         reasons.append("Operator review approved execution after incomplete proof coverage.")
         effective["reasons"] = reasons
+    return effective
+
+
+def _relax_direct_host_verification_admission(
+    verification_admission: dict[str, Any],
+) -> dict[str, Any]:
+    effective = dict(verification_admission)
+    effect_summary = effective.get("effect_summary")
+    report = effective.get("report")
+    if not isinstance(effect_summary, dict) or not isinstance(report, dict):
+        return effective
+    if int(effect_summary.get("node_count") or 0) != 0:
+        return effective
+    if str(effective.get("verdict") or "") != "verification_review_required":
+        return effective
+    if int(report.get("failed") or 0) != 0 or int(report.get("errors") or 0) != 0:
+        return effective
+    if int(report.get("unknown") or 0) != 0:
+        return effective
+
+    effective["admitted"] = True
+    effective["requires_operator_review"] = False
+    effective["verdict"] = "verification_advisory_only"
+    effective["policy_posture"] = "advisory"
+    effective["approval_requirements"] = []
+    reasons = [str(reason) for reason in effective.get("reasons", []) if reason]
+    reasons.append(
+        "Direct host-call admission is governed by the host-function contract when no executable AST constraints are present."
+    )
+    effective["reasons"] = reasons
     return effective
 
 
@@ -162,6 +218,38 @@ def _collect_delegation_events(side_effects: list[dict[str, Any]] | None) -> lis
     return lineage
 
 
+def _collect_pointer_validation_evidence(
+    side_effects: list[dict[str, Any]] | None,
+) -> dict[str, Any] | None:
+    if not side_effects:
+        return None
+    validations: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    for event in side_effects:
+        if str(event.get("type") or "") != "pointer_validation":
+            continue
+        normalized = {
+            "pointer": str(event.get("pointer") or ""),
+            "alias": str(event.get("alias") or ""),
+            "status": str(event.get("status") or "unknown"),
+            "reason": str(event.get("reason") or ""),
+            "trust_tier": str(event.get("trust_tier") or ""),
+            "governance_status": str(event.get("governance_status") or ""),
+            "freshness_status": str(event.get("freshness_status") or ""),
+        }
+        validations.append(normalized)
+        if normalized["status"] != "ok":
+            failures.append(normalized)
+    if not validations:
+        return None
+    return {
+        "validation_count": len(validations),
+        "failure_count": len(failures),
+        "validations": validations,
+        "failures": failures,
+    }
+
+
 def _collect_mission_lineage(
     ctx: ServerContext,
     runtime_variables: dict[str, Any] | None,
@@ -191,15 +279,140 @@ def _collect_mission_lineage(
         or str(step.get("escalation_role") or "").strip()
         or str(step.get("dissent_state") or "none") != "none"
     ]
+    orchestration_contract = mission.get("orchestration_contract")
+    if not isinstance(orchestration_contract, dict):
+        orchestration_contract = build_orchestration_contract(task_dag, execution_trace)
     return {
         "mission_id": mission.get("mission_id"),
         "status": "ok",
         "topic": mission.get("topic"),
         "current_phase": mission.get("current_phase"),
         "execution_summary": dict(mission.get("execution_summary") or {}),
+        "orchestration_contract": dict(orchestration_contract),
         "phase_history": list(mission.get("phase_history") or [])[-5:],
         "handoff_plan": handoff_plan,
         "handoff_trace": handoff_trace,
+    }
+
+
+def _route_admission_requirements(
+    ctx: ServerContext,
+    *,
+    agent_id: str,
+) -> tuple[list[dict[str, str]], list[str]]:
+    normalized_agent_id = str(agent_id or "").strip()
+    if not normalized_agent_id or normalized_agent_id == "unknown-agent":
+        return [], []
+
+    route_trace = ctx.get_governed_route(agent_id=agent_id)
+    if not isinstance(route_trace, dict):
+        return [], []
+    request_context = route_trace.get("request_context", {})
+    if str(request_context.get("agent_id") or "") != str(agent_id or ""):
+        return [], []
+
+    route_decision = route_trace.get("route_decision", {})
+    policy_basis = route_trace.get("policy_basis", {})
+    requirements: list[dict[str, str]] = []
+    denial_reasons: list[str] = []
+
+    if bool(route_decision.get("review_required")):
+        requirements.append(
+            {
+                "type": "route_review",
+                "scope": "routing",
+                "value": str(
+                    route_decision.get("governance_mode")
+                    or route_decision.get("decision")
+                    or "route_review"
+                ),
+            }
+        )
+
+    if str(route_decision.get("decision") or "") == "deny":
+        denial_reasons.append(
+            "Governed routing denied execution before capsule admission could proceed."
+        )
+        if str(route_decision.get("governance_mode") or "") == "trust_restricted":
+            denial_reasons.append(
+                "Restricted trust states require operator recovery before execution can proceed."
+            )
+        allowlist_policy = policy_basis.get("allowlist_policy", {})
+        if isinstance(allowlist_policy, dict) and allowlist_policy.get("enforced"):
+            denial_reasons.append(
+                "The selected route candidates did not satisfy the active deployment-tier allowlist."
+            )
+        if str(policy_basis.get("align_action") or "") == "DROP_AND_QUARANTINE":
+            denial_reasons.append(
+                "ALIGN quarantine semantics require containment instead of execution."
+            )
+
+    return requirements, denial_reasons
+
+
+def _execution_knowledge_gate(
+    ctx: ServerContext,
+    *,
+    agent_id: str,
+    verification: dict[str, Any],
+) -> dict[str, Any]:
+    route_trace = ctx.get_governed_route(agent_id=agent_id)
+    if not isinstance(route_trace, dict):
+        return {
+            "available": False,
+            "decision": "not_evaluated",
+            "admitted": True,
+            "review_required": False,
+            "reasons": [],
+            "knowledge_contract": {},
+        }
+
+    policy_basis = route_trace.get("policy_basis") if isinstance(route_trace.get("policy_basis"), dict) else {}
+    knowledge_contract = dict(policy_basis.get("knowledge_contract") or {})
+    if not knowledge_contract:
+        return {
+            "available": False,
+            "decision": "not_evaluated",
+            "admitted": True,
+            "review_required": False,
+            "reasons": [],
+            "knowledge_contract": {},
+        }
+
+    if bool(knowledge_contract.get("reference_allowed", False)):
+        return {
+            "available": True,
+            "decision": "allow",
+            "admitted": True,
+            "review_required": False,
+            "reasons": [],
+            "knowledge_contract": knowledge_contract,
+        }
+
+    operation_class = str(verification.get("operation_class") or "read_only")
+    effective_tier = str(verification.get("tier") or "hearth")
+    requested_tier = str(verification.get("requested_tier") or effective_tier)
+    elevated = requested_tier in {"forge", "sovereign"} or requested_tier != effective_tier
+    effectful = operation_class != "read_only"
+    reasons = [
+        "Governed HKS execution-admission contract did not clear trust, freshness, provenance, and graph thresholds for this request."
+    ]
+    if effectful or elevated:
+        return {
+            "available": True,
+            "decision": "deny",
+            "admitted": False,
+            "review_required": False,
+            "reasons": reasons,
+            "knowledge_contract": knowledge_contract,
+        }
+    return {
+        "available": True,
+        "decision": "review_required",
+        "admitted": False,
+        "review_required": True,
+        "reasons": reasons,
+        "knowledge_contract": knowledge_contract,
     }
 
 
@@ -215,12 +428,20 @@ def _build_execution_admission_record(
     execution_audit: dict[str, Any] | None = None,
     side_effects: list[dict[str, Any]] | None = None,
     runtime_variables: dict[str, Any] | None = None,
+    embodied_effect: dict[str, Any] | None = None,
+    ingress_contract: dict[str, Any] | None = None,
+    knowledge_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     route_trace = ctx.get_governed_route(agent_id=agent_id)
     route_decision = route_trace.get("route_decision", {}) if isinstance(route_trace, dict) else {}
     policy_basis = route_trace.get("policy_basis", {}) if isinstance(route_trace, dict) else {}
+    route_ingress_contract = policy_basis.get("ingress_contract") if isinstance(policy_basis, dict) else None
+    normalized_ingress_contract = dict(ingress_contract or {})
+    if not normalized_ingress_contract and isinstance(route_ingress_contract, dict):
+        normalized_ingress_contract = dict(route_ingress_contract)
     effect_basis = _collect_effect_basis(ctx, verification)
     delegation_events = _collect_delegation_events(side_effects)
+    pointer_evidence = _collect_pointer_validation_evidence(side_effects)
     mission_lineage = _collect_mission_lineage(ctx, runtime_variables)
     route_evidence = {
         "available": route_trace is not None,
@@ -228,11 +449,31 @@ def _build_execution_admission_record(
         "decision": route_decision.get("decision"),
         "governance_mode": route_decision.get("governance_mode"),
         "review_required": route_decision.get("review_required"),
+        "align_action": policy_basis.get("align_action"),
+        "deployment_tier": policy_basis.get("deployment_tier"),
+        "allowlist_policy": dict(policy_basis.get("allowlist_policy") or {}),
         "route_governance_event_ref": policy_basis.get("governance_event_ref"),
         "policy_constraints": list(policy_basis.get("policy_constraints", [])),
         "missing_evidence_profiles": list(policy_basis.get("missing_evidence_profiles", [])),
         "policy_basis_present": bool(policy_basis.get("policy_basis_present", False)),
+        "knowledge_contract": dict(policy_basis.get("knowledge_contract") or {}),
     }
+    ingress_evidence = {
+        "available": bool(normalized_ingress_contract),
+        "admitted": normalized_ingress_contract.get("admitted") if normalized_ingress_contract else None,
+        "decision": normalized_ingress_contract.get("decision") if normalized_ingress_contract else None,
+        "blocked_stage": normalized_ingress_contract.get("blocked_stage") if normalized_ingress_contract else None,
+        "review_required": normalized_ingress_contract.get("review_required") if normalized_ingress_contract else None,
+        "checks": list(normalized_ingress_contract.get("checks", [])) if normalized_ingress_contract else [],
+        "policy_basis": dict(normalized_ingress_contract.get("policy_basis") or {}) if normalized_ingress_contract else {},
+    }
+    normalized_embodied_effect = dict(embodied_effect or {})
+    normalized_knowledge_gate = dict(knowledge_gate or {})
+    orchestration_summary = {}
+    if isinstance(mission_lineage, dict) and isinstance(mission_lineage.get("orchestration_contract"), dict):
+        orchestration_summary = dict(
+            (mission_lineage.get("orchestration_contract") or {}).get("summary") or {}
+        )
     approval_status = "not_required"
     if approval_request is not None:
         approval_status = str(approval_request.get("status") or "pending")
@@ -243,8 +484,31 @@ def _build_execution_admission_record(
         f"during status '{execution_status}'. "
         f"Route lane is '{route_evidence.get('selected_lane') or 'unresolved'}' and effect classes are "
         f"{', '.join(effect_basis['effect_classes']) or 'none'}; approval is '{approval_status}'; "
-        f"delegations recorded: {len(delegation_events)}."
+        f"ingress is '{ingress_evidence.get('decision') or 'not-evaluated'}' at stage "
+        f"'{ingress_evidence.get('blocked_stage') or 'admit'}'; "
+        f"delegations recorded: {len(delegation_events)}; pointer validation failures: "
+        f"{int((pointer_evidence or {}).get('failure_count', 0))}."
     )
+    if orchestration_summary:
+        operator_summary += (
+            f" Mission lineage tracks {orchestration_summary.get('allowed_nodes', 0)}/"
+            f"{orchestration_summary.get('total_nodes', 0)} allowed node(s), "
+            f"{orchestration_summary.get('denied_nodes', 0)} denied, "
+            f"{orchestration_summary.get('escalated_nodes', 0)} escalated, and "
+            f"{orchestration_summary.get('dissenting_nodes', 0)} dissenting."
+        )
+    if normalized_embodied_effect:
+        operator_summary += (
+            f" Embodied function '{normalized_embodied_effect.get('function_name') or 'unknown'}' "
+            f"carries safety_class='{normalized_embodied_effect.get('safety_class') or 'none'}', "
+            f"review_posture='{normalized_embodied_effect.get('review_posture') or 'none'}', and "
+            f"bounded_spatial_envelope={bool(normalized_embodied_effect.get('bounded_spatial_envelope', False))}."
+        )
+    if normalized_knowledge_gate.get("available"):
+        operator_summary += (
+            f" Governed HKS gate is '{normalized_knowledge_gate.get('decision') or 'unknown'}' with "
+            f"{int((normalized_knowledge_gate.get('knowledge_contract') or {}).get('evidence_count') or 0)} reference(s)."
+        )
     return {
         "contract_version": "1.0",
         "agent_id": agent_id,
@@ -256,8 +520,13 @@ def _build_execution_admission_record(
         "requires_operator_review": bool(verification.get("requires_operator_review", False)),
         "reasons": list(verification.get("reasons", [])),
         "effect_basis": effect_basis,
+        "embodied_effect": normalized_embodied_effect,
+        "knowledge_gate": normalized_knowledge_gate,
+        "ingress_evidence": ingress_evidence,
         "route_evidence": route_evidence,
+        "pointer_evidence": pointer_evidence,
         "orchestration_lineage": {
+            "contract_version": "1.0",
             "delegation_events": delegation_events,
             "mission": mission_lineage,
         },
@@ -324,25 +593,40 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 verifier=ctx.formal_verifier,
                 tier=tier,
                 requested_tier=capsule.requested_tier,
+                trust_state=ctx.get_effective_trust_state(subject_agent_id=agent_id, default="trusted"),
             ).to_dict()
+            knowledge_gate = _execution_knowledge_gate(
+                ctx,
+                agent_id=agent_id,
+                verification=verification_admission,
+            )
+            route_requirements, route_denial_reasons = _route_admission_requirements(
+                ctx,
+                agent_id=agent_id,
+            )
             verification_requirements = list(
                 verification_admission.get("approval_requirements", [])
             )
+            extra_requirements = [*route_requirements, *verification_requirements]
             capsule, approval_request = _resolve_approval_request(
                 ctx,
                 capsule=capsule,
                 statements=stmts,
                 approved_by=approved_by,
                 approval_token=approval_token,
-                extra_requirements=verification_requirements,
+                extra_requirements=extra_requirements,
             )
-            approval_requirements = capsule._merged_requirements(stmts, verification_requirements)
-            approval_granted = capsule.approval_granted(stmts, verification_requirements)
+            approval_requirements = capsule._merged_requirements(stmts, extra_requirements)
+            approval_granted = capsule.approval_granted(stmts, extra_requirements)
             effective_verification = _effective_verification_admission(
                 verification_admission,
                 approval_granted=approval_granted,
             )
             violations = capsule.validate_ast(stmts, verification_requirements)
+            if route_denial_reasons:
+                violations = [f"Governed route denied: {reason}" for reason in route_denial_reasons] + violations
+            if knowledge_gate.get("decision") == "deny":
+                violations = [f"Governed HKS denied: {reason}" for reason in knowledge_gate.get("reasons", [])] + violations
             if not effective_verification.get("admitted", False) and not effective_verification.get(
                 "requires_operator_review", False
             ):
@@ -364,6 +648,7 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "approval_request": approval_request,
                 "passed": len(violations) == 0,
                 "verification": effective_verification,
+                "knowledge_gate": knowledge_gate,
                 "capsule": capsule.to_dict(),
             }
         except ValueError as exc:
@@ -388,6 +673,7 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         approval_required_tools_json: str = "[]",
         approved_by: str = "",
         approval_token: str = "",
+        ingress_nonce: str = "",
     ) -> dict[str, Any]:
         """Compile, capsule-validate, then execute HLF source within a sandboxed tier."""
         try:
@@ -420,25 +706,150 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 verifier=ctx.formal_verifier,
                 tier=tier,
                 requested_tier=capsule.requested_tier,
+                trust_state=ctx.get_effective_trust_state(subject_agent_id=agent_id, default="trusted"),
             ).to_dict()
+            knowledge_gate = _execution_knowledge_gate(
+                ctx,
+                agent_id=agent_id,
+                verification=verification_admission,
+            )
+            route_requirements, route_denial_reasons = _route_admission_requirements(
+                ctx,
+                agent_id=agent_id,
+            )
             verification_requirements = list(
                 verification_admission.get("approval_requirements", [])
             )
+            extra_requirements = [*route_requirements, *verification_requirements]
             capsule, approval_request = _resolve_approval_request(
                 ctx,
                 capsule=capsule,
                 statements=stmts,
                 approved_by=approved_by,
                 approval_token=approval_token,
-                extra_requirements=verification_requirements,
+                extra_requirements=extra_requirements,
             )
-            approval_requirements = capsule._merged_requirements(stmts, verification_requirements)
-            approval_granted = capsule.approval_granted(stmts, verification_requirements)
+            approval_requirements = capsule._merged_requirements(stmts, extra_requirements)
+            approval_granted = capsule.approval_granted(stmts, extra_requirements)
             effective_verification = _effective_verification_admission(
                 verification_admission,
                 approval_granted=approval_granted,
             )
-            approval_token_value = capsule.expected_approval_token(stmts, verification_requirements)
+            approval_token_value = capsule.expected_approval_token(stmts, extra_requirements)
+            runtime_variables = ctx.build_runtime_variables(base_variables, agent_id=agent_id)
+            ingress_contract = _resolve_execution_ingress_contract(
+                ctx,
+                agent_id=agent_id,
+                payload=source,
+                subject_scope="capsule_execution",
+                nonce=ingress_nonce,
+                require_hlf_validation=True,
+                hlf_validated=True,
+            )
+            ingress_denial_reasons = _build_ingress_denial_reasons(
+                ingress_contract,
+                surface="capsule execution",
+            )
+            if route_denial_reasons:
+                route_block_verification = {
+                    **effective_verification,
+                    "admitted": False,
+                    "requires_operator_review": False,
+                    "verdict": "route_denied",
+                    "reasons": list(route_denial_reasons),
+                }
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=route_block_verification,
+                        execution_status="route_denied",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        ingress_contract=ingress_contract,
+                        knowledge_gate=knowledge_gate,
+                    ),
+                )
+                return {
+                    "status": "route_denied",
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                    "reasons": route_denial_reasons,
+                    "verification": route_block_verification,
+                    "approval_requirements": approval_requirements,
+                    "execution_admission": execution_admission,
+                    "capsule": capsule.to_dict(),
+                }
+            if ingress_denial_reasons:
+                ingress_block_verification = {
+                    **effective_verification,
+                    "admitted": False,
+                    "requires_operator_review": False,
+                    "verdict": "ingress_denied",
+                    "reasons": list(ingress_denial_reasons),
+                }
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=ingress_block_verification,
+                        execution_status="ingress_denied",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        ingress_contract=ingress_contract,
+                        knowledge_gate=knowledge_gate,
+                    ),
+                )
+                return {
+                    "status": "ingress_denied",
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                    "reasons": ingress_denial_reasons,
+                    "verification": ingress_block_verification,
+                    "ingress_contract": ingress_contract,
+                    "approval_requirements": approval_requirements,
+                    "execution_admission": execution_admission,
+                    "capsule": capsule.to_dict(),
+                }
+            if knowledge_gate.get("decision") == "deny":
+                knowledge_block_verification = {
+                    **effective_verification,
+                    "admitted": False,
+                    "requires_operator_review": False,
+                    "verdict": "knowledge_denied",
+                    "reasons": list(knowledge_gate.get("reasons") or []),
+                }
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=knowledge_block_verification,
+                        execution_status="knowledge_denied",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        ingress_contract=ingress_contract,
+                        knowledge_gate=knowledge_gate,
+                    ),
+                )
+                return {
+                    "status": "knowledge_denied",
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                    "verification": knowledge_block_verification,
+                    "knowledge_gate": knowledge_gate,
+                    "approval_requirements": approval_requirements,
+                    "execution_admission": execution_admission,
+                    "capsule": capsule.to_dict(),
+                }
             if approval_requirements and not approval_granted:
                 execution_admission = ctx.persist_execution_admission(
                     agent_id=agent_id,
@@ -450,6 +861,9 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                         execution_status="approval_required",
                         approval_requirements=approval_requirements,
                         approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        ingress_contract=ingress_contract,
+                        knowledge_gate=knowledge_gate,
                     ),
                 )
                 return {
@@ -474,6 +888,9 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                         execution_status="verification_denied",
                         approval_requirements=approval_requirements,
                         approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        ingress_contract=ingress_contract,
+                        knowledge_gate=knowledge_gate,
                     ),
                 )
                 return {
@@ -497,6 +914,9 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                         execution_status="capsule_violation",
                         approval_requirements=approval_requirements,
                         approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        ingress_contract=ingress_contract,
+                        knowledge_gate=knowledge_gate,
                     ),
                 )
                 return {
@@ -511,7 +931,6 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 }
             effective_gas = min(gas_limit, capsule.max_gas)
             bc = ctx.bytecoder.encode(result["ast"])
-            runtime_variables = ctx.build_runtime_variables(base_variables, agent_id=agent_id)
             runtime_variables["_tier"] = capsule.requested_tier
             runtime_variables["_trusted_pointers"] = trusted_pointers
             runtime_variables["_pointer_trust_mode"] = pointer_trust_mode
@@ -546,8 +965,12 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                     execution_audit=run_result.get("audit", {}).get("execution"),
                     side_effects=run_result.get("side_effects"),
                     runtime_variables=runtime_variables,
+                    ingress_contract=ingress_contract,
+                    knowledge_gate=knowledge_gate,
                 ),
             )
+            run_result["ingress_contract"] = ingress_contract
+            run_result["knowledge_gate"] = knowledge_gate
             run_result["capsule"] = capsule.to_dict()
             return run_result
         except ValueError as exc:
@@ -590,8 +1013,10 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         tier: str = "hearth",
         requested_tier: str = "",
         capsule_id: str = "",
+        agent_id: str = "unknown-agent",
         approved_by: str = "",
         approval_token: str = "",
+        ingress_nonce: str = "",
     ) -> dict[str, Any]:
         """Call a host function from the registry."""
         try:
@@ -600,48 +1025,305 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 return {"status": "error", "error": "args_json must be a JSON array"}
             host_function = ctx.host_registry.get(function_name)
             policy_trace = host_function.policy_trace() if host_function else None
+            embodied_contract = assess_embodied_host_call(function_name, args, policy_trace)
             capsule = capsule_for_tier(
                 tier,
+                agent_id=agent_id,
                 capsule_id=capsule_id or None,
                 requested_tier=requested_tier or None,
                 approved_by=approved_by,
                 approval_token=approval_token,
             )
+            verification_admission = evaluate_verifier_admission(
+                {"statements": []},
+                verifier=ctx.formal_verifier,
+                tier=tier,
+                requested_tier=capsule.requested_tier,
+                embodied_contract=embodied_contract.to_dict() if embodied_contract.embodied else None,
+                trust_state=ctx.get_effective_trust_state(subject_agent_id=agent_id, default="trusted"),
+            ).to_dict()
+            verification_admission = _relax_direct_host_verification_admission(
+                verification_admission
+            )
+            route_requirements, route_denial_reasons = _route_admission_requirements(
+                ctx,
+                agent_id=agent_id,
+            )
+            verification_requirements = list(
+                verification_admission.get("approval_requirements", [])
+            )
+            extra_requirements = [
+                *route_requirements,
+                *verification_requirements,
+                *embodied_contract.approval_requirements,
+            ]
             capsule, approval_request = _resolve_approval_request(
                 ctx,
                 capsule=capsule,
                 statements=[],
                 approved_by=approved_by,
                 approval_token=approval_token,
+                extra_requirements=extra_requirements,
             )
-            approval_requirements = capsule.collect_approval_requirements([])
-            if approval_requirements and not capsule.approval_granted([]):
+            approval_requirements = capsule._merged_requirements([], extra_requirements)
+            approval_granted = capsule.approval_granted([], extra_requirements)
+            effective_verification = _effective_verification_admission(
+                verification_admission,
+                approval_granted=approval_granted,
+            )
+            embodied_effect = dict(effective_verification.get("embodied_summary") or {})
+            runtime_variables = ctx.build_runtime_variables({}, agent_id=agent_id)
+            ingress_contract = _resolve_execution_ingress_contract(
+                ctx,
+                agent_id=agent_id,
+                payload={
+                    "function_name": function_name,
+                    "args": args,
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                },
+                subject_scope="host_call",
+                nonce=ingress_nonce,
+                require_hlf_validation=False,
+                hlf_validated=True,
+            )
+            ingress_denial_reasons = _build_ingress_denial_reasons(
+                ingress_contract,
+                surface="host-call execution",
+            )
+            if route_denial_reasons:
+                route_block_verification = {
+                    **effective_verification,
+                    "admitted": False,
+                    "requires_operator_review": False,
+                    "verdict": "route_denied",
+                    "reasons": list(route_denial_reasons),
+                }
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=route_block_verification,
+                        execution_status="route_denied",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        embodied_effect=embodied_effect,
+                        ingress_contract=ingress_contract,
+                    ),
+                )
+                return {
+                    "status": "route_denied",
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                    "agent_id": agent_id,
+                    "policy_trace": policy_trace,
+                    "embodied_contract": embodied_contract.to_dict(),
+                    "reasons": route_denial_reasons,
+                    "verification": route_block_verification,
+                    "approval_requirements": approval_requirements,
+                    "approval_request": approval_request,
+                    "execution_admission": execution_admission,
+                    "capsule": capsule.to_dict(),
+                }
+            if ingress_denial_reasons:
+                ingress_block_verification = {
+                    **effective_verification,
+                    "admitted": False,
+                    "requires_operator_review": False,
+                    "verdict": "ingress_denied",
+                    "reasons": list(ingress_denial_reasons),
+                }
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=ingress_block_verification,
+                        execution_status="ingress_denied",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        embodied_effect=embodied_effect,
+                        ingress_contract=ingress_contract,
+                    ),
+                )
+                return {
+                    "status": "ingress_denied",
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                    "agent_id": agent_id,
+                    "policy_trace": policy_trace,
+                    "embodied_contract": embodied_contract.to_dict(),
+                    "reasons": ingress_denial_reasons,
+                    "verification": ingress_block_verification,
+                    "ingress_contract": ingress_contract,
+                    "approval_requirements": approval_requirements,
+                    "approval_request": approval_request,
+                    "execution_admission": execution_admission,
+                    "capsule": capsule.to_dict(),
+                }
+            if not embodied_contract.admitted:
+                denied_verification = {
+                    **effective_verification,
+                    "admitted": False,
+                    "requires_operator_review": False,
+                    "verdict": "embodied_contract_denied",
+                    "reasons": list(embodied_contract.reasons),
+                }
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=denied_verification,
+                        execution_status="embodied_contract_violation",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        embodied_effect=embodied_effect,
+                        ingress_contract=ingress_contract,
+                    ),
+                )
+                return {
+                    "status": "embodied_contract_violation",
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                    "agent_id": agent_id,
+                    "policy_trace": policy_trace,
+                    "embodied_contract": embodied_contract.to_dict(),
+                    "approval_request": approval_request,
+                    "verification": denied_verification,
+                    "execution_admission": execution_admission,
+                    "capsule": capsule.to_dict(),
+                    "violations": embodied_contract.reasons,
+                }
+            if approval_requirements and not approval_granted:
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=effective_verification,
+                        execution_status="approval_required",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        embodied_effect=embodied_effect,
+                        ingress_contract=ingress_contract,
+                    ),
+                )
                 return {
                     "status": "approval_required",
                     "tier": tier,
                     "requested_tier": capsule.requested_tier,
+                    "agent_id": agent_id,
                     "policy_trace": policy_trace,
+                    "embodied_contract": embodied_contract.to_dict(),
                     "approval_requirements": approval_requirements,
-                    "approval_token": capsule.expected_approval_token([]),
+                    "approval_token": capsule.expected_approval_token(
+                        [], extra_requirements
+                    ),
                     "approval_request": approval_request,
+                    "verification": effective_verification,
+                    "execution_admission": execution_admission,
+                    "capsule": capsule.to_dict(),
+                }
+            if not effective_verification.get("admitted", False):
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=effective_verification,
+                        execution_status="verification_denied",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        embodied_effect=embodied_effect,
+                        ingress_contract=ingress_contract,
+                    ),
+                )
+                return {
+                    "status": "verification_denied",
+                    "tier": tier,
+                    "requested_tier": capsule.requested_tier,
+                    "agent_id": agent_id,
+                    "policy_trace": policy_trace,
+                    "embodied_contract": embodied_contract.to_dict(),
+                    "verification": effective_verification,
+                    "approval_requirements": approval_requirements,
+                    "approval_request": approval_request,
+                    "execution_admission": execution_admission,
                     "capsule": capsule.to_dict(),
                 }
             violations = capsule.validate_host_function(function_name)
             if violations:
+                execution_admission = ctx.persist_execution_admission(
+                    agent_id=agent_id,
+                    admission_record=_build_execution_admission_record(
+                        ctx,
+                        agent_id=agent_id,
+                        capsule=capsule,
+                        verification=effective_verification,
+                        execution_status="capsule_violation",
+                        approval_requirements=approval_requirements,
+                        approval_request=approval_request,
+                        runtime_variables=runtime_variables,
+                        embodied_effect=embodied_effect,
+                        ingress_contract=ingress_contract,
+                    ),
+                )
                 return {
                     "status": "capsule_violation",
                     "tier": tier,
                     "requested_tier": capsule.requested_tier,
+                    "agent_id": agent_id,
                     "policy_trace": policy_trace,
+                    "embodied_contract": embodied_contract.to_dict(),
+                    "verification": effective_verification,
+                    "execution_admission": execution_admission,
                     "violations": violations,
                     "capsule": capsule.to_dict(),
                 }
-            result = ctx.host_registry.call(function_name, args, capsule.requested_tier)
+            result = ctx.host_registry.call(
+                function_name,
+                embodied_contract.normalized_args,
+                capsule.requested_tier,
+            )
+            if embodied_contract.embodied:
+                result["embodied_contract"] = embodied_contract.to_dict()
+            execution_admission = ctx.persist_execution_admission(
+                agent_id=agent_id,
+                admission_record=_build_execution_admission_record(
+                    ctx,
+                    agent_id=agent_id,
+                    capsule=capsule,
+                    verification=effective_verification,
+                    execution_status="host_call_admitted",
+                    approval_requirements=approval_requirements,
+                    approval_request=approval_request,
+                    runtime_variables=runtime_variables,
+                    embodied_effect=embodied_effect,
+                    ingress_contract=ingress_contract,
+                ),
+            )
             return {
                 "status": "ok",
+                "agent_id": agent_id,
                 "result": result,
                 "policy_trace": result.get("policy_trace"),
+                "embodied_contract": embodied_contract.to_dict() if embodied_contract.embodied else None,
+                "verification": effective_verification,
+                "ingress_contract": ingress_contract,
                 "approval_request": approval_request,
+                "execution_admission": execution_admission,
             }
         except json.JSONDecodeError as exc:
             return {"status": "error", "error": f"Invalid args_json: {exc}"}
@@ -687,6 +1369,31 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 reason=reason,
             )
             return {"status": "ok", "request": request.to_dict()}
+        except ApprovalDecisionError as exc:
+            bypass_record = None
+            if exc.reason_code == "approval_token_mismatch":
+                bypass_record = ctx.persist_approval_bypass_attempt(
+                    subject_agent_id=exc.agent_id or f"approval-request:{exc.request_id}",
+                    source="server_capsule.hlf_capsule_review_decide",
+                    witness_id="approval-ledger",
+                    evidence_text=(
+                        f"Approval token mismatch while operator '{operator}' attempted to approve "
+                        f"request '{exc.request_id}'."
+                    ),
+                    details={
+                        **exc.to_dict(),
+                        "domain": "capsule_approval",
+                        "operator": operator,
+                    },
+                    related_refs=[exc.latest_event_ref] if exc.latest_event_ref else None,
+                    recommended_action="review",
+                )
+            return {
+                "status": "error",
+                "error": str(exc),
+                "error_details": exc.to_dict(),
+                "bypass_record": bypass_record,
+            }
         except Exception as exc:
             return {"status": "error", "error": str(exc)}
 

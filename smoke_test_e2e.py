@@ -117,6 +117,9 @@ print(f"  {len(uris)} resources: {uris}")
 check("grammar in resources", "hlf://grammar" in uris)
 check("opcodes in resources", "hlf://opcodes" in uris)
 check("formal verifier status in resources", "hlf://status/formal_verifier" in uris)
+check("approval bypass status in resources", "hlf://status/approval_bypass" in uris)
+check("daemon transparency status in resources", "hlf://status/daemon_transparency" in uris)
+check("daemon transparency report in resources", "hlf://reports/daemon_transparency" in uris)
 
 # ---- 4. Resource Read: grammar ----
 print("=== 4. Resource Read (grammar) ===")
@@ -155,11 +158,64 @@ check("has bytecode hex", len(cr["bytecode_hex"]) > 0)
 
 # ---- 7. Run ----
 print("=== 7. Tool: hlf_run ===")
-s, d = post("/mcp", {"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "hlf_run", "arguments": {"source": src, "gas_limit": 5000}}})
+ingress_agent_id = "http-smoke-agent"
+ingress_nonce = "http-smoke-nonce"
+s, d = post(
+    "/mcp",
+    {
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {
+            "name": "hlf_run",
+            "arguments": {
+                "source": src,
+                "gas_limit": 5000,
+                "agent_id": ingress_agent_id,
+                "ingress_nonce": ingress_nonce,
+            },
+        },
+    },
+)
 er = d["result"].get("structuredContent") or json.loads(d["result"]["content"][0]["text"])
 print(f"  status={er['status']}, gas_used={er['gas_used']}")
 check("run status ok", er["status"] == "ok")
 check("gas within limit", er["gas_used"] <= 5000)
+
+# ---- 7b. Resource Read: ingress ----
+print("=== 7b. Resource Read (ingress) ===")
+s, d = post(
+    "/mcp",
+    {
+        "jsonrpc": "2.0",
+        "id": 61,
+        "method": "resources/read",
+        "params": {"uri": f"hlf://status/ingress/{ingress_agent_id}"},
+    },
+)
+ingress_resource = json.loads(d["result"]["contents"][0]["text"])
+print(
+    "  "
+    f"status={ingress_resource['status']}, "
+    f"source={(ingress_resource.get('ingress_status') or {}).get('source')}, "
+    f"decision={(ingress_resource.get('ingress_status') or {}).get('decision')}"
+)
+check("ingress resource status ok", ingress_resource["status"] == "ok")
+check(
+    "ingress resource uses execution admission fallback",
+    (ingress_resource.get("ingress_status") or {}).get("source") == "execution_admission",
+)
+check(
+    "ingress resource decision allow",
+    (ingress_resource.get("ingress_status") or {}).get("decision") == "allow",
+)
+check(
+    "ingress replay protection accepted",
+    ((ingress_resource.get("ingress_status") or {}).get("stage_status") or {})
+    .get("replay_protection", {})
+    .get("status")
+    == "accepted",
+)
 
 # ---- 8. Validate ----
 print("=== 8. Tool: hlf_validate ===")

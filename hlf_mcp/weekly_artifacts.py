@@ -304,6 +304,7 @@ def append_weekly_artifact_decision(
         ).encode("utf-8")
     ).hexdigest()[:16]
 
+    persona_gate_status = build_persona_gate_status(artifact)
     records = list(artifact.get("decision_records") or [])
     records.append(
         {
@@ -317,6 +318,7 @@ def append_weekly_artifact_decision(
             "evidence_refs": list(evidence_refs or []),
             "policy_basis": list(policy_basis or []),
             "supersedes": supersedes,
+            "persona_gate_status": persona_gate_status,
         }
     )
 
@@ -326,6 +328,7 @@ def append_weekly_artifact_decision(
     evidence_contract["triage_lane"] = triage_lane
     evidence_contract["decision_count"] = len(records)
     evidence_contract["supersedes"] = supersedes
+    evidence_contract["persona_gate_status"] = persona_gate_status
 
     artifact["artifact_status"] = status_after
     artifact["decision_records"] = records
@@ -381,6 +384,144 @@ def load_verified_weekly_artifacts(
         if limit is not None and len(filtered) >= limit:
             break
     return filtered
+
+
+def _increment_count(mapping: dict[str, int], key: Any) -> None:
+    if not isinstance(key, str) or not key:
+        return
+    mapping[key] = mapping.get(key, 0) + 1
+
+
+def _normalize_gate_status(status: Any) -> str:
+    if isinstance(status, str) and status.strip():
+        return status.strip().lower()
+    return "pending"
+
+
+def build_persona_gate_status(artifact: dict[str, Any]) -> dict[str, Any]:
+    source = str(artifact.get("source") or "unknown")
+    raw_review = artifact.get("governed_review")
+    attached_contract = isinstance(raw_review, dict) and bool(raw_review)
+    normalized_review = normalize_governed_review(
+        raw_review if attached_contract else {},
+        source=source,
+    )
+
+    required_gates = list(normalized_review.get("required_gates") or [])
+    gate_results = dict(normalized_review.get("gate_results") or {})
+    gate_status_counts: dict[str, int] = {}
+    pending_gates: list[str] = []
+    approved_gates: list[str] = []
+    rejected_gates: list[str] = []
+
+    for gate_name in required_gates:
+        gate_payload = gate_results.get(gate_name)
+        normalized_status = _normalize_gate_status(
+            gate_payload.get("status") if isinstance(gate_payload, dict) else None
+        )
+        _increment_count(gate_status_counts, normalized_status)
+        if normalized_status == "pending":
+            pending_gates.append(gate_name)
+        elif normalized_status == "approved":
+            approved_gates.append(gate_name)
+        elif normalized_status == "rejected":
+            rejected_gates.append(gate_name)
+
+    operator_promotion_status = None
+    if "operator_promotion" in required_gates:
+        operator_promotion_payload = gate_results.get("operator_promotion")
+        operator_promotion_status = _normalize_gate_status(
+            operator_promotion_payload.get("status")
+            if isinstance(operator_promotion_payload, dict)
+            else None
+        )
+
+    return {
+        "artifact_id": artifact.get("artifact_id"),
+        "artifact_status": artifact.get("artifact_status"),
+        "source": source,
+        "generated_at": artifact.get("generated_at"),
+        "contract_source": (
+            "attached_governed_review" if attached_contract else "normalized_fallback"
+        ),
+        "change_class": normalized_review.get("change_class"),
+        "lane": normalized_review.get("lane"),
+        "owner_persona": normalized_review.get("owner_persona"),
+        "review_personas": list(normalized_review.get("review_personas") or []),
+        "required_gates": required_gates,
+        "required_gate_count": len(required_gates),
+        "gate_results": gate_results,
+        "gate_status_counts": gate_status_counts,
+        "pending_gate_count": gate_status_counts.get("pending", 0),
+        "approved_gate_count": gate_status_counts.get("approved", 0),
+        "pending_gates": pending_gates,
+        "approved_gates": approved_gates,
+        "rejected_gates": rejected_gates,
+        "operator_promotion_status": operator_promotion_status,
+        "all_required_gates_resolved": gate_status_counts.get("pending", 0) == 0,
+        "escalate_to_persona": normalized_review.get("escalate_to_persona"),
+        "operator_summary": normalized_review.get("operator_summary"),
+        "handoff_template_ref": normalized_review.get("handoff_template_ref"),
+    }
+
+
+def build_persona_review_summary(
+    artifacts: list[dict[str, Any]],
+    *,
+    include_artifacts: bool = False,
+    artifact_limit: int = 5,
+) -> dict[str, Any]:
+    owner_persona_counts: dict[str, int] = {}
+    review_persona_counts: dict[str, int] = {}
+    escalation_persona_counts: dict[str, int] = {}
+    required_gate_counts: dict[str, int] = {}
+    gate_status_counts: dict[str, int] = {}
+    recent_artifacts: list[dict[str, Any]] = []
+    attached_contract_count = 0
+    fallback_contract_count = 0
+    artifact_count = 0
+
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+
+        artifact_summary = build_persona_gate_status(artifact)
+        artifact_count += 1
+        if artifact_summary.get("contract_source") == "attached_governed_review":
+            attached_contract_count += 1
+        else:
+            fallback_contract_count += 1
+
+        _increment_count(owner_persona_counts, artifact_summary.get("owner_persona"))
+        _increment_count(escalation_persona_counts, artifact_summary.get("escalate_to_persona"))
+
+        for persona in artifact_summary.get("review_personas") or []:
+            _increment_count(review_persona_counts, persona)
+        for gate_name in artifact_summary.get("required_gates") or []:
+            _increment_count(required_gate_counts, gate_name)
+        for normalized_status, count in (artifact_summary.get("gate_status_counts") or {}).items():
+            if not isinstance(count, int):
+                continue
+            for _ in range(count):
+                _increment_count(gate_status_counts, normalized_status)
+
+        if include_artifacts and len(recent_artifacts) < artifact_limit:
+            recent_artifacts.append(artifact_summary)
+
+    summary = {
+        "artifact_count": artifact_count,
+        "attached_contract_count": attached_contract_count,
+        "fallback_contract_count": fallback_contract_count,
+        "owner_persona_counts": owner_persona_counts,
+        "review_persona_counts": review_persona_counts,
+        "escalation_persona_counts": escalation_persona_counts,
+        "required_gate_counts": required_gate_counts,
+        "gate_status_counts": gate_status_counts,
+        "pending_gate_count": gate_status_counts.get("pending", 0),
+    }
+    if include_artifacts:
+        summary["recent_artifacts"] = recent_artifacts
+    return summary
 
 
 def find_weekly_artifact(
@@ -477,6 +618,7 @@ def summarize_weekly_artifacts(metrics_dir: Path | None = None) -> dict[str, Any
         "distribution_eligible_count": distributable_count,
         "status_counts": status_counts,
         "source_counts": source_counts,
+        "persona_review_summary": build_persona_review_summary(artifacts),
         "history_path": str(_coerce_metrics_dir(metrics_dir) / WEEKLY_HISTORY_ARTIFACT),
     }
 
@@ -920,6 +1062,23 @@ def build_hks_exemplar_from_weekly_artifact(
         f"{server_surface.get('registered_tool_count', 0)} registered tools, and "
         f"{len(governance.get('drift', []))} governance drift findings."
     )
+    artifact_id = str(artifact.get("artifact_id") or "weekly-artifact")
+    evaluation = {
+        "evaluation_id": f"weekly-eval-{artifact_id}",
+        "authority": "local_hks",
+        "groundedness": 1.0,
+        "citation_coverage": 1.0,
+        "freshness_verdict": "fresh",
+        "provenance_verdict": "evidence-backed",
+        "promotion_eligible": True,
+        "promotion_blocked": False,
+        "requires_local_recheck": False,
+        "lane": "current_truth",
+        "operator_summary": (
+            f"Local HKS weekly evaluation admitted artifact {artifact_id} from {artifact.get('source') or 'weekly-artifact'} "
+            "as verified, evidence-backed weekly pipeline truth."
+        ),
+    }
     return HKSValidatedExemplar(
         problem="How to validate and persist the local HLF weekly pipeline state.",
         validated_solution=validated_solution,
@@ -957,4 +1116,197 @@ def build_hks_exemplar_from_weekly_artifact(
         tags=["weekly", "pipeline", "validated", "hks"],
         summary=summary,
         confidence=float(provenance_payload.get("confidence") or 1.0),
+        evaluation=evaluation,
     )
+
+
+def build_weekly_artifact_memory_record(
+    artifact: dict[str, Any],
+    *,
+    artifact_path: Path | None = None,
+) -> dict[str, Any] | None:
+    verification = artifact.get("verification") or {}
+
+    provenance_payload = artifact.get("provenance") or {}
+    artifact_id = str(artifact.get("artifact_id") or "")
+    if not artifact_id:
+        return None
+
+    governed_review = artifact.get("governed_review") or {}
+    distribution_contract = artifact.get("distribution_contract") or {}
+    security_findings = artifact.get("security_findings") or {}
+    latest_suite_summary = artifact.get("latest_suite_summary") or {}
+    source = str(provenance_payload.get("source") or artifact.get("source") or "weekly-artifact")
+    generated_at = str(
+        provenance_payload.get("collected_at") or artifact.get("generated_at") or _utc_now()
+    )
+    artifact_status = str(artifact.get("artifact_status") or "advisory")
+    latest_suite_passed = bool(latest_suite_summary.get("passed", False))
+    operator_summary = (
+        f"Weekly artifact {artifact_id} from {source} is {artifact_status} and "
+        f"verification={'verified' if verification.get('verified', False) else 'pending'}."
+    )
+    evaluation = {
+        "evaluation_id": f"weekly-eval-{artifact_id}",
+        "authority": "local_hks",
+        "groundedness": 1.0 if latest_suite_passed else 0.0,
+        "citation_coverage": 1.0 if verification.get("verified", False) else 0.0,
+        "freshness_verdict": "fresh",
+        "provenance_verdict": "evidence-backed",
+        "promotion_eligible": bool(verification.get("verified", False) and latest_suite_passed),
+        "promotion_blocked": not bool(verification.get("verified", False) and latest_suite_passed),
+        "requires_local_recheck": False,
+        "lane": "current_truth",
+        "operator_summary": (
+            f"Local HKS weekly evaluation classified artifact {artifact_id} as {artifact_status} with "
+            f"suite_passed={latest_suite_passed}."
+        ),
+    }
+    artifact_form = "canonical_knowledge" if evaluation["promotion_eligible"] else "raw_intake"
+    source_authority_label = "canonical" if evaluation["promotion_eligible"] else "advisory"
+    source_capture = {
+        "extraction_fidelity_score": 1.0 if verification.get("verified", False) else 0.35,
+        "code_block_recall_score": 1.0 if latest_suite_passed else 0.0,
+        "structure_fidelity_score": 1.0,
+        "citation_recoverability_score": 1.0 if verification.get("verified", False) else 0.5,
+        "source_type_classification": str(
+            provenance_payload.get("source_type") or _source_type_for_weekly_artifact(source)
+        ),
+        "source_authority_label": source_authority_label,
+        "source_version": str(provenance_payload.get("commit_sha") or artifact.get("schema_version") or ""),
+        "freshness_marker": generated_at,
+    }
+    artifact_contract = {
+        "artifact_form": artifact_form,
+        "artifact_kind": "weekly_artifact",
+        "canonicalized": artifact_form == "canonical_knowledge",
+    }
+    memory_stratum = "provenance" if evaluation["promotion_eligible"] else "archive"
+    storage_tier = "warm" if evaluation["promotion_eligible"] else "cold"
+    content = json.dumps(artifact, ensure_ascii=False, sort_keys=True)
+
+    return {
+        "content": content,
+        "topic": "hlf_weekly_artifacts",
+        "confidence": float(provenance_payload.get("confidence") or 1.0),
+        "provenance": str(provenance_payload.get("collector") or "hlf_mcp.weekly_artifacts"),
+        "tags": [
+            "weekly",
+            "artifact",
+            artifact_status,
+            source,
+            "verified" if verification.get("verified", False) else "unverified",
+        ],
+        "entry_kind": "weekly_artifact",
+        "metadata": {
+            "artifact_id": artifact_id,
+            "generated_at": generated_at,
+            "source": source,
+            "artifact_status": artifact_status,
+            "workflow_run_url": provenance_payload.get("workflow_run_url")
+            or artifact.get("workflow_run_url"),
+            "operator_summary": operator_summary,
+            "governed_review": governed_review,
+            "distribution_contract": distribution_contract,
+            "security_findings": security_findings,
+            "latest_suite_summary": latest_suite_summary,
+            "verification": verification,
+            "evaluation": evaluation,
+            "source_capture": source_capture,
+            "artifact_contract": artifact_contract,
+            "artifact_form": artifact_form,
+            "artifact_kind": "weekly_artifact",
+            "source_authority_label": source_authority_label,
+            "provenance": dict(provenance_payload),
+            "artifact_path": str(artifact_path) if artifact_path else None,
+            "memory_stratum": memory_stratum,
+            "storage_tier": storage_tier,
+            "graph_context": {
+                "entities": [
+                    {"kind": "weekly_artifact", "value": artifact_id},
+                    {"kind": "artifact_status", "value": artifact_status},
+                    {"kind": "source", "value": source},
+                    *(
+                        [{"kind": "branch", "value": str(provenance_payload.get("branch") or "").strip()}]
+                        if str(provenance_payload.get("branch") or "").strip()
+                        else []
+                    ),
+                    *(
+                        [{"kind": "commit", "value": str(provenance_payload.get("commit_sha") or "").strip()}]
+                        if str(provenance_payload.get("commit_sha") or "").strip()
+                        else []
+                    ),
+                ],
+                "links": [
+                    {
+                        "source": f"weekly_artifact:{artifact_id}",
+                        "relation": "generated_from",
+                        "target": f"source:{source}",
+                    },
+                    {
+                        "source": f"weekly_artifact:{artifact_id}",
+                        "relation": "classified_as",
+                        "target": f"artifact_status:{artifact_status}",
+                    },
+                    *(
+                        [
+                            {
+                                "source": f"weekly_artifact:{artifact_id}",
+                                "relation": "captured_on_branch",
+                                "target": f"branch:{str(provenance_payload.get('branch') or '').strip()}",
+                            }
+                        ]
+                        if str(provenance_payload.get("branch") or "").strip()
+                        else []
+                    ),
+                    *(
+                        [
+                            {
+                                "source": f"weekly_artifact:{artifact_id}",
+                                "relation": "captured_at_commit",
+                                "target": f"commit:{str(provenance_payload.get('commit_sha') or '').strip()}",
+                            }
+                        ]
+                        if str(provenance_payload.get("commit_sha") or "").strip()
+                        else []
+                    ),
+                ],
+            },
+            "governed_evidence": {
+                "source_class": "weekly_artifact",
+                "source_type": str(
+                    provenance_payload.get("source_type")
+                    or _source_type_for_weekly_artifact(source)
+                ),
+                "source": source,
+                "source_path": artifact_id,
+                "artifact_id": artifact_id,
+                "collector": str(
+                    provenance_payload.get("collector") or "hlf_mcp.weekly_artifacts"
+                ),
+                "collected_at": generated_at,
+                "workflow_run_url": provenance_payload.get("workflow_run_url")
+                or artifact.get("workflow_run_url"),
+                "branch": provenance_payload.get("branch"),
+                "commit_sha": provenance_payload.get("commit_sha"),
+                "artifact_path": str(artifact_path) if artifact_path else None,
+                "confidence": float(provenance_payload.get("confidence") or 1.0),
+                "trust_tier": "validated",
+                "source_authority_label": source_authority_label,
+                "artifact_form": artifact_form,
+                "artifact_kind": "weekly_artifact",
+                "extraction_fidelity_score": source_capture["extraction_fidelity_score"],
+                "code_block_recall_score": source_capture["code_block_recall_score"],
+                "structure_fidelity_score": source_capture["structure_fidelity_score"],
+                "citation_recoverability_score": source_capture["citation_recoverability_score"],
+                "source_version": source_capture["source_version"],
+                "freshness_marker": source_capture["freshness_marker"],
+                "operator_summary": operator_summary,
+                "evaluation_id": evaluation["evaluation_id"],
+                "evaluation_authority": evaluation["authority"],
+                "promotion_eligible": evaluation["promotion_eligible"],
+                "memory_stratum": memory_stratum,
+                "storage_tier": storage_tier,
+            },
+        },
+    }

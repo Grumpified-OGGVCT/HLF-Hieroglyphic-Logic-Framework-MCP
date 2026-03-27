@@ -106,3 +106,16 @@ def test_load_persona_matrix_prefers_runtime_copy_when_present(tmp_path, monkeyp
         persona_contract.load_persona_matrix.cache_clear()
 
     assert matrix["lane"] == "runtime-lane"
+
+
+def test_resolve_persona_runtime_metadata_uses_bounded_persona_catalog() -> None:
+    from hlf_mcp.persona_runtime import resolve_persona_runtime_metadata
+
+    metadata = resolve_persona_runtime_metadata("sentinel")
+
+    assert metadata is not None
+    assert metadata["persona"] == "sentinel"
+    assert metadata["runtime_authority"] is False
+    assert metadata["internal_role"] == "security_boundary_reviewer"
+    assert metadata["hat"] == "black"
+    assert "cove" in metadata["cross_awareness"]

@@ -2,7 +2,7 @@
 goal: Complete HLF reconstruction planning from stitched doctrine to executable recovery batches
 version: 2.0
 date_created: 2026-03-17
-last_updated: 2026-03-19
+last_updated: 2026-03-21
 owner: GitHub Copilot
 status: 'In progress'
 tags: [architecture, reconstruction, planning, bridge, doctrine, recovery, hlf]
@@ -180,6 +180,8 @@ This plan is intentionally larger than a normal feature plan because the problem
 | TASK-043 | Update north-star, truth, build-guide, operator-note, and backlog docs so they treat `stdio` plus packaged build-observation tools as the first credible `HLF helps finish HLF` milestone. | ✅ | 2026-03-19 |
 | TASK-044 | Add an explicit bridge task to repair the current `streamable-http` initialize fault and rerun the smoke harness before promoting remote self-build claims. | ✅ | 2026-03-19 |
 | TASK-045 | Fold the recursive build-assist milestone into active build sequencing so it is tracked as real bridge work rather than a side note. | ✅ | 2026-03-19 |
+| TASK-045A | Verify the packaged `hlf_mcp` HTTP lane directly with `HLF_TRANSPORT=sse`, explicit port binding, and `GET /health -> 200 OK` so bounded transport claims stay grounded in present runtime proof. | ✅ | 2026-03-21 |
+| TASK-045B | Repoint workspace-local VS Code MCP wiring and quickstart guidance to the packaged `hlf-mcp` entrypoint so the repo dogfoods the current product lane instead of the legacy compatibility surface. | ✅ | 2026-03-21 |
 
 ### Implementation Phase 10A
 

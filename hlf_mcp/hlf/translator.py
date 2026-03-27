@@ -13,9 +13,18 @@ import os
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 SUPPORTED_LANGUAGES: frozenset[str] = frozenset({"en", "fr", "es", "ar", "zh"})
+COGNITIVE_LANE_POLICIES: frozenset[str] = frozenset(
+    {"benchmark_gated", "english_preferred", "chinese_allowed", "chinese_disallowed"}
+)
+CognitiveLanePolicy = Literal[
+    "benchmark_gated",
+    "english_preferred",
+    "chinese_allowed",
+    "chinese_disallowed",
+]
 
 _SYSTEM_LANGUAGE_HINTS: dict[str, str] = {
     "en": "en",
@@ -141,6 +150,30 @@ class TranslationRepairPlan:
             "recommended_tool": self.recommended_tool,
             "next_request": self.next_request,
             "diagnostics": self.diagnostics.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
+class LanguagePolicyDecision:
+    requested_language: str
+    resolved_language: str
+    effective_language: str
+    cognitive_lane_policy: str
+    policy_action: str
+    blocked: bool
+    blocked_reason: str | None
+    audit_language: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "requested_language": self.requested_language,
+            "resolved_language": self.resolved_language,
+            "effective_language": self.effective_language,
+            "cognitive_lane_policy": self.cognitive_lane_policy,
+            "policy_action": self.policy_action,
+            "blocked": self.blocked,
+            "blocked_reason": self.blocked_reason,
+            "audit_language": self.audit_language,
         }
 
 
@@ -395,6 +428,71 @@ def resolve_language(
     return detect_input_language(text, default_language=system_language)
 
 
+def normalize_cognitive_lane_policy(
+    cognitive_lane_policy: str = "benchmark_gated",
+) -> str:
+    normalized = cognitive_lane_policy.strip().lower() or "benchmark_gated"
+    aliases = {
+        "default": "benchmark_gated",
+        "auto": "benchmark_gated",
+        "english": "english_preferred",
+        "prefer_english": "english_preferred",
+        "zh_allowed": "chinese_allowed",
+        "allow_chinese": "chinese_allowed",
+        "zh_disallowed": "chinese_disallowed",
+        "disable_chinese": "chinese_disallowed",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in COGNITIVE_LANE_POLICIES:
+        raise ValueError(f"Unsupported cognitive lane policy: {cognitive_lane_policy}")
+    return normalized
+
+
+def resolve_language_with_policy(
+    language: str = "auto",
+    *,
+    text: str = "",
+    preferred_language: str | None = None,
+    cognitive_lane_policy: str = "benchmark_gated",
+) -> LanguagePolicyDecision:
+    normalized_policy = normalize_cognitive_lane_policy(cognitive_lane_policy)
+    resolved_language = resolve_language(language, text=text, preferred_language=preferred_language)
+    requested_language = language.lower().strip() or "auto"
+    effective_language = resolved_language
+    policy_action = "pass_through"
+    blocked = False
+    blocked_reason: str | None = None
+    audit_language = resolved_language
+
+    if normalized_policy == "english_preferred":
+        audit_language = "en"
+        if resolved_language != "en":
+            policy_action = "english_audit_preferred"
+    elif normalized_policy == "chinese_allowed":
+        if resolved_language == "zh":
+            policy_action = "chinese_allowed"
+    elif normalized_policy == "chinese_disallowed" and resolved_language == "zh":
+        blocked = True
+        audit_language = "en"
+        blocked_reason = (
+            "explicit_chinese_ingress_disallowed"
+            if requested_language == "zh"
+            else "detected_chinese_ingress_disallowed"
+        )
+        policy_action = "blocked_chinese_ingress"
+
+    return LanguagePolicyDecision(
+        requested_language=requested_language,
+        resolved_language=resolved_language,
+        effective_language=effective_language,
+        cognitive_lane_policy=normalized_policy,
+        policy_action=policy_action,
+        blocked=blocked,
+        blocked_reason=blocked_reason,
+        audit_language=audit_language,
+    )
+
+
 def language_to_hlf(
     text: str,
     language: str = "auto",
@@ -402,9 +500,21 @@ def language_to_hlf(
     version: str = "3",
     *,
     preferred_language: str | None = None,
+    cognitive_lane_policy: str = "benchmark_gated",
 ) -> str:
     """Convert natural language instructions to HLF program source, supporting i18n gates."""
-    lang = resolve_language(language, text=text, preferred_language=preferred_language)
+    language_policy = resolve_language_with_policy(
+        language,
+        text=text,
+        preferred_language=preferred_language,
+        cognitive_lane_policy=cognitive_lane_policy,
+    )
+    if language_policy.blocked:
+        raise ValueError(
+            "Blocked by cognitive lane policy: "
+            f"{language_policy.blocked_reason or 'language_ingress_disallowed'}"
+        )
+    lang = language_policy.effective_language
     if lang == "en":
         return english_to_hlf(text, tone=tone, version=version)
     elif lang == "fr":

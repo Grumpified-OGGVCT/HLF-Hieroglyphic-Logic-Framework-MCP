@@ -11,6 +11,13 @@
 
 ---
 
+## TL;DR for developers
+
+- HLF packages a real compiler, formatter, linter, bytecode runtime, and FastMCP server for governed agent work.
+- The easiest current entry lane is the packaged `hlf_mcp/` surface: start with `stdio` locally, then use `sse` or `streamable-http` when you need HTTP transports.
+- Fast first run: `uv sync`, `uv run hlfc fixtures/hello_world.hlf`, `uv run hlfrun fixtures/hello_world.hlf`, then `HLF_TRANSPORT=stdio uv run hlf-mcp`.
+- This README mixes vision, current truth, and bridge context on purpose; use `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_CLAIM_LANES.md` when you need the strict current-state boundary.
+
 ## Start Here
 
 HLF should not be read as “just the current packaged build.”
@@ -74,6 +81,13 @@ Repository boundary:
 - `hlf_mcp/` is the packaged product surface and the main implementation line.
 - `hlf/` is a retained compatibility and support layer with useful legacy and bridge assets.
 - `hlf_source/` is preserved source context and reconstruction evidence from the broader Sovereign system.
+
+First-stop developer links:
+
+- `BUILD_GUIDE.md` for setup, test, and server commands that are current-true now
+- `docs/cli-tools.md` for the packaged CLI surface
+- `CONTRIBUTING.md` for contribution workflow and low-risk starter tasks
+- `extensions/hlf-vscode/README.md` for the current VS Code bridge and offline VSIX install path
 
 HLF is not supposed to stay a neat MCP wrapper.
 It is supposed to become a governed language and coordination substrate that connects intent, tools, memory, policy, execution, and human-readable trust.
@@ -377,6 +391,22 @@ For the full architectural vision including the 13-layer Three-Brain model, Rose
 ---
 
 ## 2. Quick Start
+
+### 30-second local path
+
+```bash
+# install the packaged toolchain
+uv sync
+
+# compile and run the smallest fixture
+uv run hlfc fixtures/hello_world.hlf
+uv run hlfrun fixtures/hello_world.hlf
+
+# start the packaged MCP front door locally
+HLF_TRANSPORT=stdio uv run hlf-mcp
+```
+
+If you are already working inside the repo environment, the same commands also work with `python -m ...`; see `BUILD_GUIDE.md` for the canonical variants.
 
 ### Option A — Docker (recommended for any agent)
 
@@ -1391,6 +1421,16 @@ uv run pytest tests/test_linter.py -v
 uv run pytest tests/test_github_scripts.py -v
 ```
 
+For a shorter newcomer path, use:
+
+```bash
+uv sync
+uv run pytest tests/ -q --tb=short
+uv run ruff check hlf_mcp/
+```
+
+If `uv` is not already installed on your machine, install it first or use the equivalent `python -m pip install -e '.[dev]'` fallback inside a virtual environment.
+
 ### CLI Tools
 
 | Command | Description |
@@ -1408,6 +1448,28 @@ uv run pytest tests/test_github_scripts.py -v
 | `uv run python scripts/verify_chain.py <trace.jsonl>` | Verify JSONL trace-chain integrity against computed hashes |
 | `uv run python scripts/hlf_token_lint.py fixtures` | Enforce file and per-line token budgets on HLF sources |
 | `uv run hlf-mcp` | Start MCP server |
+
+### FAQ for first-time builders
+
+**What is a capsule?**
+
+An Intent Capsule is the admission boundary around execution. It applies a tier, gas ceiling, and validation rules before the runtime is allowed to proceed. Start with Section 7 and `hlf_mcp/hlf/capsules.py`.
+
+**What is CoVE?**
+
+CoVE is the verify-before-merge gate in the Instinct lifecycle. In this repo it is part of the governed `SPECIFY → PLAN → EXECUTE → VERIFY → MERGE` story rather than a loose slogan; start with Section 11 and `instinct/lifecycle.py`.
+
+**Which transport should I use first?**
+
+Use `stdio` first for local and bounded build-assist workflows. `sse` and `streamable-http` are real packaged transports, but stronger remote recursive-build claims stay gated until the full MCP initialize path is proven end to end.
+
+**How do I add or change a host function?**
+
+Update the governance contract in `governance/host_functions.json`, wire the packaged implementation in `hlf_mcp/`, then rerun the docs and tests that cover the registry and server surfaces. `docs/HLF_HOST_FUNCTIONS_REFERENCE.md` and `docs/cli-tools.md` are the best starting references.
+
+**Where should I start if I want to contribute?**
+
+Use `CONTRIBUTING.md` for the workflow, starter tasks, and validation commands. For claim-sensitive docs work, also check `docs/HLF_CLAIM_LANES.md` and `docs/HLF_README_OPERATIONALIZATION_MATRIX.md`.
 
 ### Project Structure
 
@@ -1567,6 +1629,7 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 - 🧾 [CLI Tools Reference](docs/cli-tools.md)
 - 📚 [Host Functions Reference](docs/HLF_HOST_FUNCTIONS_REFERENCE.md)
 - 🔄 [Packaged Instinct Reference](docs/INSTINCT_REFERENCE.md)
+- 🎵 [Suno track — porch-bluegrass take on the three-lane doctrine](https://suno.com/s/n18bwRmoqU7znIpv)
 - 📜 [RFC 9000 Series](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/RFC_9000_SERIES.md)
 - 🗺️ [Unified Ecosystem Roadmap](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/UNIFIED_ECOSYSTEM_ROADMAP.md)
 - 🏗️ [Walkthrough](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/WALKTHROUGH.md)

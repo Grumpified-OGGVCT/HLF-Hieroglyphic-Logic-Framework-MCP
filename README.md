@@ -1,6 +1,6 @@
 # 📜 HLF — Hieroglyphic Logic Framework · MCP Server
 
-> **HLF is meant to become a governed language for turning intent into auditable machine action.** The MCP server is the easiest way into that system, but the vision is bigger than the server: language, governance, runtime, memory, coordination, explanation, and real-code output.
+> **HLF is meant to become a governed language for turning intent into auditable machine action.** The packaged MCP server is the fastest way to try it today, but the real target is bigger than a server: language, governance, runtime, memory, coordination, explanation, and real-code output.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![HLF v0.5](https://img.shields.io/badge/HLF-v0.5.0-purple)](governance/bytecode_spec.yaml)
@@ -13,14 +13,14 @@
 
 ## TL;DR for developers
 
-- HLF packages a real compiler, formatter, linter, bytecode runtime, and FastMCP server for governed agent work.
-- The easiest current entry lane is the packaged `hlf_mcp/` surface: start with `stdio` locally, then use `sse` or `streamable-http` when you need HTTP transports.
-- Fast first run: sync dependencies, compile `fixtures/hello_world.hlf`, execute it locally, then start the packaged MCP server with `HLF_TRANSPORT=stdio uv run hlf-mcp`.
-- This README mixes vision, current truth, and bridge context on purpose; use `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_CLAIM_LANES.md` when you need the strict current-state boundary.
+- HLF gives you a real compiler, formatter, linter, bytecode runtime, and FastMCP server for governed agent work.
+- The fastest current entry lane is the packaged `hlf_mcp/` surface: start with `stdio` locally, then move to `sse` or `streamable-http` when you need HTTP transports.
+- Fast first run: sync dependencies, compile `fixtures/hello_world.hlf`, run it locally, then launch the packaged MCP server with `HLF_TRANSPORT=stdio uv run hlf-mcp`.
+- This README keeps vision, current truth, and bridge context visible on purpose; use `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_CLAIM_LANES.md` when you need the strict boundary.
 
 ## Start Here
 
-HLF should not be read as “just the current packaged build.”
+HLF should not be read as only the current packaged build.
 
 This repo carries three things at once:
 
@@ -89,9 +89,9 @@ First-stop developer links:
 - `CONTRIBUTING.md` for contribution workflow and low-risk starter tasks
 - `extensions/hlf-vscode/README.md` for the current VS Code bridge and offline VSIX install path
 
-HLF is not supposed to stay a neat MCP wrapper.
-It is supposed to become a governed language and coordination substrate that connects intent, tools, memory, policy, execution, and human-readable trust.
-This repo already contains real parts of that system, and the rest has to be recovered rather than explained away.
+HLF is not supposed to stop at a neat MCP wrapper.
+It is meant to become a governed language and coordination substrate that connects intent, tools, memory, policy, execution, and human-readable trust.
+This repo already contains real pieces of that system, and the rest should be recovered rather than waved away.
 
 Bridge execution note:
 
@@ -103,11 +103,11 @@ Bridge execution note:
 
 ## Why This Repo Stands Out
 
-HLF is not only meant to be useful after the system is finished.
-It is being shaped into a governed language and coordination layer that can already help inspect state, summarize regressions, explain intended actions, and preserve evidence during parts of its own build and recovery process.
+HLF is not only aiming to be useful after the system is finished.
+It is being shaped into a governed language and coordination layer that can already inspect state, summarize regressions, explain intended actions, and preserve evidence during parts of its own build and recovery process.
 
 That does not mean full self-hosting is complete.
-It means the repo already contains a bounded, inspectable proof that construction, operation, and audit can begin to converge inside the same governed system.
+It means the repo already contains a bounded, inspectable proof that construction, operation, and audit can start to converge inside the same governed system.
 
 The current honest milestone is local and bounded build assistance first.
 
@@ -307,11 +307,11 @@ See `docs/cli-tools.md` for the command reference.
 
 ## 1. What is HLF?
 
-HLF is not just another DSL and it is not just the current MCP server.
+HLF is not just another DSL, and it is not just the current MCP server.
 
-HLF is the attempt to build a governed meaning layer between human intent and machine action: a language that lets agents coordinate, tools execute, memory persist, policy constrain, and humans inspect what is happening in plain terms.
+HLF is an attempt to build a governed meaning layer between human intent and machine action: a language that lets agents coordinate, tools execute, memory persist, policy constrain, and humans inspect what is happening in plain terms.
 
-The current MCP server matters because it is the easiest adoption path.
+The current MCP server matters because it is the easiest adoption path today.
 But the larger target is a real language and runtime for governed agent work.
 
 ```hlf

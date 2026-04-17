@@ -53,7 +53,7 @@ Low-risk places to help without needing a large architecture change:
 - Keep claims aligned with `SSOT_HLF_MCP.md`.
 - Treat `hlf_mcp/` as the packaged product surface; `hlf/` is compatibility and bridge context unless the task specifically targets it.
 - Prefer small, reviewable PRs over large rewrites.
-- Do not promote bridge or vision language into present-tense README claims without proof.
+- Do not promote bridge or vision language (the repo's staged-recovery and north-star lanes; see `docs/HLF_CLAIM_LANES.md`) into present-tense README claims without proof.
 
 ## Good places to orient quickly
 

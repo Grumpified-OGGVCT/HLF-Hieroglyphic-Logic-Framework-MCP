@@ -15,7 +15,7 @@
 
 - HLF packages a real compiler, formatter, linter, bytecode runtime, and FastMCP server for governed agent work.
 - The easiest current entry lane is the packaged `hlf_mcp/` surface: start with `stdio` locally, then use `sse` or `streamable-http` when you need HTTP transports.
-- Fast first run: `uv sync`, `uv run hlfc fixtures/hello_world.hlf`, `uv run hlfrun fixtures/hello_world.hlf`, then `HLF_TRANSPORT=stdio uv run hlf-mcp`.
+- Fast first run: sync dependencies, compile `fixtures/hello_world.hlf`, execute it locally, then start the packaged MCP server with `HLF_TRANSPORT=stdio uv run hlf-mcp`.
 - This README mixes vision, current truth, and bridge context on purpose; use `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_CLAIM_LANES.md` when you need the strict current-state boundary.
 
 ## Start Here
@@ -406,7 +406,7 @@ uv run hlfrun fixtures/hello_world.hlf
 HLF_TRANSPORT=stdio uv run hlf-mcp
 ```
 
-If you are already working inside the repo environment, the same commands also work with `python -m ...`; see `BUILD_GUIDE.md` for the canonical variants.
+If you are already working inside this repo's active Python virtual environment, the same commands also work with `python -m ...`; see `BUILD_GUIDE.md` for the canonical variants.
 
 ### Option A — Docker (recommended for any agent)
 
@@ -1453,11 +1453,11 @@ If `uv` is not already installed on your machine, install it first or use the eq
 
 **What is a capsule?**
 
-An Intent Capsule is the admission boundary around execution. It applies a tier, gas ceiling, and validation rules before the runtime is allowed to proceed. Start with Section 7 and `hlf_mcp/hlf/capsules.py`.
+An Intent Capsule is the admission boundary around execution. It applies a tier, gas ceiling, and validation rules before the runtime is allowed to proceed. Start with Section 7 of this README (`Intent Capsule Tier Model`) and `hlf_mcp/hlf/capsules.py`.
 
 **What is CoVE?**
 
-CoVE is the verify-before-merge gate in the Instinct lifecycle. In this repo it is part of the governed `SPECIFY → PLAN → EXECUTE → VERIFY → MERGE` story rather than a loose slogan; start with Section 11 and `instinct/lifecycle.py`.
+CoVE is the verify-before-merge gate in the Instinct lifecycle. In this repo it is part of the governed `SPECIFY → PLAN → EXECUTE → VERIFY → MERGE` story rather than a loose slogan; start with Section 11 of this README (`Instinct SDD Lifecycle`) and `instinct/lifecycle.py`.
 
 **Which transport should I use first?**
 
@@ -1629,7 +1629,7 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 - 🧾 [CLI Tools Reference](docs/cli-tools.md)
 - 📚 [Host Functions Reference](docs/HLF_HOST_FUNCTIONS_REFERENCE.md)
 - 🔄 [Packaged Instinct Reference](docs/INSTINCT_REFERENCE.md)
-- 🎵 [Suno track — porch-bluegrass take on the three-lane doctrine](https://suno.com/s/n18bwRmoqU7znIpv)
+- 🎵 [Suno track — porch-bluegrass take on the three-lane doctrine](https://suno.com/s/n18bwRmoqU7znIpv) — a musical nod to the README's vision/current-truth/bridge framing
 - 📜 [RFC 9000 Series](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/RFC_9000_SERIES.md)
 - 🗺️ [Unified Ecosystem Roadmap](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/UNIFIED_ECOSYSTEM_ROADMAP.md)
 - 🏗️ [Walkthrough](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/WALKTHROUGH.md)

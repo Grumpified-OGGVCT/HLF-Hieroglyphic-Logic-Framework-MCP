@@ -1457,7 +1457,7 @@ An Intent Capsule is the admission boundary around execution. It applies a tier,
 
 **What is CoVE?**
 
-CoVE is the verify-before-merge gate in the Instinct lifecycle. In this repo it is part of the governed `SPECIFY → PLAN → EXECUTE → VERIFY → MERGE` story rather than a loose slogan; start with Section 11 of this README (`Instinct SDD Lifecycle`) and `instinct/lifecycle.py`.
+CoVE is the verify-before-merge gate in the Instinct lifecycle. In this repo it is part of the governed `SPECIFY → PLAN → EXECUTE → VERIFY → MERGE` story rather than a loose slogan; start with Section 11 of this README (`Instinct SDD Lifecycle`) and `hlf_mcp/instinct/lifecycle.py`.
 
 **Which transport should I use first?**
 
@@ -1629,7 +1629,6 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 - 🧾 [CLI Tools Reference](docs/cli-tools.md)
 - 📚 [Host Functions Reference](docs/HLF_HOST_FUNCTIONS_REFERENCE.md)
 - 🔄 [Packaged Instinct Reference](docs/INSTINCT_REFERENCE.md)
-- 🎵 [Suno track — porch-bluegrass take on the three-lane doctrine](https://suno.com/s/n18bwRmoqU7znIpv) — a musical nod to the README's vision/current-truth/bridge framing
 - 📜 [RFC 9000 Series](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/RFC_9000_SERIES.md)
 - 🗺️ [Unified Ecosystem Roadmap](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/UNIFIED_ECOSYSTEM_ROADMAP.md)
 - 🏗️ [Walkthrough](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/WALKTHROUGH.md)

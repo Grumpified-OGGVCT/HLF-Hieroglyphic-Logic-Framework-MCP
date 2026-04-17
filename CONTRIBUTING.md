@@ -27,13 +27,13 @@ python -m pip install -e '.[dev]'
 
 ## Validation commands
 
-Use the existing repo commands only:
+Use the existing repo commands only. If you are not inside the repo `.venv`, prefer the `uv run ...` forms below so you do not accidentally use the system interpreter.
 
 ```bash
 uv run pytest tests/ -q --tb=short
 uv run ruff check hlf_mcp/
-python run_tests.py
-python -m hlf_mcp.test_runner
+uv run python run_tests.py
+uv run python -m hlf_mcp.test_runner
 ```
 
 If you are touching docs only, keep the scope surgical and still record the current validation state in your PR notes.

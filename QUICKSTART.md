@@ -1,6 +1,8 @@
 # HLF Quick Start
 
 > Describe what you want. Get a governed result. Read what happened.
+>
+> MCP is the initial HLF delivery mouthpiece through Grumprolled: the immediate proof bar is native-agent usability through the packaged MCP surface, not full HLF restoration.
 
 ## Install
 
@@ -14,6 +16,45 @@ uv sync
 # Via MCP (VS Code, Claude Desktop, any MCP client)
 uv run hlf-mcp
 ```
+
+## Native MCP client onboarding
+
+The repo `.mcp.json` is the default native-agent entry point. From this
+repository root, a fresh MCP client can load:
+
+```json
+{
+  "mcpServers": {
+    "hlf-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "hlf_mcp.server"],
+      "env": { "HLF_TRANSPORT": "stdio" }
+    }
+  }
+}
+```
+
+For VS Code, the workspace `.vscode\mcp.json` already points at the same
+packaged server with `cwd` set to the workspace folder. For other clients, add
+the same `hlf-mcp` server entry to that client's MCP config while keeping the
+working directory at this repo root. If a client cannot set a working directory,
+put the repo path only in your private local client config; do not commit that
+machine-specific path. If you prefer the installed package entry point and have
+`uv` available, `uv run hlf-mcp` remains equivalent.
+
+First contact for a non-building agent:
+
+1. Initialize the `hlf-mcp` MCP server from `.mcp.json`.
+2. List prompts and apply `hlf_native_agent` for the session.
+3. List or read resources and start with `hlf://agent/quickstart`,
+   `hlf://agent/protocol`, `hlf://agent/current_authority`, and
+   `hlf://agent/handoff_contract`.
+4. Use `hlf_do` for the one-call native loop, or use
+   `hlf_translate_to_hlf -> hlf_validate/hlf_lint -> hlf_compile ->
+   execute/coordinate -> human NLP audit`.
+5. For sub-agent or swarm handoff, pass raw HLF plus validation/compile proof;
+   prose is explanatory, not the authoritative machine payload.
 
 For packaged HTTP bring-up verification:
 
@@ -67,7 +108,9 @@ The `math` block shows Shannon entropy, confidence, and gas metering — the
 information-theoretic engine running underneath.
 
 The packaged FastMCP server now exposes `hlf_do` directly, so this quick start
-matches the default install path in `pyproject.toml`.
+matches the default install path in `pyproject.toml`. The latest audited packaged
+MCP surface is **84 tools, 87 resources, and 1 prompt**; use the live registry
+and generated instructions as the source of truth when that surface changes.
 
 The older `hlf.mcp_server_complete` entry path is retained only for
 compatibility and manual legacy probes. It is not the normal install path, the
@@ -129,15 +172,17 @@ For the audience-specific phrasing guide, read `docs/HLF_MESSAGING_LADDER.md`.
 
 ## What's happening behind the scenes
 
-When you call `hlf_do`, HLF:
+When you call `hlf_do`, HLF performs the native
+NLP -> HLF -> validate/correct -> execute/audit -> NLP loop:
 
 1. **Compresses** your English into governed HLF v3 glyphs (Shannon entropy minimization)
-2. **Scores confidence** (KL-divergence-inspired threshold — rejects below 0.70)
+2. **Scores confidence and corrects or rejects** weak translations before execution
 3. **Validates** against the v3 glyph/tag grammar (header, glyphs, tags, terminator)
 4. **Checks gas budget** against your tier (hearth=1K, forge=10K, sovereign=100K)
 5. **Compiles** to bytecode via the 5-pass pipeline
-6. **Executes** in the sandboxed VM
-7. **Returns** an English audit trail with math metrics (entropy, compression, gas used)
+6. **Executes or coordinates** through packaged governed surfaces
+7. **Audits** with proof, math metrics, and authority context
+8. **Returns** a human-readable NLP summary of what happened
 
 Like the logograms in *Arrival*: you speak in sentences, HLF thinks in
 symbols, and the math guarantees the meaning survives the translation.
@@ -148,4 +193,4 @@ symbols, and the math guarantees the meaning survives the translation.
 - `hlf_translate_to_hlf` — write HLF manually from English
 - `hlf_compile` / `hlf_execute` — full compiler control
 - `hlf_validate` — validate HLF source directly
-- See [README.md](README.md) for the packaged 34-tool FastMCP reference and the broader repo context
+- See [README.md](README.md) for broader repo context; use this quick start, the live MCP registry, and `SSOT_HLF_MCP.md` for current surface counts and claim lanes

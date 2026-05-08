@@ -220,10 +220,11 @@ async def governed_complete(
         advisory_mode=advisory_mode,
     )
 
-    # Persist evidence fact to governed metrics substrate
+    # Persist evidence fact to governed metrics substrate.
+    # Bridge dependency: Gen 1 metrics substrate lives in hlf/ compatibility line.
     latency_s = round(time.monotonic() - t0, 3)
     try:
-        from hlf.mcp_metrics import get_metrics
+        from hlf.mcp_metrics import get_metrics  # noqa: F811 — cross-package bridge
         get_metrics().record_evidence_fact(
             task_type=envelope.task_type,
             task_category=envelope.category,

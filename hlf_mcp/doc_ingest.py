@@ -15,6 +15,7 @@ Entry classification:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -23,6 +24,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from html.parser import HTMLParser
+from urllib import error as urllib_error
+from urllib import request as urllib_request
+
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +204,141 @@ def _split_large_text(text: str, max_chars: int) -> list[str]:
 
 
 # ── Document ingestion engine ────────────────────────────────────────────
+
+class _StripHTML(HTMLParser):
+    """Strip HTML tags from a document, preserving block structure."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._result: list[str] = []
+        self._block_tags = frozenset({
+            "p", "div", "article", "section", "header", "footer",
+            "main", "aside", "nav", "blockquote", "pre", "hr",
+            "h1", "h2", "h3", "h4", "h5", "h6",
+            "li", "td", "th", "tr", "table", "thead", "tbody",
+        })
+        self._in_block = False
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in self._block_tags:
+            if self._result and self._result[-1] and not self._result[-1].endswith("\n\n"):
+                self._result.append("\n\n")
+            self._in_block = True
+        elif tag in ("script", "style", "noscript", "iframe", "svg"):
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in self._block_tags:
+            self._in_block = False
+        elif tag in ("script", "style", "noscript", "iframe", "svg"):
+            self._skip_depth = max(0, self._skip_depth - 1)
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth:
+            return
+        text = data.strip()
+        if not text:
+            return
+        if self._result and not self._in_block:
+            prev = self._result[-1]
+            if prev and not prev.endswith(" ") and not prev.endswith("\n"):
+                self._result.append(" ")
+        self._result.append(text)
+
+    @property
+    def text(self) -> str:
+        return "".join(self._result)
+
+
+def _strip_html(html_content: str) -> str:
+    """Convert HTML to clean plain text using stdlib html.parser."""
+    try:
+        parser = _StripHTML()
+        parser.feed(html_content)
+        text = parser.text
+    except Exception:
+        text = re.sub(r"<[^>]+>", " ", html_content)
+        text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\n\n+", "\n\n", text)
+    return text.strip()
+
+
+async def _summarize_via_model(text: str, summarize_via: str, timeout_s: float) -> str:
+    """Summarize text via Ollama or OpenRouter. Falls back to raw text on failure."""
+    import httpx
+
+    # Parse provider / model name
+    provider = "openrouter"
+    model_name = summarize_via
+    if summarize_via.startswith("ollama:"):
+        provider = "ollama"
+        model_name = summarize_via[len("ollama:") :]
+    elif summarize_via.startswith("openrouter:"):
+        provider = "openrouter"
+        model_name = summarize_via[len("openrouter:") :]
+
+    prompt = (
+        "You are a technical summarizer. Summarize the following content concisely, "
+        "preserving key technical details, code examples, and important facts.\n\n"
+        f"Content:\n{text[:8000]}"
+    )
+
+    try:
+        if provider == "ollama":
+            # Direct Ollama REST API — ModelOrchestrator.complete() is message-lane based,
+            # not suited for raw-prompt completion, so we call the API directly.
+            async with httpx.AsyncClient(timeout=timeout_s) as client:
+                resp = await client.post(
+                    "http://localhost:11434/api/generate",
+                    json={
+                        "model": model_name,
+                        "prompt": prompt,
+                        "temperature": 0.3,
+                        "stream": False,
+                    },
+                )
+                resp.raise_for_status()
+                return resp.json().get("response", text)
+        else:
+            from hlf_mcp.hlf.openrouter_client import OpenRouterClient
+
+            client = OpenRouterClient()
+            result = await client.simple_complete(
+                prompt=prompt, model=model_name, temperature=0.3, max_tokens=512
+            )
+            if result.get("status") == "ok":
+                return result.get("completion", text)
+            return text
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Model summarization failed for %s: %s", summarize_via, exc
+        )
+        return text
+
+
+
+def _sync_summarize_via_model(text: str, summarize_via: str, timeout_s: float) -> str:
+    """Synchronous wrapper for _summarize_via_model."""
+    import asyncio, concurrent.futures
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, _summarize_via_model(text, summarize_via, timeout_s))
+                return future.result(timeout=timeout_s + 5)
+        else:
+            return loop.run_until_complete(_summarize_via_model(text, summarize_via, timeout_s))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Sync summarize wrapper failed for %s: %s", summarize_via, exc)
+        return text
+
+
 
 class DocumentIngester:
     """Ingests documents into the HKS memory substrate as governed evidence.
@@ -448,7 +588,84 @@ class DocumentIngester:
             domain=domain,
             metadata=metadata,
             strict=True,
+            bypass_vector_dedup=True,
         )
+
+
+    def ingest_url(
+        self,
+        url: str,
+        *,
+        domain: str = "general-coding",
+        source_authority_label: str = "external",
+        topic: str | None = None,
+        confidence: float = 0.8,
+        tags: list[str] | None = None,
+        fresh_until: str | None = None,
+        summarize_via: str | None = None,
+        timeout_s: float = 20.0,
+    ) -> "IngestionReport":
+        """Fetch a URL, strip HTML to text, optionally enrich via model, then ingest.
+
+        This is the primary mechanism for asynchronous knowledge accumulation in HKS:
+        agents and operators can point at a URL and have it fetched, model-enriched,
+        chunked, and stored as governed evidence.
+        """
+        import logging as _log
+        if domain not in KNOWN_DOMAINS:
+            _log.warning("Unknown domain %r — accepting but flagging", domain)
+        if source_authority_label not in AUTHORITY_LEVELS:
+            _log.warning("Unknown authority %r — defaulting to 'advisory'", source_authority_label)
+            source_authority_label = "advisory"
+
+        report = IngestionReport(source_file=url, source_sha256="", domain=domain)
+        t0 = time.monotonic()
+
+        # 1. Fetch URL
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; HLF-HKS-ingester/1.0)",
+            "Accept": "text/html, application/xhtml+xml, text/plain, */*",
+        }
+        req = urllib_request.Request(url, headers=headers)
+        try:
+            with urllib_request.urlopen(req, timeout=timeout_s) as response:
+                raw_bytes = response.read()
+                encoding = response.headers.get_content_charset() or "utf-8"
+                html_content = raw_bytes.decode(encoding, errors="replace")
+        except Exception as exc:
+            report.error_count = 1
+            report.errors.append({"error": f"fetch failed: {exc}", "url": url})
+            report.elapsed_seconds = time.monotonic() - t0
+            return report
+
+        # 2. HTML → plain text
+        plain_text = _strip_html(html_content)
+        if not plain_text:
+            report.error_count = 1
+            report.errors.append({"error": "empty after HTML strip", "url": url})
+            report.elapsed_seconds = time.monotonic() - t0
+            return report
+
+        # 3. Optional model enrichment
+        content_source = plain_text
+        if summarize_via:
+            content_source = _sync_summarize_via_model(plain_text, summarize_via, timeout_s)
+            report.source_sha256 = hashlib.sha256(content_source.encode()).hexdigest()
+        else:
+            report.source_sha256 = hashlib.sha256(plain_text.encode()).hexdigest()
+
+        # 4. Delegate chunking and storage to ingest_text
+        return self.ingest_text(
+            content=content_source,
+            source_file=url,
+            domain=domain,
+            source_authority_label=source_authority_label,
+            topic=topic or _derive_topic(url, domain),
+            confidence=confidence,
+            tags=list(tags or []) + ["url-ingested", f"source:{url}"],
+            fresh_until=fresh_until,
+        )
+
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────

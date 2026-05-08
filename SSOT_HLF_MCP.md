@@ -12,6 +12,23 @@ This document separates three classes of truth:
 2. **Partial now**: present as code or scaffolding, but not complete enough to claim as finished.
 3. **Roadmap / vision**: valuable design direction, but not default present-tense product truth.
 
+
+## Authority Freeze: HLF Target vs Current Truth
+
+This reconciliation freezes the authority boundary for implementation work:
+
+1. **Full/original HLF authority target**: `AGENTS.md`, `docs/HLF_VISION_PLAIN_LANGUAGE.md`, `docs/HLF_CLAIM_LANES.md`, and `HLF_SOURCE_EXTRACTION_LEDGER.md` define the intended HLF target as a governed language and coordination substrate spanning grammar, effects, runtime, memory, multi-agent coordination, verification, audit, and real-code bridges. This is vision/bridge authority, not a claim that the packaged product is complete.
+2. **Present packaged current truth**: this `SSOT_HLF_MCP.md` remains the present-tense authority. The current implementation center is `hlf_mcp/`, especially `hlf_mcp/server.py`, `hlf_mcp/hlf/grammar.py`, `governance/tag_i18n.yaml`, `governance/templates/dictionary.json`, and `hlf_mcp/hlf/benchmark.py`. Those surfaces are useful but still reduced relative to the full target.
+3. **Bridge/recovery material**: recovery docs and the comparison workspace material such as `HLF_MCP_WORKING:hlf_mcp/hlf/swarm_orchestrator.py`, `swarm_observer.py`, `witness_governance.py`, `symbolic_surfaces.py`, and `formal_verifier.py` are mining inputs. They require validation and clean reimplementation before promotion.
+4. **Invalid mistaken checkout artifacts**: concept-only edits from `msty_playground/hlf_repo` are not authority. Do not copy its authority module/tool/tests/TextMate edits or grammar widening; re-derive any useful idea against this repo only.
+
+Executable consumers should use `hlf_mcp.hlf.authority.authority_matrix()` and `downstream_guidance()` for the same boundary in code.
+
+Downstream guidance:
+
+- `restore-grammar`: treat `grammar.py`, `tag_i18n.yaml`, `dictionary.json`, generated docs, and TextMate output as one consistency surface; restore semantics only when parser/compiler/runtime behavior and tests support them.
+- `mandatory-internal-hlf`: make internal HLF mandatory only where current tools can validate, explain, and fail closed; keep self-hosting and recursive-build claims bridge-qualified until executable evidence supports them.
+
 ## Operator Workflow (Dogfooding)
 
 The packaged HLF MCP server is now used for bounded, governed build-assist:
@@ -51,11 +68,22 @@ Additional boundary rule:
 ## Repo Identity
 
 - Repository: HLF-Hieroglyphic-Logic-Framework-MCP
-- Workspace path: `C:\Users\gerry\generic_workspace\HLF_MCP`
+- Workspace path: this repository checkout
+- Canonical/core local repository: this checkout, because it is attached to the online GitHub repository
+- Donor/reference only: sibling workspace `HLF_MCP_WORKING`; do not treat it as the project root or as automatic authority
 - Packaged product: `hlf-mcp`
 - Packaged entry point: `hlf_mcp.server:main`
 - Legacy MCP line still present: `hlf/` modules and `hlf.mcp_server_complete`
-- Expected upstream source repo for HLF extraction/reference: `C:\Users\gerry\generic_workspace\Sovereign_Agentic_OS_with_HLF`
+- Expected upstream source repo for HLF extraction/reference: sibling workspace `Sovereign_Agentic_OS_with_HLF`
+
+Freeze rule:
+
+- No blind copying from `HLF_MCP_WORKING`, playground repos, old edits, or other donor/reference paths.
+- Donor material must be reviewed, claim-laned, re-derived or cleanly reimplemented in `HLF_MCP`, and validated here before it becomes current truth.
+- Preserve claim lanes as `current-true`, `bridge-true`, `vision-true`, and `not-proven`.
+- The immediate product target is MCP-delivered HLF through Grumprolled as the initial delivery mouthpiece and native-agent usability surface.
+- The immediate proof bar is complete, usable native-agent operation through MCP; it is not a sidecar and not a claim of full HLF restoration.
+- Sovereign OS work is later/out of scope until MCP-delivered HLF is proven complete and natively usable by agents.
 
 ## Source Extraction Reality
 
@@ -85,7 +113,7 @@ Version rule:
 
 ### What the Sovereign source repo contains
 
-Direct inspection of `C:\Users\gerry\generic_workspace\Sovereign_Agentic_OS_with_HLF` shows a substantially broader HLF ecosystem, including:
+Direct inspection of sibling workspace `Sovereign_Agentic_OS_with_HLF` shows a substantially broader HLF ecosystem, including:
 
 - `hlf/` with 37 files
 - `mcp/` with 2 files
@@ -154,7 +182,7 @@ This is the default build/install surface and the one exposed by `pyproject.toml
 - Entry point: `hlf-mcp`
 - Server file: `hlf_mcp/server.py`
 - Core compiler/runtime path: `hlf_mcp/hlf/*`
-- Current packaged MCP registration count verified in this checkout on 2026-03-20: **69 tools, 31 resources, 0 prompts**
+- Current packaged MCP registration count audited in this checkout: **84 tools, 87 resources, 1 prompt**. Treat this as an observed surface snapshot; tests should prefer registry self-consistency over fragile hardcoded counts.
 
 ### 2. Legacy MCP compatibility surface
 
@@ -167,7 +195,7 @@ This line is still real and testable, but it is not the package entry point, the
 
 ### Current repo truth
 
-The right way to describe the repo is **not** "only one server exists" and **not** "everything is one unified stack already".
+The right way to describe the repo is **not** "only one server exists" and **not** "everything is one unified stack already". MCP is the first delivery mouthpiece through Grumprolled for native-agent use, not a detached sidecar or proof that every HLF pillar is restored.
 
 The truthful statement is:
 
@@ -419,10 +447,10 @@ The following validations were run in this workspace during this pass.
 | `uv run python docs/gen_from_spec.py` | Passed |
 | `uv run python scripts/hlf_token_lint.py fixtures` | Passed |
 | `uv run pytest tests/test_extracted_support_tools.py tests/test_gen_from_spec.py -q --tb=short` | Passed (`6 passed`) |
-| `uv run python -c "import hlf_mcp.server as s; print('imports-ok'); print('registered_tools', len(s.REGISTERED_TOOLS)); print('registered_resources', len(s.REGISTERED_RESOURCES)); print('exported_hlf_callables', len([name for name in dir(s) if name.startswith('hlf_') and callable(getattr(s, name))]))"` | Historical 2026-03-17 run passed (`imports-ok`, `34` registered tools, `9` registered resources, `34` exported callable `hlf_*` names) |
+| `uv run python -c "import hlf_mcp.server as s; print('imports-ok'); print('registered_tools', len(s.REGISTERED_TOOLS)); print('registered_resources', len(s.REGISTERED_RESOURCES)); print('registered_prompts', len(s.REGISTERED_PROMPTS))"` | Superseded count probe; use current audited registry snapshot below for present-tense counts. |
 | `uv run pytest tests/test_fastmcp_frontdoor.py -q --tb=short` | Passed (`20 passed`) |
 | `uv run pytest -q --tb=short` | Historical 2026-03-17 run passed (`513 passed`) |
-| Generated packaged MCP surface in `hlf_mcp.server` | Historical 2026-03-17 value: `34` registered tools, `9` registered resources, `34` exported callable `hlf_*` names |
+| Generated packaged MCP surface in `hlf_mcp.server` | Superseded 2026-03-17 snapshot; current audited count is **84 tools, 87 resources, 1 prompt**. |
 
 ## Supplemental Verification On 2026-03-20
 
@@ -432,7 +460,7 @@ The following branch-aware facts were revalidated for this local checkout.
 | --- | --- |
 | `git branch --show-current` | Passed (`integrate/vscode-operator-governed-review`) |
 | `git rev-list --left-right --count main...HEAD` | Passed (`0` behind, `10` ahead) |
-| `uv run python -c "from hlf_mcp import server; print(len(server.REGISTERED_TOOLS), len(server.REGISTERED_RESOURCES))"` | Passed (`69` tools, `31` resources) after re-manifesting `governance/host_functions.json` |
+| `python -c "from hlf_mcp import server; print(len(server.REGISTERED_TOOLS), len(server.REGISTERED_RESOURCES), len(server.REGISTERED_PROMPTS))"` | Current audited surface: **84 tools, 87 resources, 1 prompt**. |
 | `uv run pytest -q --tb=short` | Passed (`758 passed`) |
 
 ## This Pass Changed
@@ -463,7 +491,7 @@ This SSOT corresponds to the following repo-level corrections made in the same p
 Verified current branch facts:
 
 - `integrate/vscode-operator-governed-review` is **10 commits ahead, 0 behind** `main`.
-- The packaged surface count in this checkout is now **69 tools and 31 resources**.
+- The packaged surface count in this checkout is now **84 tools, 87 resources, and 1 prompt**.
 - Public-main perception therefore still undercounts meaningful branch work.
 
 Verified caution for merge/readiness interpretation:

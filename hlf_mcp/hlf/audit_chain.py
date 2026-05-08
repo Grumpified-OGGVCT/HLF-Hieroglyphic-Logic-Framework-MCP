@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from hlf_mcp.hlf.governance_events import GovernanceEvent
+from hlf_mcp.hlf.governance_proofs import verify_event_chain
 
 _ZERO_HASH = "0" * 64
 _DEFAULT_DIR = Path(__file__).resolve().parents[2] / "observability" / "openllmetry"
@@ -21,6 +22,11 @@ def _canonical_payload(event: str, data: dict[str, Any]) -> str:
 
 def _compute_trace_id(prev_hash: str, payload: str) -> str:
     return hashlib.sha256(f"{prev_hash}{payload}".encode()).hexdigest()
+
+
+def _replay_entry_hash(entry: dict[str, Any]) -> str:
+    payload = _canonical_payload(str(entry.get("event") or ""), dict(entry.get("data") or {}))
+    return _compute_trace_id(str(entry.get("parent_trace_hash") or _ZERO_HASH), payload)
 
 
 class AuditChain:
@@ -92,6 +98,75 @@ class AuditChain:
             entries = list(self._recent)
         entries.reverse()
         return entries[:size]
+
+    def iter_entries(self, limit: int = 1000) -> list[dict[str, Any]]:
+        size = max(1, min(limit, 10000))
+        if not self._log_path.is_file():
+            return []
+        entries: list[dict[str, Any]] = []
+        try:
+            with self._log_path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        item = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(item, dict):
+                        entries.append(item)
+        except Exception:
+            return []
+        return entries[-size:]
+
+    def verify_integrity(self, limit: int = 1000) -> dict[str, Any]:
+        entries = self.iter_entries(limit=limit)
+        errors: list[str] = []
+        prev_hash = _ZERO_HASH
+        for index, entry in enumerate(entries):
+            parent = str(entry.get("parent_trace_hash") or "")
+            if parent != prev_hash and index > 0:
+                errors.append(f"entry {index} parent_trace_hash mismatch")
+            expected = _replay_entry_hash(entry)
+            if expected != str(entry.get("trace_id") or ""):
+                errors.append(f"entry {index} trace_id mismatch")
+            prev_hash = str(entry.get("trace_id") or "")
+        return {
+            "status": "ok" if not errors else "error",
+            "verified": not errors,
+            "checked": len(entries),
+            "error_count": len(errors),
+            "errors": errors,
+            "head_hash": prev_hash if entries else _ZERO_HASH,
+            "boundary": {
+                "integrity": "sha256_hash_chain",
+                "cryptographic_claim": "tamper-evident content hashing only",
+                "signature": "none",
+                "non_repudiation": False,
+            },
+            "log_path": str(self._log_path),
+        }
+
+    def verify_governance_proof(self, proof: dict[str, Any]) -> dict[str, Any]:
+        chain = proof.get("chain") if isinstance(proof.get("chain"), dict) else proof
+        return verify_event_chain(chain)
+
+    def human_report(self, limit: int = 20) -> str:
+        verification = self.verify_integrity(limit=max(limit, 1))
+        lines = [
+            "# HLF Audit Chain Report",
+            "",
+            f"- Status: {verification['status']}",
+            f"- Checked entries: {verification['checked']}",
+            f"- Head hash: {verification['head_hash']}",
+            "- Boundary: SHA-256 hash-chain integrity only; no signature or non-repudiation claimed.",
+            "",
+            "## Recent events",
+        ]
+        for entry in self.iter_entries(limit=limit)[-limit:]:
+            lines.append(f"- {entry.get('timestamp')} `{entry.get('event')}` trace={entry.get('trace_id')}")
+        return "\n".join(lines) + "\n"
 
     def log_governance_event(
         self,

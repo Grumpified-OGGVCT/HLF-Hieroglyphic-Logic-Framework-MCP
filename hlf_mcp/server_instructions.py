@@ -6,6 +6,10 @@ from typing import Any
 _INTRO = """\
 You are connected to the HLF (Hieroglyphic Logic Framework) MCP server.
 
+This MCP surface is the initial HLF delivery mouthpiece through Grumprolled for
+native-agent use. It is the immediate proof bar for usable packaged behavior,
+not a sidecar and not a claim that full HLF restoration is complete.
+
 HLF is a deterministic orchestration protocol that replaces natural language ambiguity
 with a strictly-typed Hieroglyphic AST for zero-trust agent execution.
 
@@ -67,6 +71,28 @@ WHEN HLF IS THE WRONG TOOL
     execution contracts.
   x Ultra-low-latency edges where even parser and governance overhead matters.
 """
+
+_MANDATORY_INTERNAL_LOOP = """\
+  MANDATORY INTERNAL HLF LOOP
+    Agent/native tool use must preserve this order for substantive work. Current
+    packaged gates are current-true; broader swarm/sovereign restoration remains
+    bridge-true or vision-true until separately proven:
+      NLP ingress -> HLF translation -> validate/lint/compile -> governed execution
+      or coordination -> NLP egress for humans.
+
+    HLF is the internal coordination artifact, not a prose decoration. Use hlf_do
+    for the full packaged loop, or hlf_translate_to_hlf followed by hlf_validate,
+    hlf_compile, and the relevant execution/coordination surface. For swarm or
+    sub-agent handoff, request handoff_mode=swarm/subagent/raw_hlf and pass the
+    raw HLF artifact plus validation/compile proof; do not use a prose summary as
+    the authoritative machine-to-machine payload.
+
+    MCP mouthpiece enforcement is default-deny for protected tools: call bootstrap,
+    validation, repair, read-only egress, and discovery tools first, then pass the resulting
+    hlf_contract/translation_contract or hlf_governance_proof with protected tool
+    calls. Protected outputs are JSON-egress checked before return.
+  """
+
 
 _AGENT_ARRIVAL = """\
   AGENT ARRIVAL
@@ -130,6 +156,7 @@ def build_server_instructions(
     ]
     sections = [
         _INTRO.rstrip(),
+        _MANDATORY_INTERNAL_LOOP.rstrip(),
         _AGENT_ARRIVAL.rstrip(),
         _render_section("Available tools", tool_lines),
         _render_section("Resources", resource_lines),

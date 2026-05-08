@@ -164,3 +164,34 @@ __redhat_probe.py
 Cogito_Discussion.md
 artifacts/*.vsix
 extensions/hlf-vscode/*.vsix
+
+# ── Non-core local helper/tooling artifacts (keep out of HLF repo) ───────────
+full_codex_index_*.txt
+_do_patch.py
+_fix*.py
+_patch*.py
+
+# ── Local AI/editor configs and session artifacts (never committed) ───────────
+.claude/
+.mcp.json
+.vscode/mcp.json
+.test_venv/
+*.session
+*.transcript
+*session*.jsonl
+*transcript*.jsonl
+
+# ── Local SQLite/test databases and sidecars ─────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+
+# ── Local imported research/playbook drops (review before promoting) ──────────
+Advanced REading and Applications/
+OLLAMA_AGENT_PLAYBOOK.md

@@ -1,38 +1,97 @@
 {
   "name": "HLF",
   "scopeName": "source.hlf",
-  "fileTypes": ["hlf"],
+  "fileTypes": [
+    "hlf"
+  ],
   "patterns": [
-    {"include": "#comment"},
-    {"include": "#version_header"},
-    {"include": "#block"},
-    {"include": "#terminator"},
-    {"include": "#line_glyph"},
-    {"include": "#glyph"},
-    {"include": "#ascii_alias"},
-    {"include": "#canonical_tag"},
-    {"include": "#i18n_latin_tag"},
-    {"include": "#i18n_cjk_tag"},
-    {"include": "#i18n_arabic_tag"},
-    {"include": "#generic_tag"},
-    {"include": "#string"},
-    {"include": "#variable"},
-    {"include": "#control_keyword"},
-    {"include": "#definition_keyword"},
-    {"include": "#declaration_keyword"},
-    {"include": "#spec_keyword"},
-    {"include": "#builtin_keyword"},
-    {"include": "#logical_keyword"},
-    {"include": "#boolean"},
-    {"include": "#typed_param"},
-    {"include": "#property_key"},
-    {"include": "#path"},
-    {"include": "#number"},
-    {"include": "#comparison_operator"},
-    {"include": "#arithmetic_operator"},
-    {"include": "#assignment_operator"},
-    {"include": "#punctuation"},
-    {"include": "#identifier"}
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#version_header"
+    },
+    {
+      "include": "#block"
+    },
+    {
+      "include": "#terminator"
+    },
+    {
+      "include": "#line_glyph"
+    },
+    {
+      "include": "#glyph"
+    },
+    {
+      "include": "#ascii_alias"
+    },
+    {
+      "include": "#canonical_tag"
+    },
+    {
+      "include": "#i18n_cjk_tag"
+    },
+    {
+      "include": "#i18n_arabic_tag"
+    },
+    {
+      "include": "#generic_tag"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#variable"
+    },
+    {
+      "include": "#control_keyword"
+    },
+    {
+      "include": "#definition_keyword"
+    },
+    {
+      "include": "#declaration_keyword"
+    },
+    {
+      "include": "#spec_keyword"
+    },
+    {
+      "include": "#builtin_keyword"
+    },
+    {
+      "include": "#logical_keyword"
+    },
+    {
+      "include": "#boolean"
+    },
+    {
+      "include": "#typed_param"
+    },
+    {
+      "include": "#property_key"
+    },
+    {
+      "include": "#path"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#comparison_operator"
+    },
+    {
+      "include": "#arithmetic_operator"
+    },
+    {
+      "include": "#assignment_operator"
+    },
+    {
+      "include": "#punctuation"
+    },
+    {
+      "include": "#identifier"
+    }
   ],
   "repository": {
     "comment": {
@@ -46,48 +105,42 @@
     "block": {
       "begin": "\\{",
       "beginCaptures": {
-        "0": {"name": "punctuation.definition.block.begin.hlf"}
+        "0": {
+          "name": "punctuation.definition.block.begin.hlf"
+        }
       },
       "end": "\\}",
       "endCaptures": {
-        "0": {"name": "punctuation.definition.block.end.hlf"}
+        "0": {
+          "name": "punctuation.definition.block.end.hlf"
+        }
       },
       "name": "meta.block.hlf",
       "patterns": [
-        {"include": "$self"}
+        {
+          "include": "$self"
+        }
       ]
     },
     "terminator": {
-      "match": "\u03a9|\\b(?:Omega|OMEGA|END)\\b",
+      "match": "Ω|\\b(?:Omega|OMEGA|END)\\b",
       "name": "keyword.operator.terminator.hlf"
     },
     "line_glyph": {
-      "match": "^\\s*[\u0394\u0416\u2a1d\u2318\u2207\u2a55\u228e]",
+      "match": "^\\s*(?:Δ|Σ|Ж|∇|⊎|⌂|⌘|⨝|⩕)",
       "name": "keyword.control.command.hlf"
     },
     "glyph": {
-      "match": "[\u0394\u0416\u2a1d\u2318\u2207\u2a55\u228e]",
+      "match": "(?:Δ|Σ|Ж|∇|⊎|⌂|⌘|⨝|⩕)",
       "name": "keyword.operator.glyph.hlf"
     },
     "ascii_alias": {
-      "match": "\\b(?:ANALYZE|ANALYSE|ANALYSER|ANALIZAR|ENFORCE|CONSTRAIN|JOIN|CONSENSUS|VOTE|CMD|COMMAND|DELEGATE|SOURCE|PARAM|PRIORITY|BRANCH|UNION|DELTA|ZHE)\\b",
+      "match": "\\b(?:MEMORY_ANCHOR|AGGREGATE|CONSENSUS|CONSTRAIN|SUMMARIZE|ANALIZAR|ANALYSER|PRIORITY|ANALYSE|ANALYZE|COMMAND|ENFORCE|SUMMARY|BRANCH|SOURCE|OMEGA|UNION|JOIN|VOTE|CMD|END)\\b",
       "name": "support.constant.alias.hlf"
     },
     "canonical_tag": {
-      "match": "\\[(?:ACTION|AGREE|ALIGN|ARG|ARGUMENT|ASSERT|ASSERTION|ASSIGN_TO|CHECK|CONFIG|CONSENSUS|CONSTRAINT|DATA_SOURCE|DEFINE|DELEGATE|DELEGATION|DISPATCH|EXPECT|EXPECTED|FORWARD|FROM|GATE|GOAL|HANDOFF|IMPORTANCE|INPUT|INTENT|INTENTION|LOOKUP|MEMORIZE|MEMORY|MIGRATION|MIGRATION_SPEC|MODULE|OBSERVATION|OUTPUT|OUTPUT_TYPE|PARAM|PARAMETER|PLAN|PRECONDITION|PRIORITY|QUERY|QUORUM|RANK|RECALL|REMEMBER|RESPONSE|RESTRICT|RESTRICTION|RESULT|RETRIEVE|RETURN|ROUTE|ROUTING|SET|SOURCE|STORE|THOUGHT|URGENCY|VOTE|WEIGHT)\\]",
+      "match": "\\[(?:RESULTAT_ATTENDU|CONSTRENIMIENTO|EINSCHRAENKUNG|EVIDENCE_CHAIN|MIGRATION_SPEC|BESCHRAENKUNG|CONFIGURACION|CONFIGURATION|DRINGLICHKEIT|KONFIGURATION|CONFIGURACAO|ENRUTAMIENTO|PRECONDICION|PRECONDITION|SOURCE_CHAIN|VERIFICACION|VERIFICATION|VORBEDINGUNG|WEITERLEITEN|WIEDERFINDEN|ZURUECKRUFEN|DATA_SOURCE|DATENQUELLE|GEDAECHTNIS|IMPORTANCIA|OBSERVATION|OUTPUT_TYPE|PRECONDICAO|RESTRICCION|RESTRICTION|SE_SOUVENIR|SOURCE_CODE|SPEC_DEFINE|SPEC_UPDATE|TIPO_SALIDA|TRANSMETTRE|VERIFICACAO|WICHTIGKEIT|AFIRMACION|AUSGABETYP|BEHAUPTUNG|CONSTRAINT|CONTRAINTE|DEFINITION|DELEGACION|DELEGATION|DELEGIEREN|DISTRIBUER|ENCAMINHAR|GOVERNANCE|IMPORTANCE|INTERROGER|LIMITACION|MEMORIEREN|PRIORIDADE|PRIORITAET|PROVENANCE|ROTEAMENTO|TIPO_SAIDA|TRANSFERER|UEBERGEBEN|ABSTIMMEN|ACHEMINER|AFIRMACAO|ALMACENAR|ARGUMENTO|ARMAZENAR|ASIGNAR_A|ASSERTION|ASSIGN_TO|BEDINGUNG|CONSENSUS|CONSTRAIN|CONSULTAR|DELEGACAO|DESPACHAR|INTENCION|INTENTION|LIMITACAO|MEMORISER|MEMORIZAR|MIGRATION|NAMESPACE|PARAMETER|PARAMETRE|PARAMETRO|PRIORIDAD|RATIONALE|REASONING|RECUPERAR|RECUPERER|RESPUESTA|RESTRICAO|RESULTADO|RETOURNER|RUECKGABE|SPEC_GATE|SPEC_SEAL|SPEICHERN|VERTEILEN|ABFRAGEN|AFFIRMER|ARGUMENT|ATRIBUIR|ATTENDRE|BOUNDARY|CHERCHER|CONDICAO|CONSENSO|DELEGATE|DELEGUER|DISPATCH|EINIGUNG|ERGEBNIS|ERINNERN|ERWARTEN|ERWARTET|ESPERADO|EVIDENCE|EXPECTED|FUNCTION|INTENCAO|MEMORIZE|OBJECTIF|OBJETIVO|OBSERVED|PRIORITE|PRIORITY|RAPPELER|RECORDAR|RELATION|REMEMBER|RESPONSE|RESPOSTA|RESTRICT|RESULTAT|RETORNAR|RETRIEVE|URGENCIA|VORHABEN|ZUWEISEN|ABRUFEN|ABSICHT|ACUERDO|ANTWORT|ATTENDU|AUSGABE|CAPSULE|CONFIER|CONTROL|DATASET|DELEGAR|EINGABE|ENRUTAR|ENTRADA|ESPERAR|EXECUTE|FORWARD|GEWICHT|HANDOFF|KONSENS|LEMBRAR|LINEAGE|MEMOIRE|MEMORIA|OBSERVE|OBTENER|PACKAGE|PAYLOAD|PROGRAM|PRUEFEN|REPONSE|RESPOND|ROADMAP|ROUTAGE|ROUTINE|ROUTING|STOCKER|THOUGHT|URGENCE|URGENCY|ACCORD|ACORDO|ACTION|ASSERT|BUSCAR|CONFIG|DEFINE|ENTREE|EXPECT|FUENTE|IMPORT|INTENT|INVOKE|LIMITE|LOOKUP|MEMORY|MODULE|ORIGEM|ORIGEN|OUTPUT|POLICY|QUELLE|QUORUM|RECALL|RELATE|RESULT|RETURN|ROTEAR|ROUTEN|SALIDA|SORTIE|SOURCE|SUCHEN|WEIGHT|AGREE|ALIGN|CATCH|CHECK|DESDE|FONTE|INPUT|MACRO|PARAM|POIDS|QUERY|RANGO|ROUTE|SAIDA|SCOPE|STEPS|STORE|VOTAR|VOTER|WHILE|YIELD|CALL|CODE|DATA|EDGE|FROM|GATE|GOAL|LINK|META|PESO|PLAN|RANG|RANK|SPEC|VOTE|ZIEL|ACT|ARG|BUT|RUN|SET|TRY|VON|DE|FN)\\]",
       "name": "entity.name.tag.hlf"
-    },
-    "i18n_latin_tag": {
-      "match": "\\[(?:ABFRAGEN|ABRUFEN|ABSICHT|ABSTIMMEN|ACCORD|ACHEMINER|ACUERDO|AFIRMACAO|AFIRMACION|AFFIRMER|ALMACENAR|ANTWORT|ARGUMENTO|ARMAZENAR|ASIGNAR_A|ATRIBUIR|ATTENDRE|ATTENDU|AUSGABE|AUSGABETYP|BEDINGUNG|BEHAUPTUNG|BESCHRAENKUNG|BUSCAR|BUT|CHERCHER|CONDICAO|CONFIER|CONFIGURACAO|CONFIGURACION|CONFIGURATION|CONSENSO|CONSTRENIMIENTO|CONSULTAR|CONTRAINTE|DATENQUELLE|DELEGACAO|DELEGACION|DELEGIEREN|DELEGUER|DELEGAR|DESDE|DESPACHAR|DISTRIBUER|DRINGLICHKEIT|EINGABE|EINIGUNG|EINSCHRAENKUNG|ENCAMINHAR|ENRUTAR|ENRUTAMIENTO|ENTRADA|ERGEBNIS|ERINNERN|ERWARTET|ERWARTEN|ESPERAR|ESPERADO|FONTE|FUENTE|GEDAECHTNIS|GEWICHT|IMPORTANCIA|INTENCAO|INTENCION|INTERROGER|KONFIGURATION|KONSENS|LEMBRAR|LIMITACAO|LIMITACION|LIMITE|MEMOIRE|MEMORIEREN|MEMORISER|MEMORIZAR|META|OBJETIVO|OBJECTIF|OBTENER|ORIGEN|ORIGEM|PARAMETRO|PARAMETRE|PESO|POIDS|PRECONDICION|PRECONDICAO|PRIORITAET|PRIORIDAD|PRIORIDADE|PRIORITE|PROVENANCE|PRUEFEN|QUELLE|RANG|RANGO|RAPPELER|RECORDAR|RECUPERAR|RECUPERER|REPONSE|RESPOSTA|RESPUESTA|RESTRICAO|RESTRICCION|RESULTAT|RESULTAT_ATTENDU|RESULTADO|RETORNAR|RETOURNER|ROTEAMENTO|ROTEAR|ROUTEN|ROUTAGE|RUECKGABE|SAIDA|SALIDA|SE_SOUVENIR|SORTIE|SPEICHERN|STOCKER|SUCHEN|TIPO_SAIDA|TIPO_SALIDA|TRANSFERER|TRANSMETTRE|UEBERGEBEN|URGENCE|URGENCIA|VERIFICACAO|VERIFICACION|VERIFICATION|VERTEILEN|VON|VORHABEN|VORBEDINGUNG|VOTER|VOTAR|WEITERLEITEN|WICHTIGKEIT|WIEDERFINDEN|ZIEL|ZURUECKRUFEN|ZUWEISEN)\\]",
-      "name": "entity.name.tag.i18n.hlf"
-    },
-    "i18n_cjk_tag": {
-      "match": "\\[(?:\u610f\u56fe|\u76ee\u6807|\u76ee\u7684|\u7ea6\u675f|\u9650\u5236|\u7ea6\u675f\u6761\u4ef6|\u65ad\u8a00|\u524d\u7f6e\u6761\u4ef6|\u68c0\u67e5|\u671f\u671b|\u9884\u671f|\u671f\u5f85|\u59d4\u6258|\u59d4\u6d3e|\u4ee3\u7406|\u8f6c\u4ea4|\u8def\u7531|\u5206\u53d1|\u8f6c\u53d1|\u8c03\u5ea6|\u6765\u6e90|\u8f93\u5165|\u6570\u636e\u6e90|\u4ece|\u53c2\u6570|\u914d\u7f6e|\u914d\u7f6e\u9879|\u4f18\u5148\u7ea7|\u7d27\u6025\u5ea6|\u6743\u91cd|\u91cd\u8981\u6027|\u6295\u7968|\u5171\u8bc6|\u6cd5\u5b9a\u4eba\u6570|\u540c\u610f|\u7ed3\u679c|\u8fd4\u56de|\u8f93\u51fa|\u54cd\u5e94|\u8bb0\u5fc6|\u5b58\u50a8|\u8bb0\u4f4f|\u8bb0\u5fc6\u5316|\u53ec\u56de|\u68c0\u7d22|\u67e5\u627e|\u67e5\u8be2|\u610f\u56f3|\u5236\u7d04|\u5236\u9650|\u5236\u7d04\u6761\u4ef6|\u30a2\u30b5\u30fc\u30b7\u30e7\u30f3|\u524d\u63d0\u6761\u4ef6|\u78ba\u8a8d|\u4e88\u671f|\u671f\u5f85\u5024|\u59d4\u8b72|\u30c7\u30ea\u30b2\u30fc\u30c8|\u59d4\u4efb|\u5f15\u304d\u6e21\u3057|\u30eb\u30fc\u30c6\u30a3\u30f3\u30b0|\u30eb\u30fc\u30c8|\u8ee2\u9001|\u30c7\u30a3\u30b9\u30d1\u30c3\u30c1|\u30bd\u30fc\u30b9|\u30c7\u30fc\u30bf\u30bd\u30fc\u30b9|\u304b\u3089|\u30d1\u30e9\u30e1\u30fc\u30bf|\u5f15\u6570|\u8a2d\u5b9a|\u512a\u5148\u5ea6|\u7dca\u6025\u5ea6|\u91cd\u307f|\u30b3\u30f3\u30bb\u30f3\u30b5\u30b9|\u5408\u610f|\u5b9a\u8db3\u6570|\u8fd4\u5374|\u51fa\u529b|\u30ec\u30b9\u30dd\u30f3\u30b9|\u30e1\u30e2\u30ea|\u8a18\u61b6|\u8a18\u9332|\u8a18\u61b6\u3059\u308b|\u547c\u3073\u51fa\u3059|\u53d6\u5f97|\u691c\u7d22|\u60f3\u8d77|\u30af\u30a8\u30ea)\\]",
-      "name": "entity.name.tag.i18n.hlf"
-    },
-    "i18n_arabic_tag": {
-      "match": "\\[(?:\u0646\u064a\u0629|\u0647\u062f\u0641|\u063a\u0627\u064a\u0629|\u0642\u064a\u062f|\u062a\u0642\u064a\u064a\u062f|\u0642\u064a\u0648\u062f|\u062a\u0623\u0643\u064a\u062f|\u0634\u0631\u0637 \u0645\u0633\u0628\u0642|\u0641\u062d\u0635|\u062a\u0648\u0642\u0639|\u0645\u062a\u0648\u0642\u0639|\u0646\u0648\u0639_\u0627\u0644\u0625\u062e\u0631\u0627\u062c|\u062a\u0641\u0648\u064a\u0636|\u062a\u0641\u0648\u064a\u0636_\u0645\u0647\u0645\u0629|\u0625\u0633\u0646\u0627\u062f|\u062a\u0648\u062c\u064a\u0647|\u062a\u0645\u0631\u064a\u0631|\u0625\u0631\u0633\u0627\u0644|\u0645\u0635\u062f\u0631|\u0625\u062f\u062e\u0627\u0644|\u0628\u064a\u0627\u0646\u0627\u062a_\u0645\u0635\u062f\u0631|\u0645\u0639\u0627\u0645\u0644|\u0648\u0633\u064a\u0637\u0629|\u062a\u0647\u064a\u0626\u0629|\u0623\u0648\u0644\u0648\u064a\u0629|\u0625\u0644\u062d\u0627\u062d|\u0648\u0632\u0646|\u0623\u0647\u0645\u064a\u0629|\u062a\u0635\u0648\u064a\u062a|\u062a\u0648\u0627\u0641\u0642|\u0646\u0635\u0627\u0628|\u0645\u0648\u0627\u0641\u0642\u0629|\u0646\u062a\u064a\u062c\u0629|\u0625\u0631\u062c\u0627\u0639|\u0625\u062e\u0631\u0627\u062c|\u0627\u0633\u062a\u062c\u0627\u0628\u0629|\u0630\u0627\u0643\u0631\u0629|\u062a\u062e\u0632\u064a\u0646|\u062a\u0630\u0643\u0631|\u062d\u0641\u0638|\u0627\u0633\u062a\u0631\u062c\u0627\u0639|\u0627\u0633\u062a\u0630\u0643\u0627\u0631|\u0628\u062d\u062b|\u0627\u0633\u062a\u0639\u0644\u0627\u0645)\\]",
-      "name": "entity.name.tag.i18n.hlf"
     },
     "generic_tag": {
       "match": "\\[[A-Z][A-Z0-9_]*\\]",
@@ -96,16 +149,24 @@
     "string": {
       "begin": "\"",
       "beginCaptures": {
-        "0": {"name": "punctuation.definition.string.begin.hlf"}
+        "0": {
+          "name": "punctuation.definition.string.begin.hlf"
+        }
       },
       "end": "\"",
       "endCaptures": {
-        "0": {"name": "punctuation.definition.string.end.hlf"}
+        "0": {
+          "name": "punctuation.definition.string.end.hlf"
+        }
       },
       "name": "string.quoted.double.hlf",
       "patterns": [
-        {"include": "#escape"},
-        {"include": "#string_variable"}
+        {
+          "include": "#escape"
+        },
+        {
+          "include": "#string_variable"
+        }
       ]
     },
     "escape": {
@@ -151,9 +212,15 @@
     "typed_param": {
       "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)(:)([a-zA-Z_][a-zA-Z0-9_]*)\\b",
       "captures": {
-        "1": {"name": "variable.parameter.hlf"},
-        "2": {"name": "punctuation.separator.type.hlf"},
-        "3": {"name": "support.type.hlf"}
+        "1": {
+          "name": "variable.parameter.hlf"
+        },
+        "2": {
+          "name": "punctuation.separator.type.hlf"
+        },
+        "3": {
+          "name": "support.type.hlf"
+        }
       }
     },
     "property_key": {
@@ -161,7 +228,7 @@
       "name": "variable.parameter.key.hlf"
     },
     "path": {
-      "match": "(?:(?<=\\s)|^)/(?:[^\\s\\[\\]\"#{}()]|\\\\ )+",
+      "match": "(?:(?<=\\s)|^)/(?:[^\\s\\[\\]#{}()]|\\ )+",
       "name": "string.unquoted.path.hlf"
     },
     "number": {
@@ -182,13 +249,27 @@
     },
     "punctuation": {
       "patterns": [
-        {"match": "\\(", "name": "punctuation.section.parens.begin.hlf"},
-        {"match": "\\)", "name": "punctuation.section.parens.end.hlf"}
+        {
+          "match": "\\(",
+          "name": "punctuation.section.parens.begin.hlf"
+        },
+        {
+          "match": "\\)",
+          "name": "punctuation.section.parens.end.hlf"
+        }
       ]
     },
     "identifier": {
       "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b",
       "name": "variable.other.readwrite.hlf"
+    },
+    "i18n_cjk_tag": {
+      "match": "\\[(?:アサーション|コンセンサス|ディスパッチ|データソース|ルーティング|デリゲート|パラメータ|レスポンス|制約条件|前提条件|前置条件|呼び出す|引き渡し|法定人数|约束条件|記憶する|クエリ|ソース|メモリ|ルート|优先级|優先度|定足数|数据源|期待値|紧急度|緊急度|记忆化|配置项|重要性|から|予期|代理|入力|共识|出力|分发|制約|制限|参数|取得|召回|合意|同意|响应|委任|委托|委派|委譲|存储|引数|想起|意図|意图|投票|断言|期待|期望|权重|来源|查找|查询|检查|检索|検索|目标|目標|目的|確認|結果|约束|结果|記憶|記録|設定|记住|记忆|调度|路由|転送|转交|转发|输入|输出|返却|返回|配置|重み|限制|预期|从)\\]",
+      "name": "entity.name.tag.i18n.hlf"
+    },
+    "i18n_arabic_tag": {
+      "match": "\\[(?:بيانات_مصدر|نوع_الإخراج|تفويض_مهمة|شرط\\ مسبق|استجابة|استذكار|استرجاع|استعلام|أولوية|موافقة|أهمية|إخراج|إدخال|إرجاع|إرسال|إسناد|إلحاح|تأكيد|تخزين|تصويت|تفويض|تقييد|تمرير|تهيئة|توافق|توجيه|ذاكرة|متوقع|معامل|نتيجة|وسيطة|تذكر|توقع|غاية|قيود|مصدر|نصاب|بحث|حفظ|فحص|قيد|نية|هدف|وزن)\\]",
+      "name": "entity.name.tag.i18n.hlf"
     }
   }
 }

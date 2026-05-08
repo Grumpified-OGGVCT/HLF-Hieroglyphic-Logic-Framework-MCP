@@ -48,6 +48,25 @@ It exists so future agents do not start from the wrong premise, repeat the same 
 
 ## Start Here First
 
+## Repository Freeze: Canonical Core And Donor Boundaries
+
+For current HLF MCP work, this repository is the canonical/core repository because it is attached to the online GitHub repository.
+The sibling `HLF_MCP_WORKING` workspace is donor/reference material only; it is not the project root and is not authority by itself.
+Playground repositories, old edits, and other local checkouts are reference-only unless a reviewed idea is deliberately ported into this repo.
+
+Do not blindly copy files, modules, tests, docs, or generated artifacts from donor/reference paths.
+Mine them for evidence, classify the claim lane, re-derive or cleanly reimplement inside this repository, then validate here before promoting anything.
+
+Preserve these claim lanes in all guidance and implementation decisions:
+
+- `current-true`: implemented, validated, and safe to claim now in `HLF_MCP`
+- `bridge-true`: correct convergence direction or bounded partial capability, still needing proof before full promotion
+- `vision-true`: north-star doctrine and target architecture, not present-tense completion
+- `not-proven`: useful hypothesis, donor finding, old edit, or aspirational wording that has not earned a stronger lane
+
+The immediate delivery target is MCP-delivered HLF through Grumprolled as the mouthpiece and native agent-usable surface.
+Sovereign OS remains later/out of scope until the MCP-delivered HLF surface is proven complete and natively usable by agents.
+
 Before answering architectural questions, planning major changes, or deciding that a surface is optional, read these in order:
 
 1. Repo memory: `/memories/repo/HLF_MCP.md`
@@ -145,6 +164,20 @@ Primary files:
 - [HLF_IMPLEMENTATION_INDEX.md](HLF_IMPLEMENTATION_INDEX.md)
 
 Never collapse these three lanes into one flattened story.
+
+
+## Authority Freeze For Implementation
+
+Use `hlf_mcp.hlf.authority` as the code-level authority surface for reconstruction tasks. It deliberately separates:
+
+- full/original HLF authority target: vision and doctrine for the complete governed language
+- present packaged current truth: what this checkout can honestly claim and run now
+- bridge/recovery material: useful comparison inputs that need validation before promotion
+- invalid mistaken checkout artifacts: wrong-checkout edits that are not source truth
+
+For `restore-grammar`, do not widen grammar, tags, dictionaries, generated docs, or TextMate output from stale or wrong-checkout material. Rebuild one consistent surface and prove it with tests.
+
+For `mandatory-internal-hlf`, require HLF internally only where the current packaged stack can validate, explain, and fail closed. Missing orchestration, memory, governance, verification, and human-trust pieces stay bridge obligations rather than optional extras.
 
 ## Non-Negotiable Reconstruction Rules
 

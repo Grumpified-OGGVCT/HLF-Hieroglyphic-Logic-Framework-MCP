@@ -440,7 +440,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "content_hash": str(store_result.get("sha256", "")),
             "content": content,
             "trust_tier": "local",
-            "fresh_until": None,
+            "fresh_until": fresh_until,
             "revoked": False,
             "tombstoned": False,
             "topic": topic,
@@ -1188,6 +1188,85 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         summary = summarize_reports(reports)
         return {"status": "ok" if summary["errors"] == 0 else "partial", **summary}
 
+    @mcp.tool()
+    def hlf_knowledge_ingest_url(
+        url: str,
+        domain: str = "general-coding",
+        source_authority_label: str = "external",
+        topic: str | None = None,
+        confidence: float = 0.8,
+        tags: list[str] | None = None,
+        fresh_until: str | None = None,
+        summarize_via: str | None = None,
+        timeout_s: float = 20.0,
+    ) -> dict[str, Any]:
+        """Fetch a URL, strip HTML to text, optionally enrich via model, then ingest into HKS.
+
+        This is the primary mechanism for asynchronous knowledge accumulation in HKS:
+        agents and operators can point at a URL and have it fetched, model-enriched,
+        chunked, and stored as governed evidence — without needing the raw content first.
+
+        The summarize_via parameter enables model-backed pre-processing before ingest::
+
+            # Fetch and store raw
+            hlf_knowledge_ingest_url(url="https://example.com/article")
+
+            # Fetch, summarize via Ollama, then store
+            hlf_knowledge_ingest_url(
+                url="https://example.com/article",
+                summarize_via="ollama:llama3.3",
+            )
+
+            # Fetch, summarize via OpenRouter, then store
+            hlf_knowledge_ingest_url(
+                url="https://example.com/article",
+                summarize_via="openrouter:anthropic/claude-3-haiku",
+            )
+
+        Args:
+            url: The URL to fetch and ingest.
+            domain: Knowledge domain. Defaults to general-coding.
+            source_authority_label: Trust tier — canonical, advisory, external, draft.
+            topic: Override auto-derived topic.
+            confidence: Evidence confidence score, 0.0–1.0. Defaults to 0.8.
+            tags: Additional tags for the stored chunks.
+            fresh_until: Expiry hint — ISO-8601 datetime or "never".
+            summarize_via: Model to summarize content before ingest.
+                Formats: "ollama:<model>" or "openrouter:<model>".
+                Example: "ollama:llama3.3" or "openrouter:anthropic/claude-3-haiku".
+                If None, raw fetched content is ingested verbatim.
+            timeout_s: HTTP fetch timeout. Default 20 seconds.
+
+        Returns:
+            IngestionReport with stored/deduped/error counts, SHA256 of source,
+            and per-chunk IDs for provenance tracking.
+        """
+        ingester = DocumentIngester(ctx.memory_store)
+        report = ingester.ingest_url(
+            url,
+            domain=domain,
+            source_authority_label=source_authority_label,
+            topic=topic,
+            confidence=confidence,
+            tags=tags,
+            fresh_until=fresh_until,
+            summarize_via=summarize_via,
+            timeout_s=timeout_s,
+        )
+        return {
+            "status": "ok" if report.error_count == 0 else "partial",
+            "source_file": report.source_file,
+            "source_sha256": report.source_sha256,
+            "domain": report.domain,
+            "total_chunks": report.total_chunks,
+            "stored": report.stored_count,
+            "deduped": report.deduped_count,
+            "errors": report.error_count,
+            "error_details": report.errors[:10],
+            "chunk_ids": report.chunk_ids,
+            "elapsed_seconds": round(report.elapsed_seconds, 3),
+        }
+
     return {
         "hlf_memory_store": hlf_memory_store,
         "hlf_memory_query": hlf_memory_query,
@@ -1213,4 +1292,5 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_dream_proposals_get": hlf_dream_proposals_get,
         "hlf_knowledge_ingest": hlf_knowledge_ingest,
         "hlf_knowledge_ingest_directory": hlf_knowledge_ingest_directory,
+        "hlf_knowledge_ingest_url": hlf_knowledge_ingest_url,
     }

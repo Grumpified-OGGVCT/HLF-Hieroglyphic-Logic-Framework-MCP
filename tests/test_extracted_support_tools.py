@@ -28,6 +28,10 @@ def test_generate_tm_grammar_contains_core_scopes(tmp_path: Path) -> None:
     assert grammar["scopeName"] == "source.hlf"
     assert "glyph" in grammar["repository"]
     assert "canonical_tag" in grammar["repository"]
+    assert "⌂" in grammar["repository"]["glyph"]["match"]
+    assert "Σ" in grammar["repository"]["glyph"]["match"]
+    assert "PROVENANCE" in grammar["repository"]["canonical_tag"]["match"]
+    assert "CAPSULE" in grammar["repository"]["canonical_tag"]["match"]
 
     output_path = tmp_path / "hlf.tmLanguage.json"
     module.write_textmate_grammar(output_path)

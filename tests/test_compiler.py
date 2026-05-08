@@ -230,3 +230,44 @@ def test_compile_with_integer_param():
     arg = next(a for a in args if a.get("name") == "top_k")
     assert arg["value"]["type"] == "int"
     assert arg["value"]["value"] == 10
+
+
+def test_compile_restored_generic_memory_and_summary_glyphs():
+    src = (
+        '[HLF-v3]\n'
+        '⌂ [MEMORY] entity="release" confidence=1.0\n'
+        'Σ [PROVENANCE] source="weekly" confidence=1.0\n'
+        "Ω\n"
+    )
+    result = COMPILER.compile(src)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    assert [stmt["glyph"] for stmt in stmts] == ["⌂", "Σ"]
+    assert [stmt["tag"] for stmt in stmts] == ["MEMORY", "PROVENANCE"]
+
+
+def test_memory_keyword_not_shadowed_by_memory_anchor_alias():
+    src = '[HLF-v3]\nMEMORY [release] entity="release" confidence=1.0\nΩ\n'
+    result = COMPILER.compile(src)
+    assert result["errors"] == []
+    assert result["ast"]["statements"][0]["kind"] == "memory_stmt"
+
+
+def test_compile_module_with_function_block():
+    src = (
+        "[HLF-v3]\n"
+        "MODULE demo tier=\"hearth\" {\n"
+        "  FUNCTION main(input: text) {\n"
+        "    RESULT 0 \"ok\"\n"
+        "  }\n"
+        "}\n"
+        "Ω\n"
+    )
+    result = COMPILER.compile(src)
+    module = result["ast"]["statements"][0]
+    function = module["body"]["statements"][0]
+    assert module["kind"] == "module_block_stmt"
+    assert module["name"] == "demo"
+    assert module["arguments"][0]["name"] == "tier"
+    assert function["kind"] == "func_block_stmt"
+    assert function["params"][0]["name"] == "input"

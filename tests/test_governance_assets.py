@@ -10,7 +10,11 @@ def test_dictionary_json_present_and_parseable() -> None:
     assert data["version"] == "0.4.0"
     assert "glyphs" in data
     assert "tags" in data
+    assert data["glyphs"]["⌂"]["role"] == "memory_anchor"
+    assert data["glyphs"]["Σ"]["role"] == "summarize"
     assert any(tag["name"] == "INTENT" for tag in data["tags"])
+    assert any(tag["name"] == "PROVENANCE" for tag in data["tags"])
+    assert any(tag["name"] == "GOVERNANCE" for tag in data["tags"])
 
 
 def test_module_import_rules_present() -> None:

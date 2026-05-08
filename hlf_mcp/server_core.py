@@ -9,10 +9,15 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf import audit_symbolic_surface, compile_symbolic_surface
+from hlf_mcp.hlf.code_execution import execute_code_bearing_hlf
 from hlf_mcp.hlf.compiler import CompileError
-from hlf_mcp.ingress_support import build_ingress_denial_reasons
-from hlf_mcp.ingress_support import persist_runtime_execution_admission
-from hlf_mcp.ingress_support import resolve_execution_ingress_contract
+from hlf_mcp.hlf.governance_proofs import render_proof_markdown, verify_governance_proof
+from hlf_mcp.hlf.swarm_mechanics import build_swarm_mechanics_artifact
+from hlf_mcp.ingress_support import (
+    build_ingress_denial_reasons,
+    persist_runtime_execution_admission,
+    resolve_execution_ingress_contract,
+)
 from hlf_mcp.server_context import ServerContext
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
 
@@ -53,6 +58,57 @@ def load_test_suite_summary(
         "summary_path": str(summary_path),
         "summary": summary,
     }
+
+
+def run_hlf_swarm_mechanics(
+    ctx: ServerContext,
+    *,
+    source: str = "",
+    handoff: dict[str, Any] | None = None,
+    votes: list[dict[str, Any]] | None = None,
+    dissent: list[dict[str, Any]] | None = None,
+    progress_events: list[dict[str, Any]] | None = None,
+    quorum: str = "strict",
+    persist: bool = True,
+) -> dict[str, Any]:
+    try:
+        normalized_handoff = handoff if isinstance(handoff, dict) else None
+        raw_hlf_source = source or str((normalized_handoff or {}).get("raw_hlf_source") or "")
+        if not raw_hlf_source.strip():
+            return {
+                "status": "error",
+                "error": "source or handoff.raw_hlf_source is required",
+                "boundary": {"mode": "local_bounded_swarm", "distributed_a2a": False},
+            }
+        validation = ctx.compiler.validate(raw_hlf_source)
+        if not validation.get("valid"):
+            return {
+                "status": "validation_error",
+                "error": validation.get("error", "HLF source did not validate."),
+                "validation": validation,
+                "boundary": {"mode": "local_bounded_swarm", "distributed_a2a": False},
+            }
+        compile_result = ctx.compiler.compile(raw_hlf_source)
+        artifact = build_swarm_mechanics_artifact(
+            source=raw_hlf_source,
+            ast=compile_result["ast"],
+            validation=validation,
+            compile_result=compile_result,
+            handoff=normalized_handoff,
+            votes=votes,
+            dissent=dissent,
+            progress_events=progress_events,
+            quorum=quorum,
+        )
+        if persist and hasattr(ctx, "persist_swarm_mechanics"):
+            artifact = ctx.persist_swarm_mechanics(artifact)
+        return {"status": "ok", "swarm_mechanics": artifact}
+    except Exception as exc:
+        return {
+            "status": "error",
+            "error": str(exc),
+            "boundary": {"mode": "local_bounded_swarm", "distributed_a2a": False},
+        }
 
 
 def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
@@ -209,9 +265,81 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             }
 
     @mcp.tool()
+    def hlf_code_execute(
+        source: str,
+        entrypoint: str = "",
+        gas_limit: int = 500,
+        tier: str = "hearth",
+        dry_run: bool = False,
+        variables: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Compile, verify, and bounded-run MODULE/FUNCTION/[CODE] HLF blocks."""
+        try:
+            result = execute_code_bearing_hlf(
+                source,
+                entrypoint=entrypoint,
+                gas_limit=gas_limit,
+                tier=tier,
+                variables=variables,
+                dry_run=dry_run,
+                compiler=ctx.compiler,
+                linter=ctx.linter,
+                verifier=ctx.formal_verifier,
+                runtime=ctx.runtime,
+                bytecoder=ctx.bytecoder,
+                audit_logger=ctx.audit_chain,
+            )
+            if hasattr(ctx, "emit_governance_event"):
+                governance_event = ctx.emit_governance_event(
+                    kind="code_execute",
+                    source="server_core.hlf_code_execute",
+                    action="code_execute",
+                    status="ok" if result.get("status") in {"ok", "dry_run_ok"} else "warning",
+                    severity="info" if result.get("status") in {"ok", "dry_run_ok"} else "warning",
+                    subject_id=str(result.get("trace_ref", "")),
+                    details={
+                        "entrypoint": entrypoint,
+                        "gas_limit": gas_limit,
+                        "tier": tier,
+                        "dry_run": dry_run,
+                        "compiled": result.get("compiled", False),
+                        "verified": result.get("verified", False),
+                        "executed": result.get("executed", False),
+                        "sandbox_mode": result.get("sandbox_mode", ""),
+                    },
+                    agent_role="code_bearing_hlf",
+                )
+                result["governance_event"] = governance_event
+            return result
+        except Exception as exc:
+            return {"status": "error", "compiled": False, "executed": False, "error": str(exc)}
+
+    @mcp.tool()
     def hlf_validate(source: str) -> dict[str, Any]:
         """Quickly validate HLF syntax without full compilation."""
         return ctx.compiler.validate(source)
+
+    @mcp.tool()
+    def hlf_swarm_mechanics(
+        source: str = "",
+        handoff: dict[str, Any] | None = None,
+        votes: list[dict[str, Any]] | None = None,
+        dissent: list[dict[str, Any]] | None = None,
+        progress_events: list[dict[str, Any]] | None = None,
+        quorum: str = "strict",
+        persist: bool = True,
+    ) -> dict[str, Any]:
+        """Materialize bounded local delegation, voting, dissent, lineage, and progress as HLF artifacts."""
+        return run_hlf_swarm_mechanics(
+            ctx,
+            source=source,
+            handoff=handoff,
+            votes=votes,
+            dissent=dissent,
+            progress_events=progress_events,
+            quorum=quorum,
+            persist=persist,
+        )
 
     @mcp.tool()
     def hlf_benchmark(
@@ -224,6 +352,34 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     def hlf_benchmark_suite() -> dict[str, Any]:
         """Run the full HLF benchmark suite against all 6 domain NLP templates."""
         return ctx.benchmark.benchmark_suite()
+
+    @mcp.tool()
+    def hlf_real_workflow_benchmark(
+        workflow_ids: list[str] | None = None,
+        mode: str = "patch-plan",
+        persist: bool = True,
+    ) -> dict[str, Any]:
+        """Benchmark real HLF self-improvement patch-plan workflows against non-HLF baselines."""
+        result = ctx.benchmark.real_workflow_self_improvement_benchmark(
+            workflow_ids=workflow_ids,
+            mode=mode,
+        )
+        artifact = {
+            "artifact_id": f"benchmark:{result['profile_name']}:{mode}",
+            "profile_name": result["profile_name"],
+            "benchmark_scores": dict(result.get("benchmark_scores") or {}),
+            "topic": "hlf_real_workflow_benchmarks",
+            "domains": list(result.get("workflow_ids") or []),
+            "details": {
+                "benchmark_kind": result.get("benchmark_kind"),
+                "mode": mode,
+                "headline": (result.get("summary") or {}).get("headline"),
+                "covered_surfaces": (result.get("summary") or {}).get("covered_surfaces", []),
+            },
+            "result": result,
+        }
+        persisted = ctx.persist_benchmark_artifact(artifact) if persist else artifact
+        return {**result, "artifact": persisted}
 
     @mcp.tool()
     def hlf_disassemble(bytecode_hex: str) -> dict[str, Any]:
@@ -344,6 +500,16 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             return {"status": "error", "error": str(exc), "surface_id": surface_id or None}
 
     @mcp.tool()
+    def hlf_governance_proof_verify(proof: dict[str, Any], include_report: bool = False) -> dict[str, Any]:
+        """Verify a first-class governance proof hash chain and its memory/runtime anchors."""
+        if not isinstance(proof, dict):
+            return {"status": "error", "verified": False, "error": "proof must be an object"}
+        report = verify_governance_proof(proof)
+        if include_report:
+            report["human_report"] = render_proof_markdown(proof)
+        return report
+
+    @mcp.tool()
     def hlf_weekly_evidence_summary(
         metrics_dir: str | None = None,
     ) -> dict[str, Any]:
@@ -358,9 +524,13 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_format": hlf_format,
         "hlf_lint": hlf_lint,
         "hlf_run": hlf_run,
+        "hlf_code_execute": hlf_code_execute,
         "hlf_validate": hlf_validate,
+        "hlf_swarm_mechanics": hlf_swarm_mechanics,
+        "hlf_governance_proof_verify": hlf_governance_proof_verify,
         "hlf_benchmark": hlf_benchmark,
         "hlf_benchmark_suite": hlf_benchmark_suite,
+        "hlf_real_workflow_benchmark": hlf_real_workflow_benchmark,
         "hlf_disassemble": hlf_disassemble,
         "hlf_submit_ast": hlf_submit_ast,
         "hlf_test_suite_summary": hlf_test_suite_summary,

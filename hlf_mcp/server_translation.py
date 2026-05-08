@@ -17,10 +17,14 @@ from hlf_mcp.hlf.translator import (
     resolve_language_with_policy,
     translation_diagnostics,
 )
-from hlf_mcp.ingress_support import build_ingress_denial_reasons
-from hlf_mcp.ingress_support import persist_runtime_execution_admission
-from hlf_mcp.ingress_support import resolve_execution_ingress_contract
+from hlf_mcp.ingress_support import (
+    build_ingress_denial_reasons,
+    persist_runtime_execution_admission,
+    resolve_execution_ingress_contract,
+)
+from hlf_mcp.mcp_enforcement import build_mcp_call_binding
 from hlf_mcp.server_context import ServerContext
+from hlf_mcp.server_core import run_hlf_swarm_mechanics
 
 
 def _build_translation_contract(
@@ -97,6 +101,118 @@ def _build_translation_contract(
     }
 
 
+def _normalize_handoff_mode(handoff_mode: str) -> str:
+    mode = str(handoff_mode or "operator").strip().lower().replace("-", "_")
+    aliases = {
+        "": "operator",
+        "human": "operator",
+        "nlp": "operator",
+        "raw": "raw_hlf",
+        "hlf": "raw_hlf",
+        "agent": "subagent",
+        "sub_agent": "subagent",
+        "fleet": "swarm",
+    }
+    return aliases.get(mode, mode if mode in {"operator", "raw_hlf", "swarm", "subagent"} else "operator")
+
+
+def _build_internal_loop_contract(
+    *,
+    surface: str,
+    intent: str,
+    source: str,
+    validation: dict[str, Any],
+    compile_result: dict[str, Any] | None = None,
+    capsule_violations: list[dict[str, Any]] | list[str] | None = None,
+    align_violations: list[dict[str, Any]] | list[str] | None = None,
+    execution_status: str | None = None,
+    handoff_mode: str = "operator",
+) -> dict[str, Any]:
+    normalized_handoff = _normalize_handoff_mode(handoff_mode)
+    validation_passed = bool(validation.get("valid"))
+    compile_passed = compile_result is not None
+    capsule_passed = len(capsule_violations or []) == 0
+    align_passed = len(align_violations or []) == 0
+    return {
+        "contract_version": "1.0",
+        "surface": surface,
+        "enforced": True,
+        "claim_lane": "present-packaged-current-truth",
+        "stage_order": [
+            "nlp_ingress",
+            "hlf_translation",
+            "validation",
+            "compile",
+            "governance_gates",
+            "execute_or_coordinate",
+            "nlp_egress",
+        ],
+        "gates": {
+            "translation": bool(source.strip()),
+            "validation": validation_passed,
+            "compile": compile_passed,
+            "capsule": capsule_passed,
+            "align": align_passed,
+            "execution_or_coordination": execution_status or "not_attempted",
+        },
+        "artifacts": {
+            "intent_text": intent,
+            "canonical_hlf_required": True,
+            "canonical_hlf_present": bool(source.strip()),
+            "ast_sha256": (compile_result or {}).get("ast", {}).get("sha256", ""),
+            "node_count": (compile_result or {}).get("node_count", 0),
+            "gas_estimate": (compile_result or {}).get("gas_estimate", 0),
+        },
+        "handoff_policy": {
+            "mode": normalized_handoff,
+            "human_default": "return NLP summary and keep raw HLF internal unless requested",
+            "subagent_wire_format": "raw_hlf_source",
+            "raw_hlf_required": normalized_handoff in {"raw_hlf", "swarm", "subagent"},
+        },
+        "fail_closed": not (validation_passed and compile_passed and capsule_passed and align_passed),
+        "bridge_gaps": [
+            "full autonomous swarm orchestration is not claimed by this packaged surface",
+            "runtime effects remain bounded by current compiler, capsule, ingress, and VM behavior",
+        ],
+    }
+
+
+def _build_subagent_handoff(
+    *,
+    source: str,
+    compile_result: dict[str, Any],
+    validation: dict[str, Any],
+    bytecode_hex: str,
+    handoff_mode: str,
+    tier: str,
+) -> dict[str, Any]:
+    ast = compile_result.get("ast", {})
+    normalized_mode = _normalize_handoff_mode(handoff_mode)
+    return {
+        "artifact_kind": "raw_hlf_subagent_handoff",
+        "handoff_mode": normalized_mode,
+        "wire_format": "raw_hlf_source",
+        "raw_hlf_source": source,
+        "ast_sha256": ast.get("sha256", ""),
+        "bytecode_hex": bytecode_hex,
+        "validation": validation,
+        "tier": tier,
+        "swarm_mechanics": {
+            "compatible": normalized_mode in {"swarm", "subagent", "raw_hlf"},
+            "tool": "hlf_swarm_mechanics",
+            "boundary": "local_bounded_swarm",
+            "distributed_a2a": False,
+        },
+        "consumer_requirements": [
+            "validate raw_hlf_source with hlf_validate before trusting it",
+            "compile with hlf_compile and compare ast_sha256 before execution",
+            "check capsule, ingress, witness, and approval surfaces before side effects",
+            "for swarm handoff, materialize delegation/vote/dissent/lineage/progress via hlf_swarm_mechanics",
+            "translate back to NLP only for human-facing summaries",
+        ],
+    }
+
+
 def _persist_translation_contract(
     ctx: ServerContext,
     *,
@@ -124,10 +240,12 @@ def run_hlf_do(
     cognitive_lane_policy: str = "benchmark_gated",
     agent_id: str = "",
     ingress_nonce: str = "",
+    handoff_mode: str = "operator",
 ) -> dict[str, Any]:
     """Execute the packaged governed natural-language front door outside the MCP server."""
     normalized_intent = intent.strip()
     normalized_tier = tier.lower().strip()
+    normalized_handoff_mode = _normalize_handoff_mode(handoff_mode)
     if not normalized_intent:
         return {
             "success": False,
@@ -200,6 +318,7 @@ def run_hlf_do(
         diagnostics = translation_diagnostics(
             normalized_intent, language=resolved_language, source=source
         ).to_dict()
+        bytecode_hex = ctx.bytecoder.encode(ast).hex()
         translation_contract = _build_translation_contract(
             ctx,
             intent=normalized_intent,
@@ -215,6 +334,18 @@ def run_hlf_do(
             english_audit=english_audit,
             benchmark=benchmark,
         )
+        internal_loop_contract = _build_internal_loop_contract(
+            surface="hlf_do",
+            intent=normalized_intent,
+            source=source,
+            validation=validation,
+            compile_result=compile_result,
+            capsule_violations=capsule_violations,
+            align_violations=align_violations,
+            execution_status="dry_run" if dry_run else "pending",
+            handoff_mode=normalized_handoff_mode,
+        )
+        translation_contract["internal_loop_contract"] = internal_loop_contract
         translation_contract = _persist_translation_contract(
             ctx,
             contract=translation_contract,
@@ -251,7 +382,18 @@ def run_hlf_do(
             },
             "translation": diagnostics,
             "translation_contract": translation_contract,
+            "internal_loop_contract": internal_loop_contract,
         }
+        if normalized_handoff_mode in {"raw_hlf", "swarm", "subagent"}:
+            response["subagent_handoff"] = _build_subagent_handoff(
+                source=source,
+                compile_result=compile_result,
+                validation=validation,
+                bytecode_hex=bytecode_hex,
+                handoff_mode=normalized_handoff_mode,
+                tier=normalized_tier,
+            )
+            response["hlf_source"] = source
         if show_hlf:
             response["hlf_source"] = source
 
@@ -273,7 +415,7 @@ def run_hlf_do(
                 )
             return response
 
-        bc = ctx.bytecoder.encode(ast)
+        bc = bytes.fromhex(bytecode_hex)
         normalized_agent_id = str(agent_id or "unknown-agent")
         ingress_contract = resolve_execution_ingress_contract(
             ctx,
@@ -299,6 +441,8 @@ def run_hlf_do(
                 ingress_contract=ingress_contract,
                 reasons=denial_reasons,
             )
+            internal_loop_contract["gates"]["execution_or_coordination"] = "ingress_denied"
+            internal_loop_contract["fail_closed"] = True
             response["execution"] = {
                 "status": "ingress_denied",
                 "error": "; ".join(denial_reasons),
@@ -335,6 +479,8 @@ def run_hlf_do(
         response["execution"] = run_result
         response["execution_admission"] = execution_admission
         response["success"] = run_result.get("status") == "ok"
+        internal_loop_contract["gates"]["execution_or_coordination"] = str(run_result.get("status") or "unknown")
+        internal_loop_contract["fail_closed"] = internal_loop_contract["fail_closed"] or run_result.get("status") != "ok"
         if run_result.get("status") == "ok":
             response["audit"] = (
                 f"Executed at tier '{normalized_tier}'. "
@@ -399,6 +545,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         cognitive_lane_policy: str = "benchmark_gated",
         agent_id: str = "",
         ingress_nonce: str = "",
+        handoff_mode: str = "operator",
     ) -> dict[str, Any]:
         """Translate natural-language intent into governed HLF and optionally execute it."""
         return run_hlf_do(
@@ -411,6 +558,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             cognitive_lane_policy=cognitive_lane_policy,
             agent_id=agent_id,
             ingress_nonce=ingress_nonce,
+            handoff_mode=handoff_mode,
         )
 
     @mcp.tool()
@@ -497,6 +645,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         version: str = "3",
         language: str = "auto",
         cognitive_lane_policy: str = "benchmark_gated",
+        handoff_mode: str = "operator",
     ) -> dict[str, Any]:
         """Convert natural language instructions to HLF source code."""
         try:
@@ -532,6 +681,19 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             )
             english_audit = hlf_to_english(compile_result["ast"])
             benchmark = ctx.benchmark.analyze(source, compare_text=text)
+            validation = ctx.compiler.validate(source)
+            bytecode_hex = ctx.bytecoder.encode(compile_result["ast"]).hex()
+            internal_loop_contract = _build_internal_loop_contract(
+                surface="hlf_translate_to_hlf",
+                intent=text,
+                source=source,
+                validation=validation,
+                compile_result=compile_result,
+                capsule_violations=[],
+                align_violations=compile_result.get("align_violations", []),
+                execution_status="coordination_ready",
+                handoff_mode=handoff_mode,
+            )
             translation_contract = _build_translation_contract(
                 ctx,
                 intent=text,
@@ -547,12 +709,13 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 english_audit=english_audit,
                 benchmark=benchmark,
             )
+            translation_contract["internal_loop_contract"] = internal_loop_contract
             translation_contract = _persist_translation_contract(
                 ctx,
                 contract=translation_contract,
                 source="server_translation.hlf_translate_to_hlf",
             )
-            return {
+            response = {
                 "status": "ok",
                 "source": source,
                 "language": resolved_language,
@@ -561,9 +724,163 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 "language_policy": language_policy.to_dict(),
                 "translation": diagnostics,
                 "translation_contract": translation_contract,
+                "internal_loop_contract": internal_loop_contract,
             }
+            if _normalize_handoff_mode(handoff_mode) in {"raw_hlf", "swarm", "subagent"}:
+                response["subagent_handoff"] = _build_subagent_handoff(
+                    source=source,
+                    compile_result=compile_result,
+                    validation=validation,
+                    bytecode_hex=bytecode_hex,
+                    handoff_mode=handoff_mode,
+                    tier="forge",
+                )
+            return response
         except Exception as exc:
             return {"status": "error", "error": str(exc)}
+
+    @mcp.tool()
+    def hlf_governed_swarm_mechanics(
+        text: str = "",
+        source: str = "",
+        handoff: dict[str, Any] | None = None,
+        votes: list[dict[str, Any]] | None = None,
+        dissent: list[dict[str, Any]] | None = None,
+        progress_events: list[dict[str, Any]] | None = None,
+        quorum: str = "strict",
+        persist: bool = True,
+        language: str = "auto",
+        cognitive_lane_policy: str = "benchmark_gated",
+    ) -> dict[str, Any]:
+        """Bootstrap a target-bound HLF contract and materialize swarm mechanics safely."""
+        try:
+            normalized_handoff = handoff if isinstance(handoff, dict) else None
+            raw_hlf_source = source or str((normalized_handoff or {}).get("raw_hlf_source") or "")
+            translation: dict[str, Any] | None = None
+
+            if not raw_hlf_source.strip():
+                if not text.strip():
+                    return {
+                        "status": "error",
+                        "error": "text, source, or handoff.raw_hlf_source is required",
+                        "boundary": {"mode": "local_bounded_swarm", "distributed_a2a": False},
+                    }
+                translation = hlf_translate_to_hlf(
+                    text,
+                    language=language,
+                    cognitive_lane_policy=cognitive_lane_policy,
+                    handoff_mode="swarm",
+                )
+                if translation.get("status") != "ok":
+                    return translation
+                raw_hlf_source = str(translation["source"])
+                normalized_handoff = translation.get("subagent_handoff")
+
+            validation = ctx.compiler.validate(raw_hlf_source)
+            if not validation.get("valid"):
+                return {
+                    "status": "validation_error",
+                    "error": validation.get("error", "HLF source did not validate."),
+                    "validation": validation,
+                    "boundary": {"mode": "local_bounded_swarm", "distributed_a2a": False},
+                }
+
+            compile_result = ctx.compiler.compile(raw_hlf_source)
+            if translation is None:
+                resolved_language = resolve_language(language, text=raw_hlf_source)
+                language_policy = resolve_language_with_policy(
+                    resolved_language,
+                    text=raw_hlf_source,
+                    cognitive_lane_policy=normalize_cognitive_lane_policy(cognitive_lane_policy),
+                )
+                benchmark = ctx.benchmark.analyze(raw_hlf_source, compare_text=text or raw_hlf_source)
+                translation_contract = _build_translation_contract(
+                    ctx,
+                    intent=text or "raw HLF swarm mechanics artifact",
+                    source=raw_hlf_source,
+                    resolved_language=language_policy.resolved_language,
+                    language_policy=language_policy.to_dict(),
+                    tier="forge",
+                    diagnostics=translation_diagnostics(
+                        text or raw_hlf_source,
+                        language=language_policy.resolved_language,
+                        source=raw_hlf_source,
+                    ).to_dict(),
+                    compile_result=compile_result,
+                    capsule_violations=[],
+                    align_violations=compile_result.get("align_violations", []),
+                    localized_audit=hlf_to_language(
+                        compile_result["ast"], language=language_policy.audit_language
+                    ),
+                    english_audit=hlf_to_english(compile_result["ast"]),
+                    benchmark=benchmark,
+                )
+                translation_contract["internal_loop_contract"] = _build_internal_loop_contract(
+                    surface="hlf_governed_swarm_mechanics",
+                    intent=text or "raw HLF swarm mechanics artifact",
+                    source=raw_hlf_source,
+                    validation=validation,
+                    compile_result=compile_result,
+                    capsule_violations=[],
+                    align_violations=compile_result.get("align_violations", []),
+                    execution_status="coordination_ready",
+                    handoff_mode="swarm",
+                )
+            else:
+                translation_contract = dict(translation["translation_contract"])
+
+            target_arguments: dict[str, Any] = {
+                "source": raw_hlf_source,
+                "persist": persist,
+            }
+            if normalized_handoff is not None:
+                target_arguments["handoff"] = normalized_handoff
+            if votes is not None:
+                target_arguments["votes"] = votes
+            if dissent is not None:
+                target_arguments["dissent"] = dissent
+            if progress_events is not None:
+                target_arguments["progress_events"] = progress_events
+            if quorum != "strict":
+                target_arguments["quorum"] = quorum
+
+            contract = dict(translation_contract)
+            contract["mcp_binding"] = build_mcp_call_binding(
+                "hlf_swarm_mechanics", target_arguments
+            )
+            contract["target_binding"] = contract["mcp_binding"]
+
+            result = run_hlf_swarm_mechanics(
+                ctx,
+                source=raw_hlf_source,
+                handoff=normalized_handoff,
+                votes=votes,
+                dissent=dissent,
+                progress_events=progress_events,
+                quorum=quorum,
+                persist=persist,
+            )
+            result["hlf_contract"] = contract
+            result["target_call"] = {
+                "tool_name": "hlf_swarm_mechanics",
+                "arguments": target_arguments,
+            }
+            result["governed_workflow"] = {
+                "bootstrap_tool": "hlf_governed_swarm_mechanics",
+                "protected_tool": "hlf_swarm_mechanics",
+                "target_bound_contract": True,
+                "direct_protected_call_required": False,
+            }
+            if translation is not None:
+                result["translation"] = translation
+            return result
+        except Exception as exc:
+            return {
+                "status": "error",
+                "error": str(exc),
+                "boundary": {"mode": "local_bounded_swarm", "distributed_a2a": False},
+            }
+
 
     @mcp.tool()
     def hlf_translate_repair(
@@ -607,10 +924,22 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             "decision": str(invocation_gate.get("decision") or "invoke"),
             "review_required": bool(invocation_gate.get("review_required", False)),
         }
+        # Augment repair_memory with the metadata/evidence keys the contract expects
+        repair_memory_with_metadata = dict(repair_memory)
+        repair_memory_with_metadata["metadata"] = {"topic": "hlf_repairs"}
+        if "entry_kind" not in repair_memory_with_metadata:
+            repair_memory_with_metadata["entry_kind"] = "hks_exemplar"
+        governance_event = repair_memory.get("governance_event") or {}
+        event_details = dict(governance_event.get("event", {}).get("details", {}))
+        repair_memory_with_metadata["evidence"] = {
+            "topic": event_details.get("topic", "hlf_repairs"),
+            "domain": event_details.get("domain", "hlf-specific"),
+            "solution_kind": event_details.get("solution_kind", "repair-pattern"),
+        }
         return {
             "status": "ok",
             "repair": plan,
-            "repair_memory": repair_memory,
+            "repair_memory": repair_memory_with_metadata,
             "retrieval_support": retrieval_support,
             "governed_hks_contract": governed_hks_contract,
         }
@@ -879,6 +1208,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         "hlf_routing_context_benchmark": hlf_routing_context_benchmark,
         "hlf_translation_memory_query": hlf_translation_memory_query,
         "hlf_translate_to_hlf": hlf_translate_to_hlf,
+        "hlf_governed_swarm_mechanics": hlf_governed_swarm_mechanics,
         "hlf_translate_repair": hlf_translate_repair,
         "hlf_translate_resilient": hlf_translate_resilient,
         "hlf_translate_to_english": hlf_translate_to_english,

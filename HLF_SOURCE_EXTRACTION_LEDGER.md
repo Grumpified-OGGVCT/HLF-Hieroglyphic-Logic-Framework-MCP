@@ -1,8 +1,20 @@
 # HLF Source Extraction Ledger
 
 **Generated:** 2026-03-16
-**Source repo:** `C:\Users\gerry\generic_workspace\Sovereign_Agentic_OS_with_HLF`
-**Target repo:** `C:\Users\gerry\generic_workspace\HLF_MCP`
+**Source repo:** sibling workspace `Sovereign_Agentic_OS_with_HLF`
+**Target repo:** this repository
+
+
+## Authority Reconciliation Addendum
+
+This ledger is bridge/recovery authority, not present packaged truth. Current implementation claims must still flow through `SSOT_HLF_MCP.md`.
+
+- The full/original HLF target remains broader than the packaged grammar/runtime slice and includes governed effects, memory provenance, verification, orchestration, audit, and human-legibility surfaces.
+- The present packaged truth remains the `hlf_mcp` implementation plus current governance assets in this repo.
+- `HLF_MCP_WORKING` files are comparison inputs for recovery, especially swarm orchestration/observation, witness governance, symbolic surfaces, and formal verification. Promote only validated, repo-relative contracts.
+- `msty_playground/hlf_repo` concept-only authority/tool/test/TextMate/grammar edits are invalid as source artifacts. Do not copy them or their assumptions.
+
+Downstream tasks should consult `hlf_mcp.hlf.authority` before promoting bridge material into grammar or mandatory internal-HLF behavior.
 
 ## Classification Key
 

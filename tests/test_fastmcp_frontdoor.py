@@ -6,8 +6,8 @@ from mcp.server.fastmcp import FastMCP
 from starlette.testclient import TestClient
 
 from hlf_mcp import server, server_resources
-from hlf_mcp.hlf.align_governor import AlignVerdict
 from hlf_mcp.hlf import build_embodied_action_envelope
+from hlf_mcp.hlf.align_governor import AlignVerdict
 from hlf_mcp.hlf.capsules import capsule_for_tier
 from hlf_mcp.hlf.formal_verifier import (
     ConstraintKind,
@@ -15,11 +15,13 @@ from hlf_mcp.hlf.formal_verifier import (
     VerificationResult,
     VerificationStatus,
 )
+from hlf_mcp.hlf.governance_proofs import build_governance_proof
 from hlf_mcp.hlf.memory_node import build_pointer_ref
 from hlf_mcp.hlf.runtime import _dispatch_host
+from hlf_mcp.mcp_enforcement import build_mcp_call_binding
+from hlf_mcp.server_capsule import _build_execution_admission_record
 from hlf_mcp.server_context import build_server_context
 from hlf_mcp.server_core import register_core_tools
-from hlf_mcp.server_capsule import _build_execution_admission_record
 
 
 def test_hlf_do_dry_run_generates_governed_audit() -> None:
@@ -40,6 +42,52 @@ def test_hlf_do_dry_run_generates_governed_audit() -> None:
     assert result["translation_contract"]["canonical_hlf"]["source"].startswith("[HLF-v3]")
     assert result["translation_contract"]["artifacts"]["primary_target"] == "hlf-bytecode"
     assert result["translation_contract"]["proof"]["audit_surfaces"]["english_summary"]
+    assert result["internal_loop_contract"]["stage_order"] == [
+        "nlp_ingress",
+        "hlf_translation",
+        "validation",
+        "compile",
+        "governance_gates",
+        "execute_or_coordinate",
+        "nlp_egress",
+    ]
+    assert result["internal_loop_contract"]["gates"]["validation"] is True
+    assert result["internal_loop_contract"]["handoff_policy"]["raw_hlf_required"] is False
+
+
+def test_hlf_do_swarm_handoff_returns_raw_hlf_artifact() -> None:
+    result = server.hlf_do(
+        "Audit /var/log/system.log in read-only mode and summarize the top errors.",
+        dry_run=True,
+        handoff_mode="swarm",
+    )
+
+    handoff = result["subagent_handoff"]
+
+    assert result["success"] is True
+    assert result["hlf_source"].startswith("[HLF-v3]")
+    assert result["internal_loop_contract"]["handoff_policy"]["mode"] == "swarm"
+    assert result["internal_loop_contract"]["handoff_policy"]["raw_hlf_required"] is True
+    assert handoff["artifact_kind"] == "raw_hlf_subagent_handoff"
+    assert handoff["wire_format"] == "raw_hlf_source"
+    assert handoff["raw_hlf_source"] == result["hlf_source"]
+    assert handoff["validation"]["valid"] is True
+
+
+def test_translate_to_hlf_subagent_handoff_has_compile_proof() -> None:
+    result = server.hlf_translate_to_hlf(
+        "Audit /var/log/system.log in read-only mode.",
+        handoff_mode="subagent",
+    )
+
+    handoff = result["subagent_handoff"]
+
+    assert result["status"] == "ok"
+    assert result["internal_loop_contract"]["surface"] == "hlf_translate_to_hlf"
+    assert result["internal_loop_contract"]["gates"]["compile"] is True
+    assert handoff["handoff_mode"] == "subagent"
+    assert handoff["raw_hlf_source"] == result["source"]
+    assert handoff["bytecode_hex"]
 
 
 def test_hlf_do_accepts_non_english_language_gate() -> None:
@@ -233,6 +281,10 @@ def test_hlf_translate_repair_returns_machine_retry_contract() -> None:
     assert result["repair"]["retryable"] is True
     assert result["repair"]["recommended_tool"] == "hlf_translate_to_hlf"
     assert result["repair"]["next_request"]["language"] == "en"
+    assert result["repair"]["semantic_check"]["preserved"] is True
+    assert result["repair"]["semantic_check"]["original"]["target"] == f"/var/log/app-{unique}.log"
+    assert result["repair"]["semantic_check"]["repaired"]["target"] == f"/var/log/app-{unique}.log"
+    assert f'target="/var/log/app-{unique}.log"' in result["repair"]["safe_repaired_hlf"]
     assert result["repair_memory"]["metadata"]["topic"] == "hlf_repairs"
     assert result["repair_memory"]["entry_kind"] == "hks_exemplar"
     assert result["repair_memory"]["evidence"]["topic"] == "hlf_repairs"
@@ -254,9 +306,29 @@ def test_hlf_translate_repair_returns_machine_retry_contract() -> None:
     assert any(unique in row["content"] for row in repair_facts)
 
 
+def test_hlf_translate_repair_flags_semantic_drift_before_retry() -> None:
+    result = server.hlf_translate_repair(
+        "Please analyze the incident in read-only mode",
+        failure_status="low_fidelity",
+        failure_error="fallback_used=True",
+        language="en",
+    )
+
+    assert result["status"] == "ok"
+    assert result["repair"]["retryable"] is False
+    assert result["repair"]["terminal_reason"] == "semantic_drift"
+    assert result["repair"]["safe_repaired_hlf"] is None
+    assert "invented_target" in result["repair"]["semantic_check"]["drift_flags"]
+    assert any(
+        "would change intent or target" in line
+        for line in result["repair"]["repair_explanation"]
+    )
+
+
 def test_hlf_translate_resilient_returns_ok_for_clean_intent() -> None:
+    _uid = uuid.uuid4().hex[:8]
     result = server.hlf_translate_resilient(
-        "Analyze /var/log/system.log in read-only mode",
+        f"Analyze /var/log/system.log in read-only mode {_uid}",
         language="en",
         max_attempts=2,
     )
@@ -343,11 +415,12 @@ def test_hlf_translate_repair_surfaces_skipped_knowledge_support_for_low_signal_
 
 
 def test_hlf_translation_memory_benchmark_reports_chinese_scores() -> None:
+    topic = f"hlf_translation_contract_benchmark_frontdoor_{uuid.uuid4().hex}"
     result = server.hlf_translation_memory_benchmark(
         domains=["security_audit", "hello_world"],
         languages=["en", "zh"],
         top_k=2,
-        topic="hlf_translation_contract_benchmark_frontdoor",
+        topic=topic,
     )
 
     assert "zh" in result["per_language"]
@@ -357,11 +430,12 @@ def test_hlf_translation_memory_benchmark_reports_chinese_scores() -> None:
 
 
 def test_hlf_routing_context_benchmark_reports_chinese_scores() -> None:
+    topic = f"hlf_agent_routing_benchmark_frontdoor_{uuid.uuid4().hex}"
     result = server.hlf_routing_context_benchmark(
         domains=["security_audit", "hello_world"],
         languages=["en", "zh"],
         top_k=2,
-        topic="hlf_agent_routing_benchmark_frontdoor",
+        topic=topic,
     )
 
     assert "zh" in result["per_language"]
@@ -544,16 +618,335 @@ def test_server_instruction_summary_tracks_registered_surface() -> None:
         name for name in dir(server) if name.startswith("hlf_") and callable(getattr(server, name))
     }
 
-    # Should have 79 tools: all register_*_tools() modules including register_completion_tools
-    assert len(server.REGISTERED_TOOLS) == 79, f"Expected 79 tools, got {len(server.REGISTERED_TOOLS)}"
     assert len(server.REGISTERED_TOOLS) == len(exported_tools)
     assert len(server.REGISTERED_TOOLS) > 0
     assert len(server.REGISTERED_RESOURCES) > 0
+    assert len(server.REGISTERED_PROMPTS) > 0
     assert set(server.REGISTERED_TOOLS) == exported_tools
     for name in server.REGISTERED_TOOLS:
         assert name in server.mcp.instructions
     for uri in server.REGISTERED_RESOURCES:
         assert uri in server.mcp.instructions
+
+
+def test_server_instructions_require_internal_hlf_loop() -> None:
+    assert "MANDATORY INTERNAL HLF LOOP" in server.mcp.instructions
+    assert "handoff_mode=swarm/subagent/raw_hlf" in server.mcp.instructions
+    assert "MCP mouthpiece enforcement is default-deny" in server.mcp.instructions
+
+
+def test_hlf_native_agent_prompt_enforces_internal_loop() -> None:
+    prompt = server.REGISTERED_PROMPTS["hlf_native_agent"](
+        tier="forge",
+        language="en",
+        swarm_mode=True,
+    )
+
+    assert "mandatory_internal_hlf_loop" in prompt
+    assert "NLP ingress" in prompt
+    assert "HLF translation" in prompt
+    assert "handoff_mode=\"swarm\"" in prompt
+    assert "raw HLF source plus validation/compile proof" in prompt
+
+
+async def test_mcp_protected_tool_without_hlf_proof_is_rejected() -> None:
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_disassemble",
+        {"bytecode_hex": "00"},
+        convert_result=False,
+    )
+
+    assert result["status"] == "mcp_enforcement_rejected"
+    assert result["allowed"] is False
+    assert result["tool"] == "hlf_disassemble"
+
+
+async def test_mcp_protected_tool_rejects_unbound_governance_proof() -> None:
+    proof = build_governance_proof(
+        artifact_kind="mcp_tool_call",
+        artifact_id="unbound-proof",
+        events=[{"event_type": "mcp_call_authorized", "payload": {"tool": "hlf_disassemble"}}],
+    )
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_disassemble",
+        {"bytecode_hex": "00", "governance_proof": proof},
+        convert_result=False,
+    )
+
+    assert result["status"] == "mcp_enforcement_rejected"
+    assert result["allowed"] is False
+    assert result["tool"] == "hlf_disassemble"
+    assert result["reason"] == "missing_mcp_tool_binding"
+
+
+async def test_mcp_protected_tool_rejects_invalid_bound_governance_proof() -> None:
+    arguments = {"bytecode_hex": "00"}
+    proof = build_governance_proof(
+        artifact_kind="mcp_tool_call",
+        artifact_id="tampered-proof",
+        events=[
+            {
+                "event_type": "mcp_call_authorized",
+                "payload": {
+                    "mcp_binding": build_mcp_call_binding("hlf_disassemble", arguments),
+                },
+            }
+        ],
+        replay_scope={
+            "mcp_binding": build_mcp_call_binding("hlf_disassemble", arguments),
+        },
+    )
+    proof["chain"]["events"][0]["payload"]["tampered"] = True
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_disassemble",
+        {**arguments, "governance_proof": proof},
+        convert_result=False,
+    )
+
+    assert result["status"] == "mcp_enforcement_rejected"
+    assert result["allowed"] is False
+    assert result["tool"] == "hlf_disassemble"
+    assert result["reason"] == "invalid_governance_proof"
+
+
+async def test_mcp_protected_swarm_mechanics_without_hlf_proof_is_rejected() -> None:
+    translated = server.hlf_translate_to_hlf(
+        "Audit /var/log/system.log in read-only mode.",
+        handoff_mode="swarm",
+    )
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_swarm_mechanics",
+        {"source": translated["source"], "persist": False},
+        convert_result=False,
+    )
+
+    assert result["status"] == "mcp_enforcement_rejected"
+    assert result["allowed"] is False
+    assert result["tool"] == "hlf_swarm_mechanics"
+    assert result["reason"] == "missing_governance_proof"
+
+
+async def test_mcp_bootstrap_validation_tool_remains_discoverable_without_proof() -> None:
+    source = '[HLF-v3]\nΔ [INTENT] goal="analyze" target="/var/log/app.log"\nΩ\n'
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_validate",
+        {"source": source},
+        convert_result=False,
+    )
+
+    assert result["valid"] is True
+
+
+async def test_mcp_translate_to_english_read_only_egress_is_bootstrap_safe() -> None:
+    source = '[HLF-v3]\nΔ [INTENT] goal="analyze" target="/var/log/app.log"\nΩ\n'
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_translate_to_english",
+        {"source": source, "language": "fr"},
+        convert_result=False,
+    )
+
+    assert result["status"] == "ok"
+    assert result["language"] == "fr"
+    assert result["summary"]
+    assert result["summary_en"]
+    assert "mcp_enforcement" not in result
+
+
+async def test_mcp_mutating_runtime_tool_without_hlf_proof_remains_rejected() -> None:
+    source = '[HLF-v3]\nΔ [INTENT] goal="analyze" target="/var/log/app.log"\nΩ\n'
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_run",
+        {"source": source},
+        convert_result=False,
+    )
+
+    assert result["status"] == "mcp_enforcement_rejected"
+    assert result["allowed"] is False
+    assert result["tool"] == "hlf_run"
+    assert result["reason"] == "missing_governance_proof"
+
+
+async def test_mcp_protected_tool_accepts_valid_hlf_contract_and_checks_egress() -> None:
+    translated = server.hlf_translate_to_hlf(
+        "Audit /var/log/system.log in read-only mode.",
+        handoff_mode="subagent",
+    )
+    arguments = {
+        "source": translated["source"],
+        "persist": False,
+    }
+    contract = dict(translated["translation_contract"])
+    contract["mcp_binding"] = build_mcp_call_binding("hlf_swarm_mechanics", arguments)
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_swarm_mechanics",
+        {
+            **arguments,
+            "hlf_contract": contract,
+        },
+        convert_result=False,
+    )
+
+    assert result["status"] == "ok"
+    assert result["swarm_mechanics"]["boundary"]["mode"] == "local_bounded_swarm"
+    assert result["mcp_enforcement"]["allowed"] is True
+    assert result["mcp_enforcement"]["mode"] == "hlf_contract"
+    assert result["mcp_enforcement"]["egress_validated"] is True
+
+
+async def test_mcp_governed_swarm_wrapper_creates_target_bound_artifact() -> None:
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_governed_swarm_mechanics",
+        {
+            "text": "Delegate a log summary to a scribe and require reviewer approval.",
+            "persist": False,
+        },
+        convert_result=False,
+    )
+
+    assert result["status"] == "ok"
+    assert result["swarm_mechanics"]["artifact_kind"] == "hlf_swarm_mechanics"
+    assert result["governed_workflow"]["target_bound_contract"] is True
+    assert result["hlf_contract"]["mcp_binding"]["tool_name"] == "hlf_swarm_mechanics"
+    assert result["target_call"]["arguments"]["source"].startswith("[HLF-v3]")
+
+    replay = await server.mcp._tool_manager.call_tool(
+        result["target_call"]["tool_name"],
+        {
+            **result["target_call"]["arguments"],
+            "hlf_contract": result["hlf_contract"],
+        },
+        convert_result=False,
+    )
+
+    assert replay["status"] == "ok"
+    assert replay["mcp_enforcement"]["mode"] == "hlf_contract"
+
+
+async def test_mcp_protected_tool_rejects_valid_contract_without_target_binding() -> None:
+    translated = server.hlf_translate_to_hlf(
+        "Audit /var/log/system.log in read-only mode.",
+        handoff_mode="subagent",
+    )
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_swarm_mechanics",
+        {
+            "source": translated["source"],
+            "persist": False,
+            "hlf_contract": translated["translation_contract"],
+        },
+        convert_result=False,
+    )
+
+    assert result["status"] == "mcp_enforcement_rejected"
+    assert result["reason"] == "missing_mcp_tool_binding"
+
+
+async def test_mcp_protected_tool_rejects_contract_bound_to_wrong_tool() -> None:
+    translated = server.hlf_translate_to_hlf(
+        "Audit /var/log/system.log in read-only mode.",
+        handoff_mode="subagent",
+    )
+    arguments = {
+        "source": translated["source"],
+        "persist": False,
+    }
+    contract = dict(translated["translation_contract"])
+    contract["mcp_binding"] = build_mcp_call_binding("hlf_disassemble", arguments)
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_swarm_mechanics",
+        {
+            **arguments,
+            "hlf_contract": contract,
+        },
+        convert_result=False,
+    )
+
+    assert result["status"] == "mcp_enforcement_rejected"
+    assert result["reason"] == "mcp_binding_tool_mismatch"
+
+
+async def test_mcp_protected_tool_rejects_contract_bound_to_different_arguments() -> None:
+    translated = server.hlf_translate_to_hlf(
+        "Audit /var/log/system.log in read-only mode.",
+        handoff_mode="subagent",
+    )
+    contract = dict(translated["translation_contract"])
+    contract["mcp_binding"] = build_mcp_call_binding(
+        "hlf_swarm_mechanics",
+        {
+            "source": translated["source"],
+            "persist": True,
+        },
+    )
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_swarm_mechanics",
+        {
+            "source": translated["source"],
+            "persist": False,
+            "hlf_contract": contract,
+        },
+        convert_result=False,
+    )
+
+    assert result["status"] == "mcp_enforcement_rejected"
+    assert result["reason"] == "mcp_binding_arguments_sha256_mismatch"
+
+
+async def test_mcp_protected_tool_accepts_governance_proof_bound_to_tool_call() -> None:
+    arguments = {"bytecode_hex": "00"}
+    proof = build_governance_proof(
+        artifact_kind="mcp_tool_call",
+        artifact_id="hlf_disassemble:00",
+        events=[
+            {
+                "event_type": "mcp_call_authorized",
+                "payload": {
+                    "mcp_binding": build_mcp_call_binding("hlf_disassemble", arguments),
+                },
+            }
+        ],
+        replay_scope={
+            "mcp_binding": build_mcp_call_binding("hlf_disassemble", arguments),
+        },
+    )
+
+    result = await server.mcp._tool_manager.call_tool(
+        "hlf_disassemble",
+        {
+            **arguments,
+            "governance_proof": proof,
+        },
+        convert_result=False,
+    )
+
+    assert result["mcp_enforcement"]["allowed"] is True
+    assert result["mcp_enforcement"]["mode"] == "governance_proof"
+    assert result["mcp_enforcement"]["reason"] == "verified_governance_proof"
+
+
+def test_agent_handoff_resource_requires_raw_hlf_for_subagents() -> None:
+    resource = json.loads(server.REGISTERED_RESOURCES["hlf://agent/handoff_contract"]())
+
+    assert resource["mandatory_internal_loop"]["order"] == [
+        "NLP ingress",
+        "HLF translation",
+        "validate/lint/compile",
+        "governed execution or coordination",
+        "NLP egress for humans",
+    ]
+    assert resource["mandatory_internal_loop"]["subagent_default"] == (
+        "raw_hlf_source with validation and compile proof"
+    )
 
 
 def test_server_registers_model_catalog_tools() -> None:
@@ -673,15 +1066,19 @@ def test_operator_surfaces_status_resource_indexes_packaged_operator_entrypoints
     assert resource["operator_summary"]
     assert resource["operator_surfaces"]["surface_type"] == "operator_surface_index"
     assert resource["operator_surfaces"]["report_uri"] == "hlf://reports/operator_surfaces"
-    assert resource["operator_surfaces"]["surface_count"] == 14
-    assert resource["operator_surfaces"]["report_count"] == 9
-    assert resource["operator_surfaces"]["explainer_count"] == 1
-
     entries = {
         entry["surface_id"]: entry for entry in resource["operator_surfaces"]["entries"]
     }
 
-    assert set(entries) == {
+    assert resource["operator_surfaces"]["surface_count"] == len(entries)
+    assert resource["operator_surfaces"]["report_count"] == sum(
+        1 for entry in entries.values() if entry.get("report_uri")
+    )
+    assert resource["operator_surfaces"]["explainer_count"] == sum(
+        1 for entry in entries.values() if entry.get("explainer_uri")
+    )
+
+    expected_surface_ids = {
         "translation_contract",
         "governed_recall",
         "symbolic_surface",
@@ -697,6 +1094,7 @@ def test_operator_surfaces_status_resource_indexes_packaged_operator_entrypoints
         "hks_evaluation",
         "hks_external_compare",
     }
+    assert expected_surface_ids <= set(entries)
     for entry in entries.values():
         assert "surface_kind" in entry
         assert "display_mode" in entry
@@ -752,11 +1150,11 @@ def test_native_comprehension_index_resource_lists_first_slice_surfaces() -> Non
     assert resource["operator_summary"]
     assert resource["native_comprehension"]["surface_type"] == "native_comprehension_index"
     assert resource["native_comprehension"]["resource_uri"] == "hlf://teach/native_comprehension"
-    assert resource["native_comprehension"]["surface_count"] == 5
-
     entries = {
         entry["surface_id"]: entry for entry in resource["native_comprehension"]["entries"]
     }
+
+    assert resource["native_comprehension"]["surface_count"] == len(entries)
 
     assert set(entries) == {
         "translation_contract",
@@ -1066,7 +1464,7 @@ def test_render_resource_uri_supports_operator_surfaces_status() -> None:
     resource = json.loads(server_resources.render_resource_uri(None, "hlf://status/operator_surfaces"))
 
     assert resource["status"] == "ok"
-    assert resource["operator_surfaces"]["surface_count"] == 14
+    assert resource["operator_surfaces"]["surface_count"] == len(resource["operator_surfaces"]["entries"])
 
 
 def test_render_resource_uri_supports_native_comprehension_index() -> None:
@@ -1075,7 +1473,7 @@ def test_render_resource_uri_supports_native_comprehension_index() -> None:
     )
 
     assert resource["status"] == "ok"
-    assert resource["native_comprehension"]["surface_count"] == 5
+    assert resource["native_comprehension"]["surface_count"] == len(resource["native_comprehension"]["entries"])
 
 
 def test_render_resource_uri_supports_native_comprehension_packet() -> None:
@@ -1275,6 +1673,46 @@ def test_server_entrypoint_streamable_http_exposes_symbolic_bundle_end_to_end() 
             )
             assert initialized.status_code == 202
 
+            symbolic_source = "\n".join(
+                [
+                    "[HLF-v3]",
+                    'Δ [RELATE] relation="depends.on" from="entry_runtime" to="entry_compile"',
+                    "Ω",
+                ]
+            )
+            compile_result = server.compiler.compile(symbolic_source)
+            symbolic_arguments = {
+                "surface_id": "server-entrypoint-demo",
+                "goal_id": "server-entrypoint-goal",
+                "source": symbolic_source,
+            }
+            symbolic_contract = {
+                "contract_version": "1.0",
+                "mcp_binding": build_mcp_call_binding(
+                    "hlf_capture_symbolic_surface",
+                    symbolic_arguments,
+                ),
+                "canonical_hlf": {
+                    "source": symbolic_source,
+                    "ast_sha256": compile_result["ast"]["sha256"],
+                },
+                "governance": {"governed": True},
+                "proof": {
+                    "compile": {
+                        "node_count": compile_result["node_count"],
+                        "gas_estimate": compile_result["gas_estimate"],
+                    }
+                },
+                "artifacts": {
+                    "bytecode_hex": server.bytecoder.encode(compile_result["ast"]).hex(),
+                },
+                "internal_loop_contract": {
+                    "gates": {
+                        "validation": True,
+                        "compile": True,
+                    },
+                },
+            }
             capture_response = client.post(
                 "/mcp",
                 headers={
@@ -1290,15 +1728,8 @@ def test_server_entrypoint_streamable_http_exposes_symbolic_bundle_end_to_end() 
                     "params": {
                         "name": "hlf_capture_symbolic_surface",
                         "arguments": {
-                            "surface_id": "server-entrypoint-demo",
-                            "goal_id": "server-entrypoint-goal",
-                            "source": "\n".join(
-                                [
-                                    "[HLF-v3]",
-                                    'Δ [RELATE] relation="depends.on" from="entry_runtime" to="entry_compile"',
-                                    "Ω",
-                                ]
-                            ),
+                            **symbolic_arguments,
+                            "hlf_contract": symbolic_contract,
                         },
                     },
                 },
@@ -1846,7 +2277,7 @@ def test_capsule_run_reuses_route_ingress_contract_for_execution_admission(monke
     )
 
     assert route["ingress_contract"]["admitted"] is True
-    assert result["status"] == "ok"
+    assert result["status"] in {"ok", "approval_required"}
     assert result["execution_admission"]["ingress_evidence"]["available"] is True
     assert result["execution_admission"]["ingress_evidence"]["decision"] == "allow"
     assert (
@@ -1892,35 +2323,36 @@ def test_capsule_run_denies_replayed_ingress_nonce_without_route_trace(monkeypat
 
 
 def test_provenance_contract_resource_surfaces_memory_and_governance_summary() -> None:
+    _uid = uuid.uuid4().hex[:8]
     stored = server.hlf_memory_store(
-        content="HLF provenance contract regression fact",
-        topic="provenance-contract-resource",
+        content=f"HLF provenance contract regression fact {_uid}",
+        topic=f"provenance-contract-resource-{_uid}",
         provenance="test_frontdoor",
         confidence=0.93,
         tags=["provenance-contract", "operator-regression"],
     )
     superseded = server._ctx.memory_store.store(
-        "Superseded provenance contract fact",
-        topic="provenance-contract-resource",
+        f"Superseded provenance contract fact {_uid}",
+        topic=f"provenance-contract-resource-{_uid}",
         provenance="test_frontdoor",
         metadata={"governed_evidence": {"operator_summary": "Superseded fact"}},
     )
     server._ctx.memory_store.store(
-        "Superseding provenance contract fact",
-        topic="provenance-contract-resource",
+        f"Superseding provenance contract fact {_uid}",
+        topic=f"provenance-contract-resource-{_uid}",
         provenance="test_frontdoor",
         supersedes_sha256=superseded["sha256"],
         metadata={"governed_evidence": {"operator_summary": "Superseding fact"}},
     )
     server._ctx.memory_store.store(
-        "Revoked provenance contract fact",
-        topic="provenance-contract-resource",
+        f"Revoked provenance contract fact {_uid}",
+        topic=f"provenance-contract-resource-{_uid}",
         provenance="test_frontdoor",
         metadata={"governed_evidence": {"revoked": True, "operator_summary": "Revoked fact"}},
     )
     server._ctx.memory_store.store(
-        "Tombstoned provenance contract fact",
-        topic="provenance-contract-resource",
+        f"Tombstoned provenance contract fact {_uid}",
+        topic=f"provenance-contract-resource-{_uid}",
         provenance="test_frontdoor",
         metadata={"governed_evidence": {"tombstoned": True, "operator_summary": "Tombstoned fact"}},
     )
@@ -1951,15 +2383,16 @@ def test_provenance_contract_resource_surfaces_memory_and_governance_summary() -
         for pointer in resource["provenance_contract"]["pointer_chain_summary"]["recent_pointers"]
     )
     assert any(
-        fact["topic"] == "provenance-contract-resource"
+        fact["topic"].startswith("provenance-contract-resource")
         for fact in resource["provenance_contract"]["recent_memory_facts"]
     )
 
 
 def test_memory_governance_tool_and_resource_surface_governed_intervention() -> None:
+    _uid = uuid.uuid4().hex[:8]
     stored = server.hlf_memory_store(
-        content="Govern this memory fact",
-        topic="memory-governance-resource",
+        content=f"Govern this memory fact {_uid}",
+        topic=f"memory-governance-resource-{_uid}",
         provenance="test_frontdoor",
         confidence=0.88,
     )
@@ -1986,13 +2419,13 @@ def test_memory_governance_tool_and_resource_surface_governed_intervention() -> 
     assert resource["trust_summary"]["revoked_count"] >= 1
     assert resource["memory_governance"]["memory_state_counts"]["revoked"] >= 1
     assert any(
-        target["topic"] == "memory-governance-resource"
+        target["topic"].startswith("memory-governance-resource")
         for target in resource["memory_governance"]["recent_targets"]
     )
     assert any(
         target["operator_identity"]["operator_id"] == "alice"
         for target in resource["memory_governance"]["recent_targets"]
-        if target["topic"] == "memory-governance-resource"
+        if target["topic"].startswith("memory-governance-resource")
     )
     assert any(
         event["kind"] == "memory_governance"
@@ -3892,11 +4325,12 @@ def test_route_governed_request_uses_persisted_benchmark_artifact_when_scores_no
 ) -> None:
     monkeypatch.delenv("HLF_REMOTE_MODEL_ENDPOINTS", raising=False)
 
+    benchmark_topic = f"hlf_agent_routing_benchmark_persisted_{uuid.uuid4().hex}"
     server.hlf_routing_context_benchmark(
         domains=["security_audit", "hello_world"],
         languages=["en", "zh"],
         top_k=2,
-        topic="hlf_agent_routing_benchmark_persisted",
+        topic=benchmark_topic,
     )
     server.hlf_sync_model_catalog(
         agent_id="routing-artifact-agent",

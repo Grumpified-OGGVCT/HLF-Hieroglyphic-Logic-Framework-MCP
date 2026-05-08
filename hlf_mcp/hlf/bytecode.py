@@ -566,7 +566,7 @@ def _emit_stmt(
         instructions.append(_instr(Op.CALL_HOST, add_const("__log__")))
 
     elif kind == "result_stmt":
-        expr = stmt.get("expr") or stmt.get("value")
+        expr = stmt.get("expr") or stmt.get("value") or stmt.get("message") or stmt.get("code")
         if expr:
             _emit_expr(expr, instructions, pool, add_const)
         instructions.append(_instr(Op.RESULT))

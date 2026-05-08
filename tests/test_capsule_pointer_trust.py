@@ -117,7 +117,7 @@ def test_runtime_analyze_rejects_pointer_for_routing_evidence_without_provenance
 
 
 def test_memory_store_returns_pointer_contract() -> None:
-    result = server.hlf_memory_store("trusted fact", topic="routing", confidence=0.9)
+    result = server.hlf_memory_store(f"trusted fact {uuid.uuid4().hex[:8]}", topic="routing", confidence=0.9)
 
     assert result["stored"] is True
     assert result["pointer"].startswith("&routing-")

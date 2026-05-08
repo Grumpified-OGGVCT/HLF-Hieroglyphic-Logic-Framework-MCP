@@ -139,6 +139,9 @@ class TranslationRepairPlan:
     recommended_tool: str
     next_request: dict[str, Any]
     diagnostics: TranslationDiagnostics
+    semantic_check: dict[str, Any]
+    repair_explanation: tuple[str, ...]
+    safe_repaired_hlf: str | None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -150,6 +153,9 @@ class TranslationRepairPlan:
             "recommended_tool": self.recommended_tool,
             "next_request": self.next_request,
             "diagnostics": self.diagnostics.to_dict(),
+            "semantic_check": self.semantic_check,
+            "repair_explanation": list(self.repair_explanation),
+            "safe_repaired_hlf": self.safe_repaired_hlf,
         }
 
 
@@ -567,6 +573,96 @@ def _semantic_actuals(source: str) -> dict[str, bool]:
     }
 
 
+def _semantic_signature_from_text(text: str, *, language: str) -> dict[str, Any]:
+    profile = _LANGUAGE_PROFILES[language]
+    lowered = text.casefold()
+    target = _extract_path(text, language=language)
+    features = _semantic_expectations(text, language=language)
+    return {
+        "target": target,
+        "goal": profile.analyze_goal
+        if any(word in lowered for word in profile.analyze_words) or target is not None
+        else None,
+        "features": sorted(key for key, present in features.items() if present and key != "path"),
+        "delegate_agent": _extract_quoted(text)
+        if any(word in lowered for word in profile.delegate_words)
+        else None,
+        "assert_rule": _extract_quoted(text)
+        if any(word in lowered for word in profile.assert_words)
+        else None,
+    }
+
+
+def _semantic_signature_from_hlf(source: str) -> dict[str, Any]:
+    target_match = re.search(r'target="([^"]+)"', source)
+    goal_match = re.search(r'Δ \[INTENT\] goal="([^"]+)"', source)
+    delegate_match = re.search(r'\[DELEGATE\][^\n]*agent="([^"]+)"', source)
+    assert_match = re.search(r'\[ASSERT\][^\n]*rule="([^"]+)"', source)
+    actuals = _semantic_actuals(source)
+    return {
+        "target": target_match.group(1) if target_match else None,
+        "goal": goal_match.group(1) if goal_match else None,
+        "features": sorted(key for key, present in actuals.items() if present and key != "path"),
+        "delegate_agent": delegate_match.group(1) if delegate_match else None,
+        "assert_rule": assert_match.group(1) if assert_match else None,
+    }
+
+
+def _build_repair_semantic_check(
+    *,
+    original_signature: dict[str, Any],
+    repaired_signature: dict[str, Any],
+) -> dict[str, Any]:
+    drift_flags: list[str] = []
+    original_target = original_signature.get("target")
+    repaired_target = repaired_signature.get("target")
+    if original_target and repaired_target != original_target:
+        drift_flags.append("target_changed")
+    if original_target is None and repaired_target is not None:
+        drift_flags.append("invented_target")
+
+    original_features = set(original_signature.get("features") or [])
+    repaired_features = set(repaired_signature.get("features") or [])
+    missing_features = sorted(original_features - repaired_features)
+    added_features = sorted(repaired_features - original_features)
+    drift_flags.extend(f"missing_feature:{feature}" for feature in missing_features)
+    drift_flags.extend(f"added_feature:{feature}" for feature in added_features)
+
+    for key in ("delegate_agent", "assert_rule"):
+        original_value = original_signature.get(key)
+        repaired_value = repaired_signature.get(key)
+        if original_value and repaired_value != original_value:
+            drift_flags.append(f"{key}_changed")
+
+    return {
+        "preserved": not drift_flags,
+        "drift_flags": drift_flags,
+        "original": original_signature,
+        "repaired": repaired_signature,
+    }
+
+
+def _build_repair_explanation(
+    *,
+    semantic_check: dict[str, Any],
+    terminal_reason: str | None,
+) -> tuple[str, ...]:
+    if terminal_reason == "policy_block":
+        return ("Repair refused because the failure came from a policy governor block.",)
+    if terminal_reason == "align_block":
+        return ("Repair refused because the failure came from an ALIGN ledger block.",)
+    if not semantic_check.get("preserved", False):
+        flags = ", ".join(semantic_check.get("drift_flags") or ["semantic_drift"])
+        return (
+            "Repair refused because deterministic normalization would change intent or target.",
+            f"Drift flags: {flags}.",
+        )
+    target = (semantic_check.get("original") or {}).get("target")
+    if target:
+        return (f"Repair normalized syntax only and preserved target '{target}'.",)
+    return ("Repair normalized syntax only and preserved recognized intent markers.",)
+
+
 def translation_diagnostics(
     text: str,
     *,
@@ -710,16 +806,35 @@ def build_translation_repair_plan(
         language=resolved_language,
         preferred_language=preferred_language,
     )
+    repaired_source = language_to_hlf(
+        repaired_text,
+        language=resolved_language,
+        preferred_language=preferred_language,
+    )
+    semantic_check = _build_repair_semantic_check(
+        original_signature=_semantic_signature_from_text(text, language=resolved_language),
+        repaired_signature=_semantic_signature_from_hlf(repaired_source),
+    )
+    if retryable and not semantic_check["preserved"]:
+        retryable = False
+        terminal_reason = "semantic_drift"
     diagnostics = translation_diagnostics(
         repaired_text,
         language=resolved_language,
         preferred_language=preferred_language,
+        source=repaired_source,
     )
     next_request = {
         "text": repaired_text,
         "language": resolved_language,
         "version": "3",
     }
+    if semantic_check["preserved"]:
+        next_request["source"] = repaired_source
+    repair_explanation = _build_repair_explanation(
+        semantic_check=semantic_check,
+        terminal_reason=terminal_reason,
+    )
     return TranslationRepairPlan(
         retryable=retryable,
         terminal_reason=terminal_reason,
@@ -729,6 +844,9 @@ def build_translation_repair_plan(
         recommended_tool="hlf_translate_to_hlf",
         next_request=next_request,
         diagnostics=diagnostics,
+        semantic_check=semantic_check,
+        repair_explanation=repair_explanation,
+        safe_repaired_hlf=repaired_source if semantic_check["preserved"] else None,
     )
 
 

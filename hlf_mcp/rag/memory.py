@@ -116,7 +116,7 @@ PRAGMA synchronous = NORMAL;
 """
 
 _DECAY_DAYS = 30
-_DEDUP_THRESHOLD = 0.98
+_DEDUP_THRESHOLD = 0.92
 _ARCHIVE_SALIENCE_THRESHOLD = 0.45
 HKS_DOMAINS = {
     "general-coding",
@@ -157,6 +157,9 @@ _RETRIEVAL_PURPOSE_POLICIES: dict[str, dict[str, Any]] = {
     "default": {
         "require_provenance": False,
         "require_active": False,
+        "require_trusted": False,
+        "require_source_lineage": False,
+        "require_content_hash_valid": True,
         "require_graph_linked": False,
         "min_graph_score": 0.0,
         "min_rank_score": 0.0,
@@ -165,6 +168,9 @@ _RETRIEVAL_PURPOSE_POLICIES: dict[str, dict[str, Any]] = {
     "translation_memory": {
         "require_provenance": True,
         "require_active": True,
+        "require_trusted": False,
+        "require_source_lineage": False,
+        "require_content_hash_valid": True,
         "require_graph_linked": False,
         "min_graph_score": 0.05,
         "min_rank_score": 0.12,
@@ -173,6 +179,9 @@ _RETRIEVAL_PURPOSE_POLICIES: dict[str, dict[str, Any]] = {
     "repair_pattern_recall": {
         "require_provenance": True,
         "require_active": True,
+        "require_trusted": False,
+        "require_source_lineage": False,
+        "require_content_hash_valid": True,
         "require_graph_linked": False,
         "min_graph_score": 0.05,
         "min_rank_score": 0.12,
@@ -181,6 +190,9 @@ _RETRIEVAL_PURPOSE_POLICIES: dict[str, dict[str, Any]] = {
     "routing_evidence": {
         "require_provenance": True,
         "require_active": True,
+        "require_trusted": True,
+        "require_source_lineage": True,
+        "require_content_hash_valid": True,
         "require_graph_linked": True,
         "min_graph_score": 0.1,
         "min_rank_score": 0.35,
@@ -189,6 +201,9 @@ _RETRIEVAL_PURPOSE_POLICIES: dict[str, dict[str, Any]] = {
     "verifier_evidence": {
         "require_provenance": True,
         "require_active": True,
+        "require_trusted": True,
+        "require_source_lineage": True,
+        "require_content_hash_valid": True,
         "require_graph_linked": True,
         "min_graph_score": 0.1,
         "min_rank_score": 0.3,
@@ -197,6 +212,9 @@ _RETRIEVAL_PURPOSE_POLICIES: dict[str, dict[str, Any]] = {
     "execution_admission": {
         "require_provenance": True,
         "require_active": True,
+        "require_trusted": True,
+        "require_source_lineage": True,
+        "require_content_hash_valid": True,
         "require_graph_linked": True,
         "min_graph_score": 0.1,
         "min_rank_score": 0.3,
@@ -210,19 +228,46 @@ _RETRIEVAL_PURPOSE_POLICIES: dict[str, dict[str, Any]] = {
 }
 
 _POINTER_PURPOSE_POLICIES: dict[str, dict[str, bool]] = {
-    "execution": {"require_provenance": False, "allow_stale": False, "allow_superseded": False},
-    "memory_read": {"require_provenance": False, "allow_stale": False, "allow_superseded": False},
+    "execution": {
+        "require_provenance": False,
+        "require_trusted": False,
+        "require_source_lineage": False,
+        "require_content_hash_valid": True,
+        "allow_stale": False,
+        "allow_superseded": False,
+    },
+    "memory_read": {
+        "require_provenance": False,
+        "require_trusted": False,
+        "require_source_lineage": False,
+        "require_content_hash_valid": True,
+        "allow_stale": False,
+        "allow_superseded": False,
+    },
     "routing_evidence": {
         "require_provenance": True,
+        "require_trusted": True,
+        "require_source_lineage": True,
+        "require_content_hash_valid": True,
         "allow_stale": False,
         "allow_superseded": False,
     },
     "verifier_evidence": {
         "require_provenance": True,
+        "require_trusted": True,
+        "require_source_lineage": True,
+        "require_content_hash_valid": True,
         "allow_stale": False,
         "allow_superseded": False,
     },
-    "operator_review": {"require_provenance": False, "allow_stale": True, "allow_superseded": True},
+    "operator_review": {
+        "require_provenance": False,
+        "require_trusted": False,
+        "require_source_lineage": False,
+        "require_content_hash_valid": False,
+        "allow_stale": True,
+        "allow_superseded": True,
+    },
 }
 
 
@@ -270,6 +315,31 @@ def _parse_fresh_until(value: Any) -> float | None:
             except ValueError:
                 return None
     return None
+
+
+def _source_lineage_hash(lineage: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(lineage, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+
+def _trusted_for_governance(*, trust_tier: Any, source_authority_label: Any) -> bool:
+    normalized_trust = str(trust_tier or "").strip().lower()
+    normalized_authority = str(source_authority_label or "").strip().lower()
+    if normalized_authority == "canonical":
+        return normalized_trust not in {"", "untrusted", "revoked", "quarantined"}
+    return normalized_trust in {"trusted", "verified", "canonical", "validated"}
+
+
+def _lineage_present(lineage: dict[str, Any]) -> bool:
+    if not all(str(lineage.get(key) or "").strip() for key in ("source", "source_type", "collector", "collected_at")):
+        return False
+    return any(
+        str(lineage.get(key) or "").strip()
+        for key in ("source_path", "artifact_id", "workflow_run_url", "branch", "commit_sha")
+    )
 
 
 def _normalize_memory_stratum(
@@ -998,9 +1068,14 @@ def _build_governed_hks_contract(
                 "graph_source": retrieval.get("graph_source") or graph_context.get("graph_source"),
                 "graph_node_ids": list(graph_context.get("attached_node_ids") or []),
                 "trust_tier": evidence.get("trust_tier"),
+                "trusted_for_governance": evidence.get("trusted_for_governance"),
                 "freshness_status": evidence.get("freshness_status"),
                 "provenance_grade": evidence.get("provenance_grade"),
+                "source_lineage_present": evidence.get("source_lineage_present"),
+                "source_lineage_hash": evidence.get("source_lineage_hash"),
                 "source_authority_label": evidence.get("source_authority_label"),
+                "content_hash_valid": evidence.get("content_hash_valid"),
+                "integrity_status": evidence.get("integrity_status"),
                 "promotion_eligible": evidence.get("promotion_eligible"),
             }
         )
@@ -1023,6 +1098,9 @@ def _build_governed_hks_contract(
         "policy_requirements": {
             "require_provenance": bool(purpose_policy.get("require_provenance", False)),
             "require_active": bool(purpose_policy.get("require_active", False)),
+            "require_trusted": bool(purpose_policy.get("require_trusted", False)),
+            "require_source_lineage": bool(purpose_policy.get("require_source_lineage", False)),
+            "require_content_hash_valid": bool(purpose_policy.get("require_content_hash_valid", True)),
             "require_graph_linked": bool(purpose_policy.get("require_graph_linked", False)),
             "min_graph_score": float(purpose_policy.get("min_graph_score") or 0.0),
             "min_rank_score": float(purpose_policy.get("min_rank_score") or 0.0),
@@ -1137,6 +1215,11 @@ def _resolve_query_policy(
     base_policy = dict(_RETRIEVAL_PURPOSE_POLICIES.get(normalized_purpose) or _RETRIEVAL_PURPOSE_POLICIES["default"])
     base_policy["require_provenance"] = bool(base_policy.get("require_provenance", False) or require_provenance)
     base_policy["allowed_entry_kinds"] = set(base_policy.get("allowed_entry_kinds") or set())
+    base_policy.setdefault("require_active", False)
+    base_policy.setdefault("require_trusted", False)
+    base_policy.setdefault("require_source_lineage", False)
+    base_policy.setdefault("require_content_hash_valid", True)
+    base_policy.setdefault("require_graph_linked", False)
     return normalized_purpose, base_policy
 
 
@@ -1204,10 +1287,30 @@ def _apply_query_policy(
     reasons: list[str] = []
     evidence = fact.get("evidence") if isinstance(fact.get("evidence"), dict) else {}
     retrieval = fact.get("retrieval_contract") if isinstance(fact.get("retrieval_contract"), dict) else {}
+    if purpose_policy.get("require_content_hash_valid", True) and evidence.get("content_hash_valid") is False:
+        reasons.append("content_hash_integrity_required")
     if purpose_policy.get("require_provenance") and evidence.get("provenance_grade") != "evidence-backed":
         reasons.append("provenance_required")
-    if purpose_policy.get("require_active") and str(evidence.get("state") or fact.get("governance_status") or "") != "active":
-        reasons.append("active_state_required")
+    if purpose_policy.get("require_trusted") and not bool(evidence.get("trusted_for_governance", False)):
+        reasons.append("trusted_source_required")
+    if purpose_policy.get("require_source_lineage") and not bool(evidence.get("source_lineage_present", False)):
+        reasons.append("source_lineage_required")
+    if purpose_policy.get("require_active"):
+        specific_active_denials = False
+        if bool(evidence.get("revoked")) or bool(evidence.get("tombstoned")):
+            reasons.append("revoked_memory_denied")
+            specific_active_denials = True
+        if str(evidence.get("freshness_status") or "") == "stale":
+            reasons.append("stale_memory_denied")
+            specific_active_denials = True
+        if bool(evidence.get("superseded")):
+            reasons.append("superseded_memory_denied")
+            specific_active_denials = True
+        if (
+            str(evidence.get("state") or fact.get("governance_status") or "") != "active"
+            and not specific_active_denials
+        ):
+            reasons.append("active_state_required")
     if purpose_policy.get("require_graph_linked") and not bool(retrieval.get("graph_linked")):
         reasons.append("graph_link_required")
     if float(retrieval.get("graph_score") or 0.0) < float(purpose_policy.get("min_graph_score") or 0.0):
@@ -1703,6 +1806,27 @@ class RAGMemory:
                 commit_sha,
             ]
         )
+        source_authority_label = str(
+            governed.get("source_authority_label")
+            or metadata.get("source_authority_label")
+            or "advisory"
+        ).strip().lower() or "advisory"
+        source_lineage = {
+            "source": source,
+            "source_type": source_type,
+            "source_path": source_path,
+            "artifact_id": artifact_id,
+            "workflow_run_url": workflow_run_url,
+            "branch": branch,
+            "commit_sha": commit_sha,
+            "collector": collector,
+            "collector_version": collector_version,
+            "collected_at": collected_at,
+        }
+        source_lineage_present = _lineage_present(source_lineage)
+        declared_hash = str(row["sha256"] or "").strip().lower()
+        current_content_hash = hashlib.sha256(str(row["content"] or "").encode("utf-8")).hexdigest()
+        content_hash_valid = declared_hash == current_content_hash
         if tombstoned:
             state = "tombstoned"
         elif revoked:
@@ -1711,6 +1835,8 @@ class RAGMemory:
             state = "superseded"
         elif freshness_status == "stale":
             state = "stale"
+        elif not content_hash_valid:
+            state = "tampered"
         else:
             state = "active"
 
@@ -1746,8 +1872,15 @@ class RAGMemory:
                 or row["confidence"]
             ),
             "trust_tier": trust_tier,
+            "trusted_for_governance": _trusted_for_governance(
+                trust_tier=trust_tier,
+                source_authority_label=source_authority_label,
+            ),
             "fresh_until": fresh_until,
             "freshness_status": freshness_status,
+            "content_hash_valid": content_hash_valid,
+            "current_content_hash": current_content_hash,
+            "integrity_status": "ok" if content_hash_valid else "tampered",
             "revoked": revoked,
             "tombstoned": tombstoned,
             "supersedes": governed.get("supersedes") or row["supersedes_sha256"],
@@ -1761,6 +1894,9 @@ class RAGMemory:
             "operator_identity": operator_identity,
             "provenance_grade": "evidence-backed" if provenance_backed else "basic",
             "provenance_available": bool(collector and collected_at),
+            "source_lineage_present": source_lineage_present,
+            "source_lineage_hash": _source_lineage_hash(source_lineage),
+            "source_lineage": source_lineage,
             "evaluation_id": evaluation.get("evaluation_id"),
             "evaluation_authority": evaluation.get("authority"),
             "explicit_local_evaluation_present": evaluation.get(
@@ -1769,6 +1905,7 @@ class RAGMemory:
             "promotion_eligible": evaluation.get("promotion_eligible", False),
             "citation_coverage": evaluation.get("citation_coverage"),
             "groundedness": evaluation.get("groundedness"),
+            "source_authority_label": source_authority_label,
             "source_capture": dict(metadata.get("source_capture") or {}),
             "artifact_contract": dict(metadata.get("artifact_contract") or {}),
         }
@@ -2354,6 +2491,8 @@ class RAGMemory:
         require_provenance: bool,
         include_archive: bool,
     ) -> bool:
+        if evidence.get("content_hash_valid") is False:
+            return False
         if not include_revoked and (evidence["revoked"] or evidence["tombstoned"]):
             return False
         if not include_stale and evidence["freshness_status"] == "stale":
@@ -2382,6 +2521,7 @@ class RAGMemory:
         supersedes_sha256: str | None = None,
         metadata: dict[str, Any] | None = None,
         strict: bool = False,
+        bypass_vector_dedup: bool = False,
     ) -> dict[str, Any]:
         """Store a fact. Returns {id, sha256, stored, duplicate_reason}.
 
@@ -2390,6 +2530,10 @@ class RAGMemory:
         - confidence must be in [0.0, 1.0]
         - provenance must be an explicit declared value
         - metadata should contain governed_evidence when making evidence claims
+
+        When ``bypass_vector_dedup=True``, vector-similarity dedup is skipped.
+        Use for high-value governed entries (e.g. hks_exemplar repair patterns)
+        that must not be silently deduped against unrelated same-topic entries.
         """
         # ── Write-path evidence validation ────────────────────────────────
         if not content or not content.strip():
@@ -2469,40 +2613,92 @@ class RAGMemory:
         with self._lock, self._connect() as conn:
             # SHA-256 exact dedup
             existing = conn.execute(
-                "SELECT id FROM fact_store WHERE sha256 = ?", (sha256,)
+                "SELECT id, sha256, content, topic, confidence, provenance, tags, "
+                "entry_kind, domain, solution_kind, supersedes_sha256, metadata_json, "
+                "memory_stratum, storage_tier, provenance_grade, salience_score, "
+                "artifact_form, source_authority_label, source_type "
+                "FROM fact_store WHERE sha256 = ?", (sha256,)
             ).fetchone()
             if existing:
+                existing_meta = json.loads(existing["metadata_json"] or "{}")
+                existing_ge = existing_meta.get("governed_evidence") or {}
                 return {
                     "id": existing["id"],
                     "sha256": sha256,
                     "stored": False,
                     "duplicate_reason": "sha256_exact_match",
+                    "entry_kind": existing["entry_kind"] or entry_kind or "",
+                    "domain": existing["domain"] or normalized_domain,
+                    "solution_kind": existing["solution_kind"] or solution_kind or "",
+                    "supersedes_sha256": existing["supersedes_sha256"] or supersedes_sha256 or "",
+                    "metadata": existing_meta,
+                    "source_capture": dict(existing_meta.get("source_capture") or {}),
+                    "artifact_contract": dict(existing_meta.get("artifact_contract") or {}),
+                    "memory_stratum": existing["memory_stratum"] or existing_meta.get("memory_stratum") or "working",
+                    "storage_tier": existing["storage_tier"] or existing_meta.get("storage_tier") or "warm",
+                    "evaluation": existing_meta.get("evaluation") or {},
+                    "evidence": {
+                        "sha256": sha256,
+                        "entry_kind": existing["entry_kind"] or entry_kind or "",
+                        "topic": existing["topic"] or topic,
+                        "domain": existing["domain"] or normalized_domain,
+                        "source_class": existing_ge.get("source_class") or existing["entry_kind"] or "",
+                        "source_type": existing_ge.get("source_type") or "",
+                        "provenance_grade": existing["provenance_grade"] or "basic",
+                    },
                 }
 
-            # Vector race protection: check cosine similarity > 0.98
-            recent = conn.execute(
-                "SELECT id, sha256, vector_json, embedding_blob FROM fact_store "
-                "WHERE topic = ? ORDER BY created_at DESC LIMIT 100",
-                (topic,),
-            ).fetchall()
-            for row in recent:
-                existing_vec = json.loads(row["vector_json"] or "{}")
-                sim = _cosine(vec, existing_vec)
-                # Prefer dense cosine when both sides have embeddings
-                if dense_vec and row["embedding_blob"]:
-                    try:
-                        existing_dense = json.loads(row["embedding_blob"])
-                        if existing_dense:
-                            sim = _dense_cosine(dense_vec, existing_dense)
-                    except (json.JSONDecodeError, TypeError, ValueError):
-                        pass
-                if sim >= _DEDUP_THRESHOLD:
-                    return {
-                        "id": row["id"],
-                        "sha256": sha256,
-                        "stored": False,
-                        "duplicate_reason": f"vector_similarity_{sim:.3f}",
-                    }
+            # Vector race protection: check cosine similarity > _DEDUP_THRESHOLD.
+            # Bypass for high-value governed entries (hks_exemplar repair patterns,
+            # evidence records) that must not be silently deduped.
+            if not bypass_vector_dedup:
+                recent = conn.execute(
+                    "SELECT id, sha256, vector_json, embedding_blob, "
+                    "entry_kind, domain, solution_kind, supersedes_sha256, metadata_json, "
+                    "memory_stratum, storage_tier, provenance_grade, topic "
+                    "FROM fact_store "
+                    "WHERE topic = ? ORDER BY created_at DESC LIMIT 100",
+                    (topic,),
+                ).fetchall()
+                for row in recent:
+                    existing_vec = json.loads(row["vector_json"] or "{}")
+                    sim = _cosine(vec, existing_vec)
+                    # Prefer dense cosine when both sides have embeddings
+                    if dense_vec and row["embedding_blob"]:
+                        try:
+                            existing_dense = json.loads(row["embedding_blob"])
+                            if existing_dense:
+                                sim = _dense_cosine(dense_vec, existing_dense)
+                        except (json.JSONDecodeError, TypeError, ValueError):
+                            pass
+                    if sim >= _DEDUP_THRESHOLD:
+                        vec_dedup_meta = json.loads(row["metadata_json"] or "{}")
+                        vec_dedup_ge = vec_dedup_meta.get("governed_evidence") or {}
+                        return {
+                            "id": row["id"],
+                            "sha256": sha256,
+                            "stored": False,
+                            "duplicate_reason": f"vector_similarity_{sim:.3f}",
+                            "entry_kind": row["entry_kind"] or entry_kind or "",
+                            "domain": row["domain"] or normalized_domain,
+                            "solution_kind": row["solution_kind"] or solution_kind or "",
+                            "supersedes_sha256": row["supersedes_sha256"] or supersedes_sha256 or "",
+                            "metadata": vec_dedup_meta,
+                            "source_capture": dict(vec_dedup_meta.get("source_capture") or {}),
+                            "artifact_contract": dict(vec_dedup_meta.get("artifact_contract") or {}),
+                            "memory_stratum": row["memory_stratum"] or vec_dedup_meta.get("memory_stratum") or "working",
+                            "storage_tier": row["storage_tier"] or vec_dedup_meta.get("storage_tier") or "warm",
+                            "evaluation": vec_dedup_meta.get("evaluation") or {},
+                            "evidence": {
+                                "sha256": sha256,
+                                "entry_kind": row["entry_kind"] or entry_kind or "",
+                                "topic": row["topic"] or topic,
+                                "domain": row["domain"] or normalized_domain,
+                                "source_class": vec_dedup_ge.get("source_class") or row["entry_kind"] or "",
+                                "source_type": vec_dedup_ge.get("source_type") or "",
+                                "provenance_grade": row["provenance_grade"] or "basic",
+                            },
+                        }
 
             # Insert
             cursor = conn.execute(
@@ -2639,8 +2835,15 @@ class RAGMemory:
                     "confidence", confidence
                 ),
                 "trust_tier": normalized_metadata["governed_evidence"].get("trust_tier", "local"),
+                "trusted_for_governance": _trusted_for_governance(
+                    trust_tier=normalized_metadata["governed_evidence"].get("trust_tier", "local"),
+                    source_authority_label=normalized_metadata.get("source_authority_label") or "advisory",
+                ),
                 "fresh_until": normalized_metadata["governed_evidence"].get("fresh_until"),
                 "freshness_status": "fresh",
+                "content_hash_valid": True,
+                "current_content_hash": sha256,
+                "integrity_status": "ok",
                 "revoked": normalized_metadata["governed_evidence"].get("revoked", False),
                 "tombstoned": normalized_metadata["governed_evidence"].get("tombstoned", False),
                 "supersedes": normalized_metadata["governed_evidence"].get("supersedes")
@@ -2665,6 +2868,40 @@ class RAGMemory:
                 )
                 else "basic",
                 "provenance_available": True,
+                "source_lineage_present": _lineage_present(
+                    {
+                        "source": normalized_metadata["governed_evidence"].get("source") or provenance,
+                        "source_type": normalized_metadata["governed_evidence"].get("source_type")
+                        or entry_kind,
+                        "source_path": normalized_metadata["governed_evidence"].get("source_path"),
+                        "artifact_id": normalized_metadata["governed_evidence"].get("artifact_id"),
+                        "workflow_run_url": normalized_metadata["governed_evidence"].get("workflow_run_url"),
+                        "branch": normalized_metadata["governed_evidence"].get("branch"),
+                        "commit_sha": normalized_metadata["governed_evidence"].get("commit_sha"),
+                        "collector": normalized_metadata["governed_evidence"].get("collector")
+                        or provenance,
+                        "collector_version": normalized_metadata["governed_evidence"].get("collector_version"),
+                        "collected_at": normalized_metadata["governed_evidence"].get("collected_at")
+                        or _timestamp_to_iso8601(now),
+                    }
+                ),
+                "source_lineage_hash": _source_lineage_hash(
+                    {
+                        "source": normalized_metadata["governed_evidence"].get("source") or provenance,
+                        "source_type": normalized_metadata["governed_evidence"].get("source_type")
+                        or entry_kind,
+                        "source_path": normalized_metadata["governed_evidence"].get("source_path"),
+                        "artifact_id": normalized_metadata["governed_evidence"].get("artifact_id"),
+                        "workflow_run_url": normalized_metadata["governed_evidence"].get("workflow_run_url"),
+                        "branch": normalized_metadata["governed_evidence"].get("branch"),
+                        "commit_sha": normalized_metadata["governed_evidence"].get("commit_sha"),
+                        "collector": normalized_metadata["governed_evidence"].get("collector")
+                        or provenance,
+                        "collector_version": normalized_metadata["governed_evidence"].get("collector_version"),
+                        "collected_at": normalized_metadata["governed_evidence"].get("collected_at")
+                        or _timestamp_to_iso8601(now),
+                    }
+                ),
                 "evaluation_id": normalized_metadata["evaluation"].get("evaluation_id"),
                 "evaluation_authority": normalized_metadata["evaluation"].get("authority"),
                 "source_authority_label": normalized_metadata.get("source_authority_label") or "advisory",
@@ -2679,6 +2916,99 @@ class RAGMemory:
                 "artifact_contract": dict(normalized_metadata.get("artifact_contract") or {}),
             },
         }
+
+    def query_by_id(
+        self,
+        fact_id: int,
+        *,
+        include_stale: bool = False,
+        include_superseded: bool = False,
+        include_revoked: bool = False,
+        require_provenance: bool = False,
+        include_archive: bool = False,
+        purpose: str | None = None,
+        query_text: str | None = None,
+        metadata_filters: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
+        """Look up a single fact by its database row ID.
+
+        Returns the full result dict (same shape as ``query()`` items) or None.
+        When a purpose is supplied, the same governed admission policy used by
+        ``query()`` is applied so direct ID lookups cannot bypass HKS policy.
+        """
+        normalized_purpose, purpose_policy = _resolve_query_policy(
+            purpose=purpose,
+            require_provenance=require_provenance,
+        )
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, content, topic, confidence, provenance, tags, "
+                "sha256, vector_json, created_at, accessed_at, entry_kind, "
+                "domain, solution_kind, supersedes_sha256, metadata_json, "
+                "embedding_blob "
+                "FROM fact_store WHERE id = ?",
+                (fact_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            superseded_hashes = self._superseded_hashes(conn)
+            graph_substrate = self._load_graph_substrate(
+                conn,
+                now=time.time(),
+                superseded_hashes=superseded_hashes,
+            )
+
+        metadata = json.loads(row["metadata_json"] or "{}")
+        evidence = self._build_evidence(
+            row=row,
+            metadata=metadata,
+            superseded_hashes=superseded_hashes,
+            now=time.time(),
+        )
+        if not self._include_fact(
+            evidence=evidence,
+            include_stale=include_stale,
+            include_superseded=include_superseded,
+            include_revoked=include_revoked,
+            require_provenance=require_provenance,
+            include_archive=include_archive,
+        ):
+            return None
+
+        effective_query = query_text
+        similarity: float | None = None
+        if normalized_purpose != "default" or effective_query is not None:
+            effective_query = str(effective_query or "")
+            similarity = _cosine(_bow_vector(effective_query), json.loads(row["vector_json"] or "{}"))
+
+        effective_filters = dict(metadata_filters or {})
+        fact = self._row_to_fact(
+            row=row,
+            metadata=metadata,
+            evidence=evidence,
+            similarity=similarity,
+            query_text=effective_query if similarity is not None else None,
+            metadata_filters=effective_filters,
+            purpose=normalized_purpose,
+            purpose_policy=purpose_policy,
+            query_graph_context=_build_query_graph_context(
+                query_text=effective_query or "",
+                metadata_filters=effective_filters,
+            ),
+            graph_substrate=graph_substrate,
+        )
+        admitted_for_purpose, rejection_reasons = _apply_query_policy(
+            fact=fact,
+            purpose=normalized_purpose,
+            purpose_policy=purpose_policy,
+        )
+        retrieval = fact.get("retrieval_contract") if isinstance(fact.get("retrieval_contract"), dict) else None
+        if retrieval is not None:
+            retrieval["admitted_for_purpose"] = admitted_for_purpose
+            retrieval["rejection_reasons"] = rejection_reasons
+        if not admitted_for_purpose:
+            return None
+        return fact
 
     def govern_fact(
         self,
@@ -2815,6 +3145,7 @@ class RAGMemory:
             solution_kind=exemplar.solution_kind,
             supersedes_sha256=exemplar.supersedes,
             metadata=normalized_metadata,
+            bypass_vector_dedup=True,
         )
 
     def resolve_pointer(
@@ -2848,6 +3179,9 @@ class RAGMemory:
             )
         )
         policy["require_provenance"] = bool(require_provenance or policy["require_provenance"])
+        policy["require_trusted"] = bool(policy.get("require_trusted", False))
+        policy["require_source_lineage"] = bool(policy.get("require_source_lineage", False))
+        policy["require_content_hash_valid"] = bool(policy.get("require_content_hash_valid", True))
         policy["allow_stale"] = bool(include_stale or policy["allow_stale"])
         policy["allow_superseded"] = bool(include_superseded or policy["allow_superseded"])
         policy["allow_revoked"] = bool(include_revoked)
@@ -2927,6 +3261,25 @@ class RAGMemory:
             if policy["require_provenance"] and evidence.get("provenance_grade") != "evidence-backed":
                 admitted = False
                 admission_reasons.append("evidence_backed_provenance_required")
+            if policy["require_trusted"] and not bool(evidence.get("trusted_for_governance", False)):
+                admitted = False
+                admission_reasons.append("trusted_source_required")
+            if policy["require_source_lineage"] and not bool(evidence.get("source_lineage_present", False)):
+                admitted = False
+                admission_reasons.append("source_lineage_required")
+            if policy["require_content_hash_valid"] and evidence.get("content_hash_valid") is False:
+                admitted = False
+                admission_reasons.append("content_hash_integrity_required")
+        elif admitted:
+            if policy["require_provenance"]:
+                admitted = False
+                admission_reasons.append("evidence_backed_provenance_required")
+            if policy["require_trusted"]:
+                admitted = False
+                admission_reasons.append("trusted_source_required")
+            if policy["require_source_lineage"]:
+                admitted = False
+                admission_reasons.append("source_lineage_required")
 
         if admitted:
             status = "ok"
@@ -2955,6 +3308,9 @@ class RAGMemory:
                 else None,
                 "policy": {
                     "require_provenance": policy["require_provenance"],
+                    "require_trusted": policy["require_trusted"],
+                    "require_source_lineage": policy["require_source_lineage"],
+                    "require_content_hash_valid": policy["require_content_hash_valid"],
                     "allow_stale": policy["allow_stale"],
                     "allow_superseded": policy["allow_superseded"],
                     "allow_revoked": policy["allow_revoked"],

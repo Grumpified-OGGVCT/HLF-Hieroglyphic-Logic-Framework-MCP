@@ -36,8 +36,10 @@ Every significant claim in this repo should be read through one of these lanes:
 1. current-true
 2. bridge-true
 3. vision-true
-4. partially overstated
-5. reductionist or misaligned
+4. not-proven
+
+Older reviews may also name "partially overstated" or "reductionist/misaligned" findings.
+For freeze decisions, treat those as `not-proven` unless and until the claim is rewritten and earns `current-true`, `bridge-true`, or `vision-true`.
 
 These are not moral categories.
 They are interpretive status labels.
@@ -87,12 +89,15 @@ Example:
 
 > HLF is meant to become a governed language and coordination substrate that turns human intent into auditable machine action.
 
-### 4. Partially Overstated
+### 4. Not-Proven
 
-Use when a claim contains a real insight but implies more completeness, authority, or packaging maturity than the repo currently earns.
+Use when a claim, donor finding, old edit, or aspirational wording has not earned one of the three stronger lanes.
 
 Typical signals:
 
+- donor/reference material has not been reviewed and re-derived inside `HLF_MCP`
+- playground or old-checkout material was not deliberately ported
+- current evidence is missing, stale, or not from this canonical repo
 - directionally right, but maturity is too strong
 - present tense is broader than current proof
 - bridge or vision content is being phrased as if it were fully current truth

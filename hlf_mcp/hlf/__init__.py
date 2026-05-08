@@ -1,6 +1,20 @@
 """Canonical public HLF surface for the packaged product."""
 
+from hlf_mcp.hlf.authority import (
+    AUTHORITY_SURFACES,
+    BRIDGE_RECOVERY_MATERIAL,
+    FULL_ORIGINAL_HLF_AUTHORITY_TARGET,
+    INVALID_MISTAKEN_CHECKOUT_ARTIFACTS,
+    PRESENT_PACKAGED_CURRENT_TRUTH,
+    AuthoritySurface,
+    DownstreamTask,
+    authority_matrix,
+    downstream_guidance,
+)
 from hlf_mcp.hlf.benchmark import HLFBenchmark
+from hlf_mcp.hlf.bytecode import HLFBytecode
+from hlf_mcp.hlf.codegen import HLFCodeGenerator
+from hlf_mcp.hlf.compiler import HLFCompiler
 from hlf_mcp.hlf.embodied import (
     EmbodiedContractAssessment,
     assess_embodied_host_call,
@@ -8,12 +22,14 @@ from hlf_mcp.hlf.embodied import (
     build_simulated_embodied_result,
     is_embodied_policy_trace,
 )
-from hlf_mcp.hlf.bytecode import HLFBytecode
-from hlf_mcp.hlf.codegen import HLFCodeGenerator
-from hlf_mcp.hlf.compiler import HLFCompiler
 from hlf_mcp.hlf.formatter import HLFFormatter
 from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.runtime import HLFRuntime
+from hlf_mcp.hlf.swarm_mechanics import (
+    SWARM_ARTIFACT_KIND,
+    build_swarm_mechanics_artifact,
+    materialize_swarm_hlf,
+)
 from hlf_mcp.hlf.symbolic_surfaces import (
     audit_symbolic_surface,
     compile_symbolic_surface,
@@ -42,16 +58,27 @@ from hlf_mcp.hlf.translator import (
 
 __all__ = [
     "HLFBenchmark",
+    "downstream_guidance",
+    "authority_matrix",
+    "DownstreamTask",
+    "AuthoritySurface",
+    "PRESENT_PACKAGED_CURRENT_TRUTH",
+    "INVALID_MISTAKEN_CHECKOUT_ARTIFACTS",
+    "FULL_ORIGINAL_HLF_AUTHORITY_TARGET",
+    "BRIDGE_RECOVERY_MATERIAL",
+    "AUTHORITY_SURFACES",
     "HLFBytecode",
     "HLFCodeGenerator",
     "HLFCompiler",
     "HLFFormatter",
     "HLFLinter",
     "HLFRuntime",
+    "SWARM_ARTIFACT_KIND",
     "EmbodiedContractAssessment",
     "assess_embodied_host_call",
     "audit_symbolic_surface",
     "build_embodied_action_envelope",
+    "build_swarm_mechanics_artifact",
     "build_simulated_embodied_result",
     "Tone",
     "TranslationRepairPlan",
@@ -71,6 +98,7 @@ __all__ = [
     "hlf_to_english",
     "is_embodied_policy_trace",
     "language_to_hlf",
+    "materialize_swarm_hlf",
     "project_relation_edges",
     "resolve_language",
     "translation_diagnostics",

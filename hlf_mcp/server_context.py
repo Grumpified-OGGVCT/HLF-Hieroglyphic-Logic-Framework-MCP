@@ -3,12 +3,16 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
+import urllib.error
+import urllib.request
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 from hlf_mcp.dream_cycle import DreamCycleReport, build_dream_findings
 from hlf_mcp.hlf.align_governor import AlignGovernor
@@ -20,16 +24,22 @@ from hlf_mcp.hlf.compiler import HLFCompiler
 from hlf_mcp.hlf.daemon_manager import DaemonManager
 from hlf_mcp.hlf.formal_verifier import FormalVerifier
 from hlf_mcp.hlf.formatter import HLFFormatter
-from hlf_mcp.hlf.governed_ingress import GovernedIngressController
 from hlf_mcp.hlf.governance_events import (
     GovernanceEvent,
-    GovernanceEventRef,
     GovernanceEventKind,
+    GovernanceEventRef,
     GovernanceSeverity,
     GovernanceStatus,
     normalize_governance_ref,
     normalize_related_refs,
 )
+from hlf_mcp.hlf.governance_proofs import (
+    build_anchor,
+    build_governance_proof,
+    governance_body,
+    sha256_digest,
+)
+from hlf_mcp.hlf.governed_ingress import GovernedIngressController
 from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.memory_node import build_pointer_ref
 from hlf_mcp.hlf.registry import HostFunctionRegistry
@@ -42,16 +52,14 @@ from hlf_mcp.hlf.witness_governance import (
 )
 from hlf_mcp.instinct.lifecycle import InstinctLifecycle
 from hlf_mcp.media_evidence import MediaEvidenceRecord, normalize_media_evidence
-import os
-import urllib.error
-import urllib.request
-
 from hlf_mcp.rag.memory import HKSProvenance, HKSTestEvidence, HKSValidatedExemplar, RAGMemory
 from hlf_mcp.weekly_artifacts import (
     build_weekly_artifact_memory_record,
     load_verified_weekly_artifacts,
     summarize_weekly_artifacts,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _build_hks_evaluation_snapshot(
@@ -297,6 +305,7 @@ class ServerContext:
     session_governed_routes: dict[str, dict[str, Any]]
     session_execution_admissions: dict[str, dict[str, Any]]
     session_symbolic_surfaces: dict[str, dict[str, Any]]
+    session_swarm_mechanics: dict[str, dict[str, Any]]
     session_media_evidence: dict[str, dict[str, Any]]
     session_dream_cycles: dict[str, dict[str, Any]]
     session_dream_findings: dict[str, dict[str, Any]]
@@ -1405,6 +1414,10 @@ class ServerContext:
                 )
 
         all_tests_passed = all(test.passed for test in normalized_tests) if normalized_tests else True
+        durable_artifact_path = artifact_path or (
+            "hks://validated_exemplars/"
+            f"{hashlib.sha256(f'{topic}|{domain}|{solution_kind}|{problem}|{validated_solution}'.encode()).hexdigest()}"
+        )
         evaluation = {
             "authority": "local_hks",
             "groundedness": 1.0 if all_tests_passed else 0.0,
@@ -1434,7 +1447,7 @@ class ServerContext:
                 workflow_run_url=workflow_run_url,
                 branch=branch,
                 commit_sha=commit_sha,
-                artifact_path=artifact_path,
+                artifact_path=durable_artifact_path,
                 confidence=confidence,
             ),
             tests=normalized_tests,
@@ -1659,12 +1672,16 @@ class ServerContext:
                     "collector": "server_context.persist_benchmark_artifact",
                     "collected_at": collected_at,
                     "trust_tier": "validated",
+                    "source_authority_label": "canonical",
                     "operator_summary": f"Governed benchmark artifact for {profile_name}",
                 },
             },
         )
         persisted_artifact["memory_ref"] = {"id": stored.get("id"), "sha256": stored.get("sha256")}
-        persisted_artifact["memory_evidence"] = stored.get("evidence")
+        # Evidence: prefer the enriched `evidence` dict from store() return value,
+        # fall back to raw governed_evidence from metadata for backwards compatibility.
+        stored_meta = stored.get("metadata") or {}
+        persisted_artifact["memory_evidence"] = stored.get("evidence") or stored_meta.get("governed_evidence")
         self.session_benchmark_artifacts[profile_name] = persisted_artifact
         self.emit_governance_event(
             kind="validated_solution_capture",
@@ -1845,6 +1862,69 @@ class ServerContext:
         if self.session_symbolic_surfaces:
             latest_surface_id = next(reversed(self.session_symbolic_surfaces))
             return self.session_symbolic_surfaces.get(latest_surface_id)
+        return None
+
+    def persist_swarm_mechanics(self, artifact: dict[str, Any]) -> dict[str, Any]:
+        persisted = dict(artifact)
+        swarm_id = str(persisted.get("swarm_id") or f"swarm-{uuid.uuid4().hex[:12]}")
+        persisted["swarm_id"] = swarm_id
+        governance_event = self.emit_governance_event(
+            kind="validated_solution_capture",
+            source="server_context.persist_swarm_mechanics",
+            action="persist_swarm_mechanics",
+            subject_id=swarm_id,
+            goal_id="swarm_mechanics",
+            details={
+                "swarm_id": swarm_id,
+                "artifact_kind": persisted.get("artifact_kind"),
+                "delegation_count": len(persisted.get("delegations") or []),
+                "vote_count": len(persisted.get("votes") or []),
+                "dissent_count": len(persisted.get("dissent") or []),
+                "progress_event_count": len(persisted.get("progress_events") or []),
+                "distributed_a2a": bool((persisted.get("boundary") or {}).get("distributed_a2a")),
+                "operator_summary": persisted.get("operator_summary"),
+            },
+            agent_role="swarm_mechanics",
+        )
+        persisted["governance_event"] = governance_event
+        persisted["governance_event_ref"] = governance_event.get("event_ref")
+        proof_events = [
+            {"event_type": "source", "payload": persisted.get("source") or {}},
+            {"event_type": "delegations", "payload": persisted.get("delegations") or []},
+            {"event_type": "votes", "payload": persisted.get("votes") or []},
+            {"event_type": "consensus", "payload": persisted.get("consensus") or {}},
+            {"event_type": "dissent", "payload": persisted.get("dissent") or []},
+            {"event_type": "progress", "payload": persisted.get("progress_events") or []},
+            {"event_type": "trace_lineage", "payload": persisted.get("trace_lineage") or {}},
+            {"event_type": "handoff", "payload": persisted.get("handoff") or {}},
+            {"event_type": "governance_event", "payload": governance_event},
+        ]
+        persisted["governance_proof"] = build_governance_proof(
+            artifact_kind="hlf_swarm_mechanics",
+            artifact_id=swarm_id,
+            events=proof_events,
+            memory_anchors=[
+                build_anchor("memory", "swarm.governance_event_ref", governance_event.get("event_ref") or {}),
+                build_anchor("memory", "swarm.source", persisted.get("source") or {}),
+            ],
+            runtime_anchors=[
+                build_anchor("runtime", "swarm.trace_lineage", persisted.get("trace_lineage") or {}),
+            ],
+            replay_scope={
+                "artifact_body_hash": sha256_digest(governance_body(persisted)),
+                "swarm_id": swarm_id,
+                "boundary": "local_bounded_swarm_only_no_distributed_a2a",
+            },
+        )
+        self.session_swarm_mechanics[swarm_id] = persisted
+        return self.session_swarm_mechanics[swarm_id]
+
+    def get_swarm_mechanics(self, *, swarm_id: str | None = None) -> dict[str, Any] | None:
+        if swarm_id:
+            return self.session_swarm_mechanics.get(swarm_id)
+        if self.session_swarm_mechanics:
+            latest_swarm_id = next(reversed(self.session_swarm_mechanics))
+            return self.session_swarm_mechanics.get(latest_swarm_id)
         return None
 
     def persist_execution_admission(
@@ -2302,6 +2382,7 @@ class ServerContext:
                 tags=list(memory_record["tags"]),
                 entry_kind=str(memory_record["entry_kind"]),
                 metadata=dict(memory_record["metadata"]),
+                bypass_vector_dedup=True,
             )
             synced.append(
                 {
@@ -2377,6 +2458,50 @@ class ServerContext:
             for result in recalled.get("results", [])
             if str(result.get("entry_kind") or "") in allowed_entry_kinds
         ]
+        # Ensure weekly artifacts that were just synced are included in results
+        # even when the semantic query doesn't rank them high enough.
+        if include_weekly_artifacts and weekly_sync.get("count"):
+            existing_ids = {result.get("id") for result in surface_results}
+            for artifact in weekly_sync.get("artifacts") or []:
+                mem_ref = artifact.get("memory_ref") or {}
+                artifact_id = mem_ref.get("id")
+                logger.info(
+                    "recall_governed_evidence: weekly artifact injection: "
+                    "artifact_id=%s, mem_ref_id=%s, in_existing=%s",
+                    artifact.get("artifact_id"), artifact_id, artifact_id in existing_ids if artifact_id is not None else "N/A",
+                )
+                if artifact_id is not None and artifact_id not in existing_ids:
+                    direct = self.memory_store.query_by_id(
+                        artifact_id,
+                        include_stale=include_stale,
+                        include_superseded=include_superseded,
+                        include_revoked=include_revoked,
+                        require_provenance=require_provenance,
+                        include_archive=include_archive,
+                        purpose=normalized_purpose,
+                        query_text=query,
+                        metadata_filters={
+                            key: value
+                            for key, value in {
+                                "domain": self.memory_store._normalize_domain(domain),
+                                "solution_kind": solution_kind or "",
+                            }.items()
+                            if value
+                        },
+                    )
+                    if direct and str(direct.get("entry_kind") or "") in allowed_entry_kinds:
+                        surface_results.insert(0, direct)
+                        existing_ids.add(artifact_id)
+        for result in surface_results:
+            if not isinstance(result, dict):
+                continue
+            pointer_alias = f"{result.get('topic') or 'general'}-{result.get('id') or 'entry'}"
+            pointer = build_pointer_ref(pointer_alias, str(result.get("sha256") or ""))
+            result.setdefault("pointer", pointer)
+            evidence = result.get("evidence")
+            if isinstance(evidence, dict):
+                evidence.setdefault("pointer", pointer)
+                evidence.setdefault("pointer_alias", pointer_alias)
         results = surface_results[:top_k]
         recall_summary = _build_governed_recall_summary(
             results,
@@ -2429,6 +2554,13 @@ class ServerContext:
             "retrieval_contract": retrieval_contract,
             "governed_hks_contract": governed_hks_contract,
             "recall_summary": recall_summary,
+            "evidence_summary": {
+                "evidence_backed_count": int(recall_summary.get("evidence_backed_count") or 0),
+                "stale_count": int(recall_summary.get("stale_result_count") or 0),
+                "archived_count": int(recall_summary.get("archived_result_count") or 0),
+                "active_count": int(recall_summary.get("active_result_count") or 0),
+                "graph_linked_count": int(recall_summary.get("graph_linked_result_count") or 0),
+            },
             "weekly_sync": weekly_sync,
             "governance_event": governance_event,
             "evidence_refs": [governance_event.get("event_ref")],
@@ -3259,6 +3391,7 @@ def build_server_context() -> ServerContext:
         session_governed_routes={},
         session_execution_admissions={},
         session_symbolic_surfaces={},
+        session_swarm_mechanics={},
         session_media_evidence={},
         session_dream_cycles={},
         session_dream_findings={},

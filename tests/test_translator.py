@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from hlf_mcp.hlf.translator import (
-    Tone,
     COGNITIVE_LANE_POLICIES,
+    Tone,
     build_translation_repair_plan,
     canonicalize_translation_text,
     chinese_to_hlf,
@@ -237,3 +237,24 @@ def test_build_translation_repair_plan_returns_retry_request() -> None:
     assert plan["retryable"] is True
     assert plan["recommended_tool"] == "hlf_translate_to_hlf"
     assert plan["next_request"]["language"] == "en"
+    assert plan["semantic_check"]["preserved"] is True
+    assert plan["semantic_check"]["original"]["target"] == "/var/log/app.log"
+    assert plan["semantic_check"]["repaired"]["target"] == "/var/log/app.log"
+    assert 'target="/var/log/app.log"' in plan["safe_repaired_hlf"]
+    assert 'mode="ro"' in plan["safe_repaired_hlf"]
+    assert any("preserved target" in line for line in plan["repair_explanation"])
+
+
+def test_build_translation_repair_plan_blocks_invented_target_drift() -> None:
+    plan = build_translation_repair_plan(
+        "Please analyze the incident in read-only mode",
+        language="en",
+        failure_status="low_fidelity",
+        failure_error="fallback_used=True",
+    ).to_dict()
+
+    assert plan["retryable"] is False
+    assert plan["terminal_reason"] == "semantic_drift"
+    assert plan["safe_repaired_hlf"] is None
+    assert "invented_target" in plan["semantic_check"]["drift_flags"]
+    assert any("would change intent or target" in line for line in plan["repair_explanation"])

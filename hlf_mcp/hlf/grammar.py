@@ -5,12 +5,12 @@ Hieroglyphic Logic Framework — deterministic orchestration protocol
 for zero-trust agent execution with cryptographic governance.
 
 Statement types (21 top-level + block forms):
-  Glyph statements  : Δ Ж ⨝ ⌘ ∇ ⩕ ⊎
+  Glyph statements  : Δ Ж ⨝ ⌘ ∇ ⩕ ⊎ ⌂ Σ
   Declarations      : SET (immutable), ASSIGN (mutable)
   Control flow      : IF/ELIF/ELSE/ENDIF (flat), IF/ELIF/ELSE blocks
   Loops             : FOR ... IN ... (block)
   Parallel          : PARALLEL block+
-  Invocations       : CALL, TOOL, FUNCTION (with block body)
+  Invocations       : CALL, TOOL, MODULE/FUNCTION (with block body)
   Capsule           : INTENT name args block
   Import            : IMPORT
   Logging           : LOG / RESULT
@@ -25,6 +25,8 @@ Glyph → semantic mapping:
   ∇  (Nabla)   — source / parameter / data flow
   ⩕  (Bowtie)  — priority / weight / rank
   ⊎  (Union)   — branch / condition / union
+  ⌂  (House)   — memory anchor / recall provenance
+  Σ  (Sigma)   — summary / aggregate / capsule surface
 
 Expression types (for block-form control flow):
   Arithmetic : + - * / %
@@ -50,8 +52,9 @@ _hlf_version: INT ("." INT)*
           | set_stmt
           | if_block_stmt
           | for_stmt
-          | parallel_stmt
-          | func_block_stmt
+           | parallel_stmt
+           | module_block_stmt
+           | func_block_stmt
           | intent_stmt
           | tool_stmt
           | call_stmt
@@ -69,7 +72,7 @@ _hlf_version: INT ("." INT)*
 // ── Glyph statement ───────────────────────────────────────────────────────────
 glyph_stmt: GLYPH tag? arg_list?
 
-GLYPH: /[ΔЖ⨝⌘∇⩕⊎]/
+GLYPH: /[ΔЖ⨝⌘∇⩕⊎⌂Σ]/
 
 tag: LBRACKET TAG_NAME RBRACKET
 TAG_NAME: /[A-Z][A-Z0-9_]*/
@@ -106,11 +109,12 @@ for_stmt: KW_FOR IDENT KW_IN expr block
 // PARALLEL { ... } { ... }+
 parallel_stmt: KW_PARALLEL block block+
 
-// ── Function and Intent blocks ────────────────────────────────────────────────
+// ── Module, Function, and Intent blocks ───────────────────────────────────────
+module_block_stmt: KW_MODULE IDENT arg_list? block
 func_block_stmt: KW_FUNCTION IDENT param_list? block
 
 param_list: "(" param_item ("," param_item)* ")"
-param_item: IDENT (":" IDENT)?   -> typed_param
+param_item: PARAM_IDENT (":" PARAM_IDENT)?   -> typed_param
 
 // INTENT name args { ... } — capsule-scoped block
 intent_stmt: KW_INTENT IDENT arg_list? block
@@ -183,6 +187,7 @@ KW_ENDIF.10:       "ENDIF"
 KW_FOR.10:         "FOR"
 KW_IN.10:          "IN"
 KW_PARALLEL.10:    "PARALLEL"
+KW_MODULE.10:      "MODULE"
 KW_FUNCTION.10:    "FUNCTION"
 KW_INTENT.10:      "INTENT"
 KW_TOOL.10:        "TOOL"
@@ -207,6 +212,7 @@ PATH.5:    /\/[^\s"\[\]\{\}\n]+/
 FLOAT.3:   /[+-]?[0-9]+\.[0-9]+/
 INT.2:     /[+-]?[0-9]+/
 VAR_REF.4: /\$[A-Z_][A-Z0-9_]*/
+PARAM_IDENT.2: /[a-zA-Z_][a-zA-Z0-9_\-.@]*/
 IDENT.1:   /[a-zA-Z_][a-zA-Z0-9_\-.:@]*/
 
 %import common.ESCAPED_STRING
@@ -214,23 +220,55 @@ IDENT.1:   /[a-zA-Z_][a-zA-Z0-9_\-.:@]*/
 %ignore /#[^\n]*/
 """
 
-# Canonical glyph definitions for reference and documentation
+# Canonical glyph definitions for reference and documentation.
+# `syntax=statement` glyphs compile today through the generic glyph statement
+# production. `syntax=terminator` is required program structure, not a statement.
 GLYPHS = {
-    "Δ": {"name": "DELTA", "role": "analyze", "ascii": "ANALYZE", "opcode": 0x51},
-    "Ж": {"name": "ZHE", "role": "enforce", "ascii": "ENFORCE", "opcode": 0x60},
-    "⨝": {"name": "JOIN", "role": "consensus", "ascii": "JOIN", "opcode": 0x61},
-    "⌘": {"name": "COMMAND", "role": "delegate", "ascii": "CMD", "opcode": 0x52},
-    "∇": {"name": "NABLA", "role": "source", "ascii": "SOURCE", "opcode": 0x01},
-    "⩕": {"name": "BOWTIE", "role": "priority", "ascii": "PRIORITY", "opcode": 0x11},
-    "⊎": {"name": "UNION", "role": "branch", "ascii": "BRANCH", "opcode": 0x41},
+    "Ω": {
+        "name": "OMEGA",
+        "role": "terminate",
+        "ascii": "OMEGA",
+        "opcode": None,
+        "syntax": "terminator",
+    },
+    "Δ": {"name": "DELTA", "role": "analyze", "ascii": "ANALYZE", "opcode": 0x51, "syntax": "statement"},
+    "Ж": {"name": "ZHE", "role": "enforce", "ascii": "ENFORCE", "opcode": 0x60, "syntax": "statement"},
+    "⨝": {"name": "JOIN", "role": "consensus", "ascii": "JOIN", "opcode": 0x61, "syntax": "statement"},
+    "⌘": {"name": "COMMAND", "role": "delegate", "ascii": "CMD", "opcode": 0x52, "syntax": "statement"},
+    "∇": {"name": "NABLA", "role": "source", "ascii": "SOURCE", "opcode": 0x01, "syntax": "statement"},
+    "⩕": {"name": "BOWTIE", "role": "priority", "ascii": "PRIORITY", "opcode": 0x11, "syntax": "statement"},
+    "⊎": {"name": "UNION", "role": "branch", "ascii": "BRANCH", "opcode": 0x41, "syntax": "statement"},
+    "⌂": {
+        "name": "HOUSE",
+        "role": "memory_anchor",
+        "ascii": "MEMORY_ANCHOR",
+        "opcode": None,
+        "syntax": "statement",
+    },
+    "Σ": {
+        "name": "SIGMA",
+        "role": "summarize",
+        "ascii": "SUMMARY",
+        "opcode": None,
+        "syntax": "statement",
+    },
+}
+
+STATEMENT_GLYPHS = {
+    glyph: metadata for glyph, metadata in GLYPHS.items() if metadata.get("syntax") == "statement"
 }
 
 # Canonical tag definitions
 TAGS = {
     "INTENT": "Primary intent declaration",
+    "CAPSULE": "Capsule boundary / scoped intent surface",
+    "THOUGHT": "Pure reasoning note",
+    "OBSERVATION": "Pure observed data note",
+    "PLAN": "Plan or ordered step surface",
     "CONSTRAINT": "Hard constraint enforcement",
     "ASSERT": "Assertion / precondition check",
     "EXPECT": "Expected output type or value",
+    "ACTION": "Executable action request",
     "DELEGATE": "Sub-agent delegation target",
     "ROUTE": "Model routing strategy",
     "SOURCE": "Data source reference",
@@ -238,13 +276,32 @@ TAGS = {
     "PRIORITY": "Execution priority level",
     "VOTE": "Consensus vote configuration",
     "RESULT": "Result capture binding",
+    "SET": "Immutable binding metadata",
+    "MODULE": "Module declaration metadata",
+    "IMPORT": "Module import metadata",
+    "FUNCTION": "Function declaration metadata",
+    "CODE": "Code surface metadata",
+    "DATA": "Data payload metadata",
     "MEMORY": "Memory node reference",
     "RECALL": "Memory retrieval query",
+    "PROVENANCE": "Evidence provenance metadata",
+    "GOVERNANCE": "Governance or policy metadata",
+    "RELATE": "Explicit symbolic relation edge",
     "GATE": "Spec gate assertion",
     "DEFINE": "Spec definition block",
+    "CALL": "Function or tool call metadata",
+    "WHILE": "Loop metadata retained for tooling",
+    "TRY": "Error-handling try metadata retained for tooling",
+    "CATCH": "Error-handler metadata retained for tooling",
+    "RETURN": "Return payload metadata",
     "MIGRATION": "Database migration spec",
     "MIGRATION_SPEC": "Database migration specification",
     "ALIGN": "ALIGN Ledger governance rule",
+    "SPEC": "Instinct specification metadata",
+    "SPEC_DEFINE": "Instinct specification definition metadata",
+    "SPEC_GATE": "Instinct specification gate metadata",
+    "SPEC_UPDATE": "Instinct specification update metadata",
+    "SPEC_SEAL": "Instinct specification seal metadata",
 }
 
 # ASCII word-form aliases for Unicode glyphs (Pass 0 substitution, glyph-position only).
@@ -262,6 +319,7 @@ ASCII_ALIASES: dict[str, str] = {
     # JOIN ⨝ — consensus / merge
     "JOIN": "⨝",
     "CONSENSUS": "⨝",
+    "VOTE": "⨝",
     # COMMAND ⌘ — delegate / execute
     "CMD": "⌘",
     "COMMAND": "⌘",
@@ -272,6 +330,12 @@ ASCII_ALIASES: dict[str, str] = {
     # UNION ⊎ — branch / fork
     "BRANCH": "⊎",
     "UNION": "⊎",
+    # HOUSE ⌂ — memory anchor
+    "MEMORY_ANCHOR": "⌂",
+    # SIGMA Σ — aggregate / summarize
+    "SUMMARY": "Σ",
+    "SUMMARIZE": "Σ",
+    "AGGREGATE": "Σ",
     # OMEGA Ω — end / terminate
     "END": "Ω",
     "OMEGA": "Ω",

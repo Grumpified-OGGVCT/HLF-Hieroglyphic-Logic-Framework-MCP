@@ -198,10 +198,14 @@ def _gas_for_line(line: str) -> int:
         "∇": 2,
         "⩕": 2,
         "⊎": 2,
+        "⌂": 2,
+        "Σ": 2,
         "SET": 1,
         "IF": 1,
         "LOG": 1,
         "IMPORT": 2,
+        "MODULE": 2,
+        "FUNCTION": 2,
     }
     for prefix, cost in GAS_MAP.items():
         if line.startswith(prefix) or line.lstrip().startswith(prefix):

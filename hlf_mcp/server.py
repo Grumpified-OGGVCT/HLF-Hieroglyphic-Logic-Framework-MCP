@@ -28,8 +28,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from hlf_mcp.hlf.entropy_anchor import evaluate_entropy_anchor
 from hlf_mcp.doc_ingest import DocumentIngester, summarize_reports
+from hlf_mcp.hlf.entropy_anchor import evaluate_entropy_anchor
+from hlf_mcp.mcp_enforcement import install_mcp_enforcement
 from hlf_mcp.server_capsule import register_capsule_tools
 from hlf_mcp.server_completion import register_completion_tools
 from hlf_mcp.server_context import build_server_context, check_governance_manifest
@@ -38,6 +39,7 @@ from hlf_mcp.server_instinct import register_instinct_tools
 from hlf_mcp.server_instructions import build_server_instructions
 from hlf_mcp.server_memory import register_memory_tools
 from hlf_mcp.server_profiles import register_profile_tools
+from hlf_mcp.server_prompts import register_agent_prompts
 from hlf_mcp.server_resources import register_resources
 from hlf_mcp.server_translation import register_translation_tools
 from hlf_mcp.server_verifier import register_verifier_tools
@@ -190,9 +192,11 @@ def hlf_entropy_anchor(
 
 
 REGISTERED_TOOLS["hlf_entropy_anchor"] = hlf_entropy_anchor
+install_mcp_enforcement(mcp, _ctx)
 globals().update(REGISTERED_TOOLS)
 
 
+REGISTERED_PROMPTS = register_agent_prompts(mcp)
 REGISTERED_RESOURCES = register_resources(mcp, _ctx)
 _generated_instructions = build_server_instructions(REGISTERED_TOOLS, REGISTERED_RESOURCES)
 # FastMCP exposes instructions as a read-only property; the wrapped low-level

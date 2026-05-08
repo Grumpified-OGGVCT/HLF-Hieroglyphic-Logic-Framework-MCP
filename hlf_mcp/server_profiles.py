@@ -658,6 +658,11 @@ def _normalize_ollama_endpoint(raw_host: str | None) -> str:
     endpoint = endpoint.replace("https://0.0.0.0", "https://localhost")
     endpoint = endpoint.replace("http://[::]", "http://localhost")
     endpoint = endpoint.replace("https://[::]", "https://localhost")
+    # Ensure localhost/127.0.0.1 endpoints include the default Ollama port when missing
+    from urllib.parse import urlparse
+    parsed = urlparse(endpoint)
+    if parsed.port is None and parsed.hostname in ("localhost", "127.0.0.1"):
+        endpoint = f"{parsed.scheme}://{parsed.hostname}:11434"
     return endpoint
 
 

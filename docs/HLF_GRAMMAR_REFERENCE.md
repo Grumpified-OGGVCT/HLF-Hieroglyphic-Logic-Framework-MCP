@@ -67,46 +67,27 @@ The packaged grammar currently exposes 21 top-level statement forms.
 
 ## Glyph Surface
 
-The parser and runtime expose seven canonical glyphs.
+The parser accepts nine statement glyphs through the generic glyph-statement production. `Ω` remains the required terminator, not a statement glyph. This is metadata/tooling restoration plus generic glyph compilation, not full parser restoration for every v0.4/v0.5 construct.
 
 | Glyph | Canonical Name | Semantic Role | ASCII Alias |
 | --- | --- | --- | --- |
 | `Δ` | `DELTA` | analyze / primary action | `ANALYZE`, `ANALYSE` |
 | `Ж` | `ZHE` | enforce / constrain | `ENFORCE`, `CONSTRAIN` |
-| `⨝` | `JOIN` | consensus / vote / merge | `JOIN`, `CONSENSUS` |
+| `⨝` | `JOIN` | consensus / vote / merge | `JOIN`, `CONSENSUS`, `VOTE` |
 | `⌘` | `COMMAND` | command / delegate / route | `CMD`, `COMMAND` |
 | `∇` | `NABLA` | source / parameter / data flow | `SOURCE` |
 | `⩕` | `BOWTIE` | priority / weighting | `PRIORITY` |
-| `⊎` | `UNION` | branch / union | `BRANCH`, `UNION` |
+| `⊎` | `UNION` | branch / union / capsule fan-out | `BRANCH`, `UNION` |
+| `⌂` | `HOUSE` | memory anchor / provenance | `MEMORY_ANCHOR` |
+| `Σ` | `SIGMA` | summary / aggregate / report | `SUMMARY`, `SUMMARIZE`, `AGGREGATE` |
 
 `Ω` is the required terminator, not a statement glyph.
 
 ## Tag Surface
 
-The packaged repo currently carries a tooling dictionary for common tags. The most important tags exposed there are:
+The packaged repo carries a tooling dictionary for canonical and bridge-pressure tags. The current recognized metadata surface now includes intent/capsule, thought/observation/plan/action, module/function/code/import/call/return, memory/recall/provenance, governance/gate/spec lifecycle, routing/delegation/consensus, relation, and result tags.
 
-- `INTENT`
-- `CONSTRAINT`
-- `EXPECT`
-- `ACTION`
-- `SET`
-- `FUNCTION`
-- `DELEGATE`
-- `VOTE`
-- `ASSERT`
-- `RESULT`
-- `MODULE`
-- `IMPORT`
-- `MEMORY`
-- `RECALL`
-- `DEFINE`
-- `CALL`
-- `WHILE`
-- `TRY`
-- `CATCH`
-- `RETURN`
-
-For current tag arity and traits, use [HLF_TAG_REFERENCE.md](c:/Users/gerry/generic_workspace/HLF_MCP/docs/HLF_TAG_REFERENCE.md).
+For current tag arity and traits, use [HLF_TAG_REFERENCE.md](HLF_TAG_REFERENCE.md).
 
 ## Expressions
 
@@ -129,6 +110,11 @@ The parser currently defines `IMPORT` against a path-like token. The extracted s
 
 That means the repo already has a useful stdlib catalog, but the exact import authoring story is not fully unified yet. Treat the stdlib module list as authoritative for what exists, and the parser as authoritative for what compiles today.
 
+
+### Restored metadata boundary
+
+This restoration aligns metadata, linter recognition, generated TextMate scopes, LSP completions, and tag docs with the broader authority lanes. It does not claim that every dictionary tag has a dedicated AST node or runtime semantics. Dedicated parser productions remain limited to the statement forms above; broader tags compile today only when carried by supported generic glyph statements or existing keyword statements.
+
 ### Parser vs. tag dictionary
 
 The dictionary is broader than the strict parser grammar. That is intentional for tooling, but it means not every documented tag implies a dedicated parser production. Some tags are currently consumed through generic glyph statements or tooling layers rather than bespoke grammar rules.
@@ -138,4 +124,4 @@ The dictionary is broader than the strict parser grammar. That is intentional fo
 - Prefer the packaged keyword forms such as `SET`, `ASSIGN`, `IF`, `FUNCTION`, `CALL`, `RESULT`, and `LOG` when you need parser certainty.
 - Use glyph-prefixed statements when you want the hieroglyphic surface and the relevant tag is understood by the consuming toolchain.
 - End every program with `Ω`.
-- Keep [HLF_TAG_REFERENCE.md](c:/Users/gerry/generic_workspace/HLF_MCP/docs/HLF_TAG_REFERENCE.md) and [HLF_STDLIB_REFERENCE.md](c:/Users/gerry/generic_workspace/HLF_MCP/docs/HLF_STDLIB_REFERENCE.md) nearby when authoring.
+- Keep [HLF_TAG_REFERENCE.md](HLF_TAG_REFERENCE.md) and [HLF_STDLIB_REFERENCE.md](HLF_STDLIB_REFERENCE.md) nearby when authoring.

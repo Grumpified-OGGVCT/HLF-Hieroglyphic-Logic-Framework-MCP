@@ -30,6 +30,10 @@ glyph_aliases:
   PRIORITY:  "⩕"
   BRANCH:    "⊎"
   UNION:     "⊎"
+  MEMORY_ANCHOR: "⌂"
+  SUMMARY:   "Σ"
+  SUMMARIZE: "Σ"
+  AGGREGATE: "Σ"
   END:       "Ω"   # ASCII terminator alias
   OMEGA:     "Ω"
 
@@ -165,3 +169,48 @@ tags:
     ja: [呼び出す, 取得, 検索, 想起, クエリ]
     ar: [استرجاع, استذكار, بحث, استعلام]
     pt: [LEMBRAR, RECUPERAR, BUSCAR, CONSULTAR]
+
+  THOUGHT:
+    en: [THOUGHT, REASONING, RATIONALE]
+
+  OBSERVATION:
+    en: [OBSERVATION, OBSERVE, OBSERVED, EVIDENCE]
+
+  PLAN:
+    en: [PLAN, STEPS, ROADMAP]
+
+  ACTION:
+    en: [ACTION, ACT, EXECUTE]
+
+  MODULE:
+    en: [MODULE, PACKAGE, NAMESPACE]
+
+  FUNCTION:
+    en: [FUNCTION, FN, ROUTINE]
+
+  CODE:
+    en: [CODE, SOURCE_CODE, PROGRAM]
+
+  DATA:
+    en: [DATA, PAYLOAD, DATASET]
+
+  PROVENANCE:
+    en: [PROVENANCE, LINEAGE, SOURCE_CHAIN, EVIDENCE_CHAIN]
+
+  GOVERNANCE:
+    en: [GOVERNANCE, POLICY, CONTROL, ALIGN]
+
+  CAPSULE:
+    en: [CAPSULE, BOUNDARY, SCOPE]
+
+  RELATE:
+    en: [RELATE, RELATION, EDGE, LINK]
+
+  DEFINE:
+    en: [DEFINE, DEFINITION, MACRO]
+
+  CALL:
+    en: [CALL, INVOKE, RUN]
+
+  RETURN:
+    en: [RETURN, YIELD, RESPOND]

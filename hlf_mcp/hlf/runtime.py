@@ -508,8 +508,12 @@ def _resolve_pointer_argument(
             "status": outcome["status"],
             "alias": ((outcome.get("resolution") or {}).get("verification") or {}).get("alias", ""),
             "trust_tier": outcome.get("trust_tier", "unknown"),
+            "provenance_grade": outcome.get("provenance_grade", "unknown"),
             "governance_status": outcome.get("governance_status", "unknown"),
             "freshness_status": outcome.get("freshness_status", "unknown"),
+            "source_lineage_present": (outcome.get("evidence") or {}).get("source_lineage_present"),
+            "trusted_for_governance": (outcome.get("evidence") or {}).get("trusted_for_governance"),
+            "content_hash_valid": (outcome.get("evidence") or {}).get("content_hash_valid"),
             "reason": outcome.get("reason", ""),
             "purpose": outcome.get("purpose", purpose),
         }

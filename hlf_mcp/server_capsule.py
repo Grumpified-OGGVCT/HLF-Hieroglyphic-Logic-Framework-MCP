@@ -234,8 +234,12 @@ def _collect_pointer_validation_evidence(
             "status": str(event.get("status") or "unknown"),
             "reason": str(event.get("reason") or ""),
             "trust_tier": str(event.get("trust_tier") or ""),
+            "provenance_grade": str(event.get("provenance_grade") or ""),
             "governance_status": str(event.get("governance_status") or ""),
             "freshness_status": str(event.get("freshness_status") or ""),
+            "source_lineage_present": event.get("source_lineage_present"),
+            "trusted_for_governance": event.get("trusted_for_governance"),
+            "content_hash_valid": event.get("content_hash_valid"),
         }
         validations.append(normalized)
         if normalized["status"] != "ok":

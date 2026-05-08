@@ -103,6 +103,8 @@ def _human(node: dict[str, Any]) -> str:
         return f"spec gate {node.get('tag', '')}"
     if kind == "spec_seal_stmt":
         return f"spec seal {node.get('tag', '')}"
+    if kind == "module_block_stmt":
+        return f"module {node.get('name')}"
     if kind == "func_block_stmt":
         params = [p.get("name", "") for p in node.get("params", [])]
         return f"function {node.get('name')}({', '.join(params)})"
@@ -248,6 +250,18 @@ class HLFTransformer(Transformer):
         return n
 
     # ── Function & Intent blocks ─────────────────────────────────────────────
+
+    def module_block_stmt(self, _kw, name, *rest):
+        args = []
+        body = None
+        for item in rest:
+            if isinstance(item, list):
+                args.extend(item)
+            elif isinstance(item, dict) and item.get("kind") == "block":
+                body = item
+        n = _node("module_block_stmt", name=str(name), arguments=args, body=body)
+        n["human_readable"] = _human(n)
+        return n
 
     def func_block_stmt(self, _kw, name, *rest):
         params = []

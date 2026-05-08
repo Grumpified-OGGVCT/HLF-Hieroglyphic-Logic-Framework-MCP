@@ -8,7 +8,12 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from hlf.mcp_metrics import HLFMetrics
+# Bridge dependency: Gen 1 metrics substrate lives in hlf/ compatibility line.
+# Import is optional — test_runner functions without it (metrics just won't record).
+try:
+    from hlf.mcp_metrics import HLFMetrics
+except ImportError:
+    HLFMetrics = None  # type: ignore[assignment, misc]
 
 DEFAULT_PYTEST_ARGS = ["tests", "-q", "--tb=short"]
 DEFAULT_METRICS_DIR = Path.home() / ".sovereign" / "mcp_metrics"
@@ -88,18 +93,22 @@ def run_pytest_suite(
         metrics_dir=str(effective_metrics_dir),
     )
 
-    metrics = HLFMetrics(effective_metrics_dir)
-    metrics.record_test(
-        "pytest_default_suite",
-        passed=summary.passed,
-        duration_ms=duration_ms,
-        error=completed.stderr.strip(),
-        details={
-            "command": command,
-            "exit_code": completed.returncode,
-            "counts": counts,
-        },
-    )
+    if HLFMetrics is not None:
+        try:
+            metrics = HLFMetrics(effective_metrics_dir)
+            metrics.record_test(
+                "pytest_default_suite",
+                passed=summary.passed,
+                duration_ms=duration_ms,
+                error=completed.stderr.strip(),
+                details={
+                    "command": command,
+                    "exit_code": completed.returncode,
+                    "counts": counts,
+                },
+            )
+        except Exception:
+            pass  # metrics recording is best-effort
     _persist_summary(summary, effective_metrics_dir)
     return summary
 

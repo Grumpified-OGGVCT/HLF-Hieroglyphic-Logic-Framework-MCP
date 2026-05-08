@@ -2,6 +2,7 @@
 HLF Benchmark — token compression analysis using tiktoken cl100k_base.
 
 Measures HLF token efficiency vs natural language and verbose JSON equivalents.
+Also provides bounded, patch-plan-only workflow benchmarks for HLF self-improvement.
 """
 
 from __future__ import annotations
@@ -63,6 +64,109 @@ _NLP_TEMPLATES: dict[str, str] = {
         "deployment tier. Set temperature to 0.0 for deterministic output. "
         "Require operator confirmation before proceeding with deployment."
     ),
+}
+
+_SELF_IMPROVEMENT_SURFACES = (
+    "authority",
+    "grammar",
+    "internal_loop",
+    "code_bearing",
+    "swarm",
+    "governance",
+)
+
+_REAL_WORKFLOW_BENCHMARK_PROFILE = "real_hlf_self_improvement_workflow_compare"
+
+_SELF_IMPROVEMENT_WORKFLOWS: dict[str, dict[str, Any]] = {
+    "authority-grammar-loop": {
+        "title": "Authority-bound grammar metadata self-improvement",
+        "surfaces": ["authority", "grammar", "internal_loop", "governance"],
+        "files": [
+            "hlf_mcp/hlf/grammar.py",
+            "governance/tag_i18n.yaml",
+            "governance/templates/dictionary.json",
+            "docs/HLF_GRAMMAR_REFERENCE.md",
+        ],
+        "patch_steps": [
+            "classify claim lane before touching grammar metadata",
+            "derive tag contract from present packaged truth, not wrong-checkout artifacts",
+            "update parser/dictionary/docs/TextMate as one consistency surface",
+            "validate, compile, lint, and verify the HLF patch plan",
+            "record governance proof and replay scope",
+        ],
+        "hlf_source": """\
+[HLF-v3]
+Δ [INTENT] goal="self_improve_hlf" workflow="authority_grammar_loop"
+∇ [SOURCE] path="hlf_mcp/hlf/grammar.py"
+∇ [SOURCE] path="governance/tag_i18n.yaml"
+Ж [ASSERT] authority_lane="present-packaged-current-truth"
+Ж [CONSTRAINT] mode="patch-plan-only"
+⌘ [DELEGATE] agent="grammar-reviewer" goal="derive_consistency_patch"
+⨝ [VOTE] voter="authority-verifier" decision="approve" quorum="strict"
+Ж [EXPECT] validation="validate_compile_lint_proof"
+Ω
+""",
+    },
+    "code-bearing-contract": {
+        "title": "Code-bearing HLF self-improvement contract",
+        "surfaces": ["authority", "internal_loop", "code_bearing", "governance"],
+        "files": [
+            "hlf_mcp/hlf/code_execution.py",
+            "tests/test_code_bearing_execution.py",
+            "hlf_mcp/server_core.py",
+        ],
+        "entrypoint": "verify_plan",
+        "patch_steps": [
+            "express code-bearing change as a bounded HLF block",
+            "dry-run the HLF VM admission path before any runtime execution",
+            "refuse non-HLF code execution while preserving compile-only evidence",
+            "compare validation and governance proof coverage against baseline notes",
+            "add targeted regression tests before applying any real patch",
+        ],
+        "hlf_source": """\
+[HLF-v3]
+Δ [INTENT] goal="self_improve_hlf_code_execution" workflow="code_bearing_contract"
+∇ [SOURCE] path="hlf_mcp/hlf/code_execution.py"
+Ж [ASSERT] authority_lane="present-packaged-current-truth"
+Ж [CONSTRAINT] mode="dry-run"
+Δ [CODE] name="patch_notes" language="python" body="plan only: no repository write"
+FUNCTION verify_plan {
+  RESULT 0 "patch-plan-only"
+}
+⨝ [VOTE] voter="sandbox-verifier" decision="approve" quorum="strict"
+Ω
+""",
+    },
+    "swarm-governance-report": {
+        "title": "Swarm and governance proof reporting self-improvement",
+        "surfaces": ["authority", "internal_loop", "swarm", "governance"],
+        "files": [
+            "hlf_mcp/hlf/swarm_mechanics.py",
+            "hlf_mcp/hlf/governance_proofs.py",
+            "hlf_mcp/server_resources.py",
+            "tests/test_swarm_mechanics.py",
+        ],
+        "patch_steps": [
+            "delegate bounded local review roles through raw HLF handoff",
+            "materialize votes, dissent, progress, and lineage as HLF artifacts",
+            "verify SHA-256 hash-chain proof boundaries honestly",
+            "expose report/status resource without claiming distributed A2A",
+            "run targeted proof and resource tests",
+        ],
+        "hlf_source": """\
+[HLF-v3]
+Δ [INTENT] goal="self_improve_hlf_swarm_governance" workflow="swarm_governance_report"
+∇ [SOURCE] path="hlf_mcp/hlf/swarm_mechanics.py"
+∇ [SOURCE] path="hlf_mcp/hlf/governance_proofs.py"
+Ж [CONSTRAINT] mode="patch-plan-only"
+⌘ [DELEGATE] agent="planner" goal="resource_report_patch" role="coordinator"
+⌘ [DELEGATE] agent="verifier" goal="proof_boundary_check" role="reviewer"
+⨝ [VOTE] voter="planner" decision="approve" quorum="strict"
+Ж [DISSENT] agent="operator" reason="do_not_fake_file_modification" severity="warning"
+∇ [PROGRESS] event_id="bench-swarm-1" phase="patch_plan" status="materialized"
+Ω
+""",
+    },
 }
 
 
@@ -350,6 +454,140 @@ class HLFBenchmark:
             "languages": matrix["languages"],
             "tiktoken_model": matrix["tiktoken_model"],
         }
+
+    def real_workflow_self_improvement_benchmark(
+        self,
+        workflow_ids: list[str] | None = None,
+        mode: str = "patch-plan",
+    ) -> dict[str, Any]:
+        """Benchmark HLF self-improvement workflows against non-HLF patch-plan baselines.
+
+        The benchmark produces real validation/proof/swarm/code-admission artifacts, but it
+        never writes repository files. File modifications are represented as explicit patch
+        plans so the result is safe to run inside the MCP server.
+        """
+        if mode not in {"patch-plan", "dry-run"}:
+            raise ValueError("mode must be 'patch-plan' or 'dry-run'")
+
+        from hlf_mcp.hlf.authority import authority_matrix, downstream_guidance
+        from hlf_mcp.hlf.code_execution import execute_code_bearing_hlf
+        from hlf_mcp.hlf.compiler import HLFCompiler
+        from hlf_mcp.hlf.formal_verifier import FormalVerifier
+        from hlf_mcp.hlf.governance_proofs import (
+            build_anchor,
+            build_governance_proof,
+            sha256_digest,
+            verify_governance_proof,
+        )
+        from hlf_mcp.hlf.linter import HLFLinter
+        from hlf_mcp.hlf.swarm_mechanics import build_swarm_mechanics_artifact
+
+        selected_ids = workflow_ids or list(_SELF_IMPROVEMENT_WORKFLOWS)
+        unknown = [workflow_id for workflow_id in selected_ids if workflow_id not in _SELF_IMPROVEMENT_WORKFLOWS]
+        if unknown:
+            raise ValueError(f"Unknown self-improvement workflow id(s): {', '.join(unknown)}")
+
+        compiler = HLFCompiler()
+        linter = HLFLinter()
+        verifier = FormalVerifier()
+        authority = authority_matrix()
+        guidance = {
+            "restore-grammar": list(downstream_guidance("restore-grammar")),
+            "mandatory-internal-hlf": list(downstream_guidance("mandatory-internal-hlf")),
+        }
+
+        rows: list[dict[str, Any]] = []
+        for workflow_id in selected_ids:
+            spec = _SELF_IMPROVEMENT_WORKFLOWS[workflow_id]
+            hlf_source = str(spec["hlf_source"])
+            baseline_text = _render_non_hlf_self_improvement_baseline(workflow_id, spec)
+
+            hlf_result = _measure_hlf_self_improvement_workflow(
+                workflow_id=workflow_id,
+                spec=spec,
+                source=hlf_source,
+                mode=mode,
+                compiler=compiler,
+                linter=linter,
+                verifier=verifier,
+                execute_code_bearing_hlf=execute_code_bearing_hlf,
+                build_swarm_mechanics_artifact=build_swarm_mechanics_artifact,
+                verify_governance_proof=verify_governance_proof,
+            )
+            baseline_result = _measure_non_hlf_self_improvement_baseline(
+                workflow_id=workflow_id,
+                spec=spec,
+                baseline_text=baseline_text,
+            )
+            comparison = _compare_real_workflow_rows(hlf_result, baseline_result)
+            rows.append(
+                {
+                    "workflow_id": workflow_id,
+                    "title": spec["title"],
+                    "mode": mode,
+                    "modification_policy": (
+                        "No repository files are modified by this benchmark; file changes are "
+                        "represented as patch plans and bounded artifacts."
+                    ),
+                    "surfaces": list(spec["surfaces"]),
+                    "target_files": list(spec["files"]),
+                    "hlf_workflow": hlf_result,
+                    "non_hlf_baseline": baseline_result,
+                    "comparison": comparison,
+                }
+            )
+
+        aggregate = _aggregate_real_workflow_rows(rows)
+        report_body = {
+            "profile_name": _REAL_WORKFLOW_BENCHMARK_PROFILE,
+            "benchmark_kind": "hlf_self_improvement_real_workflow_compare",
+            "mode": mode,
+            "workflow_ids": selected_ids,
+            "measurement_policy": {
+                "measured": [
+                    "HLF token counts",
+                    "baseline token counts",
+                    "HLF parser/compiler/linter/formal-verifier admission",
+                    "HLF dry-run code-bearing admission where applicable",
+                    "local bounded swarm artifact construction",
+                    "governance proof verification and tamper detection",
+                ],
+                "estimated": [
+                    "baseline quality, scope, thoroughness, validation intent, and error-chasing from deterministic text rubrics",
+                    "token cost as tokenizer count only; no provider billing is inferred",
+                ],
+                "not_claimed": [
+                    "no repository file modification",
+                    "no distributed swarm/A2A execution",
+                    "no digital signature or non-repudiation",
+                ],
+            },
+            "authority_snapshot": authority,
+            "downstream_guidance": guidance,
+            "rows": rows,
+            "summary": aggregate,
+            "benchmark_scores": aggregate["benchmark_scores"],
+        }
+        proof = build_governance_proof(
+            artifact_kind="real_workflow_benchmark",
+            artifact_id=_REAL_WORKFLOW_BENCHMARK_PROFILE,
+            events=[
+                {"event_type": "workflow_rows", "payload": rows},
+                {"event_type": "summary", "payload": aggregate},
+                {"event_type": "measurement_policy", "payload": report_body["measurement_policy"]},
+            ],
+            memory_anchors=[build_anchor("memory", "authority_matrix", authority)],
+            runtime_anchors=[build_anchor("runtime", "workflow_row_hash", sha256_digest(rows))],
+            replay_scope={
+                "workflow_ids": selected_ids,
+                "mode": mode,
+                "profile_name": _REAL_WORKFLOW_BENCHMARK_PROFILE,
+                "row_hash": sha256_digest(rows),
+            },
+        )
+        report_body["governance_proof"] = proof
+        report_body["governance_proof_verification"] = verify_governance_proof(proof)
+        return report_body
 
     def translation_memory_retrieval_matrix(
         self,
@@ -666,6 +904,386 @@ class HLFBenchmark:
             "benchmark_scores": benchmark_scores,
             "profile_name": "agent_routing_context_multilingual",
         }
+
+
+def _render_non_hlf_self_improvement_baseline(workflow_id: str, spec: dict[str, Any]) -> str:
+    patch_plan = {
+        "workflow_id": workflow_id,
+        "title": spec["title"],
+        "mode": "patch-plan-only",
+        "target_files": list(spec["files"]),
+        "steps": list(spec["patch_steps"]),
+        "validation": ["run targeted tests", "run ruff on changed files"],
+        "risk_controls": [
+            "do not edit unrelated dirty files",
+            "do not claim file modification until a patch is applied",
+            "record open questions and blockers honestly",
+        ],
+    }
+    return (
+        f"Non-HLF baseline plan for {spec['title']}.\n"
+        "Use ordinary prose and JSON notes to plan a safe HLF self-improvement change. "
+        "Cover authority, grammar, internal loop, code-bearing, swarm, and governance concerns where relevant. "
+        "Validate with tests and ruff, and chase errors manually if they occur.\n"
+        + json.dumps(patch_plan, ensure_ascii=False, sort_keys=True, indent=2)
+    )
+
+
+def _measure_hlf_self_improvement_workflow(
+    *,
+    workflow_id: str,
+    spec: dict[str, Any],
+    source: str,
+    mode: str,
+    compiler: Any,
+    linter: Any,
+    verifier: Any,
+    execute_code_bearing_hlf: Any,
+    build_swarm_mechanics_artifact: Any,
+    verify_governance_proof: Any,
+) -> dict[str, Any]:
+    validation = compiler.validate(source)
+    compile_result: dict[str, Any] = {"errors": ["compile_not_attempted"], "ast": {}}
+    compile_error = ""
+    try:
+        compile_result = compiler.compile(source)
+    except Exception as exc:  # pragma: no cover - covered through validation failure assertions
+        compile_error = str(exc)
+
+    lint_diagnostics = linter.lint(source)
+    lint_errors = [diag for diag in lint_diagnostics if diag.get("level") == "error"]
+    verification_report: dict[str, Any] = {}
+    if isinstance(compile_result.get("ast"), dict) and not compile_error:
+        verification_report = verifier.verify_ast(compile_result["ast"]).to_dict()
+
+    code_result: dict[str, Any] | None = None
+    if "code_bearing" in spec["surfaces"]:
+        code_result = execute_code_bearing_hlf(
+            source,
+            entrypoint=str(spec.get("entrypoint") or ""),
+            dry_run=True,
+            compiler=compiler,
+            linter=linter,
+            verifier=verifier,
+        )
+
+    swarm_artifact: dict[str, Any] | None = None
+    swarm_proof_report: dict[str, Any] | None = None
+    if "swarm" in spec["surfaces"] and isinstance(compile_result.get("ast"), dict) and not compile_error:
+        swarm_artifact = build_swarm_mechanics_artifact(
+            source=source,
+            ast=compile_result["ast"],
+            validation=validation,
+            compile_result=compile_result,
+            votes=[{"voter": "benchmark-verifier", "decision": "approve"}],
+            quorum="strict",
+        )
+        swarm_proof_report = verify_governance_proof(swarm_artifact["governance_proof"])
+
+    tamper_detection = _tamper_detection_probe(swarm_artifact, code_result, verify_governance_proof)
+    validation_checks = {
+        "compiler_validate": bool(validation.get("valid")),
+        "compile_errors_absent": not compile_error and not compile_result.get("errors"),
+        "lint_errors_absent": not lint_errors,
+        "formal_verifier_admitted": int(verification_report.get("failed", 0) or 0) == 0
+        and int(verification_report.get("errors", 0) or 0) == 0,
+        "code_dry_run_admitted": code_result is None or code_result.get("status") == "dry_run_ok",
+        "swarm_proof_verified": swarm_proof_report is None or bool(swarm_proof_report.get("verified")),
+        "tamper_probe_detected": tamper_detection["detected"],
+    }
+    validation_coverage = _ratio(validation_checks.values())
+    proof_coverage = _ratio(
+        [
+            "governance" in spec["surfaces"],
+            code_result is None or bool(code_result.get("governance_proof") or {}),
+            swarm_artifact is None or bool(swarm_artifact.get("governance_proof") or {}),
+            tamper_detection["detected"],
+        ]
+    )
+    scope_coverage = _ratio(surface in spec["surfaces"] for surface in _SELF_IMPROVEMENT_SURFACES)
+    thoroughness = min(1.0, round((len(spec["patch_steps"]) + len(spec["files"]) + 4) / 14, 3))
+    quality = round(
+        (0.25 * scope_coverage)
+        + (0.25 * thoroughness)
+        + (0.30 * validation_coverage)
+        + (0.20 * proof_coverage),
+        3,
+    )
+
+    artifact_tokens = _count(
+        json.dumps(
+            {
+                "validation": validation,
+                "compile": {
+                    "errors": compile_result.get("errors"),
+                    "gas_estimate": compile_result.get("gas_estimate"),
+                },
+                "code_status": code_result.get("status") if code_result else None,
+                "swarm_id": swarm_artifact.get("swarm_id") if swarm_artifact else None,
+                "tamper_detection": tamper_detection,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return {
+        "workflow_form": "HLF",
+        "source": source,
+        "mode": mode,
+        "measured": True,
+        "patch_plan_only": True,
+        "file_modification_claimed": False,
+        "tokens": {
+            "source_tokens": _count(source),
+            "artifact_tokens": artifact_tokens,
+            "total_proxy_tokens": _count(source) + artifact_tokens,
+            "cost_proxy_note": "Tokenizer count only; no provider billing or hidden reasoning tokens are inferred.",
+        },
+        "scores": {
+            "quality_proxy": quality,
+            "scope_coverage": scope_coverage,
+            "thoroughness_proxy": thoroughness,
+            "validation_coverage": validation_coverage,
+            "proof_coverage": proof_coverage,
+            "error_chasing_coverage": 1.0 if tamper_detection["detected"] else 0.0,
+        },
+        "validation": {
+            "checks": validation_checks,
+            "compiler_validate": validation,
+            "compile_errors": compile_result.get("errors", []),
+            "compile_error": compile_error,
+            "lint_error_count": len(lint_errors),
+            "formal_verifier": verification_report,
+        },
+        "code_execution": _summarize_code_execution_result(code_result),
+        "swarm": _summarize_swarm_artifact(swarm_artifact, swarm_proof_report),
+        "tamper_detection": tamper_detection,
+        "measurement_notes": [
+            "HLF validation/proof/error-detection values are measured by packaged compiler, linter, verifier, dry-run code execution, swarm artifact, and proof verifier.",
+            "No patch is applied; target file list is a patch plan.",
+        ],
+    }
+
+
+def _measure_non_hlf_self_improvement_baseline(
+    *,
+    workflow_id: str,
+    spec: dict[str, Any],
+    baseline_text: str,
+) -> dict[str, Any]:
+    lower = baseline_text.lower()
+    surface_hits = [surface for surface in _SELF_IMPROVEMENT_SURFACES if surface.replace("_", "-") in lower or surface in lower]
+    validation_mentions = sum(
+        lower.count(term)
+        for term in ("validate", "validation", "test", "ruff", "proof", "verify", "lint")
+    )
+    error_chasing_mentions = sum(
+        lower.count(term) for term in ("error", "failure", "regression", "risk", "blocker")
+    )
+    step_count = len(spec["patch_steps"])
+    scope_coverage = _ratio(surface in surface_hits for surface in _SELF_IMPROVEMENT_SURFACES)
+    thoroughness = min(1.0, round((step_count + validation_mentions + error_chasing_mentions) / 16, 3))
+    validation_intent = min(1.0, round(validation_mentions / 8, 3))
+    error_chasing = min(1.0, round(error_chasing_mentions / 5, 3))
+    quality = round(
+        (0.35 * scope_coverage)
+        + (0.25 * thoroughness)
+        + (0.15 * validation_intent)
+        + (0.05 * error_chasing),
+        3,
+    )
+    return {
+        "workflow_form": "non-HLF prose+JSON",
+        "workflow_id": workflow_id,
+        "baseline_text": baseline_text,
+        "measured": False,
+        "estimated_by_text_rubric": True,
+        "patch_plan_only": True,
+        "file_modification_claimed": False,
+        "tokens": {
+            "source_tokens": _count(baseline_text),
+            "artifact_tokens": 0,
+            "total_proxy_tokens": _count(baseline_text),
+            "cost_proxy_note": "Tokenizer count only; no provider billing or hidden reasoning tokens are inferred.",
+        },
+        "scores": {
+            "quality_proxy": quality,
+            "scope_coverage": scope_coverage,
+            "thoroughness_proxy": thoroughness,
+            "validation_coverage": 0.0,
+            "validation_intent_estimate": validation_intent,
+            "proof_coverage": 0.0,
+            "error_chasing_coverage": 0.0,
+            "error_chasing_intent_estimate": error_chasing,
+        },
+        "validation": {
+            "checks": {},
+            "note": "Baseline plan is not compiled, linted, formally verified, or proof-verified.",
+        },
+        "measurement_notes": [
+            "Baseline quality/scope/thoroughness are deterministic text-rubric estimates.",
+            "Baseline has no executable validation/proof coverage in this benchmark.",
+        ],
+    }
+
+
+def _compare_real_workflow_rows(
+    hlf_result: dict[str, Any], baseline_result: dict[str, Any]
+) -> dict[str, Any]:
+    hlf_scores = hlf_result["scores"]
+    baseline_scores = baseline_result["scores"]
+    hlf_tokens = int(hlf_result["tokens"]["total_proxy_tokens"])
+    baseline_tokens = int(baseline_result["tokens"]["total_proxy_tokens"])
+    return {
+        "quality_delta": round(
+            float(hlf_scores["quality_proxy"]) - float(baseline_scores["quality_proxy"]), 3
+        ),
+        "scope_delta": round(
+            float(hlf_scores["scope_coverage"]) - float(baseline_scores["scope_coverage"]), 3
+        ),
+        "thoroughness_delta": round(
+            float(hlf_scores["thoroughness_proxy"])
+            - float(baseline_scores["thoroughness_proxy"]),
+            3,
+        ),
+        "validation_coverage_delta": round(
+            float(hlf_scores["validation_coverage"])
+            - float(baseline_scores["validation_coverage"]),
+            3,
+        ),
+        "proof_coverage_delta": round(
+            float(hlf_scores["proof_coverage"]) - float(baseline_scores["proof_coverage"]), 3
+        ),
+        "error_chasing_delta": round(
+            float(hlf_scores["error_chasing_coverage"])
+            - float(baseline_scores["error_chasing_coverage"]),
+            3,
+        ),
+        "token_delta": hlf_tokens - baseline_tokens,
+        "token_ratio_hlf_to_baseline": round(hlf_tokens / baseline_tokens, 3)
+        if baseline_tokens
+        else None,
+    }
+
+
+def _aggregate_real_workflow_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    comparisons = [row["comparison"] for row in rows]
+    hlf_scores = [row["hlf_workflow"]["scores"] for row in rows]
+    baseline_scores = [row["non_hlf_baseline"]["scores"] for row in rows]
+    hlf_tokens = sum(int(row["hlf_workflow"]["tokens"]["total_proxy_tokens"]) for row in rows)
+    baseline_tokens = sum(
+        int(row["non_hlf_baseline"]["tokens"]["total_proxy_tokens"]) for row in rows
+    )
+    covered_surfaces = sorted({surface for row in rows for surface in row["surfaces"]})
+    token_headline = (
+        "HLF was shorter in token proxy."
+        if hlf_tokens <= baseline_tokens
+        else "Non-HLF baselines were shorter in token proxy."
+    )
+    headline = (
+        "HLF patch-plan workflows had stronger measured validation/proof/error-detection coverage; "
+        f"{token_headline} Baseline quality/scope/thoroughness were text-rubric estimates."
+    )
+    return {
+        "workflow_count": len(rows),
+        "covered_surfaces": covered_surfaces,
+        "surface_coverage": _ratio(surface in covered_surfaces for surface in _SELF_IMPROVEMENT_SURFACES),
+        "hlf_avg_quality_proxy": _avg(score["quality_proxy"] for score in hlf_scores),
+        "baseline_avg_quality_proxy": _avg(score["quality_proxy"] for score in baseline_scores),
+        "avg_quality_delta": _avg(item["quality_delta"] for item in comparisons),
+        "avg_validation_coverage_delta": _avg(
+            item["validation_coverage_delta"] for item in comparisons
+        ),
+        "avg_proof_coverage_delta": _avg(item["proof_coverage_delta"] for item in comparisons),
+        "avg_error_chasing_delta": _avg(item["error_chasing_delta"] for item in comparisons),
+        "hlf_total_proxy_tokens": hlf_tokens,
+        "baseline_total_proxy_tokens": baseline_tokens,
+        "token_ratio_hlf_to_baseline": round(hlf_tokens / baseline_tokens, 3)
+        if baseline_tokens
+        else None,
+        "benchmark_scores": {
+            "quality_delta": _avg(item["quality_delta"] for item in comparisons),
+            "validation_coverage_delta": _avg(
+                item["validation_coverage_delta"] for item in comparisons
+            ),
+            "proof_coverage_delta": _avg(item["proof_coverage_delta"] for item in comparisons),
+            "error_chasing_delta": _avg(item["error_chasing_delta"] for item in comparisons),
+            "token_ratio_hlf_to_baseline": round(hlf_tokens / baseline_tokens, 3)
+            if baseline_tokens
+            else 0.0,
+            "surface_coverage": _ratio(
+                surface in covered_surfaces for surface in _SELF_IMPROVEMENT_SURFACES
+            ),
+        },
+        "headline": headline,
+    }
+
+
+def _tamper_detection_probe(
+    swarm_artifact: dict[str, Any] | None,
+    code_result: dict[str, Any] | None,
+    verify_governance_proof: Any,
+) -> dict[str, Any]:
+    proof_source = None
+    if swarm_artifact and isinstance(swarm_artifact.get("governance_proof"), dict):
+        proof_source = swarm_artifact["governance_proof"]
+    elif code_result and isinstance(code_result.get("governance_proof"), dict):
+        proof_source = code_result["governance_proof"]
+    if proof_source is None:
+        return {"attempted": False, "detected": False, "note": "no proof artifact available"}
+    tampered = json.loads(json.dumps(proof_source, ensure_ascii=False))
+    events = ((tampered.get("chain") or {}).get("events") or [])
+    if not events:
+        return {"attempted": False, "detected": False, "note": "proof had no events"}
+    events[0]["payload"] = {"tampered": True}
+    report = verify_governance_proof(tampered)
+    return {
+        "attempted": True,
+        "detected": not bool(report.get("verified")),
+        "verification_status": report.get("status"),
+        "error_count": (report.get("chain") or {}).get("error_count", 0)
+        if isinstance(report.get("chain"), dict)
+        else 0,
+    }
+
+
+def _summarize_code_execution_result(code_result: dict[str, Any] | None) -> dict[str, Any] | None:
+    if code_result is None:
+        return None
+    return {
+        "status": code_result.get("status"),
+        "compiled": code_result.get("compiled"),
+        "verified": code_result.get("verified"),
+        "executed": code_result.get("executed"),
+        "sandbox_mode": code_result.get("sandbox_mode"),
+        "governance_proof_present": isinstance(code_result.get("governance_proof"), dict),
+    }
+
+
+def _summarize_swarm_artifact(
+    swarm_artifact: dict[str, Any] | None, proof_report: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    if swarm_artifact is None:
+        return None
+    return {
+        "swarm_id": swarm_artifact.get("swarm_id"),
+        "boundary": swarm_artifact.get("boundary"),
+        "delegation_count": len(swarm_artifact.get("delegations") or []),
+        "vote_count": len(swarm_artifact.get("votes") or []),
+        "dissent_count": len(swarm_artifact.get("dissent") or []),
+        "progress_event_count": len(swarm_artifact.get("progress_events") or []),
+        "governance_proof_verified": bool((proof_report or {}).get("verified")),
+    }
+
+
+def _ratio(values: Any) -> float:
+    items = [bool(item) for item in values]
+    return round(sum(items) / len(items), 3) if items else 0.0
+
+
+def _avg(values: Any) -> float:
+    items = [float(item) for item in values]
+    return round(sum(items) / len(items), 3) if items else 0.0
 
 
 def _estimate_nlp(source: str) -> str:

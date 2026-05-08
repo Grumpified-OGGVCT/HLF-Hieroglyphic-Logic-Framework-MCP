@@ -102,3 +102,16 @@ def test_lint_all_fixtures():
         diags = LINTER.lint(source)
         errors = [d for d in diags if d["level"] == "error"]
         assert errors == [], f"Fixture {fname} has lint errors: {errors}"
+
+
+def test_lint_recognizes_restored_metadata_tags():
+    src = (
+        '[HLF-v3]\n'
+        '⊎ [CAPSULE] name="release"\n'
+        '∇ [PROVENANCE] source="weekly" confidence=1.0\n'
+        'Ж [GOVERNANCE] policy="align" action="gate"\n'
+        'Δ [CODE] language="python" body="pass"\n'
+        "Ω\n"
+    )
+    diags = LINTER.lint(src)
+    assert not any("Unknown tag" in d["message"] for d in diags)

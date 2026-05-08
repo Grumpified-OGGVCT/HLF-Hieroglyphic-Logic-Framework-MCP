@@ -126,6 +126,77 @@ In concrete repo terms:
 3. Treat `hlf_mcp/hlf/runtime.py` as the execution truth.
 4. Consult `hlf/vm/` and `hlf_source/` only if you need migration or archaeology context.
 
+## Native MCP First Contact
+
+For non-building agents, MCP is the clean front door. You should not need source
+edits, admin rights, or build permissions to discover the HLF-native surface.
+
+### Client config
+
+Use the repo `.mcp.json` from this repository root:
+
+```json
+{
+  "mcpServers": {
+    "hlf-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "hlf_mcp.server"],
+      "env": { "HLF_TRANSPORT": "stdio" }
+    }
+  }
+}
+```
+
+VS Code users can use `.vscode\mcp.json`, which points to the same packaged
+`python -m hlf_mcp.server` entry point with workspace-local `cwd`. If your MCP
+client cannot set a working directory, copy the same entry into private local
+client config and add this checkout path there. Keep that absolute path out of
+committed repo config. If you prefer the installed package entry point and have
+`uv` available, `uv run hlf-mcp` remains equivalent.
+
+### Discovery sequence
+
+1. Initialize server `hlf-mcp`.
+2. List prompts and load `hlf_native_agent`.
+   - FastMCP/MCP returns prompt text in `messages[0].content.text` from
+     `prompts/get`; there is no top-level `content` field.
+   - If a client lists the prompt but displays empty prompt content, read
+     `hlf://agent/quickstart` and use
+     `prompt_content_fallback.prompt_text` as the explicit resource fallback
+     for `hlf_native_agent`.
+3. List resources and read these first:
+   - `hlf://agent/quickstart`
+   - `hlf://agent/protocol`
+   - `hlf://agent/current_authority`
+   - `hlf://agent/handoff_contract`
+4. List tools and prefer:
+   - `hlf_do` for the packaged natural-language front door
+   - `hlf_translate_to_hlf`
+   - `hlf_validate`
+   - `hlf_lint`
+   - `hlf_compile`
+   - packaged execution, routing, approval, witness, and audit/status surfaces
+     as reported by `hlf://status/operator_surfaces`
+
+### Native loop
+
+The required operating loop for substantive work is:
+
+```text
+NLP intent
+  -> HLF translation
+  -> validate/lint/correct/compile gates
+  -> governed execute or coordinate
+  -> audit/proof/status evidence
+  -> NLP explanation for humans
+```
+
+Use `hlf_do` when you want that loop in one call. Use the explicit tool chain
+when another agent needs raw HLF, AST/bytecode proof, or a handoff contract.
+For sub-agent or swarm handoff, raw HLF plus validation/compile proof is the
+authoritative payload; prose is only an explanation.
+
 ## What Not To Confuse
 
 ### Do not confuse product truth with preserved ambition

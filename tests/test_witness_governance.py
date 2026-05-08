@@ -90,6 +90,7 @@ def test_multi_witness_correlated_evidence_can_reach_restricted() -> None:
 
 def test_witness_resource_and_tool_contracts_are_operator_legible() -> None:
     subject_agent_id = _subject("resource")
+    _uid = uuid.uuid4().hex[:8]
 
     recorded = server.REGISTERED_TOOLS["hlf_witness_record"](
         subject_agent_id=subject_agent_id,
@@ -97,7 +98,7 @@ def test_witness_resource_and_tool_contracts_are_operator_legible() -> None:
         severity="warning",
         confidence=0.88,
         witness_id="router",
-        evidence_text="fallback lane selected unexpectedly",
+        evidence_text=f"fallback lane selected unexpectedly {_uid}",
         event_ref={"kind": "routing_decision", "event_id": "route-1", "trace_id": "trace-1"},
     )
     resource = json.loads(

@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover - compatibility fallback
     from pygls.server import LanguageServer
 
 from hlf_mcp.hlf.compiler import CompileError, HLFCompiler
-from hlf_mcp.hlf.grammar import GLYPHS, TAGS
+from hlf_mcp.hlf.grammar import GLYPHS, STATEMENT_GLYPHS, TAGS
 from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.registry import HostFunctionRegistry
 
@@ -77,7 +77,7 @@ def _looks_legacy_only(source: str) -> bool:
     ]
     if not lines:
         return False
-    if any(any(glyph in line for glyph in GLYPHS) for line in lines):
+    if any(any(glyph in line for glyph in STATEMENT_GLYPHS) for line in lines):
         return False
     legacy_markers = sum(1 for line in lines if line.startswith("["))
     return legacy_markers >= max(1, len(lines) - 2)

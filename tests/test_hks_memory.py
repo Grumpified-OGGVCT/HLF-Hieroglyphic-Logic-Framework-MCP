@@ -486,6 +486,166 @@ def test_rag_memory_query_filters_stale_and_requires_evidence_backed_provenance(
     assert provenance_results["results"][0]["evidence"]["provenance_grade"] == "evidence-backed"
 
 
+def test_protected_hks_purpose_enforces_trust_lineage_freshness_revocation_and_tamper() -> None:
+    memory = RAGMemory()
+    unique = uuid.uuid4().hex
+
+    def store_protected(label: str, governed_overrides: dict[str, object]) -> dict[str, object]:
+        governed = {
+            "source_class": "weekly_artifact",
+            "source_type": "test",
+            "source": "tests.test_hks_memory",
+            "source_path": f"artifact:{unique}:{label}",
+            "collected_at": "2026-03-23T00:00:00+00:00",
+            "fresh_until": "2999-01-01T00:00:00+00:00",
+            "source_authority_label": "canonical",
+            "trust_tier": "local",
+        }
+        governed.update(governed_overrides)
+        return memory.store(
+            f"execution admission {label} {unique}",
+            topic="execution-admission",
+            confidence=1.0,
+            provenance="tests.test_hks_memory",
+            entry_kind="weekly_artifact",
+            domain="general-coding",
+            solution_kind="repair-pattern",
+            metadata={
+                "governed_evidence": governed,
+                "evaluation": {
+                    "authority": "local_hks",
+                    "groundedness": 1.0,
+                    "citation_coverage": 1.0,
+                },
+            },
+        )
+
+    accepted = store_protected("accepted", {})
+    advisory = store_protected("advisory", {"source_authority_label": "advisory"})
+    stale = store_protected("stale", {"fresh_until": "2000-01-01T00:00:00+00:00"})
+    revoked = store_protected("revoked", {"revoked": True})
+    tombstoned = store_protected("tombstoned", {"tombstoned": True})
+    missing_lineage = store_protected("missing-lineage", {"source_path": "", "artifact_id": ""})
+    tampered = store_protected("tampered", {})
+    with memory._connect() as conn:
+        conn.execute(
+            "UPDATE fact_store SET content = ? WHERE id = ?",
+            (f"tampered content {unique}", tampered["id"]),
+        )
+
+    accepted_query = memory.query(
+        f"accepted {unique}",
+        purpose="execution_admission",
+        entry_kind="weekly_artifact",
+        domain="general-coding",
+        include_archive=True,
+    )
+    rejected_query = memory.query(
+        unique,
+        purpose="execution_admission",
+        entry_kind="weekly_artifact",
+        domain="general-coding",
+        include_stale=True,
+        include_revoked=True,
+        include_archive=True,
+    )
+    all_visible = memory.query_facts(
+        include_stale=True,
+        include_revoked=True,
+        include_archive=True,
+    )
+
+    assert accepted_query["count"] >= 1
+    assert accepted_query["results"][0]["sha256"] == accepted["sha256"]
+    primary = accepted_query["governed_hks_contract"]["primary_evidence"]
+    assert primary["trusted_for_governance"] is True
+    assert primary["source_lineage_present"] is True
+    assert primary["content_hash_valid"] is True
+    rejected_hashes = {
+        advisory["sha256"],
+        stale["sha256"],
+        revoked["sha256"],
+        tombstoned["sha256"],
+        missing_lineage["sha256"],
+        tampered["sha256"],
+    }
+    returned_hashes = {result["sha256"] for result in rejected_query["results"]}
+    assert rejected_hashes.isdisjoint(returned_hashes)
+    assert rejected_query["retrieval_contract"]["rejected_result_count"] >= 4
+    assert all(fact["sha256"] != tampered["sha256"] for fact in all_visible)
+
+
+def test_rag_memory_query_by_id_applies_protected_purpose_policy() -> None:
+    memory = RAGMemory()
+    unique = uuid.uuid4().hex
+
+    trusted = memory.store(
+        f"direct execution admission trusted {unique}",
+        topic="execution-admission-direct",
+        provenance="tests.test_hks_memory",
+        entry_kind="weekly_artifact",
+        domain="general-coding",
+        solution_kind="repair-pattern",
+        tags=[unique],
+        metadata={
+            "governed_evidence": {
+                "source_class": "weekly_artifact",
+                "source_type": "test",
+                "source": "tests.test_hks_memory",
+                "source_path": f"artifact:{unique}:trusted",
+                "collector": "pytest",
+                "collected_at": "2026-03-23T00:00:00+00:00",
+                "fresh_until": "2999-01-01T00:00:00+00:00",
+                "source_authority_label": "canonical",
+                "trust_tier": "local",
+            }
+        },
+    )
+    untrusted = memory.store(
+        f"direct execution admission untrusted {unique}",
+        topic="execution-admission-direct",
+        provenance="tests.test_hks_memory",
+        entry_kind="weekly_artifact",
+        domain="general-coding",
+        solution_kind="repair-pattern",
+        tags=[unique],
+        metadata={
+            "governed_evidence": {
+                "source_class": "weekly_artifact",
+                "source_type": "test",
+                "source": "tests.test_hks_memory",
+                "source_path": f"artifact:{unique}:untrusted",
+                "collector": "pytest",
+                "collected_at": "2026-03-23T00:00:00+00:00",
+                "fresh_until": "2999-01-01T00:00:00+00:00",
+                "source_authority_label": "advisory",
+                "trust_tier": "untrusted",
+            }
+        },
+    )
+
+    admitted = memory.query_by_id(
+        trusted["id"],
+        purpose="execution_admission",
+        require_provenance=True,
+        query_text=f"direct execution admission trusted {unique}",
+        metadata_filters={"domain": "general-coding", "solution_kind": "repair-pattern"},
+    )
+    denied = memory.query_by_id(
+        untrusted["id"],
+        purpose="execution_admission",
+        require_provenance=True,
+        query_text=f"direct execution admission untrusted {unique}",
+        metadata_filters={"domain": "general-coding", "solution_kind": "repair-pattern"},
+    )
+
+    assert admitted is not None
+    assert admitted["sha256"] == trusted["sha256"]
+    assert admitted["evidence"]["trusted_for_governance"] is True
+    assert admitted["retrieval_contract"]["admitted_for_purpose"] is True
+    assert denied is None
+
+
 def test_rag_memory_default_query_hides_archived_records_unless_requested() -> None:
     memory = RAGMemory()
     unique = uuid.uuid4().hex
@@ -809,6 +969,33 @@ def test_server_memory_resolve_allows_hks_exemplar_for_execution_and_emits_event
     assert outcome["provenance_grade"] == "evidence-backed"
     assert outcome["governance_event"]["event"]["kind"] == "pointer_resolution"
     assert outcome["resolution"]["fact"]["entry_kind"] == "hks_exemplar"
+
+
+def test_mcp_native_hks_capture_governed_recall_and_resolution_happy_path() -> None:
+    unique = uuid.uuid4().hex
+
+    workflow = server.hlf_internal_governed_recall_workflow(
+        problem=f"MCP native HKS happy path {unique}",
+        validated_solution="Capture validated evidence, recall it through governed HKS, then resolve its pointer.",
+        query=unique,
+        domain="general-coding",
+        solution_kind="repair-pattern",
+        tags=[unique],
+        tests=[{"name": "pytest", "passed": True, "exit_code": 0, "counts": {"passed": 1}}],
+        include_weekly_artifacts=False,
+        include_witness_evidence=False,
+        top_k=3,
+    )
+
+    assert workflow["status"] == "ok"
+    assert workflow["workflow_kind"] == "internal_governed_recall_loop"
+    assert workflow["before"]["capture"]["stored"] is True
+    assert workflow["after"]["recall"]["result_count"] >= 1
+    assert workflow["after"]["recall"]["evidence_backed_count"] >= 1
+    assert workflow["after"]["recall"]["top_result"]["pointer"]
+    assert workflow["after"]["resolution"]["status"] == "ok"
+    assert workflow["after"]["resolution"]["admitted"] is True
+    assert workflow["after"]["resolution"]["provenance_grade"] == "evidence-backed"
 
 
 def test_governed_recall_syncs_verified_weekly_artifacts_into_memory(

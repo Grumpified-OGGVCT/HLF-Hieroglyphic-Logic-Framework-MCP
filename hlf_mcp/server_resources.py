@@ -4,15 +4,17 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from hlf_mcp.hlf.agent_prompt import build_hlf_native_system_prompt
 from hlf_mcp.hlf.bytecode import OPCODES, HLFBytecode
 from hlf_mcp.hlf.compiler import HLFCompiler
+from hlf_mcp.hlf.governance_proofs import render_proof_markdown, verify_governance_proof
 from hlf_mcp.hlf.symbolic_surfaces import compile_symbolic_surface
+from hlf_mcp.ingress_support import normalize_ingress_status, summarize_ingress_status
 from hlf_mcp.instinct.orchestration import build_orchestration_contract
-from hlf_mcp.ingress_support import normalize_ingress_status
-from hlf_mcp.ingress_support import summarize_ingress_status
 from hlf_mcp.server_profiles import (
     build_multimodal_contract_catalog,
     build_profile_capability_catalog,
@@ -3068,6 +3070,7 @@ def _build_agent_protocol_surface(ctx: object | None) -> dict[str, object]:
         if isinstance(governed_route_report.get("route_trace"), dict)
         else {}
     )
+
     instinct_report = json.loads(_render_instinct_status(ctx))
     instinct_status = (
         instinct_report.get("instinct_status")
@@ -3120,6 +3123,14 @@ def _build_agent_protocol_surface(ctx: object | None) -> dict[str, object]:
                 "The producer emits canonical HLF or an equivalent governed translation contract; the consumer reads the same "
                 "canonical unit instead of relying on conversational paraphrase."
             ),
+            "mandatory_internal_loop": [
+                "NLP ingress",
+                "HLF translation",
+                "validate/lint/compile",
+                "governed execution or coordination",
+                "NLP egress for humans",
+            ],
+            "subagent_wire_format": "raw_hlf_source",
             "semantic_drift_control": [
                 "deterministic grammar and compile path",
                 "capsule-tier validation and admission boundaries",
@@ -3360,6 +3371,7 @@ def _build_agent_quickstart_surface(ctx: object | None) -> dict[str, object]:
             "producer": "emit governed HLF or a translation contract",
             "consumer": "read canonical HLF, AST fingerprint, and packaged proof surfaces",
             "rule": "Do not treat a conversational paraphrase as the authoritative handoff artifact.",
+            "swarm_rule": "For swarm/sub-agent communication, pass raw HLF source plus validation and compile proof.",
         },
         "memory_pattern": {
             "summary": "Read witness, recall, and memory-governance surfaces before assuming reusable context is trustworthy or promotable.",
@@ -3381,6 +3393,18 @@ def _build_agent_quickstart_surface(ctx: object | None) -> dict[str, object]:
             "do not assume upstream orchestration completion is fully packaged here",
             "do not assume free-form prose is an adequate inter-agent contract",
         ],
+        "prompt_content_fallback": {
+            "status": "ok",
+            "prompt_name": "hlf_native_agent",
+            "when": (
+                "Use this resource field when an MCP client lists hlf_native_agent but fails to "
+                "surface prompts/get message text. FastMCP returns prompt text at "
+                "messages[0].content.text, not a top-level content field."
+            ),
+            "resource_uri": "hlf://agent/quickstart",
+            "content_field": "prompt_content_fallback.prompt_text",
+            "prompt_text": build_hlf_native_system_prompt(),
+        },
         "evidence_refs": evidence_refs,
     }
 
@@ -3405,6 +3429,17 @@ def _build_agent_handoff_contract_surface(ctx: object | None) -> dict[str, objec
             "bytecode-backed proof and audit surfaces",
             "capsule and admission context when execution authority matters",
         ],
+        "mandatory_internal_loop": {
+            "order": [
+                "NLP ingress",
+                "HLF translation",
+                "validate/lint/compile",
+                "governed execution or coordination",
+                "NLP egress for humans",
+            ],
+            "human_default": "natural-language summary after gates pass",
+            "subagent_default": "raw_hlf_source with validation and compile proof",
+        },
         "producer_roles": [
             "human-to-HLF translator via hlf_do or hlf_translate_to_hlf",
             "agent emitting governed HLF for another agent or runtime",
@@ -3744,6 +3779,7 @@ def _build_operator_surfaces_report(ctx: object | None) -> dict[str, object]:
         if isinstance(governed_route_report.get("route_trace"), dict)
         else {}
     )
+    swarm_mechanics_report = json.loads(_render_swarm_mechanics_status(ctx))
 
     ingress_report = json.loads(_render_ingress_status(ctx))
     ingress_status = (
@@ -3905,6 +3941,21 @@ def _build_operator_surfaces_report(ctx: object | None) -> dict[str, object]:
             ),
         },
         {
+            "surface_id": "swarm_mechanics",
+            "title": "HLF Swarm Mechanics",
+            "surface_kind": "bounded_local_swarm_artifact",
+            "display_mode": "structured-status+markdown-report",
+            "runtime_backed": True,
+            "status": swarm_mechanics_report.get("status"),
+            "status_uri": "hlf://status/swarm_mechanics",
+            "report_uri": "hlf://reports/swarm_mechanics",
+            "explainer_uri": None,
+            "summary": (
+                swarm_mechanics_report.get("operator_summary")
+                or "Latest bounded local HLF swarm mechanics artifact is available after hlf_swarm_mechanics runs."
+            ),
+        },
+        {
             "surface_id": "ingress",
             "title": "Ingress Status",
             "surface_kind": "governed_ingress",
@@ -4037,6 +4088,7 @@ def _build_operator_surfaces_report(ctx: object | None) -> dict[str, object]:
         daemon_transparency_report.get("evidence_refs"),
         formal_verifier_report.get("evidence_refs"),
         governed_route_report.get("evidence_refs"),
+        swarm_mechanics_report.get("evidence_refs"),
         ingress_report.get("evidence_refs"),
         memory_governance_report.get("evidence_refs"),
         approval_queue_report.get("evidence_refs"),
@@ -4139,6 +4191,72 @@ def _render_operator_surfaces_markdown(ctx: object | None) -> str:
             f"| {str(entry.get('title') or 'unknown').replace('|', '/')} summary | {str(entry.get('summary') or '').replace('|', '/')} | - | - | - | - | - |"
         )
 
+    return "\n".join(lines) + "\n"
+
+
+def _render_swarm_mechanics_status(
+    ctx: object | None,
+    *,
+    swarm_id: str | None = None,
+) -> str:
+    if ctx is None or not hasattr(ctx, "get_swarm_mechanics"):
+        return json.dumps({"status": "error", "error": "swarm_mechanics_unavailable"}, indent=2)
+    artifact = ctx.get_swarm_mechanics(swarm_id=swarm_id)
+    if not isinstance(artifact, dict):
+        return json.dumps({"status": "not_found", "swarm_id": swarm_id}, indent=2)
+    evidence_refs = _dedupe_evidence_refs(
+        artifact.get("governance_event_ref"),
+        artifact.get("governance_event", {}).get("event_ref")
+        if isinstance(artifact.get("governance_event"), dict)
+        else None,
+    )
+    proof = artifact.get("governance_proof") if isinstance(artifact.get("governance_proof"), dict) else {}
+    proof_verification = verify_governance_proof(proof) if proof else {"status": "missing", "verified": False}
+    return json.dumps(
+        {
+            "status": "ok",
+            "operator_summary": artifact.get("operator_summary")
+            or "Latest bounded local HLF swarm mechanics artifact is available.",
+            "evidence_refs": evidence_refs,
+            "boundary": artifact.get("boundary"),
+            "governance_proof_verification": proof_verification,
+            "swarm_mechanics": artifact,
+        },
+        indent=2,
+    )
+
+
+def _render_swarm_mechanics_markdown(
+    ctx: object | None,
+    *,
+    swarm_id: str | None = None,
+) -> str:
+    payload = json.loads(_render_swarm_mechanics_status(ctx, swarm_id=swarm_id))
+    if payload.get("status") != "ok":
+        return "# HLF Swarm Mechanics Report\n\nNo bounded local swarm artifact is currently available.\n"
+    artifact = payload.get("swarm_mechanics") if isinstance(payload.get("swarm_mechanics"), dict) else {}
+    consensus = artifact.get("consensus") if isinstance(artifact.get("consensus"), dict) else {}
+    boundary = artifact.get("boundary") if isinstance(artifact.get("boundary"), dict) else {}
+    lines = [
+        "# HLF Swarm Mechanics Report",
+        "",
+        "Generated from first-class HLF delegation, voting, dissent, lineage, and progress artifacts.",
+        "",
+        f"- Status: {payload.get('status')}",
+        f"- Summary: {payload.get('operator_summary')}",
+        f"- Swarm ID: {artifact.get('swarm_id')}",
+        f"- Boundary: {boundary.get('mode')} (distributed A2A: {boundary.get('distributed_a2a')})",
+        f"- Delegations: {len(artifact.get('delegations') or [])}",
+        f"- Votes: {len(artifact.get('votes') or [])}",
+        f"- Dissent artifacts: {len(artifact.get('dissent') or [])}",
+        f"- Progress events: {len(artifact.get('progress_events') or [])}",
+        f"- Consensus: {consensus.get('state')} (reached: {consensus.get('reached')})",
+        f"- Governance proof: {payload.get('governance_proof_verification', {}).get('status')} (hash-chain integrity only)",
+        "",
+    ]
+    proof = artifact.get("governance_proof") if isinstance(artifact.get("governance_proof"), dict) else {}
+    if proof:
+        lines.extend(render_proof_markdown(proof).splitlines())
     return "\n".join(lines) + "\n"
 
 
@@ -5354,6 +5472,104 @@ def _render_dream_proposal(ctx: object | None, *, proposal_id: str) -> str:
     )
 
 
+def _latest_real_workflow_benchmark_artifact(ctx: object | None) -> dict[str, Any] | None:
+    profile_name = "real_hlf_self_improvement_workflow_compare"
+    if ctx is not None and hasattr(ctx, "get_benchmark_artifact"):
+        artifact = ctx.get_benchmark_artifact(profile_name=profile_name)
+        if artifact is not None:
+            return artifact
+    if ctx is not None and hasattr(ctx, "memory_store"):
+        memory = ctx.memory_store
+        try:
+            facts = memory.query_facts(entry_kind="benchmark_artifact", profile=profile_name)
+        except Exception:
+            facts = []
+            for fact in memory.all_facts():
+                if (
+                    fact.get("entry_kind") == "benchmark_artifact"
+                    and (fact.get("metadata") or {}).get("profile_name") == profile_name
+                ):
+                    facts.append(fact)
+        if facts:
+            latest = facts[-1]
+            metadata = latest.get("metadata") if isinstance(latest.get("metadata"), dict) else {}
+            artifact = metadata.get("result") if isinstance(metadata.get("result"), dict) else None
+            if artifact is not None:
+                return {
+                    "profile_name": profile_name,
+                    "benchmark_scores": metadata.get("benchmark_scores", {}),
+                    "result": artifact,
+                    "memory_ref": {"id": latest.get("id"), "sha256": latest.get("sha256")},
+                }
+    return None
+
+
+def _render_real_workflow_benchmark_status(ctx: object | None) -> str:
+    artifact = _latest_real_workflow_benchmark_artifact(ctx)
+    if artifact is None:
+        return json.dumps(
+            {
+                "status": "not_found",
+                "profile_name": "real_hlf_self_improvement_workflow_compare",
+            },
+            indent=2,
+        )
+    result = artifact.get("result") if isinstance(artifact.get("result"), dict) else artifact
+    return json.dumps(
+        {
+            "status": "ok",
+            "profile_name": "real_hlf_self_improvement_workflow_compare",
+            "summary": result.get("summary", {}),
+            "benchmark_scores": result.get("benchmark_scores", artifact.get("benchmark_scores", {})),
+            "measurement_policy": result.get("measurement_policy", {}),
+            "artifact": artifact,
+        },
+        indent=2,
+    )
+
+
+def _render_real_workflow_benchmark_report(ctx: object | None) -> str:
+    artifact = _latest_real_workflow_benchmark_artifact(ctx)
+    if artifact is None:
+        return "# Real Workflow Benchmarks\n\nNo real HLF self-improvement benchmark artifact has been recorded.\n"
+    result = artifact.get("result") if isinstance(artifact.get("result"), dict) else artifact
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    lines = [
+        "# Real HLF Self-Improvement Workflow Benchmarks",
+        "",
+        str(summary.get("headline") or "No headline recorded."),
+        "",
+        f"- Workflows: {summary.get('workflow_count', 0)}",
+        f"- Covered surfaces: {', '.join(summary.get('covered_surfaces', []))}",
+        f"- Avg quality delta: {summary.get('avg_quality_delta')}",
+        f"- Validation coverage delta: {summary.get('avg_validation_coverage_delta')}",
+        f"- Proof coverage delta: {summary.get('avg_proof_coverage_delta')}",
+        f"- Error-chasing delta: {summary.get('avg_error_chasing_delta')}",
+        f"- Token ratio HLF/baseline: {summary.get('token_ratio_hlf_to_baseline')}",
+        "",
+        "Measured: HLF parser/compiler/linter/verifier, dry-run code admission, swarm artifacts, proof verification.",
+        "Estimated: non-HLF baseline quality/scope/thoroughness/error-chasing intent from text rubrics.",
+        "",
+    ]
+    for row in result.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        comparison = row.get("comparison") if isinstance(row.get("comparison"), dict) else {}
+        lines.extend(
+            [
+                f"## {row.get('workflow_id')}: {row.get('title')}",
+                "",
+                f"- Surfaces: {', '.join(row.get('surfaces', []))}",
+                f"- Quality delta: {comparison.get('quality_delta')}",
+                f"- Validation delta: {comparison.get('validation_coverage_delta')}",
+                f"- Proof delta: {comparison.get('proof_coverage_delta')}",
+                f"- Token delta: {comparison.get('token_delta')}",
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
 def render_resource_uri(ctx: object | None, resource_uri: str) -> str:
     """Render a packaged resource URI outside the running MCP server."""
     if resource_uri == "hlf://agent/protocol":
@@ -5380,6 +5596,12 @@ def render_resource_uri(ctx: object | None, resource_uri: str) -> str:
                 if fact.get("entry_kind") == "benchmark_artifact":
                     artifacts.append(fact)
         return json.dumps({"status": "ok", "artifacts": artifacts}, indent=2)
+
+    if resource_uri == "hlf://status/real_workflow_benchmarks":
+        return _render_real_workflow_benchmark_status(ctx)
+
+    if resource_uri == "hlf://reports/real_workflow_benchmarks":
+        return _render_real_workflow_benchmark_report(ctx)
 
     if resource_uri == "hlf://status/active_profiles":
         if ctx is None or not hasattr(ctx, "session_profiles"):
@@ -5688,6 +5910,16 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
                     continue
                 artifacts.append(fact)
         return json.dumps({"status": "ok", "artifacts": artifacts}, indent=2)
+
+    @mcp.resource("hlf://status/real_workflow_benchmarks")
+    def get_real_workflow_benchmark_status() -> str:
+        """Operator-facing latest real HLF self-improvement workflow benchmark status."""
+        return _render_real_workflow_benchmark_status(ctx)
+
+    @mcp.resource("hlf://reports/real_workflow_benchmarks")
+    def get_real_workflow_benchmark_report() -> str:
+        """Operator-facing markdown report for real HLF self-improvement workflow benchmarks."""
+        return _render_real_workflow_benchmark_report(ctx)
 
     @mcp.resource("hlf://status/active_profiles")
     def get_active_profiles() -> str:
@@ -6013,6 +6245,26 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
         """Operator-facing markdown governed route report for a specific agent."""
         return _render_governed_route_markdown(ctx, agent_id=agent_id)
 
+    @mcp.resource("hlf://status/swarm_mechanics")
+    def get_swarm_mechanics_status_latest() -> str:
+        """Operator-facing latest bounded local HLF swarm mechanics artifact."""
+        return _render_swarm_mechanics_status(ctx)
+
+    @mcp.resource("hlf://reports/swarm_mechanics")
+    def get_swarm_mechanics_report_latest() -> str:
+        """Operator-facing markdown report for the latest bounded local HLF swarm mechanics artifact."""
+        return _render_swarm_mechanics_markdown(ctx)
+
+    @mcp.resource("hlf://status/swarm_mechanics/{swarm_id}")
+    def get_swarm_mechanics_status_for_id(swarm_id: str) -> str:
+        """Operator-facing bounded local HLF swarm mechanics artifact for a specific swarm id."""
+        return _render_swarm_mechanics_status(ctx, swarm_id=swarm_id)
+
+    @mcp.resource("hlf://reports/swarm_mechanics/{swarm_id}")
+    def get_swarm_mechanics_report_for_id(swarm_id: str) -> str:
+        """Operator-facing markdown report for a specific bounded local HLF swarm artifact."""
+        return _render_swarm_mechanics_markdown(ctx, swarm_id=swarm_id)
+
     @mcp.resource("hlf://status/instinct")
     def get_instinct_status() -> str:
         """Operator-facing Instinct lifecycle mission list with current phase and realignment counts."""
@@ -6182,6 +6434,10 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
         "hlf://reports/governed_route": get_governed_route_report_latest,
         "hlf://status/governed_route/{agent_id}": get_governed_route_status_for_agent,
         "hlf://reports/governed_route/{agent_id}": get_governed_route_report_for_agent,
+        "hlf://status/swarm_mechanics": get_swarm_mechanics_status_latest,
+        "hlf://reports/swarm_mechanics": get_swarm_mechanics_report_latest,
+        "hlf://status/swarm_mechanics/{swarm_id}": get_swarm_mechanics_status_for_id,
+        "hlf://reports/swarm_mechanics/{swarm_id}": get_swarm_mechanics_report_for_id,
         "hlf://status/instinct": get_instinct_status,
         "hlf://status/instinct/{mission_id}": get_instinct_status_for_mission,
         "hlf://status/witness_governance": get_witness_status_summary,
@@ -6202,6 +6458,8 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
         "hlf://dream/findings": get_dream_findings,
         "hlf://dream/findings/{finding_id}": get_dream_finding,
         "hlf://status/benchmark_artifacts": get_benchmark_artifacts,
+        "hlf://status/real_workflow_benchmarks": get_real_workflow_benchmark_status,
+        "hlf://reports/real_workflow_benchmarks": get_real_workflow_benchmark_report,
         "hlf://status/active_profiles": get_active_profiles,
         "hlf://status/profile_evidence/{profile_name}": get_profile_evidence,
         "hlf://status/profile_capability_catalog": get_profile_capability_catalog,

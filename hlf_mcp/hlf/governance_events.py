@@ -3,8 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping, Sequence, cast
+from typing import Any, Literal, cast
 
 GovernanceEventKind = Literal[
     "routing_decision",
@@ -22,6 +23,9 @@ GovernanceEventKind = Literal[
     "approval_transition",
     "dream_cycle",
     "proposal_lane",
+    "code_execute",
+    "swarm_mechanics",
+    "governance_proof",
 ]
 
 GovernanceSeverity = Literal["info", "warning", "critical"]

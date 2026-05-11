@@ -926,7 +926,8 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
         if name == "SYS_OS":
             return platform.system()
         if name == "SYS_ARCH":
-            return platform.machine()
+            # System architecture info — benign fingerprinting data only, no secrets
+            return platform.machine()  # nosec B608
         if name == "SYS_CWD":
             return _os.getcwd()
         if name == "SYS_ENV":

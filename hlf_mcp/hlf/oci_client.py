@@ -138,7 +138,12 @@ class OCIClient:
                     try:
                         tar.extractall(target, filter="data")
                     except TypeError:  # pragma: no cover - older Python fallback
-                        tar.extractall(target)
+                        # Re-validate every member before extracting without filter support
+                        for member in tar.getmembers():
+                            member_path = (target / member.name).resolve()
+                            if not str(member_path).startswith(str(target.resolve())):
+                                raise OCIError(f"Path traversal detected in layer: {member.name}")
+                        tar.extractall(target)  # nosec B202
             except tarfile.TarError as exc:
                 raise OCIError(f"Layer extraction failed: {exc}") from exc
 

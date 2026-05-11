@@ -27,10 +27,10 @@ dependencies = [
 [project.optional-dependencies]
 # Hot cache tier — Valkey/Redis-compatible client (BSL-free Valkey official driver)
 # Install:  uv sync --extra hot   |   pip install "hlf-mcp[hot]"
-hot  = ["valkey>=6.0.0"]
+hot  = ["valkey>=6.1.1"]
 # Full tier — hot + beartype for strict host-function type enforcement at runtime
 # Install:  uv sync --extra full  |   pip install "hlf-mcp[full]"
-full = ["valkey>=6.0.0", "beartype>=0.18.0"]
+full = ["valkey>=6.1.1", "beartype>=0.18.0"]
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=0.25.0",

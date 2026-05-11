@@ -29,13 +29,11 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Callable
-from dataclasses import dataclass
-from datetime import datetime
+from typing import Any
 
 # Import metrics module (from same directory)
 try:
-    from hlf.mcp_metrics import get_metrics, handle_metrics_tool, metrics_tools, VERIFIED_METRICS
+    from hlf.mcp_metrics import VERIFIED_METRICS, get_metrics, handle_metrics_tool, metrics_tools
     METRICS_AVAILABLE = True
 except ImportError:
     METRICS_AVAILABLE = False
@@ -85,9 +83,9 @@ class MCPServer:
         self.friction_drop.mkdir(parents=True, exist_ok=True)
         
         # Import providers
+        from hlf.mcp_prompts import HLFPromptProvider
         from hlf.mcp_resources import HLFResourceProvider
         from hlf.mcp_tools import HLFToolProvider
-        from hlf.mcp_prompts import HLFPromptProvider
         
         self.resources = HLFResourceProvider(self.repo_root)
         self.tools = HLFToolProvider(self.resources, None, self.friction_drop)
@@ -115,7 +113,7 @@ class MCPServer:
         }
         
         # Resource subscriptions
-        self._subscriptions: Dict[str, List[str]] = {}
+        self._subscriptions: dict[str, list[str]] = {}
         
         # Logging
         self._log_level = logging.INFO
@@ -125,7 +123,7 @@ class MCPServer:
     # Protocol Lifecycle
     # ========================================
 
-    async def initialize(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle initialize request."""
         return {
             "protocolVersion": MCP_PROTOCOL_VERSION,
@@ -133,7 +131,7 @@ class MCPServer:
             "serverInfo": self.server_info
         }
 
-    async def initialized(self, params: Dict[str, Any]) -> None:
+    async def initialized(self, params: dict[str, Any]) -> None:
         """Handle initialized notification."""
         self._logger.info("Client initialized")
 
@@ -141,7 +139,7 @@ class MCPServer:
     # Resources
     # ========================================
 
-    async def resources_list(self) -> Dict[str, Any]:
+    async def resources_list(self) -> dict[str, Any]:
         """List all available resources."""
         resources = self.resources.list_resources()
         templates = self.resources.list_resource_templates()
@@ -167,7 +165,7 @@ class MCPServer:
             ]
         }
 
-    async def resources_read(self, uri: str) -> Dict[str, Any]:
+    async def resources_read(self, uri: str) -> dict[str, Any]:
         """Read a specific resource."""
         resource = self.resources.read_resource(uri)
         
@@ -194,7 +192,7 @@ class MCPServer:
         
         raise ValueError(f"Resource has no content: {uri}")
 
-    async def resources_subscribe(self, uri: str, subscription_id: str) -> Dict[str, Any]:
+    async def resources_subscribe(self, uri: str, subscription_id: str) -> dict[str, Any]:
         """Subscribe to resource updates."""
         if uri not in self._subscriptions:
             self._subscriptions[uri] = []
@@ -220,7 +218,7 @@ class MCPServer:
     # Tools
     # ========================================
 
-    async def tools_list(self) -> Dict[str, Any]:
+    async def tools_list(self) -> dict[str, Any]:
         """List all available tools."""
         tools = self.tools.list_tools()
         
@@ -235,7 +233,7 @@ class MCPServer:
             ]
         }
 
-    async def tools_call(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    async def tools_call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool."""
         try:
             result = self.tools.call_tool(name, arguments)
@@ -267,7 +265,7 @@ class MCPServer:
     # Prompts
     # ========================================
 
-    async def prompts_list(self) -> Dict[str, Any]:
+    async def prompts_list(self) -> dict[str, Any]:
         """List all available prompts."""
         prompts = self.prompts.list_prompts()
         
@@ -289,7 +287,7 @@ class MCPServer:
             ]
         }
 
-    async def prompts_get(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    async def prompts_get(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Get a prompt with arguments."""
         try:
             prompt_text = self.prompts.get_prompt(name, arguments)
@@ -308,7 +306,7 @@ class MCPServer:
             }
         except Exception as e:
             return {
-                "description": f"Error generating prompt",
+                "description": "Error generating prompt",
                 "messages": [
                     {
                         "role": "assistant",
@@ -341,7 +339,7 @@ class MCPServer:
     # Roots
     # ========================================
 
-    async def roots_list(self) -> Dict[str, Any]:
+    async def roots_list(self) -> dict[str, Any]:
         """List accessible roots."""
         return {
             "roots": [
@@ -368,7 +366,7 @@ class MCPServer:
     # Sampling (Optional)
     # ========================================
 
-    async def create_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_message(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         Request LLM generation from server.
         This is optional and requires a connected LLM.
@@ -387,7 +385,7 @@ class MCPServer:
     # Message Handling
     # ========================================
 
-    async def handle_message(self, message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def handle_message(self, message: dict[str, Any]) -> dict[str, Any] | None:
         """
         Handle an incoming MCP message.
         
@@ -528,8 +526,8 @@ def create_http_app(repo_root: Path = None):
     This provides an alternative to stdio for web-based clients.
     """
     from fastapi import FastAPI, HTTPException
-    from fastapi.responses import JSONResponse
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
     
     if repo_root is None:
         repo_root = Path(__file__).parent.parent
@@ -566,24 +564,36 @@ def create_http_app(repo_root: Path = None):
         }
     
     @app.post("/mcp")
-    async def handle_mcp(message: Dict[str, Any]):
-        response = await server.handle_message(message)
-        return response or {"status": "notification received"}
+    async def handle_mcp(message: dict[str, Any]):
+        try:
+            response = await server.handle_message(message)
+            return response or {"status": "notification received"}
+        except Exception:
+            raise HTTPException(500, "Internal error processing MCP message")
     
     @app.get("/resource/grammar")
     async def get_grammar():
-        resource = server.resources.read_resource("hlf://grammar")
-        return JSONResponse(content={"content": resource.content})
+        try:
+            resource = server.resources.read_resource("hlf://grammar")
+            return JSONResponse(content={"content": resource.content})
+        except Exception:
+            raise HTTPException(500, "Internal error reading grammar resource")
     
     @app.get("/resource/dictionaries")
     async def get_dictionaries():
-        resource = server.resources.read_resource("hlf://dictionaries")
-        return JSONResponse(content={"content": resource.content})
+        try:
+            resource = server.resources.read_resource("hlf://dictionaries")
+            return JSONResponse(content={"content": resource.content})
+        except Exception:
+            raise HTTPException(500, "Internal error reading dictionaries resource")
     
     @app.get("/resource/version")
     async def get_version():
-        resource = server.resources.read_resource("hlf://version")
-        return JSONResponse(content={"content": resource.content})
+        try:
+            resource = server.resources.read_resource("hlf://version")
+            return JSONResponse(content={"content": resource.content})
+        except Exception:
+            raise HTTPException(500, "Internal error reading version resource")
     
     @app.get("/resource/{uri:path}")
     async def get_resource(uri: str):
@@ -594,27 +604,27 @@ def create_http_app(repo_root: Path = None):
             raise HTTPException(404, str(e))
     
     @app.post("/tool/compile")
-    async def compile_hlf(request: Dict[str, Any]):
+    async def compile_hlf(request: dict[str, Any]):
         result = server.tools.call_tool("hlf_compile", request)
         return JSONResponse(content=result)
     
     @app.post("/tool/execute")
-    async def execute_hlf(request: Dict[str, Any]):
+    async def execute_hlf(request: dict[str, Any]):
         result = server.tools.call_tool("hlf_execute", request)
         return JSONResponse(content=result)
     
     @app.post("/tool/validate")
-    async def validate_hlf(request: Dict[str, Any]):
+    async def validate_hlf(request: dict[str, Any]):
         result = server.tools.call_tool("hlf_validate", request)
         return JSONResponse(content=result)
     
     @app.post("/tool/friction_log")
-    async def friction_log(request: Dict[str, Any]):
+    async def friction_log(request: dict[str, Any]):
         result = server.tools.call_tool("hlf_friction_log", request)
         return JSONResponse(content=result)
     
     @app.post("/prompt/{name}")
-    async def get_prompt(name: str, arguments: Dict[str, Any]):
+    async def get_prompt(name: str, arguments: dict[str, Any]):
         try:
             prompt = server.prompts.get_prompt(name, arguments)
             return JSONResponse(content={"prompt": prompt})

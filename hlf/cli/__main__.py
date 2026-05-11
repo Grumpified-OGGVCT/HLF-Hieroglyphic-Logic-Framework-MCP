@@ -4,24 +4,23 @@ HLF CLI
 Command-line interface for the Hierarchical Language Framework
 """
 
-import sys
-import os
 import argparse
-import json
+import sys
 from pathlib import Path
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from hlf.parser import parse
 from hlf.compiler.full_compiler import Compiler
-from hlf.vm.interpreter import VM, run_bytecode
+from hlf.parser import parse
 from hlf.vm.bytecode import BytecodeModule
+from hlf.vm.interpreter import VM
+
 
 def cmd_compile(args):
     """Compile HLF source to bytecode"""
     # Read source
-    with open(args.input, 'r') as f:
+    with open(args.input) as f:
         source = f.read()
     
     # Parse
@@ -47,7 +46,7 @@ def cmd_compile(args):
 def cmd_run(args):
     """Run HLF source directly"""
     # Read source
-    with open(args.input, 'r') as f:
+    with open(args.input) as f:
         source = f.read()
     
     # Parse
@@ -160,6 +159,9 @@ def cmd_verify(args):
     checks.append(("Python version", py_version, True))
     
     # Check imports
+    parse = None
+    Compiler = None
+    VM = None
     try:
         from hlf.parser import parse
         checks.append(("Parser module", "OK", True))
@@ -179,12 +181,13 @@ def cmd_verify(args):
         checks.append(("VM module", str(e), False))
     
     # Run basic test
-    try:
-        source = "def main() { return 42 }"
-        ast = parse(source)
-        compiler = Compiler()
-        module = compiler.compile(ast)
-        vm = VM(module)
+    if parse and Compiler and VM:
+        try:
+            source = "def main() { return 42 }"
+            ast = parse(source)
+            compiler = Compiler()
+            module = compiler.compile(ast)
+            vm = VM(module)
         result = vm.execute()
         
         if result.as_int() == 42:

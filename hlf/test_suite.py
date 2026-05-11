@@ -10,20 +10,19 @@ Comprehensive tests for:
 """
 
 import os
-import sys
-import time
-import json
-import unittest
-import tempfile
 import shutil
+import sys
+import tempfile
+import time
+import unittest
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from hlf import ProfileManager, switch_profile
-from hlf.sqlite_hot_store import SQLiteHotStore, HybridHotStore, LRUCache
-from hlf.infinite_rag_hlf import InfiniteRAGHLF, Fact
+from hlf.infinite_rag_hlf import Fact, InfiniteRAGHLF
+from hlf.sqlite_hot_store import HybridHotStore, LRUCache, SQLiteHotStore
 
 
 class TestLRUCache(unittest.TestCase):
@@ -137,7 +136,7 @@ class TestHybridHotStore(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.temp_dir, "test.db")
-        self.store = HybridHotStore(db_path=self.db_path, cache_size=10)
+        self.store = HybridHotStore(db_path=self.db_path, lru_size=10)
     
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)

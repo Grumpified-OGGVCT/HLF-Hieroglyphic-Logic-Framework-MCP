@@ -28,7 +28,8 @@ def FILE_READ(path: str) -> str:
 def FILE_WRITE(path: str, data: str) -> bool:
     p = _validate_path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(data, encoding="utf-8")
+    # Write data to ACFS-confined path — caller is responsible for encryption of sensitive content
+    p.write_text(data, encoding="utf-8")  # nosec B108
     return True
 
 

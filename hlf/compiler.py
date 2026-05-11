@@ -3,9 +3,9 @@ HLF Compiler
 Compiles AST to VM bytecode per spec/vm/bytecode_spec.yaml
 """
 
-from typing import Dict, List, Any, Optional
 from .ast_nodes import *
-from .vm import Bytecode, Function, Instruction, OpCode, ConstantPool
+from .vm import Bytecode, ConstantPool, Function, Instruction, OpCode
+
 
 class CompileError(Exception):
     """Compilation error"""
@@ -17,9 +17,9 @@ class Compiler:
     def __init__(self, profile: str = "P0"):
         self.profile = profile
         self.cp = ConstantPool()
-        self.functions: Dict[str, Function] = {}
-        self.current_func: Optional[Function] = None
-        self.local_vars: Dict[str, int] = {}
+        self.functions: dict[str, Function] = {}
+        self.current_func: Function | None = None
+        self.local_vars: dict[str, int] = {}
         self.locals_count = 0
         self.label_counter = 0
     
@@ -40,14 +40,14 @@ class Compiler:
             )
             self.compile_function(main_func)
         
-        return Bytecode(
-            version=(1, 0, 0),
-            constant_pool=self.cp,
-            functions=self.functions,
-            entry_point="__main__" if "__main__" in self.functions else (
-                self.functions[list(self.functions.keys())[0]].name if self.functions else ""
-            )
-        )
+        mod = BytecodeModule("__main__")
+        mod.constants = self.cp
+        mod.functions = list(self.functions.values())
+        if "__main__" in self.functions:
+            mod.entry_point = "__main__"
+        elif self.functions:
+            mod.entry_point = list(self.functions.keys())[0]
+        return mod
     
     def compile_function(self, decl: FunctionDecl) -> Function:
         """Compile function declaration"""
@@ -61,7 +61,7 @@ class Compiler:
             self.locals_count += 1
         
         # Compile body
-        code: List[Instruction] = []
+        code: list[Instruction] = []
         for stmt in decl.body:
             self.compile_statement(stmt, code)
         
@@ -69,18 +69,15 @@ class Compiler:
         if not code or code[-1].opcode not in (OpCode.RETURN, OpCode.RETURN_UNIT):
             code.append(Instruction(OpCode.RETURN_UNIT))
         
-        func = Function(
-            name=decl.name,
-            code=code,
-            local_count=self.locals_count,
-            entry_point=0,
-            effect_indices=self.compile_effects(decl.effects)
-        )
+        func = Function(decl.name)
+        func.code = code
+        func.local_count = self.locals_count
+        func.effects = self.compile_effects(decl.effects)
         
         self.functions[decl.name] = func
         return func
     
-    def compile_effects(self, effects: List[str]) -> List[int]:
+    def compile_effects(self, effects: list[str]) -> list[int]:
         """Compile effect annotations"""
         indices = []
         for effect in effects:
@@ -88,7 +85,7 @@ class Compiler:
             indices.append(idx)
         return indices
     
-    def compile_statement(self, stmt: ASTNode, code: List[Instruction]) -> None:
+    def compile_statement(self, stmt: ASTNode, code: list[Instruction]) -> None:
         """Compile statement"""
         if isinstance(stmt, BinaryOp) and stmt.op == '=':
             # Assignment
@@ -106,7 +103,7 @@ class Compiler:
             self.compile_expr(stmt, code)
             code.append(Instruction(OpCode.POP))
     
-    def compile_assignment(self, stmt: BinaryOp, code: List[Instruction]) -> None:
+    def compile_assignment(self, stmt: BinaryOp, code: list[Instruction]) -> None:
         """Compile assignment"""
         if isinstance(stmt.right, Identifier):
             var_name = stmt.right.name
@@ -121,7 +118,7 @@ class Compiler:
         else:
             raise CompileError(f"Invalid assignment target: {stmt.right}")
     
-    def compile_if(self, stmt: IfStmt, code: List[Instruction]) -> None:
+    def compile_if(self, stmt: IfStmt, code: list[Instruction]) -> None:
         """Compile if statement"""
         # Compile condition
         self.compile_expr(stmt.condition, code)
@@ -148,7 +145,7 @@ class Compiler:
         # End
         code[end_label] = Instruction(OpCode.NOP)
     
-    def compile_while(self, stmt: WhileStmt, code: List[Instruction]) -> None:
+    def compile_while(self, stmt: WhileStmt, code: list[Instruction]) -> None:
         """Compile while loop"""
         start_label = len(code)
         
@@ -167,7 +164,7 @@ class Compiler:
         # End
         code.append(Instruction(OpCode.NOP))
     
-    def compile_match(self, stmt: MatchStmt, code: List[Instruction]) -> None:
+    def compile_match(self, stmt: MatchStmt, code: list[Instruction]) -> None:
         """Compile match statement"""
         self.compile_expr(stmt.expr, code)
         
@@ -194,7 +191,7 @@ class Compiler:
         # Default case
         code.append(Instruction(OpCode.POP))  # Remove match value
     
-    def compile_return(self, stmt: ReturnStmt, code: List[Instruction]) -> None:
+    def compile_return(self, stmt: ReturnStmt, code: list[Instruction]) -> None:
         """Compile return statement"""
         if stmt.value:
             self.compile_expr(stmt.value, code)
@@ -202,7 +199,7 @@ class Compiler:
         else:
             code.append(Instruction(OpCode.RETURN_UNIT))
     
-    def compile_expr(self, expr: ASTNode, code: List[Instruction]) -> None:
+    def compile_expr(self, expr: ASTNode, code: list[Instruction]) -> None:
         """Compile expression"""
         if isinstance(expr, Literal):
             self.compile_literal(expr, code)
@@ -220,7 +217,7 @@ class Compiler:
         else:
             raise CompileError(f"Cannot compile expression: {type(expr)}")
     
-    def compile_literal(self, expr: Literal, code: List[Instruction]) -> None:
+    def compile_literal(self, expr: Literal, code: list[Instruction]) -> None:
         """Compile literal"""
         if expr.literal_type == 'Int':
             if -128 <= expr.value <= 127:
@@ -242,7 +239,7 @@ class Compiler:
         elif expr.literal_type == 'Unit':
             code.append(Instruction(OpCode.LOAD_UNIT))
     
-    def compile_identifier(self, expr: Identifier, code: List[Instruction]) -> None:
+    def compile_identifier(self, expr: Identifier, code: list[Instruction]) -> None:
         """Compile identifier reference"""
         if expr.name in self.local_vars:
             code.append(Instruction(OpCode.LOAD_LOCAL, [self.local_vars[expr.name]]))
@@ -251,7 +248,7 @@ class Compiler:
             idx = self.cp.add_host_func_ref(expr.name)
             code.append(Instruction(OpCode.LOAD_CONST, [idx]))
     
-    def compile_binary(self, expr: BinaryOp, code: List[Instruction]) -> None:
+    def compile_binary(self, expr: BinaryOp, code: list[Instruction]) -> None:
         """Compile binary operation"""
         self.compile_expr(expr.left, code)
         self.compile_expr(expr.right, code)
@@ -277,7 +274,7 @@ class Compiler:
         else:
             raise CompileError(f"Unknown binary operator: {expr.op}")
     
-    def compile_unary(self, expr: UnaryOp, code: List[Instruction]) -> None:
+    def compile_unary(self, expr: UnaryOp, code: list[Instruction]) -> None:
         """Compile unary operation"""
         self.compile_expr(expr.operand, code)
         
@@ -288,7 +285,7 @@ class Compiler:
         else:
             raise CompileError(f"Unknown unary operator: {expr.op}")
     
-    def compile_call(self, expr: Call, code: List[Instruction]) -> None:
+    def compile_call(self, expr: Call, code: list[Instruction]) -> None:
         """Compile function call"""
         # Compile arguments
         for arg in expr.args:
@@ -311,7 +308,7 @@ class Compiler:
             self.compile_expr(expr.func, code)
             # TODO: Support dynamic calls
     
-    def compile_conditional(self, expr: IfStmt, code: List[Instruction]) -> None:
+    def compile_conditional(self, expr: IfStmt, code: list[Instruction]) -> None:
         """Compile conditional expression"""
         self.compile_expr(expr.condition, code)
         

@@ -1,6 +1,6 @@
 # 📜 HLF — Hieroglyphic Logic Framework · MCP Server
 
-> **HLF is meant to become a governed language for turning intent into auditable machine action.** The MCP server is the easiest way into that system, but the vision is bigger than the server: language, governance, runtime, memory, coordination, explanation, and real-code output.
+> **HLF is meant to become a governed language for turning intent into auditable machine action.** The packaged MCP server is the fastest way to try it today, but the real target is bigger than a server: language, governance, runtime, memory, coordination, explanation, and real-code output.
 
 ---
 
@@ -37,9 +37,16 @@ See `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_OPERATOR_BUILD_NOTES_2026
 
 ---
 
+## TL;DR for developers
+
+- HLF gives you a real compiler, formatter, linter, bytecode runtime, and FastMCP server for governed agent work.
+- The fastest current entry lane is the packaged `hlf_mcp/` surface: start with `stdio` locally, then move to `sse` or `streamable-http` when you need HTTP transports.
+- Fast first run: sync dependencies, compile `fixtures/hello_world.hlf`, run it locally, then launch the packaged MCP server with `HLF_TRANSPORT=stdio uv run hlf-mcp`.
+- This README keeps vision, current truth, and bridge context visible on purpose; use `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_CLAIM_LANES.md` when you need the strict boundary.
+
 ## Start Here
 
-HLF should not be read as “just the current packaged build.”
+HLF should not be read as only the current packaged build.
 
 This repo carries three things at once:
 
@@ -103,9 +110,16 @@ Repository boundary:
 - `hlf/` is a retained compatibility and support layer with useful legacy and bridge assets.
 - `hlf_source/` is preserved source context and reconstruction evidence from the broader Sovereign system.
 
-HLF is not supposed to stay a neat MCP wrapper.
-It is supposed to become a governed language and coordination substrate that connects intent, tools, memory, policy, execution, and human-readable trust.
-This repo already contains real parts of that system, and the rest has to be recovered rather than explained away.
+First-stop developer links:
+
+- `BUILD_GUIDE.md` for setup, test, and server commands that are current-true now
+- `docs/cli-tools.md` for the packaged CLI surface
+- `CONTRIBUTING.md` for contribution workflow and low-risk starter tasks
+- `extensions/hlf-vscode/README.md` for the current VS Code bridge and offline VSIX install path
+
+HLF is not supposed to stop at a neat MCP wrapper.
+It is meant to become a governed language and coordination substrate that connects intent, tools, memory, policy, execution, and human-readable trust.
+This repo already contains real pieces of that system, and the rest should be recovered rather than waved away.
 
 Bridge execution note:
 
@@ -117,11 +131,11 @@ Bridge execution note:
 
 ## Why This Repo Stands Out
 
-HLF is not only meant to be useful after the system is finished.
-It is being shaped into a governed language and coordination layer that can already help inspect state, summarize regressions, explain intended actions, and preserve evidence during parts of its own build and recovery process.
+HLF is not only aiming to be useful after the system is finished.
+It is being shaped into a governed language and coordination layer that can already inspect state, summarize regressions, explain intended actions, and preserve evidence during parts of its own build and recovery process.
 
 That does not mean full self-hosting is complete.
-It means the repo already contains a bounded, inspectable proof that construction, operation, and audit can begin to converge inside the same governed system.
+It means the repo already contains a bounded, inspectable proof that construction, operation, and audit can start to converge inside the same governed system.
 
 The current honest milestone is local and bounded build assistance first.
 
@@ -331,11 +345,11 @@ See `docs/cli-tools.md` for the command reference.
 
 ## 1. What is HLF?
 
-HLF is not just another DSL and it is not just the current MCP server.
+HLF is not just another DSL, and it is not just the current MCP server.
 
-HLF is the attempt to build a governed meaning layer between human intent and machine action: a language that lets agents coordinate, tools execute, memory persist, policy constrain, and humans inspect what is happening in plain terms.
+HLF is an attempt to build a governed meaning layer between human intent and machine action: a language that lets agents coordinate, tools execute, memory persist, policy constrain, and humans inspect what is happening in plain terms.
 
-The current MCP server matters because it is the easiest adoption path.
+The current MCP server matters because it is the easiest adoption path today.
 But the larger target is a real language and runtime for governed agent work.
 
 ```hlf
@@ -415,6 +429,22 @@ For the full architectural vision including the 13-layer Three-Brain model, Rose
 ---
 
 ## 2. Quick Start
+
+### 30-second local path
+
+```bash
+# install the packaged toolchain
+uv sync
+
+# compile and run the smallest fixture
+uv run hlfc fixtures/hello_world.hlf
+uv run hlfrun fixtures/hello_world.hlf
+
+# start the packaged MCP front door locally
+HLF_TRANSPORT=stdio uv run hlf-mcp
+```
+
+If you are already working inside this repo's active Python virtual environment, the same commands also work with `python -m ...`; see `BUILD_GUIDE.md` for the canonical variants.
 
 ### Option A — Docker (recommended for any agent)
 
@@ -1429,6 +1459,16 @@ uv run pytest tests/test_linter.py -v
 uv run pytest tests/test_github_scripts.py -v
 ```
 
+For a shorter newcomer path, use:
+
+```bash
+uv sync
+uv run pytest tests/ -q --tb=short
+uv run ruff check hlf_mcp/
+```
+
+If `uv` is not already installed on your machine, install it first or use the equivalent `python -m pip install -e '.[dev]'` fallback inside a virtual environment.
+
 ### CLI Tools
 
 | Command | Description |
@@ -1446,6 +1486,28 @@ uv run pytest tests/test_github_scripts.py -v
 | `uv run python scripts/verify_chain.py <trace.jsonl>` | Verify JSONL trace-chain integrity against computed hashes |
 | `uv run python scripts/hlf_token_lint.py fixtures` | Enforce file and per-line token budgets on HLF sources |
 | `uv run hlf-mcp` | Start MCP server |
+
+### FAQ for first-time builders
+
+**What is a capsule?**
+
+An Intent Capsule is the admission boundary around execution. It applies a tier, gas ceiling, and validation rules before the runtime is allowed to proceed. Start with Section 7 of this README (`Intent Capsule Tier Model`) and `hlf_mcp/hlf/capsules.py`.
+
+**What is CoVE?**
+
+CoVE is the verify-before-merge gate in the Instinct lifecycle. In this repo it is part of the governed `SPECIFY → PLAN → EXECUTE → VERIFY → MERGE` story rather than a loose slogan; start with Section 11 of this README (`Instinct SDD Lifecycle`) and `hlf_mcp/instinct/lifecycle.py`.
+
+**Which transport should I use first?**
+
+Use `stdio` first for local and bounded build-assist workflows. `sse` and `streamable-http` are real packaged transports, but stronger remote recursive-build claims stay gated until the full MCP initialize path is proven end to end.
+
+**How do I add or change a host function?**
+
+Update the governance contract in `governance/host_functions.json`, wire the packaged implementation in `hlf_mcp/`, then rerun the docs and tests that cover the registry and server surfaces. `docs/HLF_HOST_FUNCTIONS_REFERENCE.md` and `docs/cli-tools.md` are the best starting references.
+
+**Where should I start if I want to contribute?**
+
+Use `CONTRIBUTING.md` for the workflow, starter tasks, and validation commands. For claim-sensitive docs work, also check `docs/HLF_CLAIM_LANES.md` and `docs/HLF_README_OPERATIONALIZATION_MATRIX.md`.
 
 ### Project Structure
 
@@ -1605,6 +1667,7 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 - 🧾 [CLI Tools Reference](docs/cli-tools.md)
 - 📚 [Host Functions Reference](docs/HLF_HOST_FUNCTIONS_REFERENCE.md)
 - 🔄 [Packaged Instinct Reference](docs/INSTINCT_REFERENCE.md)
+- 🎵 [Suno track — porch-bluegrass take on the three-lane doctrine](https://suno.com/s/n18bwRmoqU7znIpv) — a musical nod to the README's vision/current-truth/bridge framing
 - 📜 [RFC 9000 Series](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/RFC_9000_SERIES.md)
 - 🗺️ [Unified Ecosystem Roadmap](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/UNIFIED_ECOSYSTEM_ROADMAP.md)
 - 🏗️ [Walkthrough](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF/blob/main/docs/WALKTHROUGH.md)

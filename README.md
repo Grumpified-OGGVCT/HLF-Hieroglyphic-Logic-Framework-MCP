@@ -504,6 +504,8 @@ Current proof boundary for recursive-build claims:
 
 ### Claude Desktop (`claude_desktop_config.json`)
 
+**With Docker** (containerised):
+
 ```json
 {
   "mcpServers": {
@@ -515,6 +517,37 @@ Current proof boundary for recursive-build claims:
   }
 }
 ```
+
+**Without Docker** (local Python — no container needed):
+
+```json
+{
+  "mcpServers": {
+    "hlf": {
+      "command": "uv",
+      "args": ["run", "--directory", "C:\\Users\\gerry\\generic_workspace\\HLF_MCP", "hlf-mcp"],
+      "env": {"HLF_TRANSPORT": "stdio"}
+    }
+  }
+}
+```
+
+If `uv` is not in your PATH, use `python -m hlf_mcp` from inside the repo's venv instead:
+
+```json
+{
+  "mcpServers": {
+    "hlf": {
+      "command": "python",
+      "args": ["-m", "hlf_mcp"],
+      "cwd": "C:\\Users\\gerry\\generic_workspace\\HLF_MCP",
+      "env": {"HLF_TRANSPORT": "stdio"}
+    }
+  }
+}
+```
+
+This works identically — every MCP client launches its own server subprocess on demand. Docker is packaging convenience, not a runtime requirement.
 
 ---
 

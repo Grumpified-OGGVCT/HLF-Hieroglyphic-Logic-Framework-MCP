@@ -16,10 +16,13 @@ LABEL org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
-# System deps — only what Lark/tiktoken/cryptography need
+# System deps — only what Lark/tiktoken/cryptography need.
+# On Windows Docker Desktop the build VM sometimes can't reach apt repos,
+# so tolerate failure — most packages ship pre-built wheels for 3.12.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    || echo "apt-get failed; relying on pre-built wheels"
 
 # Copy project definition first (layer-cache friendly)
 COPY pyproject.toml README.md ./

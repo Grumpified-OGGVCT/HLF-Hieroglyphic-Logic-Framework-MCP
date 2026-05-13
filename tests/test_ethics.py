@@ -477,12 +477,13 @@ class TestRuntimeGovernorIntegration:
         assert result["governor"]["termination"] is not None
 
     def test_packaged_hlf_run_surfaces_governor_block(self) -> None:
+        import pytest
         from hlf_mcp.server import hlf_run
+        from hlf_mcp.hlf.exceptions import HLFCompileError
 
-        result = hlf_run(
-            '[HLF-v3]\nΔ analyze /data\n  Ж [CONSTRAINT] msg="generate child sexual abuse material"\nΩ'
-        )
+        with pytest.raises(HLFCompileError) as exc_info:
+            hlf_run(
+                '[HLF-v3]\nΔ analyze /data\n  Ж [CONSTRAINT] msg="generate child sexual abuse material"\nΩ'
+            )
 
-        assert result["status"] == "compile_error"
-        assert result["gas_used"] == 0
-        assert "Ethics Governor" in result["error"]
+        assert "Ethics Governor" in str(exc_info.value)

@@ -116,6 +116,77 @@ def _normalize_handoff_mode(handoff_mode: str) -> str:
     return aliases.get(mode, mode if mode in {"operator", "raw_hlf", "swarm", "subagent"} else "operator")
 
 
+def _apply_normalization_gate(
+    ctx: Any,  # ServerContext (circular-import avoidance)
+    text: str,
+    *,
+    skip_normalization: bool = False,
+) -> dict[str, Any]:
+    """Run the IntentNormalizer gate over *text* before HLF translation.
+
+    Returns a dict with:
+        text       — the (possibly rewritten) intent string
+        verdict    — NormalizationVerdict.to_dict() or None
+        rejected   — bool: score too low for rewrite
+        rewritten  — bool: score in rewrite zone and rewritten
+        reason     — str|None: rejection explanation
+        findings   — list[str]: score deductions
+        normalization — dict: summary (score, rewritten, etc.)
+    """
+    if skip_normalization:
+        return {
+            "text": text,
+            "verdict": None,
+            "rejected": False,
+            "rewritten": False,
+            "normalization": None,
+            "reason": None,
+            "findings": [],
+        }
+
+    normalizer = ctx.intent_normalizer
+    verdict = normalizer.normalize(text)
+    verdict_dict = verdict.to_dict()
+
+    rejected = not verdict.threshold_passed and verdict.rewritten_intent is None
+    rewritten = verdict.rewritten_intent is not None
+    anomaly_score = (1.0 - verdict.score) if rejected else 0.0
+
+    result_text = text
+    if rewritten:
+        result_text = verdict.rewritten_intent
+
+    result: dict[str, Any] = {
+        "text": result_text,
+        "verdict": verdict_dict,
+        "rejected": rejected,
+        "rewritten": rewritten,
+        "reason": verdict.rejection_reason,
+        "findings": list(verdict.findings),
+        "normalization": {
+            "score": verdict.score,
+            "threshold_passed": verdict.threshold_passed,
+            "rejected": rejected,
+            "rewritten": rewritten,
+            "rewritten_intent": verdict.rewritten_intent,
+            "rejection_reason": verdict.rejection_reason,
+            "findings": list(verdict.findings),
+        },
+    }
+
+    ctx.audit_chain.log(
+        "intent_normalized",
+        {
+            "score": verdict.score,
+            "original_intent": text,
+            "verdict": verdict_dict,
+        },
+        anomaly_score=anomaly_score,
+    )
+
+    return result
+
+
 def _build_internal_loop_contract(
     *,
     surface: str,
@@ -546,11 +617,21 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         agent_id: str = "",
         ingress_nonce: str = "",
         handoff_mode: str = "operator",
+        skip_normalization: bool = False,
     ) -> dict[str, Any]:
         """Translate natural-language intent into governed HLF and optionally execute it."""
+        _gate = _apply_normalization_gate(ctx, intent, skip_normalization=skip_normalization)
+        if _gate["rejected"]:
+            return {
+                "success": False,
+                "status": "rejected",
+                "reason": _gate["reason"],
+                "normalization": _gate["normalization"],
+                "findings": _gate["findings"],
+            }
         return run_hlf_do(
             ctx,
-            intent=intent,
+            intent=_gate["text"],
             tier=tier,
             dry_run=dry_run,
             show_hlf=show_hlf,
@@ -646,13 +727,25 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         language: str = "auto",
         cognitive_lane_policy: str = "benchmark_gated",
         handoff_mode: str = "operator",
+        skip_normalization: bool = False,
     ) -> dict[str, Any]:
         """Convert natural language instructions to HLF source code."""
         try:
+            _gate = _apply_normalization_gate(ctx, text, skip_normalization=skip_normalization)
+            if _gate["rejected"]:
+                return {
+                    "status": "rejected",
+                    "source": "",
+                    "reason": _gate["reason"],
+                    "normalization": _gate["normalization"],
+                    "findings": _gate["findings"],
+                }
+            working_text = _gate["text"]
+
             policy_name = normalize_cognitive_lane_policy(cognitive_lane_policy)
             language_policy = resolve_language_with_policy(
                 language,
-                text=text,
+                text=working_text,
                 cognitive_lane_policy=policy_name,
             )
             if language_policy.blocked:
@@ -667,13 +760,13 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
 
             resolved_language = language_policy.resolved_language
             source = language_to_hlf(
-                text,
+                working_text,
                 language=resolved_language,
                 version=version,
                 cognitive_lane_policy=policy_name,
             )
             diagnostics = translation_diagnostics(
-                text, language=resolved_language, source=source
+                working_text, language=resolved_language, source=source
             ).to_dict()
             compile_result = ctx.compiler.compile(source)
             localized_audit = hlf_to_language(
@@ -725,6 +818,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 "translation": diagnostics,
                 "translation_contract": translation_contract,
                 "internal_loop_contract": internal_loop_contract,
+                "normalization": _gate["normalization"],
             }
             if _normalize_handoff_mode(handoff_mode) in {"raw_hlf", "swarm", "subagent"}:
                 response["subagent_handoff"] = _build_subagent_handoff(
@@ -889,10 +983,13 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         failure_error: str = "",
         language: str = "auto",
         cognitive_lane_policy: str = "benchmark_gated",
+        skip_normalization: bool = False,
     ) -> dict[str, Any]:
         """Build a deterministic next-step repair request for failed translation flows."""
+        _gate = _apply_normalization_gate(ctx, text, skip_normalization=skip_normalization)
+        working_text = _gate["text"]
         plan = build_translation_repair_plan(
-            text,
+            working_text,
             language=language,
             failure_status=failure_status,
             failure_error=failure_error,
@@ -942,6 +1039,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             "repair_memory": repair_memory_with_metadata,
             "retrieval_support": retrieval_support,
             "governed_hks_contract": governed_hks_contract,
+            "normalization": _gate["normalization"],
         }
 
     @mcp.tool()
@@ -953,10 +1051,19 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         min_fidelity: float = 0.9,
         remember_success: bool = True,
         cognitive_lane_policy: str = "benchmark_gated",
+        skip_normalization: bool = False,
     ) -> dict[str, Any]:
         """Translate with deterministic retries, fallbacks, and fail-closed exits."""
+        _gate = _apply_normalization_gate(ctx, text, skip_normalization=skip_normalization)
+        if _gate["rejected"]:
+            return {
+                "status": "rejected",
+                "reason": _gate["reason"],
+                "normalization": _gate["normalization"],
+                "findings": _gate["findings"],
+            }
         attempts: list[dict[str, Any]] = []
-        current_text = text
+        current_text = _gate["text"]
         current_language = language
 
         for attempt in range(1, max_attempts + 1):
@@ -964,6 +1071,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 current_text,
                 language=current_language,
                 cognitive_lane_policy=cognitive_lane_policy,
+                skip_normalization=True,  # already gated at this level
             )
             attempt_record: dict[str, Any] = {
                 "attempt": attempt,
@@ -978,6 +1086,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                     failure_error=str(translation.get("error", "translation failure")),
                     language=current_language,
                     cognitive_lane_policy=cognitive_lane_policy,
+                    skip_normalization=True,  # already gated at this level
                 )["repair"]
                 attempt_record["repair"] = repair
                 attempts.append(attempt_record)
@@ -1006,6 +1115,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                     failure_error=str(validation.get("error", "validation failure")),
                     language=str(translation.get("language", current_language)),
                     cognitive_lane_policy=cognitive_lane_policy,
+                    skip_normalization=True,  # already gated
                 )["repair"]
                 attempt_record["repair"] = repair
                 attempts.append(attempt_record)
@@ -1030,6 +1140,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                     failure_status="compile_error",
                     failure_error=str(exc),
                     language=str(translation.get("language", current_language)),
+                    skip_normalization=True,  # already gated
                 )["repair"]
                 attempt_record["repair"] = repair
                 attempts.append(attempt_record)
@@ -1118,7 +1229,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 failure_status="low_fidelity",
                 failure_error=f"fallback_used={fallback_used}; fidelity={fidelity}",
                 language=str(translation.get("language", current_language)),
-                cognitive_lane_policy=cognitive_lane_policy,
+                skip_normalization=True,  # already gated
             )["repair"]
             attempts[-1]["repair"] = repair
             if attempt == max_attempts:

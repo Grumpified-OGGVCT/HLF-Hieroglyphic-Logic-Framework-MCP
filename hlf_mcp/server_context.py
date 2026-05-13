@@ -40,6 +40,7 @@ from hlf_mcp.hlf.governance_proofs import (
     sha256_digest,
 )
 from hlf_mcp.hlf.governed_ingress import GovernedIngressController
+from hlf_mcp.hlf.intent_normalizer import IntentNormalizer
 from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.memory_node import build_pointer_ref
 from hlf_mcp.hlf.registry import HostFunctionRegistry
@@ -314,6 +315,7 @@ class ServerContext:
     approval_ledger: ApprovalLedger
     audit_chain: AuditChain
     daemon_manager: DaemonManager
+    intent_normalizer: IntentNormalizer = field(default_factory=IntentNormalizer)
     governance_events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=250))
 
     def emit_governance_event(

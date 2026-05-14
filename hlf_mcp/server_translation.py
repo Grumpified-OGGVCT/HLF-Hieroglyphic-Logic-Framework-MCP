@@ -952,6 +952,13 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                         "translation_path": translation_path,
                         "compile_success": True,
                         "node_count": len(compile_result.get("ast", {}).get("statements", [])),
+                        "governed_evidence": {
+                            "source_type": "translation_pipeline",
+                            "artifact_form": "hlf_source",
+                            "salience_score": 0.95,
+                            "source_authority_label": "governed",
+                            "branch": "main",
+                        },
                     }
                     memory_store_result = ctx.memory_store.store(
                         content=source,
@@ -959,7 +966,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                         confidence=0.95,
                         provenance="governed_recall",
                         entry_kind="hks_exemplar",
-                        domain="translation",
+                        domain="hlf-specific",
                         metadata=store_meta,
                         bypass_vector_dedup=True,
                     )

@@ -40,7 +40,7 @@ def test_normalize_ast_accepts_nested_compiler_payload() -> None:
     assert normalized == {"program": [{"tag": "SET", "name": "x", "value": 1}], "env": {}}
 
 
-def test_verify_ast_emits_proven_and_skipped_results_from_packaged_ast() -> None:
+def test_verify_ast_emits_proven_and_counterexample_results_from_packaged_ast() -> None:
     verifier = FormalVerifier()
 
     report = verifier.verify_ast(
@@ -56,7 +56,7 @@ def test_verify_ast_emits_proven_and_skipped_results_from_packaged_ast() -> None
     statuses = {result["status"] for result in report.to_dict()["results"]}
 
     assert "proven" in statuses or "runtime_checked" in statuses
-    assert "skipped" in statuses
+    assert "counterexample" in statuses  # unresolvable gates now fail-closed
 
 
 def test_verify_ast_returns_skipped_when_no_constraints_are_extracted() -> None:

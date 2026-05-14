@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from hlf_mcp.hlf import insaits
 from hlf_mcp.hlf.capsules import capsule_for_tier
 from hlf_mcp.hlf.compiler import CompileError
+from hlf_mcp.hlf.hlf_llm_bridge import HLFLLMBridge
 from hlf_mcp.hlf.translator import (
     build_translation_repair_plan,
     hlf_to_english,
@@ -282,6 +283,46 @@ def _build_subagent_handoff(
             "translate back to NLP only for human-facing summaries",
         ],
     }
+
+
+def _build_hlf_translator_system_prompt(language: str = "english") -> str:
+    """Build a system prompt that instructs the LLM to produce valid HLF-v3.
+
+    The prompt emphasizes decomposition, not truncation — the LLM must
+    break the intent into GOAL, ACTION, CONSTRAINT, ASSERTION, and RESULT
+    glyphs, preserving all semantic detail from the original request.
+    """
+    return (
+        "You are a precise HLF-v3 translator. Your job is to convert natural-language "
+        f"{language} intents into canonical HLF source code.\n\n"
+        "HLF-v3 structure rules:\n"
+        "- Every HLF program begins with [HLF-v3] on its own line and ends with Ω on its own line.\n"
+        "- Decompose the intent into separate glyphs — do NOT wrap the intent in a single INTENT glyph.\n"
+        "  * USE directives: MODULE, IMPORT, VERSION\n"
+        "  * GOAL directive for the primary objective\n"
+        "  * SET for variable assignments\n"
+        "  * ACTION blocks (Δ) for concrete operations\n"
+        "  * ASSERT blocks (Ж) for constraints and invariants\n"
+        "  * RESULT blocks (Σ) for expected outputs\n"
+        "  * COND/LOOP blocks for control flow\n"
+        "- Preserve ALL semantic detail from the input. Do not truncate to 40 characters.\n"
+        "- For complex intents, produce multiple ACTION glyphs, not one monolithic block.\n"
+        "- Use variables to capture intermediate results.\n"
+        "- Include gas annotations where relevant.\n"
+        "- Output ONLY valid HLF source (no markdown, no explanation).\n\n"
+        "Format your response as:\n"
+        "```hlf\n"
+        "[HLF-v3]\n"
+        "# Generated from {language} intent\n"
+        "MODULE main\n"
+        "GOAL <primary-objective>\n"
+        "SET var = value\n"
+        "Δ [ACTION] target=\"<what-to-do>\"\n"
+        "Ж [ASSERT] condition=\"<invariant>\"\n"
+        "Σ result=\"<expected-output>\"\n"
+        "Ω\n"
+        "```"
+    )
 
 
 def _persist_translation_contract(
@@ -721,7 +762,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         )
 
     @mcp.tool()
-    def hlf_translate_to_hlf(
+    async def hlf_translate_to_hlf(
         text: str,
         version: str = "3",
         language: str = "auto",
@@ -759,12 +800,41 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 }
 
             resolved_language = language_policy.resolved_language
-            source = language_to_hlf(
-                working_text,
-                language=resolved_language,
-                version=version,
-                cognitive_lane_policy=policy_name,
-            )
+            source = ""
+            translation_path = "heuristic"
+
+            # ── LLM-backed translation (primary path) ──────────────────
+            try:
+                bridge = HLFLLMBridge()
+                system_prompt = _build_hlf_translator_system_prompt(resolved_language)
+                prompt = (
+                    f"Translate the following {resolved_language} intent into "
+                    f"canonical HLF-v3 syntax. Decompose it into structured glyphs: "
+                    f"GOALs, ACTIONS, CONSTRAINTS, ASSERTIONS, and RESULT expectations. "
+                    f"Do not truncate or wrap. Preserve all semantic detail.\n\n"
+                    f"INTENT:\n{working_text}"
+                )
+                result = await bridge.send(
+                    prompt, role="translator", system=system_prompt)
+                if result.extracted and result.hlf_output and result.hlf_output.strip() != "Ω":
+                    # Verify the LLM output is valid HLF
+                    try:
+                        ctx.compiler.compile(result.hlf_output)
+                        source = result.hlf_output
+                        translation_path = "llm"
+                    except CompileError:
+                        logger = __import__("logging").getLogger(__name__)
+                        logger.warning("LLM-generated HLF failed compilation, falling back to heuristic")
+            except Exception:
+                pass  # fall through to heuristic
+
+            if not source:
+                source = language_to_hlf(
+                    working_text,
+                    language=resolved_language,
+                    version=version,
+                    cognitive_lane_policy=policy_name,
+                )
             diagnostics = translation_diagnostics(
                 working_text, language=resolved_language, source=source
             ).to_dict()
@@ -816,6 +886,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 "cognitive_lane_policy": policy_name,
                 "language_policy": language_policy.to_dict(),
                 "translation": diagnostics,
+                "translation_path": translation_path,
                 "translation_contract": translation_contract,
                 "internal_loop_contract": internal_loop_contract,
                 "normalization": _gate["normalization"],

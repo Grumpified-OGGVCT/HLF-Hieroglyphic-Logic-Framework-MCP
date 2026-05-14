@@ -39,6 +39,11 @@ SAFE_BOOTSTRAP_TOOLS: frozenset[str] = frozenset(
         "hlf_list_profiles",
         "hlf_get_profile",
         "hlf_authority_matrix",
+        # Swarm observation tools — read-only, safe for bootstrap
+        "hlf_swarm_run",
+        "hlf_swarm_progress",
+        "hlf_swarm_witness",
+        "hlf_swarm_verify",
     }
 )
 

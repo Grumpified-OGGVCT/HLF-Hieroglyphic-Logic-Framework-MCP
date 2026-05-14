@@ -71,12 +71,6 @@ HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
         "effects": ["read_fs"],
         "desc": "Analyze a file or resource",
     },
-    "enforce_constraint": {
-        "tier": "all",
-        "gas": 1,
-        "effects": [],
-        "desc": "Enforce a typed constraint",
-    },
     "vote": {"tier": "all", "gas": 1, "effects": [], "desc": "Cast a consensus vote"},
     "delegate": {
         "tier": "all",
@@ -85,26 +79,6 @@ HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
         "desc": "Delegate to a sub-agent",
     },
     "route": {"tier": "all", "gas": 2, "effects": ["model_call"], "desc": "Route to a model"},
-    "read_file": {"tier": "all", "gas": 2, "effects": ["read_fs"], "desc": "Read a file"},
-    "write_file": {
-        "tier": "operators",
-        "gas": 5,
-        "effects": ["write_fs"],
-        "desc": "Write a file (operator+)",
-    },
-    "http_get": {"tier": "all", "gas": 4, "effects": ["network"], "desc": "HTTP GET request"},
-    "http_post": {
-        "tier": "operators",
-        "gas": 5,
-        "effects": ["network"],
-        "desc": "HTTP POST request",
-    },
-    "spawn_agent": {
-        "tier": "operators",
-        "gas": 10,
-        "effects": ["spawn_agent"],
-        "desc": "Spawn a new agent",
-    },
     "memory_store": {
         "tier": "all",
         "gas": 5,
@@ -124,12 +98,6 @@ HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
     "hash_sha256": {"tier": "all", "gas": 2, "effects": [], "desc": "Compute SHA-256 hash"},
     "merkle_chain": {"tier": "all", "gas": 3, "effects": [], "desc": "Append to Merkle chain"},
     "align_verify": {"tier": "all", "gas": 4, "effects": [], "desc": "Verify ALIGN ledger rule"},
-    "spec_gate_check": {
-        "tier": "all",
-        "gas": 4,
-        "effects": [],
-        "desc": "Check SPEC_GATE constraint",
-    },
     "get_timestamp": {"tier": "all", "gas": 1, "effects": [], "desc": "Get current timestamp"},
     "generate_ulid": {"tier": "all", "gas": 1, "effects": [], "desc": "Generate a ULID"},
     "compress_tokens": {
@@ -228,6 +196,67 @@ HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
         "execution_mode": "simulation_only",
         "supervisory_only": True,
     },
+    # ── Math stdlib ────────────────────────────────────────────────────────
+    "math_abs": {"tier": "all", "gas": 1, "effects": [], "desc": "Absolute value"},
+    "math_floor": {"tier": "all", "gas": 1, "effects": [], "desc": "Floor"},
+    "math_ceil": {"tier": "all", "gas": 1, "effects": [], "desc": "Ceiling"},
+    "math_round": {"tier": "all", "gas": 1, "effects": [], "desc": "Round"},
+    "math_min": {"tier": "all", "gas": 1, "effects": [], "desc": "Minimum"},
+    "math_max": {"tier": "all", "gas": 1, "effects": [], "desc": "Maximum"},
+    "math_sqrt": {"tier": "all", "gas": 2, "effects": [], "desc": "Square root"},
+    "math_pow": {"tier": "all", "gas": 2, "effects": [], "desc": "Power"},
+    "math_pi": {"tier": "all", "gas": 1, "effects": [], "desc": "Pi constant"},
+    "math_e": {"tier": "all", "gas": 1, "effects": [], "desc": "E constant"},
+    "math_sin": {"tier": "all", "gas": 2, "effects": [], "desc": "Sine"},
+    "math_cos": {"tier": "all", "gas": 2, "effects": [], "desc": "Cosine"},
+    "math_tan": {"tier": "all", "gas": 2, "effects": [], "desc": "Tangent"},
+    "math_log": {"tier": "all", "gas": 2, "effects": [], "desc": "Natural logarithm"},
+    # ── String stdlib ──────────────────────────────────────────────────────
+    "string_length": {"tier": "all", "gas": 1, "effects": [], "desc": "String length"},
+    "string_upper": {"tier": "all", "gas": 1, "effects": [], "desc": "Uppercase"},
+    "string_lower": {"tier": "all", "gas": 1, "effects": [], "desc": "Lowercase"},
+    "string_trim": {"tier": "all", "gas": 1, "effects": [], "desc": "Trim whitespace"},
+    "string_concat": {"tier": "all", "gas": 1, "effects": [], "desc": "Concatenate strings"},
+    "string_split": {"tier": "all", "gas": 1, "effects": [], "desc": "Split string"},
+    "string_join": {"tier": "all", "gas": 1, "effects": [], "desc": "Join strings"},
+    "string_contains": {"tier": "all", "gas": 1, "effects": [], "desc": "Contains substring"},
+    "string_replace": {"tier": "all", "gas": 1, "effects": [], "desc": "Replace in string"},
+    "string_starts_with": {"tier": "all", "gas": 1, "effects": [], "desc": "Starts with"},
+    "string_ends_with": {"tier": "all", "gas": 1, "effects": [], "desc": "Ends with"},
+    "string_substring": {"tier": "all", "gas": 1, "effects": [], "desc": "Substring"},
+    # ── Collections stdlib ─────────────────────────────────────────────────
+    "list_length": {"tier": "all", "gas": 1, "effects": [], "desc": "List length"},
+    "list_append": {"tier": "all", "gas": 1, "effects": [], "desc": "Append to list"},
+    "list_concat": {"tier": "all", "gas": 1, "effects": [], "desc": "Concatenate lists"},
+    "list_filter": {"tier": "all", "gas": 2, "effects": [], "desc": "Filter list"},
+    "list_map": {"tier": "all", "gas": 2, "effects": [], "desc": "Map over list"},
+    "list_reduce": {"tier": "all", "gas": 2, "effects": [], "desc": "Reduce list"},
+    "dict_get": {"tier": "all", "gas": 1, "effects": [], "desc": "Dict get"},
+    "dict_set": {"tier": "all", "gas": 1, "effects": [], "desc": "Dict set"},
+    "dict_keys": {"tier": "all", "gas": 1, "effects": [], "desc": "Dict keys"},
+    "dict_values": {"tier": "all", "gas": 1, "effects": [], "desc": "Dict values"},
+    # ── System stdlib ──────────────────────────────────────────────────────
+    "sys_os": {"tier": "all", "gas": 1, "effects": [], "desc": "OS name"},
+    "sys_arch": {"tier": "all", "gas": 1, "effects": [], "desc": "CPU architecture"},
+    "sys_cwd": {"tier": "all", "gas": 1, "effects": [], "desc": "Current working directory"},
+    "sys_env": {"tier": "all", "gas": 1, "effects": ["read_env"], "desc": "Read environment variable"},
+    "sys_setenv": {"tier": "operators", "gas": 2, "effects": ["write_env"], "desc": "Set environment variable"},
+    "sys_time": {"tier": "all", "gas": 1, "effects": [], "desc": "Current timestamp"},
+    "sys_sleep": {"tier": "all", "gas": 1, "effects": [], "desc": "Sleep milliseconds"},
+    "sys_exit": {"tier": "operators", "gas": 1, "effects": ["process_exit"], "desc": "Exit process"},
+    "sys_exec": {"tier": "operators", "gas": 8, "effects": ["process_exec"], "desc": "Execute command"},
+    # ── Net stdlib ─────────────────────────────────────────────────────────
+    "http_get": {"tier": "all", "gas": 4, "effects": ["network"], "desc": "HTTP GET request"},
+    "http_post": {"tier": "operators", "gas": 5, "effects": ["network"], "desc": "HTTP POST request"},
+    "http_put": {"tier": "operators", "gas": 5, "effects": ["network"], "desc": "HTTP PUT request"},
+    "http_delete": {"tier": "operators", "gas": 4, "effects": ["network"], "desc": "HTTP DELETE request"},
+    "url_encode": {"tier": "all", "gas": 2, "effects": [], "desc": "URL-encode parameters"},
+    "url_decode": {"tier": "all", "gas": 2, "effects": [], "desc": "URL-decode query string"},
+    # ── IO stdlib ──────────────────────────────────────────────────────────
+    "file_read": {"tier": "all", "gas": 2, "effects": ["read_fs"], "desc": "Read a file"},
+    "file_write": {"tier": "operators", "gas": 5, "effects": ["write_fs"], "desc": "Write a file (operator+)"},
+    "file_exists": {"tier": "all", "gas": 1, "effects": ["read_fs"], "desc": "Check file existence"},
+    "dir_list": {"tier": "all", "gas": 2, "effects": ["read_fs"], "desc": "List directory contents"},
 }
 
 _HOST_FUNCTION_ALIASES: dict[str, str] = {
@@ -696,7 +725,16 @@ def _resolve_pointer_argument(
             elif op == Op.CALL_TOOL:
                 tool_name = pool.get(operand) or ""
                 self._side_effects.append({"type": "tool_call", "name": tool_name})
-                self.stack.append({"tool_called": tool_name, "status": "simulated"})
+                try:
+                    from hlf_mcp.hlf.tool_dispatch import ToolRegistry
+                    _registry = ToolRegistry()
+                    _result = _registry.dispatch(tool_name, {})
+                    self.stack.append(
+                        {"tool_called": tool_name, "success": _result.success,
+                         "result": _result.result, "error": _result.error}
+                    )
+                except Exception as _exc:
+                    self.stack.append({"tool_called": tool_name, "status": "error", "error": str(_exc)})
 
             elif op == Op.OPENCLAW_TOOL:
                 tool = pool.get(operand) or ""
@@ -722,8 +760,14 @@ def _resolve_pointer_argument(
 
             elif op == Op.MEMORY_RECALL:
                 key = self.stack.pop() if self.stack else "unknown"
-                self.stack.append({"recalled": key, "value": None})
                 self._side_effects.append({"type": "memory_read", "key": key})
+                try:
+                    from hlf_mcp.hlf.memory_node import MemoryStore
+                    _store = MemoryStore()
+                    _results = _store.recall(entity_id=str(key), top_k=5)
+                    self.stack.append({"recalled": key, "results": _results, "count": len(_results)})
+                except Exception as _exc:
+                    self.stack.append({"recalled": key, "value": None, "error": str(_exc)})
 
             elif op == Op.SPEC_DEFINE:
                 tag = pool.get(operand) or ""
@@ -778,6 +822,7 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
     """
     import hashlib as _hashlib
     import os as _os
+    import sys as _sys
     import time as _time
 
     try:
@@ -862,6 +907,25 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
             return list(args[0].keys()) if args and isinstance(args[0], dict) else []
         if name == "DICT_VALUES":
             return list(args[0].values()) if args and isinstance(args[0], dict) else []
+        if name == "DICT_SET":
+            if len(args) >= 3 and isinstance(args[0], dict):
+                return {**args[0], args[1]: args[2]}
+            elif len(args) >= 2:
+                return {args[0]: args[1]} if len(args) >= 2 else {}
+            return {}
+        if name == "LIST_FILTER":
+            if len(args) >= 2 and hasattr(args[0], "__iter__") and callable(args[1]):
+                return [x for x in args[0] if args[1](x)]
+            return list(args[0]) if args else []
+        if name == "LIST_MAP":
+            if len(args) >= 2 and hasattr(args[0], "__iter__") and callable(args[1]):
+                return [args[1](x) for x in args[0]]
+            return list(args[0]) if args else []
+        if name == "LIST_REDUCE":
+            import functools as _ft
+            if len(args) >= 3 and hasattr(args[0], "__iter__") and callable(args[1]):
+                return _ft.reduce(args[1], args[0], args[2])
+            return args[2] if len(args) >= 3 else None
 
         # ── Crypto builtins ──────────────────────────────────────────────────
         if name == "HASH" or name == "hash_sha256":
@@ -942,6 +1006,28 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
             if ms > 0:
                 _time.sleep(min(ms / 1000, 5.0))  # cap at 5 s in VM context
             return True
+        if name == "SYS_SETENV":
+            var = str(args[0]) if args else ""
+            val = str(args[1]) if len(args) >= 2 else ""
+            if var in _ENV_BLOCKLIST:
+                raise PermissionError(
+                    f"SYS_SETENV: modification of sensitive variable '{var}' is not permitted"
+                )
+            _os.environ[var] = val
+            return True
+        if name == "SYS_EXIT":
+            code = int(args[0]) if args else 0
+            _sys.exit(code)
+            return None
+        if name == "SYS_EXEC":
+            import subprocess as _sp
+            cmd = str(args[0]) if args else ""
+            cargs = list(args[1]) if len(args) >= 2 and hasattr(args[1], "__iter__") else []
+            try:
+                result = _sp.run([cmd] + cargs, capture_output=True, text=True, timeout=30)
+                return result.stdout
+            except Exception as _exc:
+                return str(_exc)
         if name == "generate_ulid":
             # ULID: timestamp (48-bit ms) + random (80-bit) encoded in Crockford base32
             import secrets as _sec
@@ -1000,6 +1086,31 @@ def _dispatch_builtin(name: str, args: list[Any]) -> Any:
             from hlf_mcp.hlf.stdlib.agent import SET_GOAL
 
             return SET_GOAL(str(args[0])) if args else False
+
+        # ── Net builtins ───────────────────────────────────────────────────────
+        if name == "HTTP_GET":
+            from hlf_mcp.hlf.stdlib.net_mod import HTTP_GET
+            return HTTP_GET(str(args[0])) if args else ""
+        if name == "HTTP_POST":
+            from hlf_mcp.hlf.stdlib.net_mod import HTTP_POST
+            if len(args) >= 2:
+                return HTTP_POST(str(args[0]), str(args[1]))
+            return ""
+        if name == "HTTP_PUT":
+            from hlf_mcp.hlf.stdlib.net_mod import HTTP_PUT
+            if len(args) >= 2:
+                return HTTP_PUT(str(args[0]), str(args[1]))
+            return ""
+        if name == "HTTP_DELETE":
+            from hlf_mcp.hlf.stdlib.net_mod import HTTP_DELETE
+            return HTTP_DELETE(str(args[0])) if args else ""
+        if name == "URL_ENCODE":
+            from hlf_mcp.hlf.stdlib.net_mod import URL_ENCODE
+            return URL_ENCODE(args[0]) if args else ""
+        if name == "URL_DECODE":
+            from hlf_mcp.hlf.stdlib.net_mod import URL_DECODE
+            return URL_DECODE(str(args[0])) if args else {}
+
 
         # ── Cosine similarity ────────────────────────────────────────────────
         if name == "cosine_similarity":
@@ -1417,6 +1528,94 @@ def _dispatch_host(
             req = _req.Request(url, data=body.encode("utf-8"), method="POST")
             with _req.urlopen(req, timeout=10) as resp:  # noqa: S310
                 result = resp.read().decode("utf-8")[:4096]
+
+        # ── LLM-backed functions (HLFLLMBridge) ────────────────────────────
+        elif fn_name == "summarize":
+            text = str(args[0]) if args else ""
+            if not text:
+                result = {"summary": "", "tokens": 0}
+            else:
+                try:
+                    from hlf_mcp.hlf.hlf_llm_bridge import HLFLLMBridge
+                    _bridge = HLFLLMBridge()
+                    # Synchronous fallback: use urllib directly if async not possible
+                    import json as _json, urllib.request as _ureq
+                    _payload = _json.dumps({
+                        "model": _bridge.model,
+                        "prompt": f"Summarize concisely:\n\n{text[:3000]}",
+                        "stream": False,
+                        "options": {"temperature": 0.2, "num_predict": 512},
+                    }).encode("utf-8")
+                    _req = _ureq.Request(
+                        f"{_bridge.ollama_url}/api/generate",
+                        data=_payload,
+                        headers={"Content-Type": "application/json"},
+                    )
+                    with _ureq.urlopen(_req, timeout=60) as _resp:
+                        _data = _json.loads(_resp.read().decode("utf-8"))
+                        result = {
+                            "summary": _data.get("response", text[:200]),
+                            "model": _bridge.model,
+                        }
+                except Exception as _exc:
+                    # Fallback: return truncated text
+                    result = {"summary": text[:200], "fallback": True, "error": str(_exc)}
+
+        elif fn_name == "embed_text":
+            text = str(args[0]) if args else ""
+            if not text:
+                result = {"embedding": [], "dimensions": 0}
+            else:
+                try:
+                    import json as _json, urllib.request as _ureq
+                    _payload = _json.dumps({
+                        "model": "nomic-embed-text",
+                        "prompt": text[:2000],
+                    }).encode("utf-8")
+                    _req = _ureq.Request(
+                        "http://localhost:11434/api/embeddings",
+                        data=_payload,
+                        headers={"Content-Type": "application/json"},
+                    )
+                    with _ureq.urlopen(_req, timeout=30) as _resp:
+                        _data = _json.loads(_resp.read().decode("utf-8"))
+                        _emb = _data.get("embedding", [])
+                        result = {"embedding": _emb, "dimensions": len(_emb)}
+                except Exception as _exc:
+                    # Fallback: bag-of-words TF vector
+                    import re as _re
+                    _words = _re.findall(r"[a-z0-9]+", text.lower())
+                    _vocab: dict[str, int] = {}
+                    for _w in _words:
+                        _vocab[_w] = _vocab.get(_w, 0) + 1
+                    _total = sum(_vocab.values()) or 1
+                    _vec = [_vocab[k] / _total for k in sorted(_vocab)]
+                    result = {"embedding": _vec[:768], "dimensions": len(_vec[:768]),
+                              "fallback": True, "note": "Ollama unavailable; using TF vector"}
+
+        # ── Stdlib math dispatch ────────────────────────────────────────────
+        elif fn_name.startswith("math_"):
+            result = _dispatch_builtin(fn_name.upper(), args)
+
+        # ── Stdlib string dispatch ──────────────────────────────────────────
+        elif fn_name.startswith("string_"):
+            result = _dispatch_builtin(fn_name.upper(), args)
+
+        # ── Stdlib list/dict dispatch ───────────────────────────────────────
+        elif fn_name.startswith("list_") or fn_name.startswith("dict_"):
+            result = _dispatch_builtin(fn_name.upper(), args)
+
+        # ── Stdlib system dispatch ──────────────────────────────────────────
+        elif fn_name.startswith("sys_"):
+            result = _dispatch_builtin(fn_name.upper(), args)
+
+        # ── Stdlib net dispatch ─────────────────────────────────────────────
+        elif fn_name.startswith("http_") or fn_name.startswith("url_"):
+            result = _dispatch_builtin(fn_name.upper(), args)
+
+        # ── Stdlib IO dispatch ──────────────────────────────────────────────
+        elif fn_name.startswith("file_") or fn_name.startswith("dir_"):
+            result = _dispatch_builtin(fn_name.upper(), args)
 
         elif fn_name in {
             "sensor_read",
@@ -1845,7 +2044,16 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
         elif op == Op.CALL_TOOL:
             tool_name = pool.get(operand) or ""
             self._side_effects.append({"type": "tool_call", "name": tool_name})
-            self.stack.append({"tool_called": tool_name, "status": "simulated"})
+            try:
+                from hlf_mcp.hlf.tool_dispatch import ToolRegistry
+                _registry = ToolRegistry()
+                _result = _registry.dispatch(tool_name, {})
+                self.stack.append(
+                    {"tool_called": tool_name, "success": _result.success,
+                     "result": _result.result, "error": _result.error}
+                )
+            except Exception as _exc:
+                self.stack.append({"tool_called": tool_name, "status": "error", "error": str(_exc)})
         elif op == Op.OPENCLAW_TOOL:
             tool = pool.get(operand) or ""
             self._side_effects.append({"type": "openclaw_tool", "tool": tool})
@@ -1865,8 +2073,14 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
             self._side_effects.append({"type": "memory_write", "key": key, "value": str(val)})
         elif op == Op.MEMORY_RECALL:
             key = self.stack.pop() if self.stack else "unknown"
-            self.stack.append({"recalled": key, "value": None})
             self._side_effects.append({"type": "memory_read", "key": key})
+            try:
+                from hlf_mcp.hlf.memory_node import MemoryStore
+                _store = MemoryStore()
+                _results = _store.recall(entity_id=str(key), top_k=5)
+                self.stack.append({"recalled": key, "results": _results, "count": len(_results)})
+            except Exception as _exc:
+                self.stack.append({"recalled": key, "value": None, "error": str(_exc)})
         elif op == Op.SPEC_DEFINE:
             tag = pool.get(operand) or ""
             self._side_effects.append({"type": "spec_lifecycle", "op": "SPEC_DEFINE", "tag": tag})

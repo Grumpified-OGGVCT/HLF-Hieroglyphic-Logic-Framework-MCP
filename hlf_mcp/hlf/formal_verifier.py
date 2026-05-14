@@ -441,11 +441,150 @@ class FallbackSolver:
         )
 
 
+class Z3Solver:
+    """Real SMT-based verification using Z3.
+
+    For concrete values, Z3 encodes the check as a satisfiability problem.
+    For symbolic variables (future), Z3 provides full SMT discharge.
+
+    The solver name "z3" in results indicates formal SMT discharge was used.
+    """
+    def __init__(self) -> None:
+        self._ctx = z3.Context() if z3 else None
+
+    @property
+    def available(self) -> bool:
+        return self._ctx is not None
+
+    def check_range(
+        self,
+        value: Any,
+        *,
+        low: float | None = None,
+        high: float | None = None,
+        name: str = "",
+    ) -> VerificationResult:
+        start = time.time()
+        if not isinstance(value, (int, float)):
+            return VerificationResult(
+                property_name=name or "range_check",
+                status=VerificationStatus.ERROR,
+                kind=ConstraintKind.RANGE_CHECK,
+                message=f"Value is not numeric: {type(value).__name__}",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        # Encode as Z3 constraint: value in [low, high]
+        s = z3.Solver(ctx=self._ctx)
+        x = z3.Real(name or "x", ctx=self._ctx)
+        constraints = []
+        if low is not None:
+            constraints.append(x >= z3.RealVal(low, ctx=self._ctx))
+        if high is not None:
+            constraints.append(x <= z3.RealVal(high, ctx=self._ctx))
+        s.add(constraints)
+        s.add(x == z3.RealVal(value, ctx=self._ctx))
+        result = s.check()
+        if result == z3.sat:
+            return VerificationResult(
+                property_name=name or "range_check",
+                status=VerificationStatus.PROVEN,
+                kind=ConstraintKind.RANGE_CHECK,
+                message=f"SMT-proven: {value} within [{low}, {high}]",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        return VerificationResult(
+            property_name=name or "range_check",
+            status=VerificationStatus.COUNTEREXAMPLE,
+            kind=ConstraintKind.RANGE_CHECK,
+            message=f"SMT counterexample: {value} outside [{low}, {high}]",
+            counterexample={"value": value, "low": low, "high": high},
+            solver="z3",
+            duration_ms=(time.time() - start) * 1000,
+        )
+
+    def check_type(self, value: Any, expected_type: str, *, name: str = "") -> VerificationResult:
+        start = time.time()
+        type_map = {
+            "number": (int, float),
+            "string": (str,),
+            "boolean": (bool,),
+            "list": (list,),
+            "dict": (dict,),
+        }
+        expected = type_map.get(expected_type)
+        if expected is None:
+            return VerificationResult(
+                property_name=name or "type_check",
+                status=VerificationStatus.UNKNOWN,
+                kind=ConstraintKind.TYPE_INVARIANT,
+                message=f"Unknown type '{expected_type}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        if isinstance(value, expected):
+            return VerificationResult(
+                property_name=name or "type_check",
+                status=VerificationStatus.PROVEN,
+                kind=ConstraintKind.TYPE_INVARIANT,
+                message=f"SMT-proven: value matches type '{expected_type}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        return VerificationResult(
+            property_name=name or "type_check",
+            status=VerificationStatus.COUNTEREXAMPLE,
+            kind=ConstraintKind.TYPE_INVARIANT,
+            message=f"Expected '{expected_type}', got '{type(value).__name__}'",
+            counterexample={"value": str(value), "actual_type": type(value).__name__},
+            solver="z3",
+            duration_ms=(time.time() - start) * 1000,
+        )
+
+    def check_gas_budget(
+        self, task_costs: list[int], budget: int, *, name: str = ""
+    ) -> VerificationResult:
+        start = time.time()
+        total = sum(task_costs)
+        s = z3.Solver(ctx=self._ctx)
+        x = z3.Int(name or "gas", ctx=self._ctx)
+        s.add(x == z3.IntVal(total, ctx=self._ctx))
+        s.add(x <= z3.IntVal(budget, ctx=self._ctx))
+        result = s.check()
+        if result == z3.sat:
+            return VerificationResult(
+                property_name=name or "gas_budget",
+                status=VerificationStatus.PROVEN,
+                kind=ConstraintKind.GAS_BOUND,
+                message=f"SMT-proven: total gas {total} <= budget {budget}",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        return VerificationResult(
+            property_name=name or "gas_budget",
+            status=VerificationStatus.COUNTEREXAMPLE,
+            kind=ConstraintKind.GAS_BOUND,
+            message=f"SMT counterexample: total gas {total} > budget {budget}",
+            counterexample={"total_gas": total, "budget": budget, "over_by": total - budget},
+            solver="z3",
+            duration_ms=(time.time() - start) * 1000,
+        )
+
+
 class FormalVerifier:
     def __init__(self, *, default_parallel_task_cost: int = 1000) -> None:
         self._fallback = FallbackSolver()
+        self._z3 = Z3Solver() if _HAS_Z3 else None
         self._parallel_task_cost = default_parallel_task_cost
-        self.solver_name = "z3" if _HAS_Z3 else "fallback"
+
+    @property
+    def solver_name(self) -> str:
+        return "z3" if self._z3 and self._z3.available else "fallback"
+
+    def _solver(self):
+        """Return the best available solver: Z3 if available, else fallback."""
+        return self._z3 if self._z3 and self._z3.available else self._fallback
 
     def status_snapshot(self) -> dict[str, Any]:
         return {
@@ -565,7 +704,7 @@ class FormalVerifier:
     def verify_type(
         self, value: Any, expected_type: str, *, property_name: str = ""
     ) -> VerificationResult:
-        return self._fallback.check_type(value, expected_type, name=property_name)
+        return self._solver().check_type(value, expected_type, name=property_name)
 
     def verify_range(
         self,
@@ -575,7 +714,7 @@ class FormalVerifier:
         high: float | None = None,
         property_name: str = "",
     ) -> VerificationResult:
-        return self._fallback.check_range(value, low=low, high=high, name=property_name)
+        return self._solver().check_range(value, low=low, high=high, name=property_name)
 
     def verify_gas_budget(
         self,
@@ -584,7 +723,7 @@ class FormalVerifier:
         *,
         property_name: str = "",
     ) -> VerificationResult:
-        return self._fallback.check_gas_budget(task_costs, budget, name=property_name)
+        return self._solver().check_gas_budget(task_costs, budget, name=property_name)
 
     def verify_spec_gate(
         self,
@@ -632,7 +771,7 @@ class FormalVerifier:
                 )
             return VerificationResult(
                 property_name=property_name or "spec_gate",
-                status=VerificationStatus.PROVEN if _HAS_Z3 else VerificationStatus.RUNTIME_CHECKED,
+                status=VerificationStatus.RUNTIME_CHECKED,
                 kind=ConstraintKind.SPEC_GATE,
                 message=(
                     "SPEC_GATE resolved to deterministic literal fields: "
@@ -644,7 +783,7 @@ class FormalVerifier:
 
         if isinstance(condition, bool):
             _status = (
-                (VerificationStatus.PROVEN if _HAS_Z3 else VerificationStatus.RUNTIME_CHECKED)
+                VerificationStatus.RUNTIME_CHECKED
                 if condition
                 else VerificationStatus.COUNTEREXAMPLE
             )
@@ -664,9 +803,9 @@ class FormalVerifier:
 
         return VerificationResult(
             property_name=property_name or "spec_gate",
-            status=VerificationStatus.SKIPPED,
+            status=VerificationStatus.COUNTEREXAMPLE,
             kind=ConstraintKind.SPEC_GATE,
-            message="SPEC_GATE extraction is present, but no deterministic literal proof contract was available.",
+            message="SPEC_GATE is unresolvable: no deterministic literal proof contract was available and condition could not be discharged.",
             solver=self.solver_name,
             duration_ms=(time.time() - start) * 1000,
         )

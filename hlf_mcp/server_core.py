@@ -248,13 +248,8 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             )
             return run_result
         except CompileError as exc:
-            return {
-                "status": "compile_error",
-                "error": str(exc),
-                "gas_used": 0,
-                "trace": [],
-                "side_effects": [],
-            }
+            from hlf_mcp.hlf.exceptions import HLFCompileError
+            raise HLFCompileError(str(exc)) from exc
         except Exception as exc:
             return {
                 "status": "runtime_error",

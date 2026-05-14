@@ -336,7 +336,9 @@ class InstinctLifecycle:
                 "event": event,
                 "phase": phase,
                 "timestamp": time.time(),
-                "payload_sha256": hashlib.sha256(str(payload).encode()).hexdigest(),
+                "payload_sha256": hashlib.sha256(
+                    json.dumps(payload, sort_keys=True, default=str).encode()
+                ).hexdigest(),
             }
         )
 
@@ -451,7 +453,8 @@ def _run_cove_gate(mission: dict[str, Any], cove_result: dict[str, Any] | None) 
     """Evaluate CoVE gate.
 
     If cove_result is provided with passed=True, use that.
-    Otherwise perform a basic heuristic check on the verify artifact.
+    Otherwise perform a heuristic check on the verification report.
+    Falls back to running FormalVerifier if source material is available.
     """
     if cove_result is not None:
         return bool(cove_result.get("passed", False))
@@ -474,10 +477,29 @@ def _run_cove_gate(mission: dict[str, Any], cove_result: dict[str, Any] | None) 
                 for item in results
                 if isinstance(item, dict)
             )
+        # verification_report exists but has no recognizable pass/fail fields
+        return False
 
+    # No verification_report — try running FormalVerifier if source exists
     verify_artifact = mission.get("artifacts", {}).get("verify", {})
     if not verify_artifact:
         return False
     payload = verify_artifact.get("payload", {})
-    # CoVE passes if verify payload has any non-empty result
-    return bool(payload)
+    if not isinstance(payload, dict) or not payload:
+        return False
+
+    # Check spec for HLF source or AST to re-verify
+    spec = mission.get("spec", {})
+    hlf_source = None
+    if isinstance(spec, dict):
+        hlf_source = spec.get("hlf_source") or spec.get("source")
+    if hlf_source and isinstance(hlf_source, str) and len(hlf_source) > 10:
+        from hlf_mcp.hlf.formal_verifier import FormalVerifier
+        try:
+            report = FormalVerifier().verify_ast(
+                {"statements": [{"type": "module", "source": hlf_source}]}
+            )
+            return getattr(report, "all_proven", False) or False
+        except Exception:
+            return False
+    return False

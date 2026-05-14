@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -930,12 +931,12 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                         "error": "text, source, or handoff.raw_hlf_source is required",
                         "boundary": {"mode": "local_bounded_swarm", "distributed_a2a": False},
                     }
-                translation = hlf_translate_to_hlf(
+                translation = asyncio.run(hlf_translate_to_hlf(
                     text,
                     language=language,
                     cognitive_lane_policy=cognitive_lane_policy,
                     handoff_mode="swarm",
-                )
+                ))
                 if translation.get("status") != "ok":
                     return translation
                 raw_hlf_source = str(translation["source"])
@@ -1138,12 +1139,12 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         current_language = language
 
         for attempt in range(1, max_attempts + 1):
-            translation = hlf_translate_to_hlf(
+            translation = asyncio.run(hlf_translate_to_hlf(
                 current_text,
                 language=current_language,
                 cognitive_lane_policy=cognitive_lane_policy,
                 skip_normalization=True,  # already gated at this level
-            )
+            ))
             attempt_record: dict[str, Any] = {
                 "attempt": attempt,
                 "text": current_text,

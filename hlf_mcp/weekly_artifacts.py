@@ -893,7 +893,9 @@ def collect_governance_manifest_snapshot(repo_root: Path) -> dict[str, Any]:
 
 
 def collect_server_surface() -> dict[str, Any]:
-    from hlf_mcp import server
+    server = sys.modules.get("hlf_mcp.server")
+    if server is None:
+        from hlf_mcp import server  # fallback — only triggers if module not yet loaded
 
     exported = sorted(
         name for name in dir(server) if name.startswith("hlf_") and callable(getattr(server, name))

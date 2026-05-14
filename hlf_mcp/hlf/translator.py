@@ -746,13 +746,13 @@ def canonicalize_translation_text(
     clauses: list[str] = []
 
     if any(word in lowered for word in profile.analyze_words) or path is not None:
-        clause = f"{profile.analyze_words[0]} {path or '/data/target'}"
+        clause = f"{profile.analyze_words[0]} {path or '.'}"
         if any(word in lowered for word in profile.read_only_words):
             clause += f" {profile.read_only_words[0]}"
         clauses.append(clause)
 
     if any(word in lowered for word in profile.delegate_words):
-        agent = _extract_quoted(text) or "sub_agent"
+        agent = _extract_quoted(text) or _first_significant_word(text) or "worker"
         clauses.append(f'{profile.delegate_words[0]} "{agent}"')
 
     if any(word in lowered for word in profile.route_words):
@@ -768,7 +768,7 @@ def canonicalize_translation_text(
         clauses.append(profile.vote_words[0])
 
     if any(word in lowered for word in profile.assert_words):
-        constraint = _extract_quoted(text) or "constraint"
+        constraint = _extract_quoted(text) or _first_significant_word(text) or "invariant"
         clauses.append(f'{profile.assert_words[0]} "{constraint}"')
 
     if clauses:
@@ -899,12 +899,12 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
             continue
         s_lower = s.casefold()
         if any(w in s_lower for w in profile.analyze_words):
-            path = _extract_path(s, language=language) or "/data/target"
+            path = _extract_path(s, language=language) or "."
             actions.append(f'Δ [INTENT] goal="{profile.analyze_goal}" target="{path}"')
             if any(w in s_lower for w in profile.read_only_words):
                 actions.append('  Ж [CONSTRAINT] mode="ro"')
         elif any(w in s_lower for w in profile.delegate_words):
-            agent = _extract_quoted(s) or "sub_agent"
+            agent = _extract_quoted(s) or _first_significant_word(s) or "worker"
             actions.append(f'⌘ [DELEGATE] agent="{agent}" goal="{profile.delegate_goal}"')
         elif any(w in s_lower for w in profile.route_words):
             actions.append(f'⌘ [ROUTE] strategy="{profile.route_strategy}" tier="$DEPLOYMENT_TIER"')
@@ -917,7 +917,7 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
         elif any(w in s_lower for w in profile.vote_words):
             actions.append(f'⨝ [VOTE] consensus="{profile.vote_label}"')
         elif any(w in s_lower for w in profile.assert_words):
-            constraint = _extract_quoted(s) or "constraint"
+            constraint = _extract_quoted(s) or _first_significant_word(s) or "invariant"
             actions.append(f'Ж [ASSERT] rule="{constraint}"')
         else:
             goal = s[:40].strip().replace('"', "'")
@@ -935,6 +935,15 @@ def _extract_path(text: str, *, language: str = "en") -> str | None:
 def _extract_quoted(text: str) -> str | None:
     m = re.search(r'"([^"]+)"', text)
     return m.group(1) if m else None
+
+
+def _first_significant_word(text: str) -> str | None:
+    """Extract the first alphabetic word of 3+ chars, skipping noise words."""
+    noise = {"the", "a", "an", "is", "of", "to", "in", "for", "on", "and", "or", "it", "be", "as", "at", "by"}
+    for word in re.findall(r"[a-zA-Z]{3,}", text):
+        if word.casefold() not in noise:
+            return word
+    return None
 
 
 def hlf_to_english(ast: dict[str, Any]) -> str:

@@ -396,12 +396,39 @@ def run_hlf_do(
             }
 
         resolved_language = language_policy.resolved_language
-        source = language_to_hlf(
-            normalized_intent,
-            language=resolved_language,
-            version="3",
-            cognitive_lane_policy=policy_name,
-        )
+
+        # ── Try LLM-backed translation first (same as hlf_translate_to_hlf) ──
+        source = ""
+        translation_path = "heuristic"
+        try:
+            bridge = HLFLLMBridge()
+            system_prompt = _build_hlf_translator_system_prompt(resolved_language)
+            prompt = (
+                f"Translate the following {resolved_language} intent into "
+                f"canonical HLF-v3 syntax. Decompose it into structured glyphs: "
+                f"GOALs, ACTIONS, CONSTRAINTS, ASSERTIONS, and RESULT expectations. "
+                f"Do not truncate or wrap. Preserve all semantic detail.\n\n"
+                f"INTENT:\n{normalized_intent}"
+            )
+            result = asyncio.run(bridge.send(
+                prompt, role="translator", system=system_prompt))
+            if result.extracted and result.hlf_output and result.hlf_output.strip() != "Ω":
+                try:
+                    ctx.compiler.compile(result.hlf_output)
+                    source = result.hlf_output
+                    translation_path = "llm"
+                except CompileError:
+                    pass  # fall through to heuristic
+        except Exception:
+            pass  # fall through to heuristic
+
+        if not source:
+            source = language_to_hlf(
+                normalized_intent,
+                language=resolved_language,
+                version="3",
+                cognitive_lane_policy=policy_name,
+            )
         validation = ctx.compiler.validate(source)
         if not validation.get("valid"):
             response = {
@@ -480,6 +507,7 @@ def run_hlf_do(
             "audit_language": language_policy.audit_language,
             "cognitive_lane_policy": policy_name,
             "language_policy": language_policy.to_dict(),
+            "translation_path": translation_path,
             "dry_run": dry_run,
             "capsule_violations": capsule_violations,
             "align_violations": align_violations,
@@ -803,16 +831,50 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             resolved_language = language_policy.resolved_language
             source = ""
             translation_path = "heuristic"
+            memory_hits: list[dict[str, Any]] = []
+
+            # ── HKS memory recall: find similar past translations ──────
+            try:
+                memory_result = ctx.memory_store.query(
+                    working_text,
+                    top_k=3,
+                    topic="hlf_translation_contracts",
+                    min_confidence=0.7,
+                    purpose="translation_memory",
+                )
+                memory_hits = memory_result.get("results", []) or []
+            except Exception:
+                memory_hits = []
 
             # ── LLM-backed translation (primary path) ──────────────────
             try:
                 bridge = HLFLLMBridge()
                 system_prompt = _build_hlf_translator_system_prompt(resolved_language)
+
+                # Build few-shot examples from memory hits
+                few_shot = ""
+                if memory_hits:
+                    few_shot_parts = []
+                    for i, hit in enumerate(memory_hits[:2]):
+                        hit_content = hit.get("content", "")
+                        if hit_content and len(hit_content) > 20:
+                            few_shot_parts.append(
+                                f"EXAMPLE {i + 1} (confidence {hit.get('confidence', 'N/A')}):\n{hit_content}"
+                            )
+                    if few_shot_parts:
+                        few_shot = (
+                            "Here are examples of correct HLF translations for similar intents. "
+                            "Use these as style and structure reference:\n\n"
+                            + "\n\n".join(few_shot_parts)
+                            + "\n\n"
+                        )
+
                 prompt = (
                     f"Translate the following {resolved_language} intent into "
                     f"canonical HLF-v3 syntax. Decompose it into structured glyphs: "
                     f"GOALs, ACTIONS, CONSTRAINTS, ASSERTIONS, and RESULT expectations. "
                     f"Do not truncate or wrap. Preserve all semantic detail.\n\n"
+                    f"{few_shot}"
                     f"INTENT:\n{working_text}"
                 )
                 result = await bridge.send(
@@ -879,6 +941,31 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 contract=translation_contract,
                 source="server_translation.hlf_translate_to_hlf",
             )
+
+            # ── HKS memory store: feed back for compounding improvement ──
+            memory_store_result = {}
+            if translation_path == "llm" and source:
+                try:
+                    store_meta = {
+                        "intent": text,
+                        "language": resolved_language,
+                        "translation_path": translation_path,
+                        "compile_success": True,
+                        "node_count": len(compile_result.get("ast", {}).get("statements", [])),
+                    }
+                    memory_store_result = ctx.memory_store.store(
+                        content=source,
+                        topic="hlf_translation_contracts",
+                        confidence=0.95,
+                        provenance="governed_recall",
+                        entry_kind="hks_exemplar",
+                        domain="translation",
+                        metadata=store_meta,
+                        bypass_vector_dedup=True,
+                    )
+                except Exception:
+                    pass  # non-critical — translation proceeds even if memory store fails
+
             response = {
                 "status": "ok",
                 "source": source,
@@ -891,6 +978,11 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                 "translation_contract": translation_contract,
                 "internal_loop_contract": internal_loop_contract,
                 "normalization": _gate["normalization"],
+                "hks_memory": {
+                    "recall_hits": len(memory_hits),
+                    "recall_top_confidence": memory_hits[0].get("confidence", 0) if memory_hits else 0,
+                    "stored": bool(memory_store_result.get("stored")) if memory_store_result else False,
+                },
             }
             if _normalize_handoff_mode(handoff_mode) in {"raw_hlf", "swarm", "subagent"}:
                 response["subagent_handoff"] = _build_subagent_handoff(

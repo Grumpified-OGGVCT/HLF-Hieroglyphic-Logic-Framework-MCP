@@ -1,0 +1,38 @@
+[HLF-v3]
+# Fibonacci
+ASSIGN a = 0
+ASSIGN b = 1
+ASSIGN term1 = a
+ASSIGN term2 = b
+ASSIGN c = a + b
+ASSIGN term3 = c
+ASSIGN a = b
+ASSIGN b = c
+ASSIGN c = a + b
+ASSIGN term4 = c
+ASSIGN a = b
+ASSIGN b = c
+ASSIGN c = a + b
+ASSIGN term5 = c
+ASSIGN a = b
+ASSIGN b = c
+ASSIGN c = a + b
+ASSIGN term6 = c
+ASSIGN a = b
+ASSIGN b = c
+ASSIGN c = a + b
+ASSIGN term7 = c
+ASSIGN a = b
+ASSIGN b = c
+ASSIGN c = a + b
+ASSIGN term8 = c
+ASSIGN a = b
+ASSIGN b = c
+ASSIGN c = a + b
+ASSIGN term9 = c
+ASSIGN a = b
+ASSIGN b = c
+ASSIGN c = a + b
+ASSIGN term10 = c
+∇ [RESULT] message=ok
+Ω

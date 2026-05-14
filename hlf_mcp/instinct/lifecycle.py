@@ -29,6 +29,7 @@ from hlf_mcp.instinct.orchestration import (
     normalize_task_dag,
     summarize_execution_trace,
 )
+from hlf_mcp.hlf.memory_node import EvidenceContract, check_evidence_freshness
 
 # ── Phase definitions ──────────────────────────────────────────────────────────
 
@@ -503,3 +504,42 @@ def _run_cove_gate(mission: dict[str, Any], cove_result: dict[str, Any] | None) 
         except Exception:
             return False
     return False
+
+
+def _check_mission_evidence_freshness(mission: dict[str, Any]) -> dict[str, Any]:
+    """Check evidence freshness across a mission's execution trace."""
+    trace = mission.get("execution_trace", [])
+    if not trace:
+        return {"status": "ok", "verdict": "fresh", "details": []}
+
+    details = []
+    all_fresh = True
+    for entry in trace:
+        if not isinstance(entry, dict):
+            continue
+        evidence = entry.get("evidence")
+        if evidence is None:
+            details.append({"node_id": entry.get("node_id", "unknown"), "status": "no_evidence", "admissible": True})
+            continue
+        try:
+            contract = EvidenceContract.from_dict(evidence) if isinstance(evidence, dict) else evidence
+            verdict = check_evidence_freshness(
+                {"freshness_status": "stale" if contract.is_stale() else "fresh",
+                 "superseded_by_sha256": contract.supersedes_sha256,
+                 "revoked": contract.revoked,
+                 "tombstoned": contract.tombstoned},
+                purpose="execution_admission"
+            )
+            details.append({
+                "node_id": entry.get("node_id", "unknown"),
+                "status": verdict.freshness_status,
+                "admissible": verdict.admissible,
+                "reasons": verdict.reasons,
+            })
+            if not verdict.admissible:
+                all_fresh = False
+        except Exception:
+            details.append({"node_id": entry.get("node_id", "unknown"), "status": "bad_evidence", "admissible": False})
+            all_fresh = False
+
+    return {"status": "ok", "verdict": "fresh" if all_fresh else "stale", "details": details}

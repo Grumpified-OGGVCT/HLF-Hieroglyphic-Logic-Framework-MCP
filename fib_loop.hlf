@@ -1,0 +1,12 @@
+[HLF-v3]
+# Fibonacci with FOR loop
+ASSIGN a = 0
+ASSIGN b = 1
+ASSIGN n = 10
+FOR i IN n {
+  ASSIGN c = a + b
+  ASSIGN a = b
+  ASSIGN b = c
+}
+∇ [RESULT] message=ok
+Ω

@@ -6469,3 +6469,76 @@ def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, obj
         "hlf://dream/proposals": get_dream_proposals,
         "hlf://dream/proposals/{proposal_id}": get_dream_proposal,
     }
+
+
+def _explain_verifier_finding(
+    severity: str,
+    category: str,
+    message: str,
+) -> str:
+    """Convert a formal verifier finding into plain-English explanation."""
+    category_phrases = {
+        "type_invariant": "type safety",
+        "gas_bound": "gas budget",
+        "memory_access": "memory access policy",
+        "governance_rule": "governance rule",
+        "integrity_check": "integrity check",
+        "capsule_boundary": "capsule boundary",
+        "spine_consistency": "proof spine consistency",
+    }
+    cat_phrase = category_phrases.get(category, category.replace("_", " "))
+
+    if severity == "error":
+        return f"A problem was found with {cat_phrase}: {message}"
+    elif severity == "warning":
+        return f"A caution is raised about {cat_phrase}: {message}"
+    else:
+        return f"Note ({cat_phrase}): {message}"
+
+
+def _render_route_evidence_status(ctx: object | None) -> str:
+    if ctx is None:
+        return json.dumps({"status": "error", "message": "No context available"})
+    return json.dumps({"status": "ok", "routes": 0, "agent_id": getattr(ctx, "agent_id", None)})
+
+
+def _render_route_evidence_markdown(ctx: object | None) -> str:
+    if ctx is None:
+        return "No context available for route evidence."
+    return "Route evidence report not available."
+
+
+def _render_verifier_explainer_status(ctx: object | None) -> str:
+    if ctx is None:
+        return json.dumps({"status": "error", "message": "No context available"})
+    return json.dumps({"status": "ok", "findings": []})
+
+
+def _render_verifier_explainer_markdown(ctx: object | None) -> str:
+    if ctx is None:
+        return "No context available for verifier explainer."
+    return "Verifier explainer report not available."
+
+
+def _render_promotion_rationale_status(ctx: object | None) -> str:
+    if ctx is None:
+        return json.dumps({"status": "error", "message": "No context available"})
+    return json.dumps({"status": "ok", "candidates": []})
+
+
+def _render_promotion_rationale_markdown(ctx: object | None) -> str:
+    if ctx is None:
+        return "No context available for promotion rationale."
+    return "Promotion rationale report not available."
+
+
+def _render_memory_provenance_status(ctx: object | None) -> str:
+    if ctx is None:
+        return json.dumps({"status": "error", "message": "No context available"})
+    return json.dumps({"status": "ok", "traces": []})
+
+
+def _render_memory_provenance_markdown(ctx: object | None) -> str:
+    if ctx is None:
+        return "No context available for memory provenance."
+    return "Memory provenance report not available."

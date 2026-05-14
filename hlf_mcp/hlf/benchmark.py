@@ -1365,3 +1365,149 @@ _DOMAIN_HLF: dict[str, str] = {
 Ω
 """,
 }
+
+# ── Complex multi-step workflow benchmarks ────────────────────────────────
+# These test HLF's core value proposition: structural governance overhead
+# amortizes over many steps in multi-agent coordination workflows.
+
+_COMPLEX_WORKFLOW_NLP: dict[str, str] = {
+    "incident_response_7step": (
+        "Step 1: Detect the security incident from alert feed at /alerts/feed.json. "
+        "Step 2: Classify severity as critical/high/medium/low based on impact scoring rules. "
+        "Step 3: Contain the affected systems by isolating network segment 10.0.1.0/24. "
+        "Step 4: Investigate root cause by analyzing logs at /var/log/audit/*.log. "
+        "Step 5: Remediate the vulnerability following runbook RB-2026-03. "
+        "Step 6: Verify the fix by replaying attack vectors in sandbox environment. "
+        "Step 7: Generate post-incident report and notify SOC lead."
+    ),
+    "multi_service_deploy_5step": (
+        "Step 1: Build Docker images for api-gateway, user-service, and payment-worker from main branch. "
+        "Step 2: Run integration test suite against staging environment with 5-minute timeout. "
+        "Step 3: Deploy canary to 10% of production traffic and monitor error rate for 2 minutes. "
+        "Step 4: Full production rollout with rolling update strategy, max 3 pods at a time. "
+        "Step 5: Health-check all endpoints and verify database migration completed successfully."
+    ),
+    "data_pipeline_6step": (
+        "Step 1: Extract raw data from S3 bucket analytics-events/2026/03/ with 100MB batch size. "
+        "Step 2: Validate schema against event-schema-v3.json, reject malformed records to dead-letter queue. "
+        "Step 3: Transform events: anonymize PII, enrich with geo-ip, and normalize timestamps to UTC. "
+        "Step 4: Load transformed data into BigQuery partitioned table events_v3 with WRITE_TRUNCATE. "
+        "Step 5: Verify row counts match between source and destination within 1% tolerance. "
+        "Step 6: Archive processed source files to cold-storage bucket with 90-day retention."
+    ),
+}
+
+_COMPLEX_WORKFLOW_HLF: dict[str, str] = {
+    "incident_response_7step": """\
+[HLF-v3]
+Δ [WORKFLOW] name="incident_response" steps=7
+  ⚡ [STEP 1] detect source="/alerts/feed.json"
+  ⚡ [STEP 2] classify severity∈{critical,high,medium,low} based_on=impact_scoring
+  ⚡ [STEP 3] contain target="10.0.1.0/24" action=isolate_network
+  ⚡ [STEP 4] investigate source="/var/log/audit/*.log" goal=root_cause
+  ⚡ [STEP 5] remediate runbook="RB-2026-03"
+  ⚡ [STEP 6] verify method=replay_attack sandbox=true
+  ⚡ [STEP 7] report type=post_incident notify="soc_lead"
+  Ж [CONSTRAINT] all_steps_sequential=true
+  Ж [EXPECT] incident_resolved
+Ω
+""",
+    "multi_service_deploy_5step": """\
+[HLF-v3]
+⌘ [DEPLOY] services=["api-gateway","user-service","payment-worker"] branch=main
+  ⚡ [STEP 1] build dockerfiles=true
+  ⚡ [STEP 2] test suite="integration" env=staging timeout=300s
+  ⚡ [STEP 3] canary traffic_pct=10 monitor=error_rate duration=120s
+  ⚡ [STEP 4] rollout strategy=rolling_update max_concurrent=3
+  ⚡ [STEP 5] health_check endpoints=all verify_migration=true
+  Ж [CONSTRAINT] deploy_tier="production"
+  Ж [VOTE] require_confirmation=true
+Ω
+""",
+    "data_pipeline_6step": """\
+[HLF-v3]
+Δ [PIPELINE] name="analytics_etl" steps=6
+  ⚡ [STEP 1] extract source="s3://analytics-events/2026/03/" batch=100MB
+  ⚡ [STEP 2] validate schema="event-schema-v3.json" dead_letter=true
+  ⚡ [STEP 3] transform anonymize_pii=true enrich_geoip=true normalize_tz=UTC
+  ⚡ [STEP 4] load target="bigquery:events_v3" mode=WRITE_TRUNCATE
+  ⚡ [STEP 5] verify tolerance_pct=1 method=row_count_match
+  ⚡ [STEP 6] archive target="cold-storage" retention=90d
+  Ж [CONSTRAINT] processing_tier="batch"
+  Ж [EXPECT] pipeline_complete
+Ω
+""",
+}
+
+# Scalability: same workflow at different step counts to measure amortization
+_COMPLEX_SCALE_NLP = (
+    "Analyze production logs for errors. "
+    "Classify errors by severity. "
+    "Correlate errors across services. "
+    "Identify root cause patterns. "
+    "Generate remediation plan. "
+    "Execute safe fixes. "
+    "Verify fixes in staging. "
+    "Deploy verified fixes to canary. "
+    "Monitor canary for regression. "
+    "Full production rollout. "
+    "Post-deployment health check. "
+    "Archive deployment artifacts. "
+    "Notify stakeholders. "
+    "Update runbook with findings. "
+    "Schedule follow-up review."
+)
+
+_COMPLEX_SCALE_HLF = """\
+[HLF-v3]
+Δ [WORKFLOW] name="error_remediation" max_steps=15
+  Ж [CONSTRAINT] mode="governed_rollout"
+  Ж [VOTE] consensus="majority"
+  Ж [EXPECT] errors_resolved
+Ω
+"""
+
+# Multi-agent swarm scenarios
+_SWARM_WORKFLOW_NLP: dict[str, str] = {
+    "code_review_3agent": (
+        "Agent Alpha: Review the PR diff at github.com/org/repo/pull/42 for security vulnerabilities. "
+        "Agent Beta: Review the same PR for performance regressions. "
+        "Agent Gamma: Review the same PR for code style and documentation completeness. "
+        "All agents vote: approve, request_changes, or comment. "
+        "Strict consensus required before merge. Dissenting agents must provide evidence."
+    ),
+    "audit_trail_4agent": (
+        "Agent Auditor: Analyze /var/log/audit/2026-03/*.log for unauthorized access patterns. "
+        "Agent Compliance: Check all access against policy ACL-2026-Q1. "
+        "Agent Forensics: Trace any anomalies back to source IP and user agent. "
+        "Agent Reporter: Compile findings into SOC2 compliance report. "
+        "Votes required: 3 of 4 must agree on severity classification. "
+        "Dissenting opinion must be recorded with evidence chain."
+    ),
+}
+
+_SWARM_WORKFLOW_HLF: dict[str, str] = {
+    "code_review_3agent": """\
+[HLF-v3]
+⨝ [SWARM] agents=["alpha","beta","gamma"] target="github.com/org/repo/pull/42"
+  ⌘ [AGENT alpha] review_for="security"
+  ⌘ [AGENT beta] review_for="performance"
+  ⌘ [AGENT gamma] review_for="style,documentation"
+  Ж [VOTE] options={approve,request_changes,comment} consensus=strict
+  Ж [DISSENT] require_evidence=true
+  Ж [EXPECT] review_complete
+Ω
+""",
+    "audit_trail_4agent": """\
+[HLF-v3]
+⨝ [SWARM] agents=["auditor","compliance","forensics","reporter"] quorum=3
+  ⌘ [AGENT auditor] target="/var/log/audit/2026-03/*.log" goal=unauthorized_access
+  ⌘ [AGENT compliance] policy="ACL-2026-Q1" goal=access_validation
+  ⌘ [AGENT forensics] goal=trace_anomalies trace=source_ip,user_agent
+  ⌘ [AGENT reporter] format="SOC2_compliance" goal=compile_findings
+  Ж [VOTE] threshold=0.75 on=severity_classification
+  Ж [DISSENT] record_evidence_chain=true
+  Ж [EXPECT] audit_complete
+Ω
+""",
+}

@@ -536,6 +536,8 @@ async def _main() -> None:
 
     # Resolve Ollama URL
     ollama_url = args.ollama_url or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    if ollama_url and not ollama_url.startswith(("http://", "https://")):
+        ollama_url = f"http://{ollama_url}"
 
     # Resolve prompt count
     prompt_count_env = os.environ.get("HLF_CERTIFY_PROMPT_COUNT", "")

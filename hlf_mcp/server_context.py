@@ -3280,9 +3280,14 @@ def _build_ollama_embed_fn() -> Callable[[str], list[float]] | None:
     """
     _log = logging.getLogger(__name__)
     _OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    # Resiliency: if OLLAMA_HOST is set to a bare host:port (e.g. "0.0.0.0" or "127.0.0.1:11434"),
+    # auto-prepend http:// so urllib can parse it.
+    if not _OLLAMA_BASE.startswith(("http://", "https://")):
+        _OLLAMA_BASE = f"http://{_OLLAMA_BASE}"
     _CANDIDATE_MODELS = [
         "nomic-embed-text",
         "nomic-embed-text-v2-moe",
+        "qwen3-embedding",
         "mxbai-embed-large",
         "all-minilm",
     ]

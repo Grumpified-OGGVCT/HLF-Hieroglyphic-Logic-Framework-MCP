@@ -116,7 +116,11 @@ class CrossAgentBenchmark:
 
             # Quick compile check
             from hlf_mcp.hlf.compiler import HLFCompiler
-            compile_ok = HLFCompiler().compile_with_recovery(hlf).get("success", False)
+            try:
+                compile_result = HLFCompiler().compile(hlf)
+                compile_ok = True
+            except Exception:
+                compile_ok = False
 
             runs.append(
                 ConsistencyRun(

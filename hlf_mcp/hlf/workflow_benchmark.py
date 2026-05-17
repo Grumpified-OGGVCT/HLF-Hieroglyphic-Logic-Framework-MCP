@@ -243,11 +243,17 @@ class WorkflowBenchmark:
         metrics.input_tokens = _count(task.description)
         metrics.hlf_tokens = _count(hlf_source)
 
-        # ── Phase 2: Compile + Auto-repair ────────────────────────────────────
-        compile_result = self.compiler.compile_with_recovery(hlf_source)
-        metrics.compile_success = bool(compile_result.get("success"))
-        metrics.gas_estimate = int(compile_result.get("gas_estimate", 0))
-        metrics.corrections = compile_result.get("corrections", [])
+        # ── Phase 2: Compile ──────────────────────────────────────────────────
+        try:
+            compile_result = self.compiler.compile(hlf_source)
+            metrics.compile_success = True
+            metrics.gas_estimate = int(compile_result.get("gas_estimate", 0))
+            metrics.corrections = []
+        except Exception as exc:
+            compile_result = {"errors": [str(exc)]}
+            metrics.compile_success = False
+            metrics.gas_estimate = 0
+            metrics.corrections = []
 
         if not metrics.compile_success and auto_repair:
             metrics.auto_repair_attempts = 1
@@ -255,12 +261,18 @@ class WorkflowBenchmark:
             if repaired.success:
                 metrics.auto_repair_success = True
                 hlf_source = repaired.repaired_source
-                compile_result = self.compiler.compile_with_recovery(hlf_source)
-                metrics.compile_success = bool(compile_result.get("success"))
-                metrics.gas_estimate = int(compile_result.get("gas_estimate", 0))
-                metrics.corrections = compile_result.get("corrections", [])
+                try:
+                    compile_result = self.compiler.compile(hlf_source)
+                    metrics.compile_success = True
+                    metrics.gas_estimate = int(compile_result.get("gas_estimate", 0))
+                    metrics.corrections = []
+                except Exception as exc2:
+                    metrics.compile_success = False
+                    metrics.gas_estimate = 0
+                    metrics.corrections = []
+                    metrics.compile_error = str(exc2)[:200]
             else:
-                metrics.compile_error = str(compile_result.get("compile_error", ""))[:200]
+                metrics.compile_error = str(compile_result.get("errors", [""])[0])[:200]
 
         # ── Phase 3: Lint ─────────────────────────────────────────────────────
         t0 = time.perf_counter_ns()

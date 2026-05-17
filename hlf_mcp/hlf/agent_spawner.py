@@ -70,6 +70,9 @@ class AsyncioBackend:
     _tasks: dict[str, asyncio.Task[Any]] = {}
     _coros: dict[str, Any] = {}
 
+    def __init__(self, **kwargs: Any) -> None:
+        pass
+
     def spawn(self, agent_id: str, role: str, task: str, model: str = "", **kwargs: Any) -> SpawnHandle:
         handle = SpawnHandle(agent_id=agent_id, backend="asyncio", token=str(uuid.uuid4()))
         coro = self._run_agent(agent_id, role, task, handle)

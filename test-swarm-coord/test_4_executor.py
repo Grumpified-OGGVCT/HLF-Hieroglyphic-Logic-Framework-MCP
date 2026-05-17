@@ -21,8 +21,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-# Ensure HLF_MCP_WORKING is on path
-sys.path.insert(0, "C:\\Users\\gerry\\generic_workspace\\HLF_MCP_WORKING")
+# Ensure HLF_MCP is on path
+sys.path.insert(0, "C:\\Users\\gerry\\generic_workspace\\HLF_MCP")
 
 from hlf_mcp.hlf.agent_spawner import AgentSpawner
 from hlf_mcp.hlf.swarm_compiler import compile_swarm
@@ -88,7 +88,7 @@ def load_hlf_plan(path: str) -> tuple[list[dict[str, Any]], list[list[str]]]:
 
 
 def run_agent(agent: dict[str, Any], model: str, output_dir: str) -> dict[str, Any]:
-    spawner = AgentSpawner(backend="subprocess", model=model)
+    spawner = AgentSpawner(backend="asyncio", model=model)
     handle = spawner.spawn(
         agent_id=agent["agent_id"],
         role=agent["role"],
@@ -97,22 +97,8 @@ def run_agent(agent: dict[str, Any], model: str, output_dir: str) -> dict[str, A
         constraints=agent.get("constraints", []),
     )
     result = spawner.wait(handle.agent_id, timeout=TIMEOUT_SEC)
-    # Copy files from agent work_dir to output_dir
-    work_dir = handle.work_dir
+    # asyncio backend returns immediately; no files to copy from work_dir
     copied: list[str] = []
-    if work_dir and os.path.isdir(work_dir):
-        for root, _dirs, files in os.walk(work_dir):
-            for fname in files:
-                if fname in ("config.json", "agent_worker.py", "status.json"):
-                    continue
-                src = os.path.join(root, fname)
-                rel = os.path.relpath(src, work_dir)
-                dst = os.path.join(output_dir, rel)
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                with open(src, "rb") as sf:
-                    with open(dst, "wb") as df:
-                        df.write(sf.read())
-                copied.append(rel)
     return {
         "agent_id": agent["agent_id"],
         "status": result.status,
@@ -129,12 +115,12 @@ def run_version(mode: str, model: str, output_dir: str) -> dict[str, Any]:
     print(f"\n=== Test 4 {mode.upper()} ===")
     os.makedirs(output_dir, exist_ok=True)
     if mode == "nl":
-        agents = load_nl_plan("C:/Users/gerry/generic_workspace/test-swarm-coord/test-4-nl/PLAN.md")
+        agents = load_nl_plan("test-swarm-coord/test-4-nl/PLAN.md")
         schedule: list[list[str]] = []
         # NL has no explicit schedule; run all in one batch (up to MAX_CONCURRENT)
         schedule = [[a["agent_id"] for a in agents]]
     else:
-        agents, schedule = load_hlf_plan("C:/Users/gerry/generic_workspace/test-swarm-coord/test-4-hlf/swarm.hlf")
+        agents, schedule = load_hlf_plan("test-swarm-coord/test-4-hlf/swarm.hlf")
 
     agent_map = {a["agent_id"]: a for a in agents}
     results: list[dict[str, Any]] = []

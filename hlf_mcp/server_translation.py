@@ -354,6 +354,7 @@ def run_hlf_do(
     ctx: ServerContext,
     *,
     intent: str,
+    original_intent: str = "",
     tier: str = "forge",
     dry_run: bool = False,
     show_hlf: bool = False,
@@ -381,9 +382,11 @@ def run_hlf_do(
 
     try:
         policy_name = normalize_cognitive_lane_policy(cognitive_lane_policy)
+        # Use the original intent for auto language detection so normalization rewrites don't erase cues.
+        detection_text = original_intent.strip() if original_intent else normalized_intent
         language_policy = resolve_language_with_policy(
             language,
-            text=normalized_intent,
+            text=detection_text,
             cognitive_lane_policy=policy_name,
         )
         if language_policy.blocked:
@@ -710,6 +713,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         return run_hlf_do(
             ctx,
             intent=_gate["text"],
+            original_intent=intent,
             tier=tier,
             dry_run=dry_run,
             show_hlf=show_hlf,
@@ -821,9 +825,11 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             working_text = _gate["text"]
 
             policy_name = normalize_cognitive_lane_policy(cognitive_lane_policy)
+            # Use the original text for auto language detection so normalization rewrites don't erase cues.
+            detection_text = text if language.lower().strip() == "auto" else working_text
             language_policy = resolve_language_with_policy(
                 language,
-                text=working_text,
+                text=detection_text,
                 cognitive_lane_policy=policy_name,
             )
             if language_policy.blocked:

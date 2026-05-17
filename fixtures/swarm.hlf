@@ -1,8 +1,0 @@
-# HLF v3 — Swarm VM Execution Test Fixture
-# Spawns 3 agents via CALL spawn_agent, then waits for all.
-[HLF-v3]
-CALL spawn_agent "alpha" "planner" "plan architecture"
-CALL spawn_agent "beta" "executor" "execute build"
-CALL spawn_agent "gamma" "verifier" "verify output"
-CALL wait_all_agents 60
-Ω

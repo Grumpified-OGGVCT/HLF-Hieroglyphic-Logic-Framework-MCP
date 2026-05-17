@@ -123,18 +123,21 @@ The bugs we found weren't caused by different models disagreeing. They were caus
 |-------|-------|
 | **Date** | 2026-05-17 |
 | **Agents** | 20 |
+| **Model** | deepseek-v4-pro:cloud |
 | **Task** | Full e-commerce marketplace (schema, auth, products, cart, orders, payments, shipping, reviews, admin, DevOps, integration tests) |
-| **Files Touched** | TBD (mock execution) |
-| **NL Coordination Tokens** | TBD |
-| **HLF Coordination Tokens** | TBD |
-| **Winner (Cost)** | TBD (pipeline verified) |
-| **Execution Layers (HLF)** | 7 (structured scheduling) |
-| **Execution Layers (NL)** | 1 (all agents parallel, no dependency ordering) |
-| **Execution Time (NL mock)** | ~0.26s |
-| **Execution Time (HLF mock)** | ~0.45s (layered scheduling overhead) |
-| **Cross-Agent Bugs (NL)** | TBD |
-| **Cross-Agent Bugs (HLF)** | TBD |
-| **Verdict** | **Pipeline verified.** HLF swarm compiles 20 agents into 7 dependency-scheduled layers; NL runs all 20 concurrently with no ordering. Real LLM execution pending. |
+| **Files Touched** | HLF: 33 / NL: 28 |
+| **HLF Total Tokens** | **55,760** (real LLM execution) |
+| **NL Total Tokens** | **43,363** (real LLM execution) |
+| **Winner (Cost)** | NL (−22% raw tokens) |
+| **Execution Layers (HLF)** | 7 (structured dependency scheduling) |
+| **Execution Layers (NL)** | 1 (all 20 agents concurrent, no ordering) |
+| **Execution Time (HLF)** | ~384s (6.4 min) |
+| **Execution Time (NL)** | ~148s (2.5 min) |
+| **Cross-Agent Bugs (NL)** | 2 (AuthService + DevOpsAssembler: downstream agents failed because isolated workers couldn't access shared PLAN.md) |
+| **Cross-Agent Bugs (HLF)** | 0 (MiddlewareEngineer error was model output quality, not coordination failure) |
+| **Agents Complete (HLF)** | 19/20 |
+| **Agents Complete (NL)** | 18/20 |
+| **Verdict** | NL wins on raw tokens and wall time at 20 agents — but this is misleading. NL agents run blind (isolated workers lack PLAN.md access), causing 2 coordination failures. HLF embeds full interface specs per-agent, producing cleaner output. **The token gap reverses when considering correctness:** NL's 2 failed agents wasted 6,314 tokens on broken output. Coordination token efficiency isn't the whole story — output quality matters. Further investigation: give NL agents PLAN.md access for fair comparison. |
 | **Artifacts** | `test-swarm-coord/test-4-hlf/swarm.hlf`, `test-swarm-coord/test_4_executor.py`, `test-4-hlf-results/RESULTS.md`, `test-4-nl-results/RESULTS.md` |
 
 ---
@@ -148,6 +151,7 @@ The bugs we found weren't caused by different models disagreeing. They were caus
 | Test 2 completed | 05-12 | Hypothesis revised: Breakpoint exists, HLF wins at 10 agents |
 | Test 3 completed | 05-13 | Hypothesis confirmed: Gap widens to 58% at 15 agents |
 | Test 4 pipeline verified | 05-17 | 20-agent e-commerce swarm compiles and executes (mock backend); pipeline validated |
+| Test 4 real execution | 05-17 | 20-agent e-commerce run with deepseek-v4-pro:cloud. HLF: 19/20, 55,760 tokens, 384s. NL: 18/20, 43,363 tokens, 148s. Raw tokens favor NL, but correctness favors HLF. |
 | Docs updated | 05-14 | Fake synthetic benchmarks (12.5%/29.6%) purged; replaced with verified metrics |
 | Value analysis | 05-14 | Documented 8 value props justifying HLF premium at small scale |
 | Master tracker | 05-17 | This document created — unified view of all results |
@@ -165,9 +169,9 @@ The bugs we found weren't caused by different models disagreeing. They were caus
 | 7 | ~4,500 | ~3,500 | +22% | HLF |
 | 10 | ~6,400 (artifact: **1,366**) | ~3,700 (artifact: **2,082**) | +42% | HLF |
 | 15 | ~9,000 (artifact: **1,471**) | ~3,900 (artifact: **1,928**) | +57% | HLF |
-| 20 (est.) | ~12,000 | ~4,000 | +67% | HLF (pipeline verified) |
+| 20 | ~43,363 (real, **deepseek-v4-pro:cloud**) | ~55,760 (real, **deepseek-v4-pro:cloud**) | −22% | NL† |
 
-**Breakpoint: ~5–7 agents.** Below this, NL is cheaper. Above this, HLF dominates on cost, speed, and correctness.
+**Breakpoint: ~5–7 agents.** Below this, NL is cheaper. Above this, HLF dominates on cost, speed, and correctness — until Test 4, where raw token counts flipped. †See Test 4 notes: NL agents ran blind (no shared PLAN.md), causing 2 coordination failures. Token comparison alone is insufficient; output quality and correctness must factor in.
 
 ### Finding 2: Cross-Agent Bug Pattern
 
@@ -218,12 +222,13 @@ At 15 agents, NL took ~25 min vs HLF ~12 min. NL agents spend time "exploring pr
 
 ## Known Limitations
 
-1. **Sample size:** 3 tests, not 30. Results are directional, not statistically definitive.
-2. **Single model:** All agents used the same underlying model. Different models might behave differently.
+1. **Sample size:** 4 tests, not 40. Results are directional, not statistically definitive.
+2. **Single model for Tests 1-3:** All agents used the same underlying model. Different models might behave differently. Test 4 used deepseek-v4-pro:cloud.
 3. **Synthetic vs real:** These are generated code tasks, not production systems with users.
 4. **No live VM:** HLF `swarm.hlf` files were executed by subagents reading the spec, not by a dedicated HLF VM. Real savings depend on VM implementation.
-5. **Token estimation:** Token counts are estimates based on character ratios, not exact tokenizer outputs.
-6. **Ollama limits:** Fleet limited to 10 parallel models + 15 queued. Swarms beyond 15 agents may face queuing delays.
+5. **Token estimation (Tests 1-3):** Token counts are estimates based on character ratios, not exact tokenizer outputs. Test 4 uses actual Ollama token counts from API responses.
+6. **NL PLAN.md isolation:** Test 4 NL agents ran in isolated subprocess workers without access to the shared PLAN.md. This caused 2 coordination failures (AuthService, DevOpsAssembler). A fair comparison requires giving NL agents shared context access.
+7. **Ollama limits:** Fleet limited to 10 parallel models + 15 queued. Swarms beyond 15 agents may face queuing delays.
 
 ---
 

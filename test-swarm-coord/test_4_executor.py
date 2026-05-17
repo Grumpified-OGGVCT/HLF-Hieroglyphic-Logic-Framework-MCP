@@ -88,7 +88,7 @@ def load_hlf_plan(path: str) -> tuple[list[dict[str, Any]], list[list[str]]]:
 
 
 def run_agent(agent: dict[str, Any], model: str, output_dir: str) -> dict[str, Any]:
-    spawner = AgentSpawner(backend="asyncio", model=model)
+    spawner = AgentSpawner(backend="subprocess", model=model)
     handle = spawner.spawn(
         agent_id=agent["agent_id"],
         role=agent["role"],
@@ -97,8 +97,22 @@ def run_agent(agent: dict[str, Any], model: str, output_dir: str) -> dict[str, A
         constraints=agent.get("constraints", []),
     )
     result = spawner.wait(handle.agent_id, timeout=TIMEOUT_SEC)
-    # asyncio backend returns immediately; no files to copy from work_dir
+    # Copy files from agent work_dir to output_dir
+    work_dir = handle.work_dir
     copied: list[str] = []
+    if work_dir and os.path.isdir(work_dir):
+        for root, _dirs, files in os.walk(work_dir):
+            for fname in files:
+                if fname in ("config.json", "agent_worker.py", "status.json"):
+                    continue
+                src = os.path.join(root, fname)
+                rel = os.path.relpath(src, work_dir)
+                dst = os.path.join(output_dir, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                with open(src, "rb") as sf:
+                    with open(dst, "wb") as df:
+                        df.write(sf.read())
+                copied.append(rel)
     return {
         "agent_id": agent["agent_id"],
         "status": result.status,

@@ -1,0 +1,10 @@
+{
+  "name": "notification-service",
+  "version": "1.0.0",
+  "description": "Notification microservice",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}

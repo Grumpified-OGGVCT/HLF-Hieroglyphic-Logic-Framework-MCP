@@ -328,9 +328,17 @@ class VMResult:
 class HlfVM:
     """HLF stack-machine virtual machine."""
 
-    def __init__(self, tier: str = "hearth", max_gas: int = 100) -> None:
+    def __init__(
+        self,
+        tier: str = "hearth",
+        max_gas: int = 100,
+        session_id: str | None = None,
+        parent_session_id: str | None = None,
+    ) -> None:
         self.tier = tier
         self.max_gas = max_gas
+        self.session_id = session_id
+        self.parent_session_id = parent_session_id
         self.gas_used = 0
         self.stack: list[Any] = []
         self.scope: dict[str, Any] = {}
@@ -340,6 +348,23 @@ class HlfVM:
         self._result_code = 0
         self._result_message = "ok"
         self._side_effects: list[dict[str, Any]] = []
+
+    def spawn_child(self, tier: str | None = None, max_gas: int | None = None) -> "HlfVM":
+        """Spawn a child VM that inherits this VM's session auth.
+
+        The child receives parent_session_id so runtime checks can verify
+        delegation, and its scope is pre-populated with the parent's tier
+        via delegate_session_auth().
+        """
+        child_session_id = str(uuid.uuid4())
+        child = HlfVM(
+            tier=tier if tier is not None else self.tier,
+            max_gas=max_gas if max_gas is not None else self.max_gas,
+            session_id=child_session_id,
+            parent_session_id=self.session_id,
+        )
+        delegate_session_auth(self.scope, child.scope)
+        return child
 
     def execute(self, hlb_data: bytes) -> VMResult:
         """Execute .hlb bytecode and return a VMResult."""
@@ -406,6 +431,19 @@ class HlfVM:
             trace=self.trace[:50],
             side_effects=self._side_effects,
         )
+
+
+def delegate_session_auth(parent_scope: dict[str, Any], child_scope: dict[str, Any]) -> None:
+    """Copy delegated tier and session delegation flag from parent to child scope.
+
+    This allows a child VM spawned during swarm execution to inherit the
+    parent's permissions without an individual auth prompt, provided the
+    parent's tier was sufficient at the time of delegation.
+    """
+    parent_tier = parent_scope.get("_tier")
+    if parent_tier:
+        child_scope["_tier"] = parent_tier
+    child_scope["_session_delegated"] = True
 
 
 def _query_memory_context(

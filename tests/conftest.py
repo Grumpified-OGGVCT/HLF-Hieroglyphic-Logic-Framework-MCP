@@ -13,6 +13,7 @@ is fast, deterministic, and requires no network.
 
 from __future__ import annotations
 
+import inspect
 import pytest
 
 
@@ -44,6 +45,20 @@ def pytest_collection_modifyitems(
     for item in items:
         if "requires_ollama" in item.keywords:
             item.add_marker(skip_ollama)
+
+
+def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
+    """Run async test functions via asyncio.run so pytest-asyncio is not required."""
+    if inspect.iscoroutinefunction(pyfuncitem.obj):
+        import asyncio
+        import inspect as _inspect
+        sig = _inspect.signature(pyfuncitem.obj)
+        params = set(sig.parameters)
+        kwargs = {k: v for k, v in pyfuncitem.funcargs.items() if k in params}
+        coro = pyfuncitem.obj(**kwargs)
+        asyncio.run(coro)
+        return True
+    return None
 
 
 # ── autouse fixture: block real Ollama calls ──────────────────────────────────

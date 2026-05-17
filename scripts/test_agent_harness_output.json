@@ -1,0 +1,930 @@
+Building ServerContext...
+  Compiler: HLFCompiler
+  Runtime: HLFRuntime
+  Bytecoder: BytecodeCompiler
+  Memory: RAGMemory
+  Host Registry: 37 functions
+
+Intent: Calculate 2 plus 3 and return the result
+{
+  "success": true,
+  "you_said": "Calculate 2 plus 3 and return the result",
+  "what_hlf_did": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result.",
+  "what_hlf_did_en": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result.",
+  "audit": "Dry run only. Generated HLF validated for tier 'hearth' with estimated gas 3 / 100.",
+  "tier": "hearth",
+  "governed": true,
+  "language": "en",
+  "audit_language": "en",
+  "cognitive_lane_policy": "benchmark_gated",
+  "language_policy": {
+    "requested_language": "auto",
+    "resolved_language": "en",
+    "effective_language": "en",
+    "cognitive_lane_policy": "benchmark_gated",
+    "policy_action": "pass_through",
+    "blocked": false,
+    "blocked_reason": null,
+    "audit_language": "en"
+  },
+  "dry_run": true,
+  "capsule_violations": [],
+  "align_violations": [],
+  "math": {
+    "english_tokens": 10,
+    "hlf_tokens": 37,
+    "compression_pct": -270.0,
+    "token_savings": -27,
+    "gas_estimate": 3,
+    "gas_budget": 100,
+    "roundtrip_fidelity_score": 1.0,
+    "fallback_used": true
+  },
+  "translation": {
+    "resolved_language": "en",
+    "extracted_statement_count": 1,
+    "fallback_count": 1,
+    "fallback_used": true,
+    "roundtrip_fidelity_score": 1.0,
+    "semantic_loss_flags": [],
+    "roundtrip_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result."
+  },
+  "translation_contract": {
+    "contract_version": "1.0",
+    "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed.",
+    "intent": {
+      "text": "Calculate 2 plus 3 and return the result",
+      "language": "en",
+      "tier": "hearth"
+    },
+    "language_policy": {
+      "requested_language": "auto",
+      "resolved_language": "en",
+      "effective_language": "en",
+      "cognitive_lane_policy": "benchmark_gated",
+      "policy_action": "pass_through",
+      "blocked": false,
+      "blocked_reason": null,
+      "audit_language": "en"
+    },
+    "canonical_hlf": {
+      "source": "[HLF-v3]\n# Generated from English (tone: neutral)\n\u0394 [INTENT] goal=\"Calculate 2 plus 3 and return the result\"\n\u03a9\n",
+      "version": "3",
+      "statement_count": 1,
+      "ast_sha256": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6"
+    },
+    "governance": {
+      "governed": true,
+      "capsule_violations": [],
+      "align_violations": [],
+      "validation": {
+        "valid": true,
+        "version": "3",
+        "statement_count": 1,
+        "has_terminator": true,
+        "error": null
+      }
+    },
+    "proof": {
+      "translation": {
+        "resolved_language": "en",
+        "extracted_statement_count": 1,
+        "fallback_count": 1,
+        "fallback_used": true,
+        "roundtrip_fidelity_score": 1.0,
+        "semantic_loss_flags": [],
+        "roundtrip_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result."
+      },
+      "compile": {
+        "node_count": 1,
+        "gas_estimate": 3,
+        "normalization_changes": []
+      },
+      "math": {
+        "english_tokens": 10,
+        "hlf_tokens": 37,
+        "compression_pct": -270.0,
+        "token_savings": -27
+      },
+      "audit_surfaces": {
+        "localized_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result.",
+        "english_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result.",
+        "bytecode_summary_en": "## HLF Bytecode Decompilation\n\n### Header\n- Format version: `0x0004`\n- Code length: 12 bytes\n- Constants: 3 entries\n- CRC32 OK: True\n- SHA-256 OK: True\n\n### Instructions\n- `0x0000` **PUSH_CONST** \u2014 constant: `'Calculate 2 plus 3 and return the result'`: push constant value onto stack\n- `0x0003` **STORE** \u2014 constant: `'goal'`: store top of stack into mutable variable\n- `0x0006` **CALL_HOST** \u2014 constant: `'\u0394 [INTENT]'`: call host function\n- `0x0009` **HALT**: halt execution\n\n### Constant Pool\n- [0] `'\u0394 [INTENT]'`\n- [1] `'Calculate 2 plus 3 and return the result'`\n- [2] `'goal'`"
+      }
+    },
+    "artifacts": {
+      "primary_target": "hlf-bytecode",
+      "bytecode_hex": "e02470ab146a5636576ecf180073510115adacafc78fd1b74cfb40c63b42c017484c420004000c00000084956734000003000000030b000000ce94205b494e54454e545d032800000043616c63756c617465203220706c7573203320616e642072657475726e2074686520726573756c740304000000676f616c010100020200510000ff0000",
+      "bytecode_size_bytes": 134,
+      "runtime": "HLFRuntime"
+    },
+    "contract_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+    "resource_uri": "hlf://status/translation_contract/43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+    "report_uri": "hlf://reports/translation_contract/43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+    "governance_event": {
+      "event": {
+        "kind": "validated_solution_capture",
+        "event_id": "3f76c2e75fa202cc",
+        "source": "server_translation.run_hlf_do",
+        "action": "persist_translation_contract",
+        "status": "ok",
+        "severity": "info",
+        "subject_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+        "goal_id": "hearth",
+        "session_id": "",
+        "details": {
+          "contract_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+          "intent_text": "Calculate 2 plus 3 and return the result",
+          "intent_language": "en",
+          "tier": "hearth",
+          "ast_sha256": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+          "statement_count": 1,
+          "governed": true,
+          "memory_fact_id": null,
+          "memory_sha256": null,
+          "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed."
+        },
+        "related_refs": [],
+        "timestamp": 1778081563.0187995,
+        "trace_id": "5d06f07e5d24598186cd2d6ebe9d0d502a9f2905fc861f669adfd4d2494ffeb2",
+        "event_ref": {
+          "kind": "validated_solution_capture",
+          "event_id": "3f76c2e75fa202cc",
+          "trace_id": "5d06f07e5d24598186cd2d6ebe9d0d502a9f2905fc861f669adfd4d2494ffeb2"
+        }
+      },
+      "audit": {
+        "trace_id": "5d06f07e5d24598186cd2d6ebe9d0d502a9f2905fc861f669adfd4d2494ffeb2",
+        "parent_trace_hash": "1e016ef4d01b650287c52c08867b31d03e040f39af76b1d2fcc256d79a801a17",
+        "timestamp": "2026-05-06T15:32:43",
+        "goal_id": "hearth",
+        "agent_role": "translation_contract",
+        "event": "governance_event",
+        "data": {
+          "kind": "validated_solution_capture",
+          "event_id": "3f76c2e75fa202cc",
+          "source": "server_translation.run_hlf_do",
+          "action": "persist_translation_contract",
+          "status": "ok",
+          "severity": "info",
+          "subject_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+          "goal_id": "hearth",
+          "session_id": "",
+          "details": {
+            "contract_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+            "intent_text": "Calculate 2 plus 3 and return the result",
+            "intent_language": "en",
+            "tier": "hearth",
+            "ast_sha256": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+            "statement_count": 1,
+            "governed": true,
+            "memory_fact_id": null,
+            "memory_sha256": null,
+            "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed."
+          },
+          "related_refs": [],
+          "timestamp": 1778081563.0187995
+        },
+        "confidence_score": 1.0,
+        "anomaly_score": 0.0,
+        "token_cost": 0
+      },
+      "event_ref": {
+        "kind": "validated_solution_capture",
+        "event_id": "3f76c2e75fa202cc",
+        "trace_id": "5d06f07e5d24598186cd2d6ebe9d0d502a9f2905fc861f669adfd4d2494ffeb2"
+      }
+    },
+    "governance_event_ref": {
+      "kind": "validated_solution_capture",
+      "event_id": "3f76c2e75fa202cc",
+      "trace_id": "5d06f07e5d24598186cd2d6ebe9d0d502a9f2905fc861f669adfd4d2494ffeb2"
+    }
+  },
+  "hlf_source": "[HLF-v3]\n# Generated from English (tone: neutral)\n\u0394 [INTENT] goal=\"Calculate 2 plus 3 and return the result\"\n\u03a9\n"
+}
+
+Intent: Write a greeting message to hello.txt
+{
+  "success": true,
+  "you_said": "Write a greeting message to hello.txt",
+  "what_hlf_did": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Write a greeting message to hello.txt.",
+  "what_hlf_did_en": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Write a greeting message to hello.txt.",
+  "audit": "Dry run only. Generated HLF validated for tier 'hearth' with estimated gas 3 / 100.",
+  "tier": "hearth",
+  "governed": true,
+  "language": "en",
+  "audit_language": "en",
+  "cognitive_lane_policy": "benchmark_gated",
+  "language_policy": {
+    "requested_language": "auto",
+    "resolved_language": "en",
+    "effective_language": "en",
+    "cognitive_lane_policy": "benchmark_gated",
+    "policy_action": "pass_through",
+    "blocked": false,
+    "blocked_reason": null,
+    "audit_language": "en"
+  },
+  "dry_run": true,
+  "capsule_violations": [],
+  "align_violations": [],
+  "math": {
+    "english_tokens": 7,
+    "hlf_tokens": 34,
+    "compression_pct": -385.7,
+    "token_savings": -27,
+    "gas_estimate": 3,
+    "gas_budget": 100,
+    "roundtrip_fidelity_score": 1.0,
+    "fallback_used": true
+  },
+  "translation": {
+    "resolved_language": "en",
+    "extracted_statement_count": 1,
+    "fallback_count": 1,
+    "fallback_used": true,
+    "roundtrip_fidelity_score": 1.0,
+    "semantic_loss_flags": [],
+    "roundtrip_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Write a greeting message to hello.txt."
+  },
+  "translation_contract": {
+    "contract_version": "1.0",
+    "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed.",
+    "intent": {
+      "text": "Write a greeting message to hello.txt",
+      "language": "en",
+      "tier": "hearth"
+    },
+    "language_policy": {
+      "requested_language": "auto",
+      "resolved_language": "en",
+      "effective_language": "en",
+      "cognitive_lane_policy": "benchmark_gated",
+      "policy_action": "pass_through",
+      "blocked": false,
+      "blocked_reason": null,
+      "audit_language": "en"
+    },
+    "canonical_hlf": {
+      "source": "[HLF-v3]\n# Generated from English (tone: neutral)\n\u0394 [INTENT] goal=\"Write a greeting message to hello.txt\"\n\u03a9\n",
+      "version": "3",
+      "statement_count": 1,
+      "ast_sha256": "7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba"
+    },
+    "governance": {
+      "governed": true,
+      "capsule_violations": [],
+      "align_violations": [],
+      "validation": {
+        "valid": true,
+        "version": "3",
+        "statement_count": 1,
+        "has_terminator": true,
+        "error": null
+      }
+    },
+    "proof": {
+      "translation": {
+        "resolved_language": "en",
+        "extracted_statement_count": 1,
+        "fallback_count": 1,
+        "fallback_used": true,
+        "roundtrip_fidelity_score": 1.0,
+        "semantic_loss_flags": [],
+        "roundtrip_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Write a greeting message to hello.txt."
+      },
+      "compile": {
+        "node_count": 1,
+        "gas_estimate": 3,
+        "normalization_changes": []
+      },
+      "math": {
+        "english_tokens": 7,
+        "hlf_tokens": 34,
+        "compression_pct": -385.7,
+        "token_savings": -27
+      },
+      "audit_surfaces": {
+        "localized_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Write a greeting message to hello.txt.",
+        "english_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Write a greeting message to hello.txt.",
+        "bytecode_summary_en": "## HLF Bytecode Decompilation\n\n### Header\n- Format version: `0x0004`\n- Code length: 12 bytes\n- Constants: 3 entries\n- CRC32 OK: True\n- SHA-256 OK: True\n\n### Instructions\n- `0x0000` **PUSH_CONST** \u2014 constant: `'Write a greeting message to hello.txt'`: push constant value onto stack\n- `0x0003` **STORE** \u2014 constant: `'goal'`: store top of stack into mutable variable\n- `0x0006` **CALL_HOST** \u2014 constant: `'\u0394 [INTENT]'`: call host function\n- `0x0009` **HALT**: halt execution\n\n### Constant Pool\n- [0] `'\u0394 [INTENT]'`\n- [1] `'Write a greeting message to hello.txt'`\n- [2] `'goal'`"
+      }
+    },
+    "artifacts": {
+      "primary_target": "hlf-bytecode",
+      "bytecode_hex": "e8ea5bc948ef58a58fe58c6a369651f5ec30f26c341be2d942b8311e3ba12e95484c420004000c00000084956734000003000000030b000000ce94205b494e54454e545d032500000057726974652061206772656574696e67206d65737361676520746f2068656c6c6f2e7478740304000000676f616c010100020200510000ff0000",
+      "bytecode_size_bytes": 131,
+      "runtime": "HLFRuntime"
+    },
+    "contract_id": "7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+    "resource_uri": "hlf://status/translation_contract/7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+    "report_uri": "hlf://reports/translation_contract/7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+    "governance_event": {
+      "event": {
+        "kind": "validated_solution_capture",
+        "event_id": "c110c9505fc5ee76",
+        "source": "server_translation.run_hlf_do",
+        "action": "persist_translation_contract",
+        "status": "ok",
+        "severity": "info",
+        "subject_id": "7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+        "goal_id": "hearth",
+        "session_id": "",
+        "details": {
+          "contract_id": "7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+          "intent_text": "Write a greeting message to hello.txt",
+          "intent_language": "en",
+          "tier": "hearth",
+          "ast_sha256": "7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+          "statement_count": 1,
+          "governed": true,
+          "memory_fact_id": null,
+          "memory_sha256": null,
+          "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed."
+        },
+        "related_refs": [],
+        "timestamp": 1778081563.688191,
+        "trace_id": "7c0275bd27defaac98fa1d667968135a897b119a1555e3d6b3f8f56e5b975dda",
+        "event_ref": {
+          "kind": "validated_solution_capture",
+          "event_id": "c110c9505fc5ee76",
+          "trace_id": "7c0275bd27defaac98fa1d667968135a897b119a1555e3d6b3f8f56e5b975dda"
+        }
+      },
+      "audit": {
+        "trace_id": "7c0275bd27defaac98fa1d667968135a897b119a1555e3d6b3f8f56e5b975dda",
+        "parent_trace_hash": "5d06f07e5d24598186cd2d6ebe9d0d502a9f2905fc861f669adfd4d2494ffeb2",
+        "timestamp": "2026-05-06T15:32:43",
+        "goal_id": "hearth",
+        "agent_role": "translation_contract",
+        "event": "governance_event",
+        "data": {
+          "kind": "validated_solution_capture",
+          "event_id": "c110c9505fc5ee76",
+          "source": "server_translation.run_hlf_do",
+          "action": "persist_translation_contract",
+          "status": "ok",
+          "severity": "info",
+          "subject_id": "7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+          "goal_id": "hearth",
+          "session_id": "",
+          "details": {
+            "contract_id": "7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+            "intent_text": "Write a greeting message to hello.txt",
+            "intent_language": "en",
+            "tier": "hearth",
+            "ast_sha256": "7530d86bf1ef788fe455d30ac5e46def40182f4024ec2bdc2eb9e05b4bf05aba",
+            "statement_count": 1,
+            "governed": true,
+            "memory_fact_id": null,
+            "memory_sha256": null,
+            "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed."
+          },
+          "related_refs": [],
+          "timestamp": 1778081563.688191
+        },
+        "confidence_score": 1.0,
+        "anomaly_score": 0.0,
+        "token_cost": 0
+      },
+      "event_ref": {
+        "kind": "validated_solution_capture",
+        "event_id": "c110c9505fc5ee76",
+        "trace_id": "7c0275bd27defaac98fa1d667968135a897b119a1555e3d6b3f8f56e5b975dda"
+      }
+    },
+    "governance_event_ref": {
+      "kind": "validated_solution_capture",
+      "event_id": "c110c9505fc5ee76",
+      "trace_id": "7c0275bd27defaac98fa1d667968135a897b119a1555e3d6b3f8f56e5b975dda"
+    }
+  },
+  "hlf_source": "[HLF-v3]\n# Generated from English (tone: neutral)\n\u0394 [INTENT] goal=\"Write a greeting message to hello.txt\"\n\u03a9\n"
+}
+
+Attempting LIVE execution of arithmetic intent...
+{
+  "success": true,
+  "you_said": "Calculate 2 plus 3 and return the result",
+  "what_hlf_did": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result.",
+  "what_hlf_did_en": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result.",
+  "audit": "Executed at tier 'hearth'. Gas used: 13 / 100.",
+  "tier": "hearth",
+  "governed": true,
+  "language": "en",
+  "audit_language": "en",
+  "cognitive_lane_policy": "benchmark_gated",
+  "language_policy": {
+    "requested_language": "auto",
+    "resolved_language": "en",
+    "effective_language": "en",
+    "cognitive_lane_policy": "benchmark_gated",
+    "policy_action": "pass_through",
+    "blocked": false,
+    "blocked_reason": null,
+    "audit_language": "en"
+  },
+  "dry_run": false,
+  "capsule_violations": [],
+  "align_violations": [],
+  "math": {
+    "english_tokens": 10,
+    "hlf_tokens": 37,
+    "compression_pct": -270.0,
+    "token_savings": -27,
+    "gas_estimate": 3,
+    "gas_budget": 100,
+    "roundtrip_fidelity_score": 1.0,
+    "fallback_used": true
+  },
+  "translation": {
+    "resolved_language": "en",
+    "extracted_statement_count": 1,
+    "fallback_count": 1,
+    "fallback_used": true,
+    "roundtrip_fidelity_score": 1.0,
+    "semantic_loss_flags": [],
+    "roundtrip_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result."
+  },
+  "translation_contract": {
+    "contract_version": "1.0",
+    "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed.",
+    "intent": {
+      "text": "Calculate 2 plus 3 and return the result",
+      "language": "en",
+      "tier": "hearth"
+    },
+    "language_policy": {
+      "requested_language": "auto",
+      "resolved_language": "en",
+      "effective_language": "en",
+      "cognitive_lane_policy": "benchmark_gated",
+      "policy_action": "pass_through",
+      "blocked": false,
+      "blocked_reason": null,
+      "audit_language": "en"
+    },
+    "canonical_hlf": {
+      "source": "[HLF-v3]\n# Generated from English (tone: neutral)\n\u0394 [INTENT] goal=\"Calculate 2 plus 3 and return the result\"\n\u03a9\n",
+      "version": "3",
+      "statement_count": 1,
+      "ast_sha256": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6"
+    },
+    "governance": {
+      "governed": true,
+      "capsule_violations": [],
+      "align_violations": [],
+      "validation": {
+        "valid": true,
+        "version": "3",
+        "statement_count": 1,
+        "has_terminator": true,
+        "error": null
+      }
+    },
+    "proof": {
+      "translation": {
+        "resolved_language": "en",
+        "extracted_statement_count": 1,
+        "fallback_count": 1,
+        "fallback_used": true,
+        "roundtrip_fidelity_score": 1.0,
+        "semantic_loss_flags": [],
+        "roundtrip_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result."
+      },
+      "compile": {
+        "node_count": 1,
+        "gas_estimate": 3,
+        "normalization_changes": []
+      },
+      "math": {
+        "english_tokens": 10,
+        "hlf_tokens": 37,
+        "compression_pct": -270.0,
+        "token_savings": -27
+      },
+      "audit_surfaces": {
+        "localized_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result.",
+        "english_summary": "HLF v3 program with 1 statement(s): analyze [INTENT]: goal=Calculate 2 plus 3 and return the result.",
+        "bytecode_summary_en": "## HLF Bytecode Decompilation\n\n### Header\n- Format version: `0x0004`\n- Code length: 12 bytes\n- Constants: 3 entries\n- CRC32 OK: True\n- SHA-256 OK: True\n\n### Instructions\n- `0x0000` **PUSH_CONST** \u2014 constant: `'Calculate 2 plus 3 and return the result'`: push constant value onto stack\n- `0x0003` **STORE** \u2014 constant: `'goal'`: store top of stack into mutable variable\n- `0x0006` **CALL_HOST** \u2014 constant: `'\u0394 [INTENT]'`: call host function\n- `0x0009` **HALT**: halt execution\n\n### Constant Pool\n- [0] `'\u0394 [INTENT]'`\n- [1] `'Calculate 2 plus 3 and return the result'`\n- [2] `'goal'`"
+      }
+    },
+    "artifacts": {
+      "primary_target": "hlf-bytecode",
+      "bytecode_hex": "e02470ab146a5636576ecf180073510115adacafc78fd1b74cfb40c63b42c017484c420004000c00000084956734000003000000030b000000ce94205b494e54454e545d032800000043616c63756c617465203220706c7573203320616e642072657475726e2074686520726573756c740304000000676f616c010100020200510000ff0000",
+      "bytecode_size_bytes": 134,
+      "runtime": "HLFRuntime"
+    },
+    "contract_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+    "resource_uri": "hlf://status/translation_contract/43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+    "report_uri": "hlf://reports/translation_contract/43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+    "governance_event": {
+      "event": {
+        "kind": "validated_solution_capture",
+        "event_id": "d038ddf46a0ceb35",
+        "source": "server_translation.run_hlf_do",
+        "action": "persist_translation_contract",
+        "status": "ok",
+        "severity": "info",
+        "subject_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+        "goal_id": "hearth",
+        "session_id": "",
+        "details": {
+          "contract_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+          "intent_text": "Calculate 2 plus 3 and return the result",
+          "intent_language": "en",
+          "tier": "hearth",
+          "ast_sha256": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+          "statement_count": 1,
+          "governed": true,
+          "memory_fact_id": null,
+          "memory_sha256": null,
+          "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed."
+        },
+        "related_refs": [],
+        "timestamp": 1778081564.3962588,
+        "trace_id": "448ec160e620ea6aedd6bd1a1c3f15dfde4a856cce6533e785ad792c9a7d64a8",
+        "event_ref": {
+          "kind": "validated_solution_capture",
+          "event_id": "d038ddf46a0ceb35",
+          "trace_id": "448ec160e620ea6aedd6bd1a1c3f15dfde4a856cce6533e785ad792c9a7d64a8"
+        }
+      },
+      "audit": {
+        "trace_id": "448ec160e620ea6aedd6bd1a1c3f15dfde4a856cce6533e785ad792c9a7d64a8",
+        "parent_trace_hash": "7c0275bd27defaac98fa1d667968135a897b119a1555e3d6b3f8f56e5b975dda",
+        "timestamp": "2026-05-06T15:32:44",
+        "goal_id": "hearth",
+        "agent_role": "translation_contract",
+        "event": "governance_event",
+        "data": {
+          "kind": "validated_solution_capture",
+          "event_id": "d038ddf46a0ceb35",
+          "source": "server_translation.run_hlf_do",
+          "action": "persist_translation_contract",
+          "status": "ok",
+          "severity": "info",
+          "subject_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+          "goal_id": "hearth",
+          "session_id": "",
+          "details": {
+            "contract_id": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+            "intent_text": "Calculate 2 plus 3 and return the result",
+            "intent_language": "en",
+            "tier": "hearth",
+            "ast_sha256": "43bbf85086112ca0b68ee52043547d3cbc7ce811b55df86e0e34ab4f6ceb4de6",
+            "statement_count": 1,
+            "governed": true,
+            "memory_fact_id": null,
+            "memory_sha256": null,
+            "operator_summary": "Intent was translated from en into canonical HLF and compiled to bytecode with governance status governed."
+          },
+          "related_refs": [],
+          "timestamp": 1778081564.3962588
+        },
+        "confidence_score": 1.0,
+        "anomaly_score": 0.0,
+        "token_cost": 0
+      },
+      "event_ref": {
+        "kind": "validated_solution_capture",
+        "event_id": "d038ddf46a0ceb35",
+        "trace_id": "448ec160e620ea6aedd6bd1a1c3f15dfde4a856cce6533e785ad792c9a7d64a8"
+      }
+    },
+    "governance_event_ref": {
+      "kind": "validated_solution_capture",
+      "event_id": "d038ddf46a0ceb35",
+      "trace_id": "448ec160e620ea6aedd6bd1a1c3f15dfde4a856cce6533e785ad792c9a7d64a8"
+    }
+  },
+  "hlf_source": "[HLF-v3]\n# Generated from English (tone: neutral)\n\u0394 [INTENT] goal=\"Calculate 2 plus 3 and return the result\"\n\u03a9\n",
+  "ingress_contract": null,
+  "execution": {
+    "status": "ok",
+    "result": {
+      "host_fn": "\u0394 [INTENT]",
+      "status": "unresolved",
+      "args": [
+        "Calculate 2 plus 3 and return the result"
+      ],
+      "note": "No backend mapped for host function '\u0394 [INTENT]'; register via governance/host_functions.json backend field",
+      "normalized_host_fn": "\u03b4 [intent]"
+    },
+    "gas_used": 13,
+    "trace": [
+      {
+        "pc": 0,
+        "op": "PUSH_CONST",
+        "gas": 1,
+        "push": "Calculate 2 plus 3 and return the result",
+        "stack_depth": 1
+      },
+      {
+        "pc": 3,
+        "op": "STORE",
+        "gas": 3,
+        "stack_depth": 1
+      },
+      {
+        "pc": 6,
+        "op": "CALL_HOST",
+        "gas": 13,
+        "stack_depth": 1
+      },
+      {
+        "pc": 9,
+        "op": "HALT",
+        "gas": 13,
+        "halted": true
+      }
+    ],
+    "side_effects": [],
+    "error": null,
+    "verification": null,
+    "audit": {
+      "execution": null,
+      "side_effects": []
+    },
+    "ingress_contract": null,
+    "execution_admission": {
+      "contract_version": "1.0",
+      "agent_id": "unknown-agent",
+      "surface": "hlf_do",
+      "requested_tier": "hearth",
+      "execution_status": "ok",
+      "admission_verdict": "deny",
+      "admitted": false,
+      "requires_operator_review": false,
+      "reasons": [
+        "Packaged ingress blocked hlf_do at stage 'ingress'."
+      ],
+      "effect_basis": {
+        "effect_classes": [],
+        "tool_names": []
+      },
+      "embodied_effect": {},
+      "ingress_evidence": {
+        "available": false,
+        "admitted": null,
+        "decision": null,
+        "blocked_stage": null,
+        "review_required": null,
+        "checks": [],
+        "policy_basis": {}
+      },
+      "route_evidence": {
+        "available": false,
+        "selected_lane": null,
+        "decision": null,
+        "governance_mode": null,
+        "review_required": null,
+        "align_action": null,
+        "deployment_tier": null,
+        "allowlist_policy": {},
+        "route_governance_event_ref": null,
+        "policy_constraints": [],
+        "missing_evidence_profiles": [],
+        "policy_basis_present": false
+      },
+      "pointer_evidence": {},
+      "orchestration_lineage": {
+        "contract_version": "1.0",
+        "delegation_events": [],
+        "mission": {}
+      },
+      "approval": {
+        "status": "not_required",
+        "requirements": [],
+        "request": null
+      },
+      "audit_refs": {
+        "execution_trace_id": "",
+        "execution_parent_trace_hash": ""
+      },
+      "verification": {
+        "surface": "hlf_do",
+        "execution_status": "ok"
+      },
+      "operator_summary": "Runtime admission for agent 'unknown-agent' on surface 'hlf_do' is 'deny' during execution status 'ok'. Route lane is 'unresolved' and ingress is 'not-evaluated' at stage 'admit'.",
+      "governance_event": {
+        "event": {
+          "kind": "verification_result",
+          "event_id": "88b05199d965db0b",
+          "source": "server_context.persist_execution_admission",
+          "action": "persist_execution_admission",
+          "status": "blocked",
+          "severity": "critical",
+          "subject_id": "unknown-agent",
+          "goal_id": "hearth",
+          "session_id": "",
+          "details": {
+            "execution_status": "ok",
+            "admission_verdict": "deny",
+            "requested_tier": "hearth",
+            "effect_classes": [],
+            "tool_names": [],
+            "selected_lane": null,
+            "route_decision": null,
+            "ingress_decision": null,
+            "ingress_blocked_stage": null,
+            "delegation_count": 0,
+            "mission_id": null,
+            "execution_trace_id": ""
+          },
+          "related_refs": [],
+          "timestamp": 1778081565.0565934,
+          "trace_id": "898643339f52efff2baeb09bffdf4ee1767c5f98e31966b9e0dac26dabc3a414",
+          "event_ref": {
+            "kind": "verification_result",
+            "event_id": "88b05199d965db0b",
+            "trace_id": "898643339f52efff2baeb09bffdf4ee1767c5f98e31966b9e0dac26dabc3a414"
+          }
+        },
+        "audit": {
+          "trace_id": "898643339f52efff2baeb09bffdf4ee1767c5f98e31966b9e0dac26dabc3a414",
+          "parent_trace_hash": "448ec160e620ea6aedd6bd1a1c3f15dfde4a856cce6533e785ad792c9a7d64a8",
+          "timestamp": "2026-05-06T15:32:45",
+          "goal_id": "hearth",
+          "agent_role": "execution_admission",
+          "event": "governance_event",
+          "data": {
+            "kind": "verification_result",
+            "event_id": "88b05199d965db0b",
+            "source": "server_context.persist_execution_admission",
+            "action": "persist_execution_admission",
+            "status": "blocked",
+            "severity": "critical",
+            "subject_id": "unknown-agent",
+            "goal_id": "hearth",
+            "session_id": "",
+            "details": {
+              "execution_status": "ok",
+              "admission_verdict": "deny",
+              "requested_tier": "hearth",
+              "effect_classes": [],
+              "tool_names": [],
+              "selected_lane": null,
+              "route_decision": null,
+              "ingress_decision": null,
+              "ingress_blocked_stage": null,
+              "delegation_count": 0,
+              "mission_id": null,
+              "execution_trace_id": ""
+            },
+            "related_refs": [],
+            "timestamp": 1778081565.0565934
+          },
+          "confidence_score": 1.0,
+          "anomaly_score": 1.0,
+          "token_cost": 0
+        },
+        "event_ref": {
+          "kind": "verification_result",
+          "event_id": "88b05199d965db0b",
+          "trace_id": "898643339f52efff2baeb09bffdf4ee1767c5f98e31966b9e0dac26dabc3a414"
+        }
+      }
+    }
+  },
+  "execution_admission": {
+    "contract_version": "1.0",
+    "agent_id": "unknown-agent",
+    "surface": "hlf_do",
+    "requested_tier": "hearth",
+    "execution_status": "ok",
+    "admission_verdict": "deny",
+    "admitted": false,
+    "requires_operator_review": false,
+    "reasons": [
+      "Packaged ingress blocked hlf_do at stage 'ingress'."
+    ],
+    "effect_basis": {
+      "effect_classes": [],
+      "tool_names": []
+    },
+    "embodied_effect": {},
+    "ingress_evidence": {
+      "available": false,
+      "admitted": null,
+      "decision": null,
+      "blocked_stage": null,
+      "review_required": null,
+      "checks": [],
+      "policy_basis": {}
+    },
+    "route_evidence": {
+      "available": false,
+      "selected_lane": null,
+      "decision": null,
+      "governance_mode": null,
+      "review_required": null,
+      "align_action": null,
+      "deployment_tier": null,
+      "allowlist_policy": {},
+      "route_governance_event_ref": null,
+      "policy_constraints": [],
+      "missing_evidence_profiles": [],
+      "policy_basis_present": false
+    },
+    "pointer_evidence": {},
+    "orchestration_lineage": {
+      "contract_version": "1.0",
+      "delegation_events": [],
+      "mission": {}
+    },
+    "approval": {
+      "status": "not_required",
+      "requirements": [],
+      "request": null
+    },
+    "audit_refs": {
+      "execution_trace_id": "",
+      "execution_parent_trace_hash": ""
+    },
+    "verification": {
+      "surface": "hlf_do",
+      "execution_status": "ok"
+    },
+    "operator_summary": "Runtime admission for agent 'unknown-agent' on surface 'hlf_do' is 'deny' during execution status 'ok'. Route lane is 'unresolved' and ingress is 'not-evaluated' at stage 'admit'.",
+    "governance_event": {
+      "event": {
+        "kind": "verification_result",
+        "event_id": "88b05199d965db0b",
+        "source": "server_context.persist_execution_admission",
+        "action": "persist_execution_admission",
+        "status": "blocked",
+        "severity": "critical",
+        "subject_id": "unknown-agent",
+        "goal_id": "hearth",
+        "session_id": "",
+        "details": {
+          "execution_status": "ok",
+          "admission_verdict": "deny",
+          "requested_tier": "hearth",
+          "effect_classes": [],
+          "tool_names": [],
+          "selected_lane": null,
+          "route_decision": null,
+          "ingress_decision": null,
+          "ingress_blocked_stage": null,
+          "delegation_count": 0,
+          "mission_id": null,
+          "execution_trace_id": ""
+        },
+        "related_refs": [],
+        "timestamp": 1778081565.0565934,
+        "trace_id": "898643339f52efff2baeb09bffdf4ee1767c5f98e31966b9e0dac26dabc3a414",
+        "event_ref": {
+          "kind": "verification_result",
+          "event_id": "88b05199d965db0b",
+          "trace_id": "898643339f52efff2baeb09bffdf4ee1767c5f98e31966b9e0dac26dabc3a414"
+        }
+      },
+      "audit": {
+        "trace_id": "898643339f52efff2baeb09bffdf4ee1767c5f98e31966b9e0dac26dabc3a414",
+        "parent_trace_hash": "448ec160e620ea6aedd6bd1a1c3f15dfde4a856cce6533e785ad792c9a7d64a8",
+        "timestamp": "2026-05-06T15:32:45",
+        "goal_id": "hearth",
+        "agent_role": "execution_admission",
+        "event": "governance_event",
+        "data": {
+          "kind": "verification_result",
+          "event_id": "88b05199d965db0b",
+          "source": "server_context.persist_execution_admission",
+          "action": "persist_execution_admission",
+          "status": "blocked",
+          "severity": "critical",
+          "subject_id": "unknown-agent",
+          "goal_id": "hearth",
+          "session_id": "",
+          "details": {
+            "execution_status": "ok",
+            "admission_verdict": "deny",
+            "requested_tier": "hearth",
+            "effect_classes": [],
+            "tool_names": [],
+            "selected_lane": null,
+            "route_decision": null,
+            "ingress_decision": null,
+            "ingress_blocked_stage": null,
+            "delegation_count": 0,
+            "mission_id": null,
+            "execution_trace_id": ""
+          },
+          "related_refs": [],
+          "timestamp": 1778081565.0565934
+        },
+        "confidence_score": 1.0,
+        "anomaly_score": 1.0,
+        "token_cost": 0
+      },
+      "event_ref": {
+        "kind": "verification_result",
+        "event_id": "88b05199d965db0b",
+        "trace_id": "898643339f52efff2baeb09bffdf4ee1767c5f98e31966b9e0dac26dabc3a414"
+      }
+    }
+  }
+}

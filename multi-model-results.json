@@ -1,0 +1,197 @@
+[
+  {
+    "model": "kimi-k2.6:cloud",
+    "total_agents": 3,
+    "complete": 3,
+    "errors": 0,
+    "total_ms": 127.6845932006836,
+    "agent_results": [
+      {
+        "agent_id": "SchemaDesigner",
+        "model": "kimi-k2.6:cloud",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent SchemaDesigner done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "AuthService",
+        "model": "kimi-k2.6:cloud",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent AuthService done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "ApiRoutes",
+        "model": "kimi-k2.6:cloud",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent ApiRoutes done",
+        "stderr": "",
+        "error": null
+      }
+    ]
+  },
+  {
+    "model": "deepseek-v4-pro:cloud",
+    "total_agents": 3,
+    "complete": 3,
+    "errors": 0,
+    "total_ms": 121.5665340423584,
+    "agent_results": [
+      {
+        "agent_id": "SchemaDesigner",
+        "model": "deepseek-v4-pro:cloud",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent SchemaDesigner done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "AuthService",
+        "model": "deepseek-v4-pro:cloud",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent AuthService done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "ApiRoutes",
+        "model": "deepseek-v4-pro:cloud",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent ApiRoutes done",
+        "stderr": "",
+        "error": null
+      }
+    ]
+  },
+  {
+    "model": "qwen3.5:9b",
+    "total_agents": 3,
+    "complete": 3,
+    "errors": 0,
+    "total_ms": 125.26702880859375,
+    "agent_results": [
+      {
+        "agent_id": "SchemaDesigner",
+        "model": "qwen3.5:9b",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent SchemaDesigner done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "AuthService",
+        "model": "qwen3.5:9b",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent AuthService done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "ApiRoutes",
+        "model": "qwen3.5:9b",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent ApiRoutes done",
+        "stderr": "",
+        "error": null
+      }
+    ]
+  },
+  {
+    "model": "deepseek-r1:14b",
+    "total_agents": 3,
+    "complete": 3,
+    "errors": 0,
+    "total_ms": 124.09234046936035,
+    "agent_results": [
+      {
+        "agent_id": "SchemaDesigner",
+        "model": "deepseek-r1:14b",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent SchemaDesigner done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "AuthService",
+        "model": "deepseek-r1:14b",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent AuthService done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "ApiRoutes",
+        "model": "deepseek-r1:14b",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent ApiRoutes done",
+        "stderr": "",
+        "error": null
+      }
+    ]
+  },
+  {
+    "model": "llama3.2:latest",
+    "total_agents": 3,
+    "complete": 3,
+    "errors": 0,
+    "total_ms": 124.84860420227051,
+    "agent_results": [
+      {
+        "agent_id": "SchemaDesigner",
+        "model": "llama3.2:latest",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent SchemaDesigner done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "AuthService",
+        "model": "llama3.2:latest",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent AuthService done",
+        "stderr": "",
+        "error": null
+      },
+      {
+        "agent_id": "ApiRoutes",
+        "model": "llama3.2:latest",
+        "status": "complete",
+        "elapsed_ms": 0.0,
+        "tokens_used": 0,
+        "stdout": "asyncio agent ApiRoutes done",
+        "stderr": "",
+        "error": null
+      }
+    ]
+  }
+]

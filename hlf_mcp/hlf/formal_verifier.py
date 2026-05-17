@@ -5,6 +5,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from hlf_mcp.hlf.typed_contracts import (
+    EffectContractAssessment,
+    OutputContract,
+    ProofSurface,
+    TypedEffectDeclaration,
+)
+
 _HAS_Z3 = False
 try:
     import z3  # type: ignore[import-untyped]
@@ -892,3 +899,59 @@ class FormalVerifier:
                 )
             )
         return report
+
+    def verify_effect_declaration(
+        self,
+        decl: TypedEffectDeclaration,
+        args: dict[str, Any] | None = None,
+    ) -> EffectContractAssessment:
+        """Verify a typed effect declaration against concrete arguments."""
+        effective_args = dict(args) if args is not None else {}
+        admitted, reasons = decl.validate_call(effective_args)
+
+        # Mutating effects require review posture
+        if decl.effect_class.is_mutating() and decl.review_posture == "none":
+            admitted = False
+            reasons.append(
+                f"'{decl.function_name}': mutating effect '{decl.effect_class.value}' requires review_posture to be set"
+            )
+
+        # Security-sensitive failures need adequate safety class
+        for fm in decl.failure_modes:
+            if fm.is_security_sensitive() and decl.safety_class in ("none", "low"):
+                admitted = False
+                reasons.append(
+                    f"'{decl.function_name}': security-sensitive failure mode '{fm.value}' requires higher safety_class than '{decl.safety_class}'"
+                )
+
+        return EffectContractAssessment(
+            function_name=decl.function_name,
+            admitted=admitted,
+            requires_operator_review=decl.review_posture == "operator_review",
+            verdict="admitted" if admitted else "denied",
+            reasons=reasons,
+        )
+
+    def verify_output_contract(
+        self,
+        oc: OutputContract,
+        value: Any,
+    ) -> VerificationResult:
+        """Verify a concrete value against an output contract."""
+        valid, message = oc.validate(value)
+        if valid:
+            return VerificationResult(
+                property_name=f"{oc.function_name}_output_type",
+                status=VerificationStatus.RUNTIME_CHECKED,
+                kind=ConstraintKind.TYPE_INVARIANT,
+                message=message or "Output contract validated",
+                solver=self.solver_name,
+            )
+        return VerificationResult(
+            property_name=f"{oc.function_name}_output_type",
+            status=VerificationStatus.COUNTEREXAMPLE,
+            kind=ConstraintKind.TYPE_INVARIANT,
+            message=message,
+            counterexample={"value": value},
+            solver=self.solver_name,
+        )

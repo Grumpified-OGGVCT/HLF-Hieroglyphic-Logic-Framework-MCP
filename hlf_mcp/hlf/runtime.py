@@ -255,6 +255,24 @@ HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
         "effects": ["spawn_agent"],
         "desc": "Spawn a new agent",
     },
+    "wait_agent": {
+        "tier": "operators",
+        "gas": 5,
+        "effects": ["wait_agent"],
+        "desc": "Wait for a spawned agent to complete",
+    },
+    "wait_all_agents": {
+        "tier": "operators",
+        "gas": 8,
+        "effects": ["wait_agent"],
+        "desc": "Wait for all spawned agents to complete",
+    },
+    "get_agent_result": {
+        "tier": "operators",
+        "gas": 2,
+        "effects": [],
+        "desc": "Get result of a spawned agent",
+    },
     "http_put": {"tier": "operators", "gas": 5, "effects": ["network"], "desc": "HTTP PUT request"},
     "http_delete": {"tier": "operators", "gas": 4, "effects": ["network"], "desc": "HTTP DELETE request"},
     "url_encode": {"tier": "all", "gas": 2, "effects": [], "desc": "URL-encode parameters"},
@@ -289,6 +307,9 @@ def _normalize_host_function_name(fn_name: str) -> str:
         bracketed = raw_name[1:-1].strip()
     elif " [" in raw_name and raw_name.endswith("]"):
         bracketed = raw_name.split(" [", 1)[1][:-1].strip()
+    elif "[" in raw_name and raw_name.endswith("]"):
+        # Handle glyph-prefixed tags like "⌘ [DELEGATE]" or "Δ [ANALYZE]"
+        bracketed = raw_name[raw_name.rfind("[") + 1 : -1].strip()
 
     normalized = _HOST_FUNCTION_ALIASES.get(bracketed.lower())
     if normalized:
@@ -1275,10 +1296,10 @@ def _dispatch_host(
     try:
         # Gate: reject if caller's tier is insufficient for this function
         fn_tier = fn_info.get("tier", "all")
-        if fn_tier == "operators" and effective_tier not in ("forge", "sovereign"):
+        if fn_tier == "operators" and effective_tier not in ("operators", "forge", "sovereign"):
             raise PermissionError(
                 f"Host function '{fn_name}' requires operator tier "
-                f"(forge/sovereign); current tier is '{effective_tier}'."
+                f"(operators/forge/sovereign); current tier is '{effective_tier}'."
             )
 
         # Gate: capsule denied-tools enforcement ─────────────────────────
@@ -1726,7 +1747,10 @@ def _dispatch_host(
             task = str(args[2]) if len(args) >= 3 else ""
             model = str(args[3]) if len(args) >= 4 else ""
             backend = scope.get("_spawner_backend", "subprocess")
-            spawner = AgentSpawner(backend=backend)
+            spawner = scope.get("_agent_spawner")
+            if spawner is None:
+                spawner = AgentSpawner(backend=backend)
+                scope["_agent_spawner"] = spawner
             handle = spawner.spawn(agent_id=agent_id, role=role, task=task, model=model)
             side_effects.append(
                 {
@@ -1747,6 +1771,60 @@ def _dispatch_host(
                 "token": handle.token,
                 "work_dir": handle.work_dir,
             }
+
+        elif fn_name == "wait_agent":
+            agent_id = str(args[0]) if args else ""
+            timeout = float(args[1]) if len(args) >= 2 else 300.0
+            spawner = scope.get("_agent_spawner")
+            if spawner is None:
+                result = {"error": "No agent spawner found in scope"}
+            else:
+                res = spawner.wait(agent_id, timeout=timeout)
+                result = {
+                    "agent_id": res.agent_id,
+                    "status": res.status,
+                    "stdout": res.stdout,
+                    "stderr": res.stderr,
+                    "elapsed_ms": res.elapsed_ms,
+                    "tokens_used": res.tokens_used,
+                }
+
+        elif fn_name == "wait_all_agents":
+            timeout = float(args[0]) if args else 300.0
+            spawner = scope.get("_agent_spawner")
+            if spawner is None:
+                result = {"error": "No agent spawner found in scope"}
+            else:
+                results = spawner.wait_all(list(spawner._handles.keys()), timeout=timeout)
+                result = {
+                    agent_id: {
+                        "status": r.status,
+                        "stdout": r.stdout,
+                        "stderr": r.stderr,
+                        "elapsed_ms": r.elapsed_ms,
+                        "tokens_used": r.tokens_used,
+                    }
+                    for agent_id, r in results.items()
+                }
+
+        elif fn_name == "get_agent_result":
+            agent_id = str(args[0]) if args else ""
+            spawner = scope.get("_agent_spawner")
+            if spawner is None:
+                result = {"error": "No agent spawner found in scope"}
+            else:
+                res = spawner.get_result(agent_id)
+                if res is None:
+                    result = {"error": f"No result for agent {agent_id}"}
+                else:
+                    result = {
+                        "agent_id": res.agent_id,
+                        "status": res.status,
+                        "stdout": res.stdout,
+                        "stderr": res.stderr,
+                        "elapsed_ms": res.elapsed_ms,
+                        "tokens_used": res.tokens_used,
+                    }
 
         # ── Unknown host function — structured error, never silent ───────────
         else:
@@ -2144,6 +2222,9 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
         elif op == Op.RESULT:
             val = self.stack[-1] if self.stack else None
             self._result_message = str(val)
+        elif op == Op.POP:
+            if self.stack:
+                self.stack.pop()
         elif op == Op.MEMORY_STORE:
             key = self.stack.pop() if self.stack else "unknown"
             val = self.stack.pop() if self.stack else None

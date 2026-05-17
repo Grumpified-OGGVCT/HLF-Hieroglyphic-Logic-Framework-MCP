@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -25,6 +26,8 @@ from hlf_mcp.weekly_artifacts import (
     load_verified_weekly_artifacts,
     summarize_weekly_artifacts,
 )
+from hlf_mcp.persona_contract import load_persona_matrix
+from hlf_mcp.persona_runtime import load_persona_runtime_catalog
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _GOVERNANCE_DIR = _PACKAGE_DIR.parent / "governance"
@@ -4078,6 +4081,18 @@ def _build_operator_surfaces_report(ctx: object | None) -> dict[str, object]:
                 or "Latest quarantined HKS external compare contract is available through the packaged advisory surface."
             ),
         },
+        {
+            "surface_id": "persona_doctrine",
+            "title": "Persona Doctrine",
+            "surface_kind": "persona_doctrine",
+            "display_mode": "structured-status+markdown-report",
+            "runtime_backed": True,
+            "status": _persona_doctrine_status(),
+            "status_uri": "hlf://status/persona_doctrine",
+            "report_uri": "hlf://reports/persona_doctrine",
+            "explainer_uri": None,
+            "summary": _persona_doctrine_summary(),
+        },
     ]
 
     evidence_refs = _dedupe_evidence_refs(
@@ -4191,6 +4206,142 @@ def _render_operator_surfaces_markdown(ctx: object | None) -> str:
             f"| {str(entry.get('title') or 'unknown').replace('|', '/')} summary | {str(entry.get('summary') or '').replace('|', '/')} | - | - | - | - | - |"
         )
 
+    return "\n".join(lines) + "\n"
+
+
+def _persona_doctrine_status() -> str:
+    return "ok"
+
+
+def _persona_doctrine_summary() -> str:
+    return "Persona doctrine catalog and ownership matrix are available for operator review."
+
+
+def _build_persona_doctrine_report(ctx: object | None) -> dict[str, Any]:
+    matrix = load_persona_matrix()
+    catalog = load_persona_runtime_catalog()
+    personas: list[dict[str, Any]] = []
+    for name, entry in catalog.items():
+        personas.append({
+            "persona": name,
+            "lane": entry.get("lane", "bridge-true"),
+            "runtime_authority": entry.get("runtime_authority", False),
+            "internal_role": entry.get("internal_role", ""),
+        })
+    if not personas:
+        for name in sorted(matrix.get("personas", {}).keys()):
+            personas.append({
+                "persona": name,
+                "lane": str(matrix.get("lane", "bridge-true")),
+                "runtime_authority": False,
+                "internal_role": "",
+            })
+    persona_count = len(personas)
+    payload: dict[str, Any] = {
+        "lane": str(matrix.get("lane", "bridge-true")),
+        "persona_count": persona_count,
+        "personas": personas,
+        "authority_boundary": {
+            "live_packaged_runtime_authority": False,
+            "operator_promotion_required": True,
+        },
+    }
+    verification_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
+    payload["verification_hash"] = verification_hash
+    return payload
+
+
+def _render_persona_doctrine_status(ctx: object | None) -> str:
+    report = _build_persona_doctrine_report(ctx)
+    return json.dumps({
+        "status": _persona_doctrine_status(),
+        "persona_doctrine": report,
+    }, indent=2)
+
+
+def _render_persona_doctrine_markdown(ctx: object | None) -> str:
+    report = _build_persona_doctrine_report(ctx)
+    lines = [
+        "# Persona Doctrine Report",
+        "",
+        "## Persona Roles",
+        "",
+        f"- Lane: {report.get('lane', 'bridge-true')}",
+        f"- Persona count: {report.get('persona_count', 0)}",
+        f"- Verification hash: {report.get('verification_hash', '')}",
+        "",
+        "| Persona | Runtime Authority | Internal Role |",
+        "| --- | --- | --- |",
+    ]
+    for p in report.get("personas", []):
+        if isinstance(p, dict):
+            lines.append(
+                f"| {p.get('persona', '')} | {p.get('runtime_authority', False)} | {p.get('internal_role', '')} |"
+            )
+    lines.extend([
+        "",
+        "## Authority Boundary",
+        "",
+        f"- Live packaged runtime authority: {report.get('authority_boundary', {}).get('live_packaged_runtime_authority', False)}",
+        f"- Operator promotion required: {report.get('authority_boundary', {}).get('operator_promotion_required', True)}",
+        "",
+        "Status URI: hlf://status/persona_doctrine",
+    ])
+    return "\n".join(lines) + "\n"
+
+
+def _render_operator_proof_gallery_status(ctx: object | None) -> str:
+    examples = [
+        {
+            "example_id": "persona-gated-promotion",
+            "title": "Persona Gated Promotion",
+            "persona_role": "operator",
+        },
+        {
+            "example_id": "operator-audit-inspection",
+            "title": "Operator Audit Inspection",
+            "persona_role": "operator",
+        },
+        {
+            "example_id": "developer-verifier-roundtrip",
+            "title": "Developer Verifier Roundtrip",
+            "persona_role": "cove",
+        },
+    ]
+    return json.dumps({
+        "status": "ok",
+        "operator_proof_gallery": {
+            "examples": examples,
+        },
+    }, indent=2)
+
+
+def _render_memory_audit_chain_status(ctx: object | None) -> str:
+    return json.dumps({
+        "status": "ok",
+        "memory_audit_chain": {
+            "persona_contract_ref": {
+                "resource_uri": "hlf://status/persona_doctrine",
+                "operator_is_authoritative": True,
+            },
+        },
+    }, indent=2)
+
+
+def _render_gallery_markdown(ctx: object | None) -> str:
+    lines = [
+        "# Operator Proof Gallery",
+        "",
+        "## Persona Roles",
+        "",
+        "This gallery demonstrates persona-gated workflows and operator authority patterns.",
+        "",
+        "- persona-gated-promotion: Operator must approve promotion.",
+        "- operator-audit-inspection: Operator audits system state.",
+        "- developer-verifier-roundtrip: Cove verifies developer output.",
+        "",
+        "Status URI: hlf://status/persona_doctrine",
+    ]
     return "\n".join(lines) + "\n"
 
 

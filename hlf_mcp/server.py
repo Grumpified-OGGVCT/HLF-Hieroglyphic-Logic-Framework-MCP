@@ -37,6 +37,7 @@ from hlf_mcp.server_context import build_server_context, check_governance_manife
 from hlf_mcp.server_core import register_core_tools
 from hlf_mcp.server_feedback import register_feedback_tools
 from hlf_mcp.server_governance import register_governance_tools
+from hlf_mcp.server_handoff import register_handoff_tools
 from hlf_mcp.server_instinct import register_instinct_tools
 from hlf_mcp.server_instructions import build_server_instructions
 from hlf_mcp.server_memory import register_memory_tools
@@ -105,6 +106,7 @@ REGISTERED_TOOLS.update(register_native_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_workflow_benchmark_tools(mcp))
 REGISTERED_TOOLS.update(register_governance_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_feedback_tools(mcp))
+REGISTERED_TOOLS.update(register_handoff_tools(mcp, _ctx))
 
 
 @mcp.tool()

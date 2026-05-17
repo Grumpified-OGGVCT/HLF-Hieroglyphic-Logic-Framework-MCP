@@ -89,8 +89,8 @@ def register_handoff_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     ) -> dict[str, Any]:
         """Record a conformant JSON handoff event primitive with hashes and bounds."""
         parent_lineage_hash = ""
-        if parent_event_hash and hasattr(ctx, "session_handoff_events"):
-            parent = ctx.session_handoff_events.get(parent_event_hash)
+        if parent_event_hash and hasattr(ctx, "get_handoff_event"):
+            parent = ctx.get_handoff_event(parent_event_hash)
             if isinstance(parent, dict):
                 parent_lineage_hash = str(parent.get("lineage_hash") or "")
         semantic_drift = {}

@@ -317,6 +317,7 @@ class ServerContext:
     daemon_manager: DaemonManager
     intent_normalizer: IntentNormalizer = field(default_factory=IntentNormalizer)
     governance_events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=250))
+    handoff_events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=1000))
 
     def emit_governance_event(
         self,
@@ -396,6 +397,50 @@ class ServerContext:
             if effective_event_id and str(event.get("event_id") or "") == effective_event_id:
                 return dict(event)
         return None
+
+    def persist_handoff_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        """Store a handoff event and return it with persisted metadata."""
+        self.handoff_events.append(event)
+        return event
+
+    def list_handoff_events(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return recent handoff events, newest first."""
+        events = list(self.handoff_events)
+        events.reverse()
+        return events[:max(1, limit)]
+
+    def get_handoff_event(self, event_hash: str) -> dict[str, Any] | None:
+        """Retrieve a handoff event by its hash."""
+        for event in reversed(self.handoff_events):
+            if str(event.get("event_hash") or "") == event_hash:
+                return dict(event)
+        return None
+
+    def get_handoff_chain(self, event_hash: str | None = None) -> dict[str, Any] | None:
+        """Build a linear handoff chain from stored events, root to head."""
+        if not self.handoff_events:
+            return None
+        all_events = list(self.handoff_events)
+        event_by_hash = {str(e.get("event_hash") or ""): e for e in all_events}
+
+        # Walk backwards from head to root via parent_event_hash
+        ordered: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        current_hash = event_hash or str(all_events[-1].get("event_hash") or "")
+        while current_hash and current_hash not in seen:
+            seen.add(current_hash)
+            event = event_by_hash.get(current_hash)
+            if not event:
+                break
+            ordered.append(event)
+            current_hash = str(event.get("parent_event_hash") or "")
+        ordered.reverse()  # root to head
+
+        return {
+            "events": ordered,
+            "head_event_hash": ordered[-1].get("event_hash") if ordered else "",
+            "memory_freshness": {},
+        }
 
     def list_approval_requests(
         self,

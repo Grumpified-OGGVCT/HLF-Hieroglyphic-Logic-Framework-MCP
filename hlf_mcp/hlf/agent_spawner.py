@@ -68,22 +68,43 @@ class AsyncioBackend:
     """Run agents as asyncio coroutines. No real isolation."""
 
     _tasks: dict[str, asyncio.Task[Any]] = {}
+    _coros: dict[str, Any] = {}
 
     def spawn(self, agent_id: str, role: str, task: str, model: str = "", **kwargs: Any) -> SpawnHandle:
         handle = SpawnHandle(agent_id=agent_id, backend="asyncio", token=str(uuid.uuid4()))
         coro = self._run_agent(agent_id, role, task, handle)
-        self._tasks[agent_id] = asyncio.create_task(coro)
+        self._coros[agent_id] = coro
         return handle
 
     async def _run_agent(self, agent_id: str, role: str, task: str, handle: SpawnHandle) -> SpawnResult:
         # Simulate work
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
         return SpawnResult(agent_id=agent_id, status="complete", stdout=f"asyncio agent {agent_id} done")
 
     def wait(self, handle: SpawnHandle, timeout: float = 300.0) -> SpawnResult:
-        task = self._tasks.get(handle.agent_id)
-        if task is None:
-            return SpawnResult(agent_id=handle.agent_id, status="error", error="task not found")
+        coro = self._coros.pop(handle.agent_id, None)
+        if coro is None:
+            task = self._tasks.get(handle.agent_id)
+            if task is None:
+                return SpawnResult(agent_id=handle.agent_id, status="error", error="task not found")
+        else:
+            try:
+                loop = asyncio.get_running_loop()
+                task = loop.create_task(coro)
+                self._tasks[handle.agent_id] = task
+            except RuntimeError:
+                # No running event loop — create one
+                loop = asyncio.new_event_loop()
+                try:
+                    result = loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout))
+                    return result
+                except asyncio.TimeoutError:
+                    return SpawnResult(agent_id=handle.agent_id, status="timeout", error="timeout")
+                except Exception as exc:
+                    return SpawnResult(agent_id=handle.agent_id, status="error", error=str(exc))
+                finally:
+                    loop.close()
+
         try:
             loop = asyncio.get_event_loop()
             result = loop.run_until_complete(asyncio.wait_for(task, timeout=timeout))

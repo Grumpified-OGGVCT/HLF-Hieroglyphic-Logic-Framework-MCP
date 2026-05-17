@@ -41,6 +41,7 @@ class Op(IntEnum):
     AND = 0x30
     OR = 0x31
     NOT = 0x32
+    POP = 0x33
     JMP = 0x40
     JZ = 0x41
     JNZ = 0x42
@@ -274,6 +275,7 @@ _OP_HAS_OPERAND: dict[Op, bool] = {
     Op.SPEC_GATE: True,
     Op.SPEC_UPDATE: True,
     Op.SPEC_SEAL: True,
+    Op.POP: False,
     Op.HALT: False,
 }
 
@@ -308,6 +310,7 @@ _OP_DESC: dict[Op, str] = {
     Op.TAG: "Tag/label annotation",
     Op.INTENT: "Declare intent",
     Op.RESULT: "Push result value",
+    Op.POP: "Pop top of stack",
     Op.MEMORY_STORE: "Store TOS to RAG memory",
     Op.MEMORY_RECALL: "Recall from RAG memory by key",
     Op.SPEC_DEFINE: "Define Instinct spec",
@@ -355,8 +358,13 @@ class BytecodeCompiler:
         instructions: list[bytes] = []
 
         statements = ast.get("statements", [])
-        for stmt in statements:
+        total = len(statements)
+        for i, stmt in enumerate(statements):
             _emit_stmt(stmt, instructions, pool, pool.add)
+            # Discard unused return values from standalone calls so they
+            # don't leak onto the stack and become arguments for the next call.
+            if i < total - 1 and stmt.get("kind") in ("call_stmt", "tool_stmt"):
+                instructions.append(_instr(Op.POP))
 
         instructions.append(_instr(Op.HALT))
 
@@ -774,7 +782,10 @@ def _emit_arg(arg: dict[str, Any], instructions: list[bytes], add_const) -> None
         idx = add_const(arg.get("name", ""))
         instructions.append(_instr(Op.STORE, idx))
     elif kind in ("path_arg", "var_arg", "pos_arg"):
-        idx = add_const(str(arg.get("value", "")))
+        inner = arg.get("value", "")
+        if isinstance(inner, dict):
+            inner = inner.get("value", "")
+        idx = add_const(inner)
         instructions.append(_instr(Op.PUSH_CONST, idx))
 
 

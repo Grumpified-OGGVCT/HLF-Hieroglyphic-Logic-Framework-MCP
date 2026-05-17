@@ -75,6 +75,30 @@ _ALLOWED_NEXT: dict[str, list[str]] = {
     "merge": [],
 }
 
+# ── Task type → persona role mapping ─────────────────────────────────────────────
+_TASK_TYPE_TO_ROLE: dict[str, str] = {
+    "analyze": "strategist",
+    "deep_research": "strategist",
+    "run_command": "steward",
+    "deploy_prod": "steward",
+    "execute_plan": "steward",
+    "run_tests": "cove",
+    "run_lint": "cove",
+    "check_syntax": "cove",
+    "validate_imports": "cove",
+    "preflight": "cove",
+    "security_scan": "cove",
+    "create_file": "scribe",
+    "audit_log": "scribe",
+    "generate_docs": "herald",
+    "update_changelog": "herald",
+}
+
+
+def _task_type_to_role(task_type: str) -> str:
+    """Map a task type to its governing persona role."""
+    return _TASK_TYPE_TO_ROLE.get(task_type, "scribe")
+
 
 @dataclass(slots=True)
 class SDDRealignmentEvent:

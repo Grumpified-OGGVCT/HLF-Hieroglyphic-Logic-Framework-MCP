@@ -1,0 +1,226 @@
+# HLF Coordination: 10-Agent Task Management API
+# This file replaces per-agent prose instructions with structured declarations.
+# All agents read this file to understand their role, inputs, and constraints.
+
+## Interfaces (Contracts)
+
+interface SchemaOutput {
+  migrations: file("migrations/*.js")   // Knex migration files
+  schema_sql: file("schema.sql")        // Plain SQL reference
+  tables: list(string)                   // Table names created
+}
+
+interface ModelFactory {
+  create(data: object): Promise<object>
+  findById(id: int): Promise<object|null>
+  findAll(filters: object): Promise<object[]>
+  update(id: int, data: object): Promise<object|null>
+  delete(id: int): Promise<int>
+}
+
+interface AuthModule {
+  register(req, res, next): void
+  login(req, res, next): void
+  authenticate(req, res, next): void
+  refresh(req, res, next): void
+  optionalAuth(req, res, next): void
+  export_shape: { register, login, authenticate, refresh, optionalAuth }
+}
+
+interface ValidationResult {
+  valid: bool
+  errors: list(string)
+}
+
+interface RouteModule {
+  mount_path: string
+  methods: list(string)
+  auth_required: list(string)
+  export_shape: factory(models, auth, validation) -> Express.Router
+}
+
+interface ErrorModule {
+  errorHandler: middleware(err, req, res, next)
+  notFoundHandler: middleware(req, res, next)
+  setupErrorHandlers: procedure()
+  export_shape: { errorHandler, notFoundHandler, setupErrorHandlers }
+}
+
+interface TestSuite {
+  test_count: int
+  coverage: list(string)  // endpoint paths covered
+  mock_strategy: string   // in-memory | db | stub
+}
+
+## Agent Declarations
+
+agent SchemaDesigner {
+  role: "PostgreSQL schema and Knex migrations"
+  input: none
+  output: SchemaOutput
+  constraints: [SQL-VALID, FK-CONSTRAINTS, INDEXES-DEFINED]
+  tables: [users, projects, tasks, labels, task_labels, comments]
+}
+
+agent ValidationLayer {
+  role: "Input validation schemas"
+  input: none
+  output: {
+    user_validation: file("validation/user.js") -> ValidationResult
+    task_validation: file("validation/task.js") -> ValidationResult
+    project_validation: file("validation/project.js") -> ValidationResult
+  }
+  constraints: [PURE-JS, NO-DEPS, COMMONJS]
+}
+
+agent ModelBuilder {
+  role: "Knex.js model factories"
+  input: SchemaOutput
+  output: {
+    User: ModelFactory
+    Task: ModelFactory + { findByProject, findByAssignee, addLabel, removeLabel, getLabels, getComments }
+    Project: ModelFactory + { findByOwner }
+    Label: ModelFactory
+    Comment: ModelFactory + { findByTask }
+    index: file("models/index.js") -> (knex) -> { User, Task, Project, Label, Comment }
+  }
+  constraints: [FACTORY-PATTERN, KNEX-QUERY, COMMONJS, NULL-ON-MISSING]
+}
+
+agent AuthEngineer {
+  role: "JWT authentication middleware"
+  input: { User: ModelFactory }
+  output: {
+    auth: AuthModule
+    export_shape: factory(models) -> AuthModule
+  }
+  constraints: [JWT-SECRET-ENV, BCRYPTJS, REFRESH-TOKENS, COMMONJS]
+}
+
+agent TaskEndpoints {
+  role: "Task CRUD routes"
+  input: { Task: ModelFactory, auth: AuthModule, task_validation: ValidationResult }
+  output: {
+    router: RouteModule
+    mount_path: "/tasks"
+    endpoints: [GET /tasks, GET /tasks/:id, POST /tasks, PUT /tasks/:id, DELETE /tasks/:id, POST /tasks/:id/labels/:labelId, DELETE /tasks/:id/labels/:labelId, GET /tasks/:id/comments]
+  }
+  constraints: [RESTFUL, AUTH-GUARDED, VALIDATED, FACTORY-EXPORT]
+}
+
+agent ProjectEndpoints {
+  role: "Project CRUD routes"
+  input: { Project: ModelFactory, Task: ModelFactory, auth: AuthModule, project_validation: ValidationResult }
+  output: {
+    router: RouteModule
+    mount_path: "/projects"
+    endpoints: [GET /projects, GET /projects/:id, POST /projects, PUT /projects/:id, DELETE /projects/:id, GET /projects/:id/tasks]
+  }
+  constraints: [RESTFUL, AUTH-GUARDED, OWNERSHIP-CHECK, VALIDATED, FACTORY-EXPORT]
+}
+
+agent UserEndpoints {
+  role: "User management and auth routes"
+  input: { User: ModelFactory, Task: ModelFactory, auth: AuthModule, user_validation: ValidationResult }
+  output: {
+    router: RouteModule
+    mount_path: "/users"
+    endpoints: [GET /users/:id, GET /users/:id/tasks, PUT /users/:id, POST /auth/register, POST /auth/login, POST /auth/refresh]
+  }
+  constraints: [RESTFUL, AUTH-GUARDED, SELF-UPDATE-ONLY, FACTORY-EXPORT]
+}
+
+agent ErrorHandler {
+  role: "Centralized error handling"
+  input: none
+  output: {
+    error: ErrorModule
+    export_shape: factory() -> ErrorModule
+  }
+  constraints: [STATUS-MAPPING, STACK-TRACE-DEV-ONLY, UNHANDLED-REJECTION, COMMONJS]
+}
+
+agent IntegrationTester {
+  role: "Integration test suite"
+  input: {
+    TaskEndpoints: RouteModule,
+    ProjectEndpoints: RouteModule,
+    UserEndpoints: RouteModule,
+    AuthModule: AuthModule,
+    ErrorModule: ErrorModule
+  }
+  output: {
+    tests: file("tests/api.test.js")
+    suite: TestSuite
+    test_count: >= 15
+  }
+  constraints: [JEST, SUPERTEST, MOCK-MODELS, COVERS-ALL-ENDPOINTS]
+}
+
+agent ProjectAssembler {
+  role: "Server entry point and config"
+  input: {
+    models: file("models/index.js"),
+    auth: AuthModule,
+    error: ErrorModule,
+    validation: { user, task, project },
+    routes: [TaskEndpoints, ProjectEndpoints, UserEndpoints]
+  }
+  output: {
+    server: file("server.js")
+    package: file("package.json")
+    knex_config: file("knexfile.js")
+    env_template: file(".env.example")
+    gitignore: file(".gitignore")
+  }
+  constraints: [EXPRESS-APP, ROUTE-MOUNT, ERROR-LAST, COMMONJS]
+}
+
+## Effect Annotations
+
+effect SchemaDesigner -> [WRITE("migrations/001_initial_schema.js"), WRITE("schema.sql")]
+effect ValidationLayer -> [WRITE("validation/user.js"), WRITE("validation/task.js"), WRITE("validation/project.js")]
+effect ModelBuilder -> [READ("migrations/001_initial_schema.js"), READ("schema.sql"), WRITE("models/User.js"), WRITE("models/Task.js"), WRITE("models/Project.js"), WRITE("models/Label.js"), WRITE("models/Comment.js"), WRITE("models/index.js")]
+effect AuthEngineer -> [READ("models/User.js"), WRITE("middleware/auth.js")]
+effect TaskEndpoints -> [READ("models/Task.js"), READ("middleware/auth.js"), READ("validation/task.js"), WRITE("routes/tasks.js")]
+effect ProjectEndpoints -> [READ("models/Project.js"), READ("models/Task.js"), READ("middleware/auth.js"), READ("validation/project.js"), WRITE("routes/projects.js")]
+effect UserEndpoints -> [READ("models/User.js"), READ("models/Task.js"), READ("middleware/auth.js"), READ("validation/user.js"), WRITE("routes/users.js")]
+effect ErrorHandler -> [WRITE("middleware/error.js")]
+effect IntegrationTester -> [READ("routes/tasks.js"), READ("routes/projects.js"), READ("routes/users.js"), READ("middleware/auth.js"), READ("middleware/error.js"), READ("models/index.js"), WRITE("tests/api.test.js")]
+effect ProjectAssembler -> [READ("models/index.js"), READ("middleware/auth.js"), READ("middleware/error.js"), READ("validation/user.js"), READ("validation/task.js"), READ("validation/project.js"), READ("routes/tasks.js"), READ("routes/projects.js"), READ("routes/users.js"), WRITE("server.js"), WRITE("package.json"), WRITE("knexfile.js"), WRITE(".env.example"), WRITE(".gitignore")]
+
+## Execution DAG
+
+layer_1: [SchemaDesigner, ValidationLayer]  // No deps, parallel
+layer_2: [ModelBuilder]                       // After SchemaDesigner
+layer_3: [AuthEngineer]                       // After ModelBuilder
+layer_4: [TaskEndpoints, ProjectEndpoints, UserEndpoints]  // After ModelBuilder, AuthEngineer, ValidationLayer
+layer_5: [ErrorHandler]                       // No deps, can run parallel to layer 4
+layer_6: [IntegrationTester]                  // After all endpoints + ErrorHandler
+layer_7: [ProjectAssembler]                   // After everything
+
+## Constraints
+
+- COMMONJS: All files use `require` and `module.exports`
+- FACTORY-EXPORT: Models, auth, error modules export factory functions
+- NO-INSTALL: Do not run npm install
+- NULL-ON-MISSING: findById returns null, not throws, when record missing
+- EXPRESS-APP: server.js creates Express app, mounts routes, applies middleware
+- ERROR-LAST: Error handler middleware must be last in Express middleware stack
+- ROUTE-MOUNT: Routes mounted at their declared mount_path
+
+## Trace Config
+
+trace {
+  format: "swarm-trace.json"
+  include: [agent_id, timestamp, files_written, files_read, bytes_produced, status]
+  checkpoint: true
+}
+
+## Checkpoint Config
+
+checkpoint {
+  on: ["layer_complete", "agent_complete"]
+  rollback: true
+  max_retries: 2
+}

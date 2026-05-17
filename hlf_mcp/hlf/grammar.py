@@ -47,32 +47,40 @@ LBRACKET: "["
 
 _hlf_version: INT ("." INT)*
 
-?statement: glyph_stmt
-          | assign_stmt
-          | set_stmt
-          | if_block_stmt
-          | for_stmt
-           | parallel_stmt
-           | module_block_stmt
-           | func_block_stmt
-          | intent_stmt
-          | tool_stmt
-          | call_stmt
-          | return_stmt
-          | result_stmt
-          | log_stmt
-          | import_stmt
-          | memory_stmt
-          | recall_stmt
-          | spec_define_stmt
-          | spec_gate_stmt
-          | spec_update_stmt
-          | spec_seal_stmt
+statement: glyph_stmt
+         | assign_stmt
+         | set_stmt
+         | if_block_stmt
+         | for_stmt
+         | parallel_stmt
+         | module_block_stmt
+         | func_block_stmt
+         | intent_stmt
+         | tool_stmt
+         | call_stmt
+         | return_stmt
+         | result_stmt
+         | log_stmt
+         | import_stmt
+         | memory_stmt
+         | recall_stmt
+         | spec_define_stmt
+         | spec_gate_stmt
+         | spec_update_stmt
+         | spec_seal_stmt
+         | pipe_stmt
+         | template_stmt
 
 // ── Glyph statement ───────────────────────────────────────────────────────────
-glyph_stmt: GLYPH tag? arg_list?
+glyph_stmt: GLYPH tag? arg_list? validate_annot?
 
 GLYPH: /[ΔЖ⨝⌘∇⩕⊎⌂Σ]/
+
+// ── Pipe operator (statement chaining) ────────────────────────────────────────
+PIPE: "→"
+pipe_stmt: glyph_stmt (PIPE statement)+
+         | tool_stmt (PIPE statement)+
+         | call_stmt (PIPE statement)+
 
 tag: LBRACKET TAG_NAME RBRACKET
 TAG_NAME: /[A-Z][A-Z0-9_]*/
@@ -88,6 +96,11 @@ value: ESCAPED_STRING    -> str_val
      | VAR_REF           -> var_ref_val
      | PATH              -> path_val
      | IDENT             -> ident_val
+
+// ── @validate inline annotation ───────────────────────────────────────────────
+KW_VALIDATE: /@validate/
+validate_annot: KW_VALIDATE "(" validate_arg ("," validate_arg)* ")"
+validate_arg: IDENT "=" value -> kv_arg
 
 // ── Declaration statements ────────────────────────────────────────────────────
 // Immutable binding — SET name = value
@@ -120,8 +133,8 @@ param_item: PARAM_IDENT (":" PARAM_IDENT)?   -> typed_param
 intent_stmt: KW_INTENT IDENT arg_list? block
 
 // ── Explicit tool / call ──────────────────────────────────────────────────────
-tool_stmt: KW_TOOL   IDENT arg_list?
-call_stmt: KW_CALL   IDENT arg_list?
+tool_stmt: KW_TOOL   IDENT arg_list? validate_annot?
+call_stmt: KW_CALL   IDENT arg_list? validate_annot?
 
 // ── Result / Log / Return ────────────────────────────────────────────────────
 result_stmt: KW_RESULT expr (expr)?
@@ -134,6 +147,9 @@ import_stmt: KW_IMPORT PATH
 // ── Memory ───────────────────────────────────────────────────────────────────
 memory_stmt: KW_MEMORY LBRACKET IDENT RBRACKET arg_list?
 recall_stmt: KW_RECALL LBRACKET IDENT RBRACKET
+
+// ── Template (reusable pattern blocks) ───────────────────────────────────────
+template_stmt: KW_TEMPLATE IDENT block
 
 // ── Instinct Spec Lifecycle ──────────────────────────────────────────────────
 spec_define_stmt: KW_SPEC_DEFINE tag? arg_list?
@@ -205,6 +221,7 @@ KW_SPEC_SEAL.10:   "SPEC_SEAL"
 KW_AND.10:         "AND"
 KW_OR.10:          "OR"
 KW_NOT.10:         "NOT"
+KW_TEMPLATE.10:    "TEMPLATE"
 
 // ── Terminals ─────────────────────────────────────────────────────────────────
 CMP:     ">=" | "<=" | "!=" | "==" | ">" | "<"

@@ -117,6 +117,12 @@ def _human(node: dict[str, Any]) -> str:
     if kind == "return_stmt":
         v = node.get("value")
         return f"return {_val_str(v)}" if v else "return"
+    if kind == "pipe_stmt":
+        stages = len(node.get("stages", []))
+        return f"pipe chain of {stages} stage(s)"
+    if kind == "template_stmt":
+        body_count = len(node.get("body", {}).get("statements", []))
+        return f"template {node.get('name')} with {body_count} stmt(s)"
     return kind
 
 
@@ -158,6 +164,10 @@ class HLFTransformer(Transformer):
 
     # ── Top level ────────────────────────────────────────────────────────────
 
+    def statement(self, stmt):
+        """Pass-through for non-inline statement rule."""
+        return stmt
+
     def start(self, header, *statements):
         stmts = [s for s in statements if s is not None]
         n = _node(
@@ -179,14 +189,19 @@ class HLFTransformer(Transformer):
     def glyph_stmt(self, glyph, *rest):
         tag = None
         args = []
+        validates = []
         for item in rest:
             if isinstance(item, dict) and item.get("kind") == "_tag":
                 tag = item["name"]
+            elif isinstance(item, dict) and item.get("kind") == "validate_annot":
+                validates = item["validations"]
             elif isinstance(item, list):
                 args.extend(item)
             elif isinstance(item, dict):
                 args.append(item)
         n = _node("glyph_stmt", glyph=str(glyph), tag=tag, arguments=args)
+        if validates:
+            n["validations"] = validates
         n["human_readable"] = _human(n)
         return n
 
@@ -305,19 +320,56 @@ class HLFTransformer(Transformer):
 
     def tool_stmt(self, _kw, name, *rest):
         args = []
+        validates = []
         for item in rest:
-            if isinstance(item, list):
+            if isinstance(item, dict) and item.get("kind") == "validate_annot":
+                validates = item["validations"]
+            elif isinstance(item, list):
                 args.extend(item)
         n = _node("tool_stmt", name=str(name), arguments=args)
+        if validates:
+            n["validations"] = validates
         n["human_readable"] = _human(n)
         return n
 
     def call_stmt(self, _kw, name, *rest):
         args = []
+        validates = []
         for item in rest:
-            if isinstance(item, list):
+            if isinstance(item, dict) and item.get("kind") == "validate_annot":
+                validates = item["validations"]
+            elif isinstance(item, list):
                 args.extend(item)
         n = _node("call_stmt", name=str(name), arguments=args)
+        if validates:
+            n["validations"] = validates
+        n["human_readable"] = _human(n)
+        return n
+
+    # ── Pipe (statement chaining) ──────────────────────────────────────────
+
+    def pipe_stmt(self, first, *rest):
+        """Flatten pipe chain into sequential stages with implicit data passing."""
+        stages = [first]
+        for item in rest:
+            if not isinstance(item, Token):
+                stages.append(item)
+        n = _node("pipe_stmt", stages=stages)
+        n["human_readable"] = _human(n)
+        return n
+
+    # ── @validate inline annotation ────────────────────────────────────────
+
+    def validate_annot(self, _at_val, *args):
+        """Collect @validate(k=v, ...) args as validation list."""
+        # args includes the kv_arg dicts (unnamed terminals filtered)
+        validations = [a for a in args if isinstance(a, dict)]
+        return _node("validate_annot", validations=validations)
+
+    # ── Template ───────────────────────────────────────────────────────────
+
+    def template_stmt(self, _kw, name, body):
+        n = _node("template_stmt", name=str(name), body=body)
         n["human_readable"] = _human(n)
         return n
 
@@ -509,6 +561,12 @@ def _pass0_normalize(source: str) -> tuple[str, list[tuple[int, str, str]]]:
 
     normalized = _ALIAS_PATTERN.sub(_sub_alias, normalized)
 
+    # Step 0b2: ASCII pipe alias |> → →
+    _pipe_found = normalized.count("|>")
+    if _pipe_found:
+        normalized = normalized.replace("|>", "→")
+        replacements.append((0, "|>", "→ (pipe operator)"))
+
     # Step 0c: char-level homoglyph substitution.
     result = []
     for i, char in enumerate(normalized):
@@ -645,6 +703,7 @@ class HLFCompiler:
         )
         self._transformer = HLFTransformer()
         self.strict_align = strict_align
+        self._template_registry: dict[str, dict] = {}
 
     def compile(self, source: str) -> dict[str, Any]:
         """Full multi-pass compilation.
@@ -656,10 +715,16 @@ class HLFCompiler:
         if not source or not source.strip():
             raise CompileError("Empty source")
 
+        # Reset per-compile state
+        self._template_registry.clear()
+
         # Cache check: skip all passes for identical source.
         _src_key = hashlib.sha256(source.strip().encode()).hexdigest()
         if _src_key in _AST_CACHE:
             return _AST_CACHE[_src_key]
+
+        # Reset per-compile state
+        self._template_registry.clear()
 
         # Pass 0: Normalize
         normalized, norm_changes = _pass0_normalize(source.strip())
@@ -678,6 +743,20 @@ class HLFCompiler:
             raise CompileError(str(exc)) from exc
 
         stmts = ast.get("statements", [])
+
+        # ── Post-parse expansions ──────────────────────────────────────────
+        # 1. Extract template definitions into registry
+        stmts = self._extract_templates(stmts)
+
+        # 2. Expand pipe chains into flat sequential statements
+        stmts = self._expand_pipes(stmts)
+
+        # 3. Expand @validate annotations into ENFORCE check statements
+        stmts = self._expand_validates(stmts)
+
+        # 4. Expand template references (ref="name") by inlining template bodies
+        stmts = self._expand_template_refs(stmts)
+        ast["statements"] = stmts
 
         # Pass 2: Collect env
         env = _pass1_collect_env(stmts)
@@ -741,6 +820,91 @@ class HLFCompiler:
         if len(_AST_CACHE) >= _AST_CACHE_MAX:
             _AST_CACHE.pop(next(iter(_AST_CACHE)))
         _AST_CACHE[_src_key] = result
+        return result
+
+    # ── Post-parse expansion passes ──────────────────────────────────────────
+
+    def _extract_templates(self, stmts: list[dict]) -> list[dict]:
+        """Extract template_stmt nodes into registry, return remaining statements."""
+        remaining = []
+        for stmt in stmts:
+            if stmt.get("kind") == "template_stmt":
+                name = stmt["name"]
+                if name in self._template_registry:
+                    raise CompileError(f"Duplicate template definition: '{name}'")
+                self._template_registry[name] = stmt["body"]
+            else:
+                remaining.append(stmt)
+        return remaining
+
+    def _expand_pipes(self, stmts: list[dict]) -> list[dict]:
+        """Flatten pipe_stmt nodes into sequential statements (recursively)."""
+        result = []
+        for stmt in stmts:
+            if stmt.get("kind") == "pipe_stmt":
+                stages = stmt.get("stages", [])
+                for i, stage in enumerate(stages):
+                    if stage.get("kind") == "pipe_stmt":
+                        # Recursively expand nested pipe chains
+                        result.extend(self._expand_pipes([stage]))
+                    else:
+                        stage = dict(stage)  # shallow copy
+                        if i > 0:
+                            stage.setdefault("_pipe_context", {"from_stage": i - 1})
+                        result.append(stage)
+            else:
+                result.append(stmt)
+        return result
+
+    def _expand_validates(self, stmts: list[dict]) -> list[dict]:
+        """Expand @validate annotations into trailing ENFORCE check statements."""
+        result = []
+        for stmt in stmts:
+            result.append(stmt)
+            validations = stmt.get("validations", [])
+            if validations:
+                # Remove validations from the original stmt (they've been consumed)
+                stmt.pop("validations", None)
+                for v in validations:
+                    name = v.get("name", "check")
+                    val = v.get("value", {})
+                    val_str = val.get("value", "") if isinstance(val, dict) else str(val)
+                    enforce = _node(
+                        "glyph_stmt",
+                        glyph="Ж",
+                        tag="ENFORCE",
+                        arguments=[
+                            _node("kv_arg", name="check", value=_node("value", type="string", value=str(name))),
+                            _node("kv_arg", name="value", value=_node("value", type="string", value=str(val_str))),
+                        ],
+                    )
+                    enforce["human_readable"] = _human(enforce)
+                    result.append(enforce)
+        return result
+
+    def _expand_template_refs(self, stmts: list[dict]) -> list[dict]:
+        """Expand ref='template_name' glyph_stmt args by inlining template body."""
+        result = []
+        for stmt in stmts:
+            if stmt.get("kind") == "glyph_stmt":
+                args = stmt.get("arguments", [])
+                ref_arg = next(
+                    (a for a in args if a.get("kind") == "kv_arg" and a.get("name") == "ref"),
+                    None,
+                )
+                if ref_arg:
+                    template_name = ref_arg["value"].get("value", "")
+                    if template_name not in self._template_registry:
+                        raise CompileError(f"Undefined template reference: '{template_name}'")
+                    # Remove ref arg from statement
+                    stmt["arguments"] = [a for a in args if a is not ref_arg]
+                    # Emit the referencing statement first, then inline the template body
+                    result.append(stmt)
+                    body = self._template_registry[template_name]
+                    for body_stmt in body.get("statements", []):
+                        result.append(dict(body_stmt))  # shallow copy
+                    continue
+            result.append(stmt)
         return result
 
     def validate(self, source: str) -> dict[str, Any]:

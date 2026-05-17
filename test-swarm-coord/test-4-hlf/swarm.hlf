@@ -1,0 +1,356 @@
+# HLF Coordination: 20-Agent E-Commerce Marketplace
+# Tests HLF amortization at the largest agent count attempted.
+# All agents read this file to understand their role, inputs, and constraints.
+
+## Interfaces (Contracts)
+
+interface SchemaOutput {
+  migrations: list(file("migrations/*.js"))
+  schema_sql: file("schema.sql")
+  tables: list(string)
+}
+
+interface ServiceModule {
+  export_shape: factory(knex, helpers) -> { crud, search, validate, helpers }
+}
+
+interface AuthModule {
+  register(req, res, next): void
+  login(req, res, next): void
+  logout(req, res, next): void
+  refresh(req, res, next): void
+  verify(token): object
+  authenticate: middleware(req, res, next)
+  optionalAuth: middleware(req, res, next)
+  requireRole(roles): middleware(req, res, next)
+  export_shape: factory(knex) -> AuthModule
+}
+
+interface RouteModule {
+  mount_path: string
+  methods: list(string)
+  auth_required: list(string)
+  export_shape: factory(services, auth, middleware) -> Express.Router
+}
+
+interface MiddlewareModule {
+  export_shape: factory() -> MiddlewareModule
+}
+
+interface ValidationResult {
+  valid: bool
+  errors: list(string)
+}
+
+interface DevOpsOutput {
+  server: file("server.js")
+  package: file("package.json")
+  knex_config: file("knexfile.js")
+  env_template: file(".env.example")
+  gitignore: file(".gitignore")
+}
+
+interface TestSuite {
+  test_count: int
+  coverage: list(string)
+  mock_strategy: string
+}
+
+## Agent Declarations
+
+agent SchemaDesigner {
+  role: "PostgreSQL schema for multi-vendor marketplace"
+  input: none
+  output: SchemaOutput
+  tables: [users, vendors, customers, addresses, categories, products, product_variants, inventory, carts, cart_items, coupons, coupon_products, orders, order_items, payments, shipments, reviews, notifications]
+  constraints: [SQL-VALID, FK-CONSTRAINTS, INDEXES-DEFINED, COMMONJS]
+}
+
+agent ConfigEngineer {
+  role: "Project configuration and package manifest"
+  input: none
+  output: {
+    package: file("package.json")
+    knex_config: file("knexfile.js")
+    env_template: file(".env.example")
+    gitignore: file(".gitignore")
+  }
+  constraints: [NODE-18+, PG-DB, JWT-SECRET-ENV, COMMONJS]
+}
+
+agent MiddlewareEngineer {
+  role: "Base middleware stack"
+  input: none
+  output: {
+    error: file("middleware/error.js") -> MiddlewareModule
+    logger: file("middleware/logger.js") -> MiddlewareModule
+    validate: file("middleware/validate.js") -> (schema) -> ValidationResult
+    rateLimit: file("middleware/rateLimit.js") -> MiddlewareModule
+  }
+  constraints: [EXPRESS-MIDDLEWARE, JSON-ERRORS, COMMONJS]
+}
+
+agent MigrationWriter {
+  role: "Knex migrations with indexes and constraints"
+  input: SchemaOutput
+  output: {
+    migrations: list(file("migrations/*.js"))
+  }
+  constraints: [KNEX-FORMAT, INDEXES-MATCH-SCHEMA, COMMONJS]
+}
+
+agent AuthService {
+  role: "JWT authentication and role-based auth"
+  input: SchemaOutput
+  output: {
+    auth: AuthModule
+    route: file("routes/auth.js") -> RouteModule
+    middleware: file("middleware/auth.js") -> AuthModule
+  }
+  constraints: [JWT-SECRET-ENV, BCRYPTJS, REFRESH-TOKENS, ROLE-AWARE, COMMONJS]
+}
+
+agent VendorService {
+  role: "Vendor CRUD and approval workflow"
+  input: SchemaOutput
+  output: {
+    service: file("services/vendorService.js") -> ServiceModule
+    route: file("routes/vendors.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, SLUG-GENERATION, NULL-ON-MISSING]
+}
+
+agent CustomerService {
+  role: "Customer profiles and address book"
+  input: SchemaOutput
+  output: {
+    service: file("services/customerService.js") -> ServiceModule
+    route: file("routes/customers.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, NULL-ON-MISSING]
+}
+
+agent ProductService {
+  role: "Product catalog with categories and variants"
+  input: SchemaOutput
+  output: {
+    service: file("services/productService.js") -> ServiceModule
+    product_route: file("routes/products.js") -> RouteModule
+    category_route: file("routes/categories.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, SLUG-GENERATION, VARIANT-SUPPORT, NULL-ON-MISSING]
+}
+
+agent CartService {
+  role: "Shopping cart logic"
+  input: SchemaOutput
+  output: {
+    service: file("services/cartService.js") -> ServiceModule
+    route: file("routes/carts.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, SESSION-AWARE, NULL-ON-MISSING]
+}
+
+agent InventoryService {
+  role: "Stock tracking and reservations"
+  input: SchemaOutput
+  output: {
+    service: file("services/inventoryService.js") -> ServiceModule
+    route: file("routes/inventory.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, RESERVATION-SUPPORT, NULL-ON-MISSING]
+}
+
+agent CouponService {
+  role: "Discount codes and promotions"
+  input: SchemaOutput
+  output: {
+    service: file("services/couponService.js") -> ServiceModule
+    route: file("routes/coupons.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, EXPIRY-CHECK, USAGE-LIMIT, NULL-ON-MISSING]
+}
+
+agent SearchService {
+  role: "Full-text product search with filters and facets"
+  input: SchemaOutput
+  output: {
+    service: file("services/searchService.js") -> ServiceModule
+    route: file("routes/search.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, FULL-TEXT, FACETS, PAGINATION, NULL-ON-MISSING]
+}
+
+agent OrderService {
+  role: "Order lifecycle management"
+  input: SchemaOutput
+  output: {
+    service: file("services/orderService.js") -> ServiceModule
+    route: file("routes/orders.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, STATUS-FINITE-STATE-MACHINE, NULL-ON-MISSING]
+}
+
+agent PaymentService {
+  role: "Payment processing and refunds"
+  input: SchemaOutput
+  output: {
+    service: file("services/paymentService.js") -> ServiceModule
+    route: file("routes/payments.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, MOCK-PROCESSOR, REFUND-SUPPORT, NULL-ON-MISSING]
+}
+
+agent ShippingService {
+  role: "Shipping rates and tracking"
+  input: SchemaOutput
+  output: {
+    service: file("services/shippingService.js") -> ServiceModule
+    route: file("routes/shipping.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, MOCK-CARRIERS, TRACKING, NULL-ON-MISSING]
+}
+
+agent ReviewService {
+  role: "Ratings, reviews, and moderation"
+  input: SchemaOutput
+  output: {
+    service: file("services/reviewService.js") -> ServiceModule
+    route: file("routes/reviews.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, PURCHASE-VERIFICATION, MODERATION, NULL-ON-MISSING]
+}
+
+agent NotificationService {
+  role: "User notifications"
+  input: SchemaOutput
+  output: {
+    service: file("services/notificationService.js") -> ServiceModule
+    route: file("routes/notifications.js") -> RouteModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, READ-TRACKING, NULL-ON-MISSING]
+}
+
+agent AdminDashboardService {
+  role: "Admin analytics and moderation tools"
+  input: {
+    schema: SchemaOutput,
+    auth: AuthModule
+  }
+  output: {
+    service: file("services/adminService.js") -> ServiceModule
+    route: file("routes/admin.js") -> RouteModule
+    permissions: file("middleware/permissions.js") -> MiddlewareModule
+  }
+  constraints: [FACTORY-EXPORT, COMMONJS, ADMIN-ONLY, ANALYTICS, NULL-ON-MISSING]
+}
+
+agent DevOpsAssembler {
+  role: "Server entry point and route wiring"
+  input: {
+    routes: list(RouteModule),
+    auth: AuthModule,
+    middleware: MiddlewareModule,
+    config: DevOpsOutput
+  }
+  output: {
+    server: file("server.js")
+  }
+  constraints: [EXPRESS-APP, ROUTE-MOUNT, ERROR-LAST, COMMONJS]
+}
+
+agent IntegrationTester {
+  role: "End-to-end integration tests"
+  input: {
+    routes: list(RouteModule),
+    auth: AuthModule,
+    services: list(ServiceModule)
+  }
+  output: {
+    tests: file("tests/marketplace.test.js")
+    suite: TestSuite
+    test_count: >= 20
+  }
+  constraints: [JEST, SUPERTEST, MOCK-MODELS, COVERS-ALL-ENDPOINTS, COMMONJS]
+}
+
+## Effect Annotations
+
+effect SchemaDesigner -> [WRITE("migrations/001_initial_schema.js"), WRITE("schema.sql")]
+effect ConfigEngineer -> [WRITE("package.json"), WRITE("knexfile.js"), WRITE(".env.example"), WRITE(".gitignore")]
+effect MiddlewareEngineer -> [WRITE("middleware/error.js"), WRITE("middleware/logger.js"), WRITE("middleware/validate.js"), WRITE("middleware/rateLimit.js")]
+effect MigrationWriter -> [READ("schema.sql"), READ("migrations/001_initial_schema.js"), WRITE("migrations/002_indexes.js"), WRITE("migrations/003_constraints.js")]
+effect AuthService -> [READ("schema.sql"), WRITE("services/authService.js"), WRITE("middleware/auth.js"), WRITE("routes/auth.js")]
+effect VendorService -> [READ("schema.sql"), WRITE("services/vendorService.js"), WRITE("routes/vendors.js")]
+effect CustomerService -> [READ("schema.sql"), WRITE("services/customerService.js"), WRITE("routes/customers.js")]
+effect ProductService -> [READ("schema.sql"), WRITE("services/productService.js"), WRITE("routes/products.js"), WRITE("routes/categories.js")]
+effect CartService -> [READ("schema.sql"), WRITE("services/cartService.js"), WRITE("routes/carts.js")]
+effect InventoryService -> [READ("schema.sql"), WRITE("services/inventoryService.js"), WRITE("routes/inventory.js")]
+effect CouponService -> [READ("schema.sql"), WRITE("services/couponService.js"), WRITE("routes/coupons.js")]
+effect SearchService -> [READ("schema.sql"), WRITE("services/searchService.js"), WRITE("routes/search.js")]
+effect OrderService -> [READ("schema.sql"), WRITE("services/orderService.js"), WRITE("routes/orders.js")]
+effect PaymentService -> [READ("schema.sql"), WRITE("services/paymentService.js"), WRITE("routes/payments.js")]
+effect ShippingService -> [READ("schema.sql"), WRITE("services/shippingService.js"), WRITE("routes/shipping.js")]
+effect ReviewService -> [READ("schema.sql"), WRITE("services/reviewService.js"), WRITE("routes/reviews.js")]
+effect NotificationService -> [READ("schema.sql"), WRITE("services/notificationService.js"), WRITE("routes/notifications.js")]
+effect AdminDashboardService -> [READ("schema.sql"), READ("services/vendorService.js"), READ("services/productService.js"), READ("services/orderService.js"), READ("services/reviewService.js"), READ("services/inventoryService.js"), WRITE("services/adminService.js"), WRITE("routes/admin.js"), WRITE("middleware/permissions.js")]
+effect DevOpsAssembler -> [READ(all_routes), READ(all_middleware), READ("package.json"), WRITE("server.js")]
+effect IntegrationTester -> [READ("server.js"), READ(all_routes), READ(all_services), READ("middleware/auth.js"), READ("middleware/error.js"), WRITE("tests/marketplace.test.js")]
+
+## Execution DAG
+
+layer_1: [SchemaDesigner, ConfigEngineer, MiddlewareEngineer]
+layer_2: [MigrationWriter, AuthService, VendorService, CustomerService]
+layer_3: [ProductService, CartService, InventoryService, CouponService, SearchService]
+layer_4: [OrderService, PaymentService, ShippingService, ReviewService, NotificationService]
+layer_5: [AdminDashboardService]
+layer_6: [DevOpsAssembler]
+layer_7: [IntegrationTester]
+
+## Constraints
+
+- COMMONJS: All files use `require` and `module.exports`
+- FACTORY-EXPORT: Services and routes export factory functions
+- NULL-ON-MISSING: findById/findBySlug returns null when record missing
+- EXPRESS-APP: server.js creates Express app with route mounting
+- ERROR-LAST: Error handler middleware must be last in Express middleware stack
+- ROUTE-MOUNT: Routes mounted at their declared mount_path
+- NO-INSTALL: Do not run npm install
+- SLUG-GENERATION: Vendor, product, category names generate URL-safe slugs
+- VARIANT-SUPPORT: Products support multiple variants (size, color, etc.)
+- SESSION-AWARE: Cart supports both authenticated customers and guest sessions
+- RESERVATION-SUPPORT: Inventory tracks both available and reserved quantities
+- EXPIRY-CHECK: Coupons validate expiration date before application
+- USAGE-LIMIT: Coupons enforce max_uses and used_count
+- FULL-TEXT: Search uses PostgreSQL tsvector or equivalent pattern
+- FACETS: Search returns category and price range aggregations
+- PAGINATION: All list endpoints support page/limit params
+- STATUS-FINITE-STATE-MACHINE: Orders enforce valid status transitions
+- MOCK-PROCESSOR: Payment processor is a mock/stub (no real charges)
+- REFUND-SUPPORT: Payments support partial and full refunds
+- MOCK-CARRIERS: Shipping carriers are mock (no real API calls)
+- TRACKING: Shipments have tracking numbers and status history
+- PURCHASE-VERIFICATION: Reviews require verified purchase
+- MODERATION: Reviews have pending/approved/rejected status
+- READ-TRACKING: Notifications track read/unread state
+- ADMIN-ONLY: Admin routes require admin role
+- ANALYTICS: Admin service provides aggregated metrics
+- JEST: Tests use Jest test runner
+- SUPERTEST: Tests use supertest for HTTP assertions
+- COVERS-ALL-ENDPOINTS: Tests cover every declared route module
+
+## Trace Config
+
+trace {
+  format: "swarm-trace.json"
+  include: [agent_id, timestamp, files_written, files_read, bytes_produced, status, layer]
+  checkpoint: true
+}
+
+## Checkpoint Config
+
+checkpoint {
+  on: ["layer_complete", "agent_complete"]
+  rollback: true
+  max_retries: 2
+}

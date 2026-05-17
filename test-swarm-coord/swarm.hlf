@@ -1,0 +1,115 @@
+-- HLF Swarm Coordination Program
+-- Task: Build Node.js TaskQueue + Worker module
+-- 3 agents, explicit interfaces, no chat coordination
+
+program TaskQueueModule {
+  metadata {
+    name: "task-queue-module"
+    version: "1.0.0"
+    agents: 3
+    gas_total: 3000
+  }
+
+  -- Interface contracts (SSOT for coordination)
+  interface TaskQueue {
+    methods: [enqueue, dequeue, peek, size]
+    enqueue(task: { id: string, data: any, priority: number }): void
+    dequeue(): Task | undefined
+    peek(): Task | undefined
+    size(): number
+    invariant: "higher priority dequeued first; FIFO tie-break"
+  }
+
+  interface Worker {
+    constructor(queue: TaskQueue, options: { concurrency: number, retryCount: number })
+    methods: [start, stop, on]
+    start(): void
+    stop(): Promise<void>
+    on(event: EventName, handler: Function): void
+    events: [task_start, task_complete, task_error, started, stopped]
+    invariant: "concurrency limit enforced; retries up to retryCount"
+  }
+
+  interface Task {
+    fields: [id: string, data: any, priority: number]
+    constraint: "id required; priority is number"
+  }
+
+  -- Agent declarations
+  agent QueueBuilder {
+    role: IMPLEMENT
+    scope: ["src/queue.js"]
+    implements: TaskQueue
+    effect: WRITE_FILE
+    gas: 800
+    outputs: {
+      file: "src/queue.js"
+      exports: "TaskQueue class"
+      algorithm: "binary max-heap with sequence counter for stable FIFO"
+    }
+  }
+
+  agent WorkerBuilder {
+    role: IMPLEMENT
+    scope: ["src/worker.js"]
+    implements: Worker
+    effect: WRITE_FILE
+    gas: 900
+    depends_on: [QueueBuilder]
+    inputs: {
+      queue_interface: TaskQueue
+    }
+    outputs: {
+      file: "src/worker.js"
+      exports: "Worker class"
+      pattern: "polling loop with in-flight set and WeakMap retry tracking"
+    }
+  }
+
+  agent TestBuilder {
+    role: VERIFY
+    scope: ["src/index.js", "tests/queue.test.js", "tests/worker.test.js"]
+    effect: [WRITE_FILE, EXECUTE]
+    gas: 700
+    depends_on: [QueueBuilder, WorkerBuilder]
+    inputs: {
+      queue_interface: TaskQueue
+      worker_interface: Worker
+    }
+    outputs: {
+      index: "re-exports TaskQueue and Worker"
+      queue_tests: "enqueue, dequeue, peek, size, priority, FIFO tie-break, empty edge cases"
+      worker_tests: "constructor, start, stop, events, concurrency, retry, no auto-start"
+    }
+    constraint: TestMustPass {
+      rule: "node tests/queue.test.js && node tests/worker.test.js must exit 0"
+      recovery: "Report failure, halt, emit TEST_FAILURE signal"
+    }
+  }
+
+  -- No PLAN.md needed — interfaces ARE the plan
+  -- No "notes for other agents" — declarations are SSOT
+
+  effect LogFileChanges {
+    trigger: WRITE_FILE
+    action: append_to_log
+    format: "[timestamp] AGENT:agent_name FILE:path CHECKSUM:sha256"
+  }
+
+  effect ValidateExports {
+    trigger: WRITE_FILE
+    action: verify_exports
+    rule: "File must export classes matching interface declarations"
+  }
+
+  trace {
+    level: FULL
+    output: "swarm-trace.json"
+    fields: [agent_name, interface, file_path, gas_used, checksum]
+  }
+
+  checkpoint {
+    frequency: PER_AGENT
+    storage: "./.hlf/checkpoints/"
+  }
+}

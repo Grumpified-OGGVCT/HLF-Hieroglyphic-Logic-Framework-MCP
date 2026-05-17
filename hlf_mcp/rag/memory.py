@@ -1032,6 +1032,58 @@ def _build_query_retrieval_contract(
     }
 
 
+def _verify_evidence_ref_policy(
+    ref: dict[str, Any],
+    purpose_policy: dict[str, Any],
+) -> bool:
+    """Re-verify an evidence ref against the purpose policy (defense-in-depth).
+
+    This catches edge cases where facts pass the primary query-policy filter
+    but should still be excluded under stricter governance requirements.
+    """
+    if purpose_policy.get("require_trusted") and not bool(ref.get("trusted_for_governance", False)):
+        return False
+    if purpose_policy.get("require_source_lineage") and not bool(ref.get("source_lineage_present", False)):
+        return False
+    if purpose_policy.get("require_content_hash_valid", True) and ref.get("content_hash_valid") is False:
+        return False
+    if purpose_policy.get("require_graph_linked") and not bool(ref.get("graph_score")):
+        return False
+    min_rank = float(purpose_policy.get("min_rank_score") or 0.0)
+    if min_rank > 0.0 and float(ref.get("rank_score") or 0.0) < min_rank:
+        return False
+    return True
+
+
+def _extract_agent_id(fact: dict[str, Any]) -> str | None:
+    """Extract agent_id from fact metadata if present."""
+    metadata = fact.get("metadata") if isinstance(fact.get("metadata"), dict) else {}
+    agent_id = metadata.get("agent_id") or metadata.get("agentId")
+    if agent_id:
+        return str(agent_id)
+    # Also check in governed_evidence sub-dict
+    governed = metadata.get("governed_evidence") if isinstance(metadata.get("governed_evidence"), dict) else {}
+    agent_id = governed.get("agent_id") or governed.get("agentId")
+    return str(agent_id) if agent_id else None
+
+
+def _ref_matches_agent_id(ref: dict[str, Any], agent_id: str) -> bool:
+    """Check if an evidence ref's metadata matches the given agent_id."""
+    fact_id = ref.get("fact_id")
+    if not fact_id or not agent_id:
+        return True  # Can't verify without fact_id; err on side of inclusion
+    # The ref may not carry full metadata, so we can't always verify.
+    # If the ref has a metadata field, check it.
+    ref_metadata = ref.get("metadata") if isinstance(ref.get("metadata"), dict) else {}
+    if ref_metadata:
+        ref_agent = ref_metadata.get("agent_id") or ref_metadata.get("agentId")
+        if ref_agent:
+            return str(ref_agent) == agent_id
+    # Without metadata in the ref, we can't exclude — include by default
+    # (the primary filter in query() already handled agent_id filtering)
+    return True
+
+
 def _build_governed_hks_contract(
     *,
     query_text: str,
@@ -1039,6 +1091,7 @@ def _build_governed_hks_contract(
     purpose: str,
     purpose_policy: dict[str, Any],
     retrieval_contract: dict[str, Any],
+    agent_id: str | None = None,
 ) -> dict[str, Any]:
     evidence_refs: list[dict[str, Any]] = []
     for item in results[:5]:
@@ -1085,8 +1138,19 @@ def _build_governed_hks_contract(
         if isinstance(retrieval_contract.get("path_status"), dict)
         else {}
     )
-    reference_allowed = bool(evidence_refs)
-    primary_evidence = evidence_refs[0] if evidence_refs else None
+    # Re-verify each evidence ref against the purpose policy (defense-in-depth)
+    verified_refs: list[dict[str, Any]] = [
+        ref for ref in evidence_refs
+        if _verify_evidence_ref_policy(ref, purpose_policy)
+    ]
+    # Additionally filter by agent_id if specified
+    if agent_id:
+        verified_refs = [
+            ref for ref in verified_refs
+            if _ref_matches_agent_id(ref, agent_id)
+        ]
+    reference_allowed = bool(verified_refs)
+    primary_evidence = verified_refs[0] if verified_refs else None
     allowed_entry_kinds = sorted(purpose_policy.get("allowed_entry_kinds") or [])
     return {
         "contract_version": "governed-hks-evidence-v1",
@@ -1094,7 +1158,7 @@ def _build_governed_hks_contract(
         "query": query_text,
         "admitted": reference_allowed,
         "reference_allowed": reference_allowed,
-        "evidence_count": len(evidence_refs),
+        "evidence_count": len(verified_refs),
         "policy_requirements": {
             "require_provenance": bool(purpose_policy.get("require_provenance", False)),
             "require_active": bool(purpose_policy.get("require_active", False)),
@@ -1114,9 +1178,9 @@ def _build_governed_hks_contract(
             "result_count": int(graph_status.get("result_count") or 0),
         },
         "primary_evidence": primary_evidence,
-        "evidence_refs": evidence_refs,
+        "evidence_refs": verified_refs,
         "operator_summary": (
-            f"Governed HKS contract {'admitted' if reference_allowed else 'withheld'} {len(evidence_refs)} evidence reference(s) "
+            f"Governed HKS contract {'admitted' if reference_allowed else 'withheld'} {len(verified_refs)} evidence reference(s) "
             f"for purpose '{purpose}' under graph source '{graph_status.get('source') or 'metadata-derived'}'."
         ),
     }
@@ -3347,6 +3411,7 @@ class RAGMemory:
         require_provenance: bool = False,
         include_archive: bool = False,
         purpose: str | None = None,
+        agent_id: str | None = None,
     ) -> dict[str, Any]:
         """Query memory by semantic similarity."""
         query_vec = _bow_vector(query_text)
@@ -3405,6 +3470,7 @@ class RAGMemory:
                     "allowed_entry_kinds": sorted(purpose_policy.get("allowed_entry_kinds") or []),
                 },
                 retrieval_contract=retrieval_contract,
+                agent_id=agent_id,
             )
 
             return {
@@ -3522,6 +3588,11 @@ class RAGMemory:
             if not admitted_for_purpose:
                 rejected_count += 1
                 continue
+            if agent_id:
+                fact_agent_id = _extract_agent_id(fact)
+                if fact_agent_id and fact_agent_id != agent_id:
+                    rejected_count += 1
+                    continue
             scored.append(fact)
 
         scored.sort(
@@ -3552,6 +3623,7 @@ class RAGMemory:
                 "allowed_entry_kinds": sorted(purpose_policy.get("allowed_entry_kinds") or []),
             },
             retrieval_contract=retrieval_contract,
+            agent_id=agent_id,
         )
 
         # Update access stats

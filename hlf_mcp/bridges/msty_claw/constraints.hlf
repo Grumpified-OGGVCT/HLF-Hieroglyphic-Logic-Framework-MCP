@@ -1,0 +1,51 @@
+[HLF-v3]
+# ── Destructive Shell Commands ─────────────────────────────────────────────────
+Ж [FORBID] tool="shell" pattern="rm -rf" tier="hearth"
+Ж [FORBID] tool="shell" pattern="rm -r *" tier="hearth"
+Ж [FORBID] tool="shell" pattern="rmdir /s" tier="hearth"
+Ж [FORBID] tool="shell" pattern="del /s" tier="hearth"
+Ж [FORBID] tool="shell" pattern="del /f" tier="hearth"
+Ж [FORBID] tool="shell" pattern="format " tier="hearth"
+Ж [FORBID] tool="shell" pattern="mkfs." tier="hearth"
+Ж [FORBID] tool="shell" pattern="dd if=" tier="hearth"
+Ж [FORBID] tool="shell" pattern="> /dev/sd" tier="hearth"
+Ж [FORBID] tool="shell" pattern="chmod 777" tier="hearth"
+Ж [FORBID] tool="shell" pattern="DROP TABLE" tier="hearth"
+Ж [FORBID] tool="shell" pattern="DROP DATABASE" tier="hearth"
+Ж [FORBID] tool="shell" pattern="TRUNCATE TABLE" tier="hearth"
+Ж [FORBID] tool="shell" pattern="shutdown" tier="hearth"
+
+# ── File Write Constraints ─────────────────────────────────────────────────────
+Ж [FORBID] tool="file_write" path="/etc/*" tier="forge"
+Ж [FORBID] tool="file_write" path="/boot/*" tier="forge"
+Ж [FORBID] tool="file_write" path="/sys/*" tier="forge"
+Ж [FORBID] tool="file_write" path="/proc/*" tier="forge"
+Ж [FORBID] tool="file_write" path="C:\\Windows\\*" tier="forge"
+Ж [FORBID] tool="file_write" path="C:\\Program Files\\*" tier="forge"
+Ж [FORBID] tool="file_write" path="~/.ssh/*" tier="forge"
+Ж [FORBID] tool="file_write" path="~/.gnupg/*" tier="forge"
+Ж [FORBID] tool="file_write" path="*.env" tier="forge"
+
+# ── Secret File Reads ──────────────────────────────────────────────────────────
+Ж [FORBID] tool="file_read" path="~/.ssh/id_rsa"
+Ж [FORBID] tool="file_read" path="~/.ssh/id_ed25519"
+Ж [FORBID] tool="file_read" path="~/.aws/credentials"
+Ж [FORBID] tool="file_read" path="~/.azure/*"
+Ж [FORBID] tool="file_read" path="~/.config/gcloud/*"
+Ж [FORBID] tool="file_read" path="*.pem"
+Ж [FORBID] tool="file_read" path="*.key"
+Ж [FORBID] tool="file_read" path="*.pfx"
+
+# ── Network Egress ─────────────────────────────────────────────────────────────
+Ж [REQUIRE_APPROVAL] tool="http_request" host="*" tier="hearth"
+Ж [FORBID] tool="http_request" host="*.internal" tier="forge"
+Ж [FORBID] tool="http_request" host="169.254.*" tier="hearth"
+Ж [FORBID] tool="http_request" host="10.*" tier="hearth"
+Ж [FORBID] tool="http_request" host="172.16.*" tier="hearth"
+
+# ── Workspace Allowlist ────────────────────────────────────────────────────────
+Ж [ALLOW] tool="file_read" path="/workspace/*"
+Ж [ALLOW] tool="file_read" path="./*"
+Ж [ALLOW] tool="file_write" path="/workspace/*"
+Ж [ALLOW] tool="file_write" path="./*"
+Ω

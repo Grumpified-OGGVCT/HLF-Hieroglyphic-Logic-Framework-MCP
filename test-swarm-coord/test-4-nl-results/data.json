@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "title": "Getting Started with Node.js",
+    "content": "Node.js is a JavaScript runtime built on Chrome's V8 JavaScript engine."
+  },
+  {
+    "id": 2,
+    "title": "Express.js Guide",
+    "content": "Express is a minimal and flexible Node.js web application framework."
+  },
+  {
+    "id": 3,
+    "title": "Understanding REST APIs",
+    "content": "REST stands for Representational State Transfer and is an architectural style for distributed hypermedia systems."
+  }
+]

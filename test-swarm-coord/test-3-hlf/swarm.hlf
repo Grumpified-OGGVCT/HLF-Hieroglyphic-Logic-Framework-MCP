@@ -1,0 +1,198 @@
+# HLF Coordination: 15-Agent Real-Time Chat Platform
+
+## Interfaces
+
+interface SchemaOutput {
+  migrations: list(file)
+  schema_sql: file("schema.sql")
+  tables: list(string)
+}
+
+interface ServiceModule {
+  export_shape: factory(models, helpers) -> { crud, search, validate }
+}
+
+interface AuthModule {
+  register, login, logout, refresh, verify, authenticate, optionalAuth
+  export_shape: factory(models) -> AuthModule
+}
+
+interface RouteModule {
+  mount_path: string
+  export_shape: factory(services, auth, middleware) -> Express.Router
+}
+
+interface WebSocketEngine {
+  connect, disconnect, joinRoom, leaveRoom, broadcast, typing
+  export_shape: factory(io, services) -> WebSocketEngine
+}
+
+interface MiddlewareModule {
+  export_shape: factory(services) -> MiddlewareModule
+}
+
+interface RateLimitModule {
+  check, consume, reset
+  export_shape: factory(redis) -> RateLimitModule
+}
+
+interface DevOpsOutput {
+  server: file("server.js")
+  package: file("package.json")
+  docker: file("docker-compose.yml")
+  knex_config: file("knexfile.js")
+}
+
+## Agents
+
+agent SchemaDesigner {
+  role: "PostgreSQL schema for chat platform"
+  input: none
+  output: SchemaOutput
+  tables: [users, workspaces, workspace_members, channels, channel_members, messages, reactions, files, notifications, roles_permissions]
+  constraints: [SQL-VALID, FK-CONSTRAINTS, INDEXES-DEFINED, COMMONJS]
+}
+
+agent MigrationWriter {
+  role: "Knex migrations and indexes"
+  input: SchemaOutput
+  output: { migrations: list(file) }
+  constraints: [KNEX-FORMAT, COMMONJS]
+}
+
+agent UserService {
+  role: "User CRUD and profile"
+  input: SchemaOutput
+  output: { service: file("services/userService.js"), route: file("routes/users.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, NULL-ON-MISSING]
+}
+
+agent AuthService {
+  role: "JWT authentication"
+  input: { UserService: ServiceModule }
+  output: { auth: AuthModule, route: file("routes/auth.js"), middleware: file("middleware/auth.js") }
+  constraints: [JWT-SECRET-ENV, BCRYPTJS, REFRESH-TOKENS, COMMONJS]
+}
+
+agent WorkspaceService {
+  role: "Workspace/team management"
+  input: { UserService: ServiceModule }
+  output: { service: file("services/workspaceService.js"), route: file("routes/workspaces.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, SLUG-GENERATION]
+}
+
+agent ChannelService {
+  role: "Channel management (public/private/DM)"
+  input: { WorkspaceService: ServiceModule }
+  output: { service: file("services/channelService.js"), route: file("routes/channels.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, MEMBER-TRACKING]
+}
+
+agent MessageService {
+  role: "Message CRUD, threading, reactions"
+  input: { ChannelService: ServiceModule, UserService: ServiceModule }
+  output: { service: file("services/messageService.js"), route: file("routes/messages.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, THREAD-SUPPORT, REACTIONS]
+}
+
+agent WebSocketEngine {
+  role: "Socket.io real-time engine"
+  input: { MessageService: ServiceModule, ChannelService: ServiceModule, UserService: ServiceModule }
+  output: { engine: file("websocket/engine.js"), events: file("websocket/events.js") }
+  constraints: [SOCKET-IO, ROOM-BASED, TYPING-INDICATORS, COMMONJS]
+}
+
+agent FileUploadService {
+  role: "File upload and storage"
+  input: SchemaOutput
+  output: { service: file("services/fileService.js"), route: file("routes/files.js") }
+  constraints: [MIME-VALIDATION, SIZE-LIMIT, FACTORY-EXPORT, COMMONJS]
+}
+
+agent PresenceService {
+  role: "Online/away/offline status"
+  input: { UserService: ServiceModule }
+  output: { service: file("services/presenceService.js"), route: file("routes/presence.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, STATUS-ENUM]
+}
+
+agent NotificationService {
+  role: "Push/email notifications"
+  input: { MessageService: ServiceModule, UserService: ServiceModule }
+  output: { service: file("services/notificationService.js"), route: file("routes/notifications.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, MENTION-DETECTION, READ-TRACKING]
+}
+
+agent SearchService {
+  role: "Full-text message search"
+  input: { MessageService: ServiceModule }
+  output: { service: file("services/searchService.js"), route: file("routes/search.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, PAGINATION, FULL-TEXT]
+}
+
+agent PermissionService {
+  role: "RBAC permissions"
+  input: { WorkspaceService: ServiceModule, ChannelService: ServiceModule }
+  output: { service: file("services/permissionService.js"), middleware: file("middleware/permissions.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, ROLE-ENUM, PERMISSION-CHECK]
+}
+
+agent RateLimitService {
+  role: "API rate limiting"
+  input: none
+  output: { service: file("services/rateLimitService.js"), middleware: file("middleware/rateLimit.js") }
+  constraints: [FACTORY-EXPORT, COMMONJS, SLIDING-WINDOW, REDIS]
+}
+
+agent DevOpsAssembler {
+  role: "Server entry point and infrastructure"
+  input: { all_services: list(ServiceModule), all_routes: list(RouteModule), auth: AuthModule, websocket: WebSocketEngine }
+  output: DevOpsOutput
+  constraints: [EXPRESS-APP, SOCKET-IO-INTEGRATION, ROUTE-MOUNT, ERROR-LAST, DOCKER, COMMONJS]
+}
+
+## Execution DAG
+
+layer_1: [SchemaDesigner, RateLimitService]
+layer_2: [MigrationWriter]
+layer_3: [UserService]
+layer_4: [AuthService, WorkspaceService]
+layer_5: [ChannelService]
+layer_6: [MessageService, FileUploadService, PresenceService]
+layer_7: [WebSocketEngine, NotificationService, SearchService, PermissionService]
+layer_8: [DevOpsAssembler]
+
+## Effect Annotations
+
+effect SchemaDesigner -> [WRITE("migrations/001_initial_schema.js"), WRITE("schema.sql")]
+effect MigrationWriter -> [READ("migrations/001_initial_schema.js"), READ("schema.sql"), WRITE("migrations/002_indexes.js")]
+effect UserService -> [READ("schema.sql"), WRITE("services/userService.js"), WRITE("routes/users.js")]
+effect AuthService -> [READ("services/userService.js"), WRITE("services/authService.js"), WRITE("routes/auth.js"), WRITE("middleware/auth.js")]
+effect WorkspaceService -> [READ("services/userService.js"), WRITE("services/workspaceService.js"), WRITE("routes/workspaces.js")]
+effect ChannelService -> [READ("services/workspaceService.js"), WRITE("services/channelService.js"), WRITE("routes/channels.js")]
+effect MessageService -> [READ("services/channelService.js"), READ("services/userService.js"), WRITE("services/messageService.js"), WRITE("routes/messages.js")]
+effect WebSocketEngine -> [READ("services/messageService.js"), READ("services/channelService.js"), READ("services/userService.js"), WRITE("websocket/engine.js"), WRITE("websocket/events.js")]
+effect FileUploadService -> [READ("schema.sql"), WRITE("services/fileService.js"), WRITE("routes/files.js")]
+effect PresenceService -> [READ("services/userService.js"), WRITE("services/presenceService.js"), WRITE("routes/presence.js")]
+effect NotificationService -> [READ("services/messageService.js"), READ("services/userService.js"), WRITE("services/notificationService.js"), WRITE("routes/notifications.js")]
+effect SearchService -> [READ("services/messageService.js"), WRITE("services/searchService.js"), WRITE("routes/search.js")]
+effect PermissionService -> [READ("services/workspaceService.js"), READ("services/channelService.js"), WRITE("services/permissionService.js"), WRITE("middleware/permissions.js")]
+effect RateLimitService -> [WRITE("services/rateLimitService.js"), WRITE("middleware/rateLimit.js")]
+effect DevOpsAssembler -> [READ(all), WRITE("server.js"), WRITE("package.json"), WRITE("docker-compose.yml"), WRITE("knexfile.js"), WRITE(".env.example"), WRITE(".gitignore"), WRITE("Dockerfile")]
+
+## Constraints
+
+- COMMONJS: All files use `require` and `module.exports`
+- FACTORY-EXPORT: Services export factory functions
+- NULL-ON-MISSING: findById returns null when record missing
+- EXPRESS-APP: server.js creates Express app with route mounting
+- ERROR-LAST: Error handler middleware last in stack
+- NO-INSTALL: Do not run npm install
+
+## Trace Config
+
+trace {
+  format: "swarm-trace.json"
+  include: [agent_id, timestamp, files_written, files_read, bytes_produced, status]
+  checkpoint: true
+}

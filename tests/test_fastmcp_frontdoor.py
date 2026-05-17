@@ -74,8 +74,8 @@ def test_hlf_do_swarm_handoff_returns_raw_hlf_artifact() -> None:
     assert handoff["validation"]["valid"] is True
 
 
-def test_translate_to_hlf_subagent_handoff_has_compile_proof() -> None:
-    result = server.hlf_translate_to_hlf(
+async def test_translate_to_hlf_subagent_handoff_has_compile_proof() -> None:
+    result = await server.hlf_translate_to_hlf(
         "Audit /var/log/system.log in read-only mode.",
         handoff_mode="subagent",
     )
@@ -148,8 +148,8 @@ def test_hlf_do_prefers_english_audit_when_policy_requests_transparency() -> Non
     assert result["what_hlf_did"] == result["what_hlf_did_en"]
 
 
-def test_translate_to_hlf_auto_reports_resolved_language() -> None:
-    result = server.hlf_translate_to_hlf(
+async def test_translate_to_hlf_auto_reports_resolved_language() -> None:
+    result = await server.hlf_translate_to_hlf(
         "analizar /var/log/system.log",
         language="auto",
     )
@@ -213,8 +213,8 @@ def test_hlf_do_persists_ingress_resource_via_execution_admission() -> None:
     assert ingress_resource["ingress_status"]["decision"] == "allow"
 
 
-def test_translate_to_hlf_auto_reports_chinese_language() -> None:
-    result = server.hlf_translate_to_hlf(
+async def test_translate_to_hlf_auto_reports_chinese_language() -> None:
+    result = await server.hlf_translate_to_hlf(
         "分析 /var/log/system.log",
         language="auto",
     )
@@ -712,7 +712,7 @@ async def test_mcp_protected_tool_rejects_invalid_bound_governance_proof() -> No
 
 
 async def test_mcp_protected_swarm_mechanics_without_hlf_proof_is_rejected() -> None:
-    translated = server.hlf_translate_to_hlf(
+    translated = await server.hlf_translate_to_hlf(
         "Audit /var/log/system.log in read-only mode.",
         handoff_mode="swarm",
     )
@@ -773,7 +773,7 @@ async def test_mcp_mutating_runtime_tool_without_hlf_proof_remains_rejected() ->
 
 
 async def test_mcp_protected_tool_accepts_valid_hlf_contract_and_checks_egress() -> None:
-    translated = server.hlf_translate_to_hlf(
+    translated = await server.hlf_translate_to_hlf(
         "Audit /var/log/system.log in read-only mode.",
         handoff_mode="subagent",
     )
@@ -830,7 +830,7 @@ async def test_mcp_governed_swarm_wrapper_creates_target_bound_artifact() -> Non
 
 
 async def test_mcp_protected_tool_rejects_valid_contract_without_target_binding() -> None:
-    translated = server.hlf_translate_to_hlf(
+    translated = await server.hlf_translate_to_hlf(
         "Audit /var/log/system.log in read-only mode.",
         handoff_mode="subagent",
     )
@@ -850,7 +850,7 @@ async def test_mcp_protected_tool_rejects_valid_contract_without_target_binding(
 
 
 async def test_mcp_protected_tool_rejects_contract_bound_to_wrong_tool() -> None:
-    translated = server.hlf_translate_to_hlf(
+    translated = await server.hlf_translate_to_hlf(
         "Audit /var/log/system.log in read-only mode.",
         handoff_mode="subagent",
     )
@@ -875,7 +875,7 @@ async def test_mcp_protected_tool_rejects_contract_bound_to_wrong_tool() -> None
 
 
 async def test_mcp_protected_tool_rejects_contract_bound_to_different_arguments() -> None:
-    translated = server.hlf_translate_to_hlf(
+    translated = await server.hlf_translate_to_hlf(
         "Audit /var/log/system.log in read-only mode.",
         handoff_mode="subagent",
     )

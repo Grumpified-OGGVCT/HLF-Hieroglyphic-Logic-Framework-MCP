@@ -16,6 +16,7 @@ import logging
 import math
 import platform
 import struct
+import uuid
 import sys
 from dataclasses import dataclass, field
 from typing import Any
@@ -248,6 +249,12 @@ HOST_FUNCTIONS: dict[str, dict[str, Any]] = {
     # ── Net stdlib ─────────────────────────────────────────────────────────
     "http_get": {"tier": "all", "gas": 4, "effects": ["network"], "desc": "HTTP GET request"},
     "http_post": {"tier": "operators", "gas": 5, "effects": ["network"], "desc": "HTTP POST request"},
+    "spawn_agent": {
+        "tier": "operators",
+        "gas": 10,
+        "effects": ["spawn_agent"],
+        "desc": "Spawn a new agent",
+    },
     "http_put": {"tier": "operators", "gas": 5, "effects": ["network"], "desc": "HTTP PUT request"},
     "http_delete": {"tier": "operators", "gas": 4, "effects": ["network"], "desc": "HTTP DELETE request"},
     "url_encode": {"tier": "all", "gas": 2, "effects": [], "desc": "URL-encode parameters"},
@@ -265,6 +272,7 @@ _HOST_FUNCTION_ALIASES: dict[str, str] = {
     "delegate": "delegate",
     "route": "route",
     "vote": "vote",
+    "spawn_agent": "spawn_agent",
 }
 
 
@@ -1670,6 +1678,37 @@ def _dispatch_host(
                     "safety_class": assessment.safety_class,
                 }
             )
+
+        # ── Agent Spawning (Live) ────────────────────────────────────────────
+        elif fn_name == "spawn_agent":
+            from hlf_mcp.hlf.agent_spawner import AgentSpawner
+
+            agent_id = str(args[0]) if args else "agent_" + str(uuid.uuid4())[:8]
+            role = str(args[1]) if len(args) >= 2 else "executor"
+            task = str(args[2]) if len(args) >= 3 else ""
+            model = str(args[3]) if len(args) >= 4 else ""
+            backend = scope.get("_spawner_backend", "subprocess")
+            spawner = AgentSpawner(backend=backend)
+            handle = spawner.spawn(agent_id=agent_id, role=role, task=task, model=model)
+            side_effects.append(
+                {
+                    "type": "spawn_agent",
+                    "agent_id": agent_id,
+                    "role": role,
+                    "backend": backend,
+                    "pid": handle.pid,
+                    "token": handle.token,
+                }
+            )
+            result = {
+                "spawned": True,
+                "agent_id": agent_id,
+                "role": role,
+                "backend": backend,
+                "pid": handle.pid,
+                "token": handle.token,
+                "work_dir": handle.work_dir,
+            }
 
         # ── Unknown host function — structured error, never silent ───────────
         else:

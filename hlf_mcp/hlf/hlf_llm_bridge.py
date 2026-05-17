@@ -253,18 +253,33 @@ Respond ONLY with valid HLF-v3 source code wrapped in a code block. Never output
 HLF-v3 grammar rules:
 - Header: [HLF-v3]
 - Statements use Unicode glyphs: ⌘ Δ Ж ∇ Σ ⨝ ⌂ ⊎ ⩕
-- Tags use [TAG_NAME] syntax (uppercase, underscores allowed): Ж [ASSERT], ⌘ [ROUTE]
+- Tags use [TAG_NAME] syntax (UPPERCASE with underscores, NO hyphens). BAD: [AUDIT-TRAIL], GOOD: [AUDIT_TRAIL]
 - Arguments: key="value" or positional
 - Terminator: Ω (must be on its own line)
 - Comments: # ...
+- DO NOT use MODULE, FUNCTION, or GOAL keywords — use glyphs with tags
+- Decompose complex intents into multiple glyphs (one per action/step)
 
 Example valid HLF:
 ```hlf
 [HLF-v3]
 ⌘ [GOAL] input="task" output="result"
-Δ action="validate input"
+Δ [ACTION] target="validate input"
 Ж [ASSERT] condition="input not empty"
 Σ summary="Plan for task execution"
+Ω
+```
+
+Multi-step example:
+```hlf
+[HLF-v3]
+⌘ [GOAL] objective="deploy platform update"
+Δ [MIGRATE] target="database"
+Δ [DEPLOY] target="API gateway"
+Δ [DEPLOY] target="worker services"
+Δ [SMOKE] test="smoke tests"
+Ж [ASSERT] condition="all tests pass"
+Σ [RESULT] output="deployment complete"
 Ω
 ```
 

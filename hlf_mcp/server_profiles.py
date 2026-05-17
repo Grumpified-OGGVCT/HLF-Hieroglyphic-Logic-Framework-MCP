@@ -1532,6 +1532,7 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             min_confidence=0.0,
             require_provenance=True,
             purpose="routing_evidence",
+            agent_id=agent_id if agent_id != "unknown-agent" else None,
         )
         knowledge_contract = dict(knowledge_evidence.get("governed_hks_contract") or {})
 

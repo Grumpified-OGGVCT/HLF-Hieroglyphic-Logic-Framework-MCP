@@ -51,6 +51,7 @@ class SwarmSpec:
     effects: dict[str, Effect] = field(default_factory=dict)
     layers: list[list[str]] = field(default_factory=list)
     constraints: dict[str, str] = field(default_factory=dict)
+    architecture: dict[str, Any] = field(default_factory=dict)
     trace_config: dict[str, Any] = field(default_factory=dict)
     checkpoint_config: dict[str, Any] = field(default_factory=dict)
     raw_source: str = ""
@@ -176,6 +177,8 @@ class SwarmCompiler:
                 i = self._parse_interface(lines, i, spec)
             elif line.startswith("agent "):
                 i = self._parse_agent(lines, i, spec)
+            elif line.startswith("architecture {"):
+                i = self._parse_architecture(lines, i, spec)
             elif line.startswith("effect "):
                 i = self._parse_effect(lines, i, spec)
             elif re.match(r"layer_\d+:", line):
@@ -184,6 +187,8 @@ class SwarmCompiler:
                 i = self._parse_trace(lines, i, spec)
             elif line.startswith("checkpoint {"):
                 i = self._parse_checkpoint(lines, i, spec)
+            elif line.startswith("constraints:") or line.startswith("constraint:"):
+                i = self._parse_constraint(lines, i, spec)
             elif re.match(r"[A-Z-]+:", line) and not line.startswith("##"):
                 i = self._parse_constraint(lines, i, spec)
             else:
@@ -209,6 +214,24 @@ class SwarmCompiler:
                 fields[k.strip()] = v.strip()
             i += 1
         spec.interfaces[name] = Interface(name, fields)
+        return i + 1
+
+    def _parse_architecture(self, lines: list[str], i: int, spec: SwarmSpec) -> int:
+        """Parse architecture { key: value, ... } block."""
+        i += 1
+        while i < len(lines) and not lines[i].strip().startswith("}"):
+            line = lines[i].strip().rstrip(",")
+            if ":" in line and not line.startswith("#"):
+                k, v = line.split(":", 1)
+                key = k.strip()
+                val = v.strip()
+                # Parse list values: [item1, item2]
+                if val.startswith("[") and val.endswith("]"):
+                    items = [x.strip().strip('"') for x in val[1:-1].split(",") if x.strip()]
+                    spec.architecture[key] = items
+                else:
+                    spec.architecture[key] = val.strip('"')
+            i += 1
         return i + 1
 
     def _parse_agent(self, lines: list[str], i: int, spec: SwarmSpec) -> int:
@@ -294,12 +317,52 @@ class SwarmCompiler:
 
     def _parse_constraint(self, lines: list[str], i: int, spec: SwarmSpec) -> int:
         line = lines[i].strip()
+        # Handle "constraints:" block header — parse subsequent bullet lines
+        if line.lower() == "constraints:" or line.lower() == "constraint:":
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if not next_line or next_line.startswith("##"):
+                    i += 1
+                    continue
+                if next_line.startswith("- ") and ":" in next_line:
+                    # "- TAG: description" format
+                    content = next_line[2:]  # strip "- "
+                    if ":" in content:
+                        k, v = content.split(":", 1)
+                        k = k.strip()
+                        if k.isupper() or "-" in k:
+                            spec.constraints[k] = v.strip()
+                    i += 1
+                elif self._is_constraint_line(next_line):
+                    k, v = next_line.split(":", 1)
+                    k = k.strip()
+                    if k.isupper() or "-" in k:
+                        spec.constraints[k] = v.strip()
+                    i += 1
+                else:
+                    # End of constraints block
+                    break
+            return i
+
+        # Single constraint line
         if ":" in line and not line.startswith("##"):
-            k, v = line.split(":", 1)
+            # Strip leading bullet if present
+            content = line
+            if content.startswith("- "):
+                content = content[2:]
+            k, v = content.split(":", 1)
             k = k.strip()
             if k.isupper() or "-" in k:
                 spec.constraints[k] = v.strip()
         return i + 1
+
+    def _is_constraint_line(self, line: str) -> bool:
+        """Check if a line looks like a constraint definition: TAG: description."""
+        if ":" not in line:
+            return False
+        k = line.split(":", 1)[0].strip()
+        return bool(re.match(r"^[A-Z][A-Z0-9-]*$", k))
 
     def _parse_kv_block(self, lines: list[str]) -> dict[str, Any]:
         result: dict[str, Any] = {}

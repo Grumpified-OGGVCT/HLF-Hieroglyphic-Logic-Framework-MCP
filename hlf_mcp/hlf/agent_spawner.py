@@ -144,7 +144,48 @@ class SubprocessBackend:
 
     WORKER_TEMPLATE = r'''#!/usr/bin/env python3
 """HLF Agent Worker — spawned by SubprocessBackend."""
-import json, os, sys, time, pathlib, urllib.request
+import json, os, sys, time, pathlib, urllib.request, re
+
+def repair_truncated_json(s: str) -> str:
+    """Attempt to repair truncated JSON by closing strings, braces, and brackets."""
+    s = s.strip()
+    # Determine if we're inside a string value at the end
+    # Strategy: remove any trailing incomplete string value, then close braces
+    result = list(s)
+    in_string = False
+    escape_next = False
+    open_braces = 0
+    open_brackets = 0
+
+    for i, ch in enumerate(s):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\':
+            escape_next = True
+            continue
+        if ch == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            open_braces += 1
+        elif ch == '}':
+            open_braces -= 1
+        elif ch == '[':
+            open_brackets += 1
+        elif ch == ']':
+            open_brackets -= 1
+
+    # If we're inside a string at the end, close it
+    if in_string:
+        s += '"'
+
+    # Close remaining braces and brackets
+    s += ']' * max(0, open_brackets)
+    s += '}' * max(0, open_braces)
+    return s
 
 def main():
     config_path = sys.argv[1]
@@ -156,58 +197,117 @@ def main():
     model = cfg.get("model", "llama3.2")
     ollama_url = cfg.get("ollama_url", "http://localhost:11434")
     work_dir = cfg.get("work_dir", ".")
+    num_predict = cfg.get("num_predict", 16384)
+    fallback_model = cfg.get("fallback_model", "")
+    max_retries = cfg.get("max_retries", 2)
+    retry_backoff = cfg.get("retry_backoff", 2.0)
     os.makedirs(work_dir, exist_ok=True)
     start = time.time()
-    # Call Ollama generate
     prompt = f"""You are Agent {agent_id} ({role}).
-Task: {task}
-Constraints: {', '.join(cfg.get('constraints', []))}
-Dependencies: {json.dumps(cfg.get('dependencies', {}))}
-Produce the required files. Return ONLY a JSON object mapping file paths to their full contents.
-Example: {{"server.js": "const express = require('express');\\n..."}}
+
+TASK:
+{task}
+
+CONSTRAINTS: {', '.join(cfg.get('constraints', []))}
+DEPENDENCIES: {json.dumps(cfg.get('dependencies', {}))}
+
+CRITICAL INSTRUCTIONS:
+1. Produce ALL the files listed in your output spec.
+2. Return ONLY a single JSON object. Start with {{ and end with }}.
+3. Every value in the JSON must be a string containing the complete file content.
+4. Do NOT include explanations, commentary, markdown formatting, or code fences.
+5. Do NOT truncate — write every file in full.
+
+Example response format:
+{{"server.js": "const express = require('express');\\nconst app = express();\\n// ... full file content ...", "routes/auth.js": "const express = require('express');\\nconst router = express.Router();\\n// ... full file content ..."}}
 """
-    body = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
-    req = urllib.request.Request(f"{ollama_url}/api/generate", data=body, headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            data = json.loads(resp.read().decode())
-        response_text = data.get("response", "")
-        # Try to extract JSON from response
-        files_written = []
+    # Retry loop with fallback model support
+    models_to_try = [model]
+    if fallback_model and fallback_model != model:
+        models_to_try.append(fallback_model)
+    response_text = ""
+    final_model = model
+    eval_count = 0
+    prompt_eval_count = 0
+    for attempt in range(max_retries + 1):
+        current_model = models_to_try[min(attempt, len(models_to_try) - 1)]
+        body = json.dumps({
+            "model": current_model, "prompt": prompt, "stream": False,
+            "options": {"num_predict": num_predict, "temperature": 0.3}
+        }).encode()
+        req = urllib.request.Request(f"{ollama_url}/api/generate", data=body,
+                                     headers={"Content-Type": "application/json"}, method="POST")
         try:
-            # Find JSON block
-            start_idx = response_text.find("{")
-            end_idx = response_text.rfind("}")
-            if start_idx != -1 and end_idx != -1:
-                files = json.loads(response_text[start_idx:end_idx+1])
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                data = json.loads(resp.read().decode())
+            response_text = data.get("response", "")
+            final_model = current_model
+            prompt_eval_count = data.get("prompt_eval_count", 0)
+            eval_count = data.get("eval_count", 0)
+            # Check if we got meaningful output (not empty, not pure commentary)
+            if response_text.strip():
+                break
+        except Exception as exc:
+            if attempt < max_retries:
+                time.sleep(retry_backoff * (2 ** attempt))
+            response_text = ""
+            continue
+    else:
+        # All retries exhausted
+        pass
+    # Save raw response for debugging
+    if response_text:
+        with open(os.path.join(work_dir, "raw_response.txt"), "w", encoding="utf-8") as f:
+            f.write(response_text)
+
+    # Try to extract JSON from response (multiple strategies)
+    files_written = []
+    if response_text:
+        try:
+            cleaned = response_text.strip()
+            # Strategy 1: Strip markdown code fences
+            if cleaned.startswith("```"):
+                lines = cleaned.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                cleaned = "\n".join(lines)
+
+            # Strategy 2: Extract JSON object (find outermost braces)
+            start_idx = cleaned.find("{")
+            end_idx = cleaned.rfind("}")
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                json_str = cleaned[start_idx:end_idx+1]
+                try:
+                    files = json.loads(json_str)
+                except json.JSONDecodeError:
+                    json_str = repair_truncated_json(json_str)
+                    files = json.loads(json_str)
+
                 for path, content in files.items():
+                    if not isinstance(content, str):
+                        continue
                     full = os.path.join(work_dir, path)
                     os.makedirs(os.path.dirname(full), exist_ok=True)
                     with open(full, "w", encoding="utf-8") as f:
                         f.write(content)
                     files_written.append(path)
         except Exception:
-            pass
-        status = {
-            "agent_id": agent_id,
-            "status": "complete" if files_written else "error",
-            "stdout": response_text[:500],
-            "stderr": "",
-            "files_written": files_written,
-            "elapsed_ms": int((time.time() - start) * 1000),
-            "tokens_used": data.get("eval_count", 0) + data.get("prompt_eval_count", 0)
-        }
-    except Exception as exc:
-        status = {
-            "agent_id": agent_id,
-            "status": "error",
-            "stdout": "",
-            "stderr": str(exc),
-            "files_written": [],
-            "elapsed_ms": int((time.time() - start) * 1000),
-            "tokens_used": 0,
-            "error": str(exc)
-        }
+            with open(os.path.join(work_dir, "fallback_output.txt"), "w", encoding="utf-8") as f:
+                f.write(response_text)
+
+    status = {
+        "agent_id": agent_id,
+        "status": "complete" if files_written else "error",
+        "stdout": response_text[:500] if response_text else "",
+        "stderr": "",
+        "files_written": files_written,
+        "elapsed_ms": int((time.time() - start) * 1000),
+        "tokens_used": eval_count + prompt_eval_count,
+        "model_used": final_model,
+        "retries": min(max_retries, len(models_to_try) - 1) if not files_written else 0,
+    }
     with open(os.path.join(work_dir, "status.json"), "w", encoding="utf-8") as f:
         json.dump(status, f, indent=2)
 
@@ -229,10 +329,14 @@ if __name__ == "__main__":
             "role": role,
             "task": task,
             "model": model,
+            "fallback_model": kwargs.get("fallback_model", ""),
+            "max_retries": kwargs.get("max_retries", 2),
+            "retry_backoff": kwargs.get("retry_backoff", 2.0),
             "ollama_url": self.ollama_url,
             "work_dir": work_dir,
             "constraints": kwargs.get("constraints", []),
             "dependencies": kwargs.get("dependencies", {}),
+            "num_predict": kwargs.get("num_predict", 16384),
         }
         config_path = os.path.join(work_dir, "config.json")
         with open(config_path, "w", encoding="utf-8") as f:

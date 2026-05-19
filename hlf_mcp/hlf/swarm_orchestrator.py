@@ -28,6 +28,7 @@ from hlf_mcp.hlf import HLFCompiler, language_to_hlf, hlf_source_to_english
 from hlf_mcp.hlf.compiler import CompileError
 from hlf_mcp.hlf.formal_verifier import FormalVerifier
 from hlf_mcp.hlf.swarm_observer import SwarmObserver
+from hlf_mcp.hlf.swarm_consensus import SwarmLedger, VotePosition, QuorumType
 from hlf_mcp.hlf.witness_governance import WitnessGovernance, WitnessObservation
 
 if TYPE_CHECKING:
@@ -96,12 +97,14 @@ class SwarmOrchestrator:
         governance: WitnessGovernance | None = None,
         verifier: FormalVerifier | None = None,
         llm_bridge: HLFLLMBridge | None = None,
+        consensus: SwarmLedger | None = None,
     ) -> None:
         self.compiler = HLFCompiler(strict_align=True)
         self.governance = governance or WitnessGovernance()
         self.verifier = verifier or FormalVerifier()
         self.observer = observer or SwarmObserver()
         self.llm_bridge = llm_bridge
+        self.consensus = consensus  # optional SwarmLedger for delegation/dissent/vote tracking
 
     # ── Has LLM bridge? ─────────────────────────────────────────────────────
 
@@ -310,6 +313,36 @@ class SwarmOrchestrator:
             + (1.0 if compile_success_final else 0.0) * 0.3
             + (min(total_tokens, 500) / 500) * 0.2
         )
+
+        # ── Consensus tracking (when SwarmLedger is configured) ──────────────
+        if self.consensus is not None:
+            from hlf_mcp.hlf.swarm_consensus import VotePosition, QuorumType
+            task_id = hashlib.sha256(description.encode()).hexdigest()[:16]
+            # Record each phase as a delegation
+            for phase in phases:
+                self.consensus.delegate(
+                    from_agent="orchestrator",
+                    to_agent=phase.agent_id,
+                    task=f"{phase.action}: {description[:120]}",
+                    priority=1,
+                )
+            # Record swarm outcome as a vote
+            prop = self.consensus.propose(
+                title=f"Swarm result: {description[:80]}",
+                description=f"Task {task_id}: {compile_success_final}",
+                proposed_by="orchestrator",
+                quorum=QuorumType.SIMPLE_MAJORITY,
+            )
+            position = VotePosition.APPROVE if compile_success_final else VotePosition.REJECT
+            self.consensus.vote(
+                prop.proposal_id,
+                "orchestrator",
+                position,
+                reason=f"Compile {'OK' if compile_success_final else 'FAILED'}, "
+                       f"{len(phases)} phases, {total_tokens} tokens",
+            )
+            self.consensus.resolve(prop.proposal_id)
+
         return SwarmResult(
             swarm_id=swarm_id,
             task_id=hashlib.sha256(description.encode()).hexdigest()[:16],

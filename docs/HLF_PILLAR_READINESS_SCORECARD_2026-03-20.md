@@ -2,7 +2,7 @@
 goal: Provide the first percent-backed scorecard across the major HLF pillars using the canonical internal readiness model
 version: 1.0
 date_created: 2026-03-20
-last_updated: 2026-03-20-v3
+last_updated: 2026-05-19
 owner: GitHub Copilot
 status: 'In progress'
 tags: [readiness, scorecard, pillars, governance, internal]
@@ -45,13 +45,13 @@ Older gap docs classify these more harshly because they predate the branch-resid
 | Runtime and capsule-bounded execution | 11 | `present` from `docs/HLF_MISSING_PILLARS.md` + Two-channel execution model | 88 | `strong_but_incomplete` from runtime and capsule proof rows + 57 two-channel tests | 85 | `current_with_active_gaps` from packaged runtime plus bridge obligations | 80 | 85.0 |
 | Governance-native execution | 11 | `damaged` → `partial_packaged` from `docs/HLF_MISSING_PILLARS.md` + Constitutional check wired (4 real rules) | 70 | `strong` from governance, ethics, and security proof rows + 36 constitutional tests | 92 | `current_with_active_gaps` from packaged controls and control-matrix gaps | 80 | 80.0 |
 | Typed effect and capability algebra | 8 | `damaged` → `present` from `docs/HLF_MISSING_PILLARS.md` + 12-type universe + CapabilityManifest + EffectExtractor | 75 | `partial_thin` → `partial_substantial` — typed contracts complete, capability manifest signed, 108 manifest tests | 65 | `doctrine_only` → `bridge_owned` — manifest compiled artifact with swarm integration | 60 | 68.0 |
-| Human-readable audit and trust layer | 8 | `damaged` from `docs/HLF_MISSING_PILLARS.md` + ProvenanceChain tracking | 58 | `partial_substantial` from InsAIts, governed review, symbolic, and dream proof slices | 60 | `bridge_owned` via packaged operator resources, trust-surface plans, and provenance chains | 65 | 60.5 |
+| Human-readable audit and trust layer | 8 | `damaged` → audit-hardened — ProvenanceChain + AuditTrail (markdown/html operator reports) + TrustSurface (13 components, 12 edges, BFS validation) + ReviewProof (completeness proofs, gap detection) + two-channel executor integration (70 new tests) | 73 | `partial_substantial` → `substantial` — 60.5% proof → 70%: audit trail completeness, trust chain validation, review proof generation all verified | 70 | `bridge_owned` → audit-hardened — self-contained human-readable audit reports, trust surface DOT visualization, governed review proof pipeline | 70 | 71.0 |
 | Real-code bridge | 6 | `damaged` → `present` — equivalence proofs (43 tests), effect audit, bytecode roundtrip | 75 | `thin` → `partial_substantial` — HLF↔Python equivalence verified for arithmetic, booleans, control flow | 65 | `doctrine_only` → `bridge_owned` — real-code bridge with auditable roundtrip and effect verification | 65 | 70.0 |
 | Knowledge substrate and governed memory | 10 | `damaged` → `present` — freshness guarantee, consistency proof, memory lease (20 tests) | 70 | `partial` → `partial_substantial` — cross-witness agreement proofs, fork detection, trust-tier-aware freshness | 70 | `bridge_owned` → `current_with_active_gaps` — scoped lease system, entropy-anchor drift integration | 70 | 70.0 |
 | Formal verification surface | 7 | `partial_packaged` using branch-aware override + Constitutive gating (not advisory) + 38 gate tests | 60 | `partial` → `strong` from `tests/test_formal_verifier.py`, verification gating, and front-door coverage | 75 | `bridge_owned` → `current_with_active_gaps` — gate is constitutive, tier-differentiated | 70 | 68.5 |
 | Gateway and routing fabric | 7 | `partial_packaged` → `present` — node registry, capability router, load balancer, failover (51 tests) | 70 | `partial` → `partial_substantial` — thread-safe discovery, proficiency-based routing, round-robin + least-loaded | 68 | `bridge_owned` → `current_with_active_gaps` — failover with retry logic, health-check loop | 68 | 68.5 |
-| Orchestration lifecycle and plan execution | 7 | `partial_packaged` → hardened — two-channel dispatch + plan_versioning (versioning, rollback, diff, chain integrity) + checkpoint_executor (save/resume, multi-phase integration) | 62 | `partial_thin` → `partial` — 57 two-channel tests + 30 orchestration lifecycle tests (12 awaiting lifecycle methods) | 62 | `bridge_owned` → hardened — checkpointable execution with plan history, versioning, and rollback | 65 | 63.0 |
-| Persona and operator doctrine | 5 | `partial_packaged` → `present` — Steward/Herald/Builder/Sentinel with runtime proof pipeline (24 tests) | 60 | `thin` → `partial_substantial` — 4-persona pipeline proven, constitutional check integrated | 55 | `bridge_owned` → `current_with_active_gaps` — operator doctrine contracts, persona gating wired | 60 | 58.0 |
+| Orchestration lifecycle and plan execution | 7 | `partial_packaged` → lifecycle-complete — two-channel dispatch + plan_versioning + checkpoint_executor + classify_and_plan + execute_plan_with_routing + CoVE gate integration (96 tests) | 72 | `partial` → `partial_substantial` — 96 orchestration lifecycle tests, full lifecycle pipeline proven | 70 | `bridge_owned` → lifecycle-complete — checkpointable execution with plan history, routing dispatch, and CoVE verification gating | 68 | 70.0 |
+| Persona and operator doctrine | 5 | `partial_packaged` → doctrine-hardened — Steward/Herald/Builder/Sentinel + OperatorDoctrine (contracts, obligations, permissions, prohibitions) + PersonaGate (constitutional integration) + PersonaTransitionProof (runtime pipeline) + handoff contracts (62 new tests) | 75 | `partial_substantial` → `substantial` — 132 persona tests (59 existing + 62 doctrine + 11 gate), full 4-persona pipeline with constitutional gating proven | 68 | `current_with_active_gaps` → doctrine-hardened — operator doctrine contracts, persona gating wired, cross-persona handoff proof pipeline | 65 | 70.0 |
 | Ecosystem integration surface | 4 | `source_only` → hardened — MCP bridge + REST bridge with rate limiting, circuit breaking (CLOSED/OPEN/HALF_OPEN), retry policy (exponential backoff + jitter), credential manager (scoped keys, HMAC, TTL, rotation) | 78 | `missing` → `partial_substantial` — 121 tests (68 bridge + 53 hardening) | 65 | `source_only_named_path` → hardened — production-ready middleware stack on both bridges | 65 | 70.0 |
 | Gallery and operator-legibility surface | 4 | `damaged` → hardened — type/verification/manifest/provenance viewers + operator dashboard + TelemetryCollector (live readiness polling, ndjson streaming, trend buffer) + operator CLI (Rich dashboard, snapshot/JSON, watch mode, subcommands) | 82 | `missing` → `partial_substantial` — 65 tests (25 gallery + 40 operatorization) | 65 | `doctrine_only` → hardened — live dashboard with alerts, CLI tooling, telemetry streaming | 70 | 73.0 |
 
@@ -59,7 +59,7 @@ Older gap docs classify these more harshly because they predate the branch-resid
 
 Using the canonical pillar weights, the current branch-wide internal readiness score is:
 
-- `73.4%`
+- `75.3%`
 
 Internal interpretation band:
 
@@ -77,20 +77,17 @@ Internal interpretation band:
 
 | Pillar | Score | Why it lags |
 | --- | ---: | --- |
-| Orchestration lifecycle and plan execution | 63.0 | plan versioning and checkpointing built, but lifecycle methods (classify_and_plan, execute_plan_with_routing) not yet wired |
-| Persona and operator doctrine | 58.0 | 4-persona pipeline with runtime proofs, but operator doctrine contracts still partial |
-| Human-readable audit and trust layer | 60.5 | provenance chain tracking exists, but InsAIts and governed review proofs are still thin |
+| Typed effect and capability algebra | 68.0 | 12-type universe + CapabilityManifest + EffectExtractor built, but typed contracts still partial and operand coverage incomplete |
+| Formal verification surface | 68.5 | constitutive gating is wired, but proof depth and counterexample quality still need hardening |
+| Gateway and routing fabric | 68.5 | node registry, capability router, load balancer, failover all built, but real-world routing stress tests remain thin |
 
 ## Immediate Scoring Pressure Points
 
-The fastest legitimate readiness gains are in:
+The remaining legitimate readiness gains are in:
 
-1. typed effect and capability algebra
-2. knowledge substrate and governed memory contracts
-3. formal verification proof depth
-4. orchestration lifecycle completion (classify_and_plan, execute_plan_with_routing, CoVE gate)
-5. persona and operator doctrine proof surfaces
-6. human-readable audit and trust layer (InsAIts + governed review proofs)
+1. typed effect and capability algebra (68.0%) — operand coverage, type contracts, parametric type proofs
+2. formal verification proof depth (68.5%) — counterexample quality, Z3 integration depth
+3. gateway and routing fabric (68.5%) — real-world routing stress tests, multi-node failover scenarios
 
 ## 2026-03-20 Live Validation Checkpoint
 

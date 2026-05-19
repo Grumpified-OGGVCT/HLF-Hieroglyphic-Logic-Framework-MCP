@@ -25,6 +25,63 @@ _CHANGE_CLASS_OWNER_MAP = {
     "low_risk_maintenance": "strategist",
 }
 
+# ── Operator doctrine bridge ──────────────────────────────────────────────────
+
+
+def resolve_persona_doctrine_proof(
+    *,
+    persona: str,
+    action: str,
+    tier: str = "hearth",
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Resolve a persona doctrine proof for a given persona and action.
+
+    This hook bridges persona_contract resolution with the operator doctrine
+    compliance engine.  It validates an action against the persona's doctrine
+    contract and returns a gated decision suitable for the governance pipeline.
+
+    Args:
+        persona:  Normalised persona name.
+        action:   Action identifier.
+        tier:     Active tier (hearth / sovereign / field).
+        context:  Optional context dict.
+
+    Returns:
+        Dict with keys: allowed, persona, action, block_reason, matched_rule, tier.
+    """
+    from hlf_mcp.persona.operator_doctrine import validate_doctrine_compliance as _vdc
+
+    ctx = dict(context or {})
+    ctx.setdefault("tier", tier)
+    report = _vdc(persona, action, ctx)
+    return report.to_dict()
+
+
+def resolve_handoff_doctrine_proof(
+    *,
+    source_persona: str,
+    target_persona: str,
+    tier: str = "hearth",
+) -> dict[str, Any]:
+    """Resolve a cross-persona handoff doctrine proof.
+
+    Bridges persona_contract handoff resolution with the gate integration
+    proof pipeline. Returns a proof dict suitable for audit logging.
+
+    Args:
+        source_persona: Persona handing off.
+        target_persona: Persona receiving.
+        tier:           Active tier.
+
+    Returns:
+        Dict with keys: valid, source_persona, target_persona, gate_results, etc.
+    """
+    from hlf_mcp.persona.gate_integration import prove_persona_transition
+
+    proof = prove_persona_transition(source_persona, target_persona, tier=tier)
+    return proof.to_dict()
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent

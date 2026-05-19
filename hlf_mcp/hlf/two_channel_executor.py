@@ -43,6 +43,13 @@ from hlf_mcp.hlf.formal_verifier import (
     VerificationBlockedError,
 )
 
+# Phase 9: Audit trail integration (optional, lazy-loaded to avoid circular imports)
+_AUDIT_TRAIL_AVAILABLE = True
+try:
+    from hlf_mcp.hlf.audit_trail import AuditTrail, AuditEvent  # noqa: F811
+except ImportError:
+    _AUDIT_TRAIL_AVAILABLE = False
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ProvenanceChain
@@ -458,6 +465,7 @@ class TwoChannelExecutor:
         *,
         tier: str = "hearth",
         gas_limit: int = 500,
+        audit_trail: Any | None = None,
     ) -> ExecutionResult:
         """Execute with gating and provenance.
 
@@ -476,6 +484,7 @@ class TwoChannelExecutor:
             gate: Optional VerificationGate instance for gating.
             tier: Trust tier for this execution session.
             gas_limit: Maximum gas for execution.
+            audit_trail: Optional AuditTrail to record execution events.
 
         Returns:
             ExecutionResult with full provenance trail.
@@ -485,6 +494,8 @@ class TwoChannelExecutor:
 
         # ── 1. Instruction channel integrity ────────────────────────────
         if not instruction_intact:
+            if audit_trail is not None:
+                audit_trail.add_event(_make_integrity_fail_event(trace_ref, tier))
             return ExecutionResult(
                 status="blocked",
                 executed=False,
@@ -512,6 +523,10 @@ class TwoChannelExecutor:
             manifest_blocked_reasons = reasons
 
         if not manifest_ok:
+            if audit_trail is not None:
+                audit_trail.add_event(_make_manifest_block_event(
+                    manifest_blocked_reasons, tier
+                ))
             return ExecutionResult(
                 status="blocked",
                 executed=False,
@@ -539,6 +554,10 @@ class TwoChannelExecutor:
             except Exception:
                 gate_decision = GateDecision.BLOCK
 
+        # Record gate decision in audit trail
+        if audit_trail is not None and instruction.verification:
+            audit_trail.add_gate_decision(gate_decision, instruction.verification, tier)
+
         if gate_decision == GateDecision.BLOCK:
             blocked_error = VerificationBlockedError(instruction.verification, tier)
             return ExecutionResult(
@@ -565,7 +584,7 @@ class TwoChannelExecutor:
             executed = False
 
         # ── 5. Build result with provenance ─────────────────────────────
-        return ExecutionResult(
+        result = ExecutionResult(
             status="ok" if executed else "runtime_error",
             executed=executed,
             gate_decision=gate_decision,
@@ -580,6 +599,16 @@ class TwoChannelExecutor:
             trace_ref=trace_ref,
             error_message="" if executed else runtime_result.get("error", ""),
         )
+
+        # Record provenance events in audit trail
+        if audit_trail is not None:
+            for name, chain in data.provenance.items():
+                try:
+                    audit_trail.add_provenance_event(chain, "provenance_check", "executor")
+                except Exception:
+                    pass
+
+        return result
 
     def _execute_bytecode(
         self,
@@ -716,6 +745,45 @@ def _make_trace_ref(
     """Generate a deterministic trace reference for this execution."""
     payload = f"{instruction.program_id}:{data.created_at}:{len(data.inputs)}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+
+
+def _make_integrity_fail_event(trace_ref: str, tier: str) -> Any:
+    """Create an AuditEvent for an instruction integrity failure."""
+    from hlf_mcp.hlf.audit_trail import AuditEvent  # noqa: PLC0415
+    from datetime import datetime, timezone  # noqa: PLC0415
+
+    return AuditEvent(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        event_type="integrity_check",
+        persona="executor",
+        decision="BLOCK: Instruction channel integrity compromised",
+        rationale=(
+            f"The instruction channel signature does not match its contents "
+            f"at tier '{tier}'.  The bytecode, manifest, or verification report "
+            f"may have been tampered with after compilation.  Execution halted."
+        ),
+        provenance_ref=trace_ref,
+    )
+
+
+def _make_manifest_block_event(reasons: list[str], tier: str) -> Any:
+    """Create an AuditEvent for a capability manifest block."""
+    from hlf_mcp.hlf.audit_trail import AuditEvent  # noqa: PLC0415
+    from datetime import datetime, timezone  # noqa: PLC0415
+
+    reason_text = "; ".join(reasons) if reasons else "unspecified capability violation"
+    return AuditEvent(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        event_type="manifest_check",
+        persona="executor",
+        decision=f"BLOCK: Capability manifest rejected at tier '{tier}'",
+        rationale=(
+            f"The capability manifest check failed: {reason_text}. "
+            f"The program requested capabilities that are not granted "
+            f"at tier '{tier}'.  Execution halted to prevent privilege escalation."
+        ),
+        provenance_ref="",
+    )
 
 
 __all__ = [

@@ -88,6 +88,28 @@ def __getattr__(name: str):
         }[name]
         return _get_checkpoint_types()[idx]
     raise AttributeError(f"module 'hlf_mcp.hlf' has no attribute '{name}'")
+# Phase 9: Audit & Trust Layer
+from hlf_mcp.hlf.audit_trail import (
+    AuditEvent,
+    AuditTrail,
+    generate_execution_audit,
+    summarize_audit,
+    audit_to_html,
+)
+from hlf_mcp.hlf.trust_surface import (
+    TrustEdge,
+    TrustSurface,
+    build_default_trust_surface,
+    validate_trust_against_constitution,
+)
+from hlf_mcp.hlf.review_proof import (
+    ReviewRecord,
+    ReviewProof,
+    prove_review_completeness,
+    generate_review_checklist,
+    audit_review_gaps,
+    generate_review_proof_markdown,
+)
 from hlf_mcp.hlf.symbolic_surfaces import (
     audit_symbolic_surface,
     compile_symbolic_surface,
@@ -194,4 +216,20 @@ __all__ = [
     "CheckpointManager",
     "CheckpointableExecutor",
     "CheckpointedExecutionResult",
+    # Phase 9: Audit & Trust Layer Hardening
+    "AuditEvent",
+    "AuditTrail",
+    "generate_execution_audit",
+    "summarize_audit",
+    "audit_to_html",
+    "TrustEdge",
+    "TrustSurface",
+    "build_default_trust_surface",
+    "validate_trust_against_constitution",
+    "ReviewRecord",
+    "ReviewProof",
+    "prove_review_completeness",
+    "generate_review_checklist",
+    "audit_review_gaps",
+    "generate_review_proof_markdown",
 ]

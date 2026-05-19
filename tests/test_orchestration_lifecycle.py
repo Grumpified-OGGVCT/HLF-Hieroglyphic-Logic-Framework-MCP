@@ -447,7 +447,6 @@ class TestLifecycleTransitions:
         assert r.get("note") == "already_at_phase"
 
 
-@pytest.mark.skip(reason="InstinctLifecycle.classify_and_plan not yet implemented")
 class TestClassificationIntegration:
     """Tests classify_and_plan integration."""
 
@@ -467,7 +466,6 @@ class TestClassificationIntegration:
         assert r["task_dag"][0]["node_id"] == "quick_execute"
 
 
-@pytest.mark.skip(reason="InstinctLifecycle.classify_and_plan not yet implemented")
 class TestRoleBoundaries:
     """Validates role/persona boundaries in DAG construction."""
 
@@ -633,7 +631,6 @@ class TestRealignment:
         assert r["status"] == "error"
 
 
-@pytest.mark.skip(reason="InstinctLifecycle.execute_plan_with_routing not yet implemented")
 class TestExecuteWithRouting:
     """Tests the execute_plan_with_routing integration."""
 
@@ -668,7 +665,6 @@ class TestExecuteWithRouting:
         assert r["status"] == "error"
 
 
-@pytest.mark.skip(reason="InstinctLifecycle CoVE gate methods not yet implemented")
 class TestCoVEGateIntegration:
     """Tests CoVE verification gate integration."""
 

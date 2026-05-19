@@ -187,6 +187,19 @@ def repair_truncated_json(s: str) -> str:
     s += '}' * max(0, open_braces)
     return s
 
+
+def repair_control_characters(s: str) -> str:
+    """Sanitize raw control characters that are invalid in JSON strings.
+
+    LLMs often output Windows-style \\r\\n inside JSON string values as
+    literal bytes, which violates JSON spec. Replace with valid escapes.
+    """
+    # Normalize Windows line endings first
+    s = s.replace('\r\n', '\n')
+    # Replace any remaining bare CR with escaped version
+    s = s.replace('\r', '\\r')
+    return s
+
 def main():
     config_path = sys.argv[1]
     with open(config_path, "r", encoding="utf-8") as f:
@@ -309,11 +322,17 @@ Example response format:
 
                 if end_idx != -1 and end_idx > start_idx:
                     json_str = cleaned[start_idx:end_idx+1]
+                    # Sanitize raw control characters that break JSON parsing
+                    json_str = repair_control_characters(json_str)
                     try:
                         files = json.loads(json_str)
                     except json.JSONDecodeError:
                         json_str = repair_truncated_json(json_str)
-                        files = json.loads(json_str)
+                        try:
+                            files = json.loads(json_str)
+                        except json.JSONDecodeError:
+                            # Last resort: lenient decoder allows control chars in strings
+                            files = json.JSONDecoder(strict=False).decode(json_str)
 
                     for path, content in files.items():
                         if not isinstance(content, str):

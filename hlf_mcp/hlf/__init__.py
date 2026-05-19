@@ -27,6 +27,15 @@ from hlf_mcp.hlf.embodied import (
 from hlf_mcp.hlf.formatter import HLFFormatter
 from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.runtime import HLFRuntime
+from hlf_mcp.hlf.two_channel_executor import (
+    ProvenanceChain,
+    InstructionChannel,
+    DataChannel,
+    ExecutionResult,
+    TwoChannelExecutor,
+    build_instruction_channel,
+    build_data_channel,
+)
 from hlf_mcp.hlf.swarm_mechanics import (
     SWARM_ARTIFACT_KIND,
     build_swarm_mechanics_artifact,
@@ -106,4 +115,12 @@ __all__ = [
     "project_relation_edges",
     "resolve_language",
     "translation_diagnostics",
+    # Phase 6: Two-Channel Execution Model
+    "ProvenanceChain",
+    "InstructionChannel",
+    "DataChannel",
+    "ExecutionResult",
+    "TwoChannelExecutor",
+    "build_instruction_channel",
+    "build_data_channel",
 ]

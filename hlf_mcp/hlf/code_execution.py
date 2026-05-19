@@ -21,6 +21,11 @@ from hlf_mcp.hlf.governance_proofs import (
 )
 from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.runtime import HLFRuntime
+from hlf_mcp.hlf.two_channel_executor import (
+    TwoChannelExecutor,
+    DataChannel,
+    build_data_channel,
+)
 
 _HLF_LANGUAGES = {"hlf", "hlf-v3", "hieroglyphic-logic-framework"}
 
@@ -379,6 +384,179 @@ def _success_result(
     return result
 
 
+def execute_two_channel_hlf(
+    source: str,
+    *,
+    entrypoint: str = "",
+    gas_limit: int = 500,
+    tier: str = "hearth",
+    variables: dict[str, Any] | None = None,
+    capabilities: set[str] | None = None,
+    dry_run: bool = False,
+    compiler: HLFCompiler | None = None,
+    linter: HLFLinter | None = None,
+    verifier: FormalVerifier | None = None,
+    runtime: HLFRuntime | None = None,
+    bytecoder: HLFBytecode | None = None,
+    audit_logger: Any | None = None,
+) -> dict[str, Any]:
+    """Compile, verify, and execute HLF via the two-channel model.
+
+    This is the Phase 6 execution path: instructions (compile-time, immutable,
+    signed) are separated from data (runtime, provenance-tracked).  Every
+    input carries a ProvenanceChain recording its source, trust, and
+    transformation history.
+
+    The two-channel path runs alongside the existing single-channel
+    execute_code_bearing_hlf() — both paths are supported.
+    """
+    compiler = compiler or HLFCompiler()
+    linter = linter or HLFLinter()
+    verifier = verifier or FormalVerifier()
+    runtime = runtime or HLFRuntime()
+    bytecoder = bytecoder or HLFBytecode()
+
+    # Build data channel with provenance
+    data = build_data_channel(
+        inputs=variables or {},
+        capabilities=capabilities or set(),
+        default_source="agent",
+        default_trust=0.95,
+    )
+
+    trace_ref = _trace_ref(source, entrypoint, gas_limit, dry_run)
+
+    try:
+        instruction = compiler.compile_to_instruction_channel(
+            source,
+            tier=tier,
+            bytecoder=bytecoder,
+            verifier=verifier,
+            gas_limit=gas_limit,
+        )
+    except Exception as exc:
+        return _blocked_result(
+            status="compile_error",
+            trace_ref=trace_ref,
+            message=str(exc),
+            compiled=False,
+            code=1,
+        )
+
+    # Lint check
+    diagnostics = linter.lint(source, gas_limit=gas_limit)
+    lint_errors = [diag for diag in diagnostics if diag.get("level") == "error"]
+    if lint_errors:
+        return _blocked_result(
+            status="lint_error",
+            trace_ref=trace_ref,
+            message="Lint errors blocked two-channel execution.",
+            code=1,
+        )
+
+    # Collect and select code block
+    compile_result = compiler.compile(source)
+    ast = compile_result["ast"]
+    blocks = _collect_code_blocks(ast)
+    selected = _select_block(blocks, entrypoint)
+
+    if selected is None:
+        message = (
+            f"No code-bearing block matched entrypoint '{entrypoint}'."
+            if entrypoint
+            else "No MODULE, FUNCTION, or [CODE] block was found."
+        )
+        return _blocked_result(
+            status="no_code_blocks",
+            trace_ref=trace_ref,
+            message=message,
+            trace={"blocks": blocks},
+            blocks=blocks,
+            code=1,
+        )
+
+    if dry_run:
+        return {
+            "status": "dry_run_ok",
+            "compiled": True,
+            "verified": True,
+            "gate_decision": GateDecision.PROCEED,
+            "executed": False,
+            "sandbox_mode": "two-channel-dry-run",
+            "trace_ref": trace_ref,
+            "blocks": [_public_block(block) for block in blocks],
+            "selected_block": _public_block(selected),
+            "runtime": None,
+            "instruction_channel": instruction.to_dict(),
+            "data_channel": data.to_dict(),
+            "two_channel": True,
+            "hlf_result": _hlf_result(0, f"Two-channel dry run: {trace_ref}"),
+            "result_artifact": {
+                "kind": "RESULT",
+                "code": 0,
+                "message": f"Two-channel dry run: {trace_ref}",
+                "trace_ref": trace_ref,
+                "governed": True,
+                "model": "two-channel",
+            },
+        }
+
+    # Two-channel execution
+    executor = TwoChannelExecutor(
+        verifier=verifier,
+        runtime=runtime,
+        audit_logger=audit_logger,
+    )
+
+    exec_result = executor.execute(
+        instruction=instruction,
+        data=data,
+        tier=tier,
+        gas_limit=gas_limit,
+    )
+
+    # Build response
+    result = {
+        "status": exec_result.status,
+        "compiled": True,
+        "verified": exec_result.gate_decision != GateDecision.BLOCK,
+        "gate_decision": exec_result.gate_decision,
+        "instruction_intact": exec_result.instruction_intact,
+        "executed": exec_result.executed,
+        "sandbox_mode": "two-channel-bytecode" if exec_result.executed else "two-channel-blocked",
+        "trace_ref": trace_ref,
+        "blocks": [_public_block(block) for block in blocks],
+        "selected_block": _public_block(selected),
+        "runtime": exec_result.runtime_result,
+        "instruction_channel": instruction.to_dict(),
+        "data_channel": data.to_dict(),
+        "provenance": {
+            name: chain.to_dict() for name, chain in exec_result.provenance.items()
+        },
+        "provenance_hashes": dict(exec_result.provenance_hashes),
+        "two_channel": True,
+        "hlf_result": _hlf_result(
+            0 if exec_result.executed else 1,
+            f"Two-channel: {exec_result.status}; trace={trace_ref}",
+        ),
+        "result_artifact": {
+            "kind": "RESULT",
+            "code": 0 if exec_result.executed else 1,
+            "message": f"Two-channel: {exec_result.status}; trace={trace_ref}",
+            "trace_ref": trace_ref,
+            "governed": True,
+            "model": "two-channel",
+            "instruction_intact": exec_result.instruction_intact,
+            "manifest_ok": exec_result.manifest_ok,
+        },
+    }
+
+    if exec_result.error_message:
+        result["error"] = exec_result.error_message
+
+    return result
+
+
 def _blocked_result(
     *,
     status: str,
@@ -505,4 +683,4 @@ def _audit(audit_logger: Any | None, event: str, payload: dict[str, Any]) -> dic
     return audit_logger.log(event, payload, agent_role="code_bearing_hlf")
 
 
-__all__ = ["execute_code_bearing_hlf"]
+__all__ = ["execute_code_bearing_hlf", "execute_two_channel_hlf"]

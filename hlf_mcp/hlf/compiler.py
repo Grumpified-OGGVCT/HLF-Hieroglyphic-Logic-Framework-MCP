@@ -1291,6 +1291,79 @@ class HLFCompiler:
         manifest = EffectExtractor.extract(result["ast"], source)
         return result, manifest
 
+    def compile_to_instruction_channel(
+        self,
+        source: str,
+        *,
+        tier: str = "hearth",
+        signer_key: str = "",
+        bytecoder: Any | None = None,
+        verifier: Any | None = None,
+        gas_limit: int = 500,
+    ) -> Any:
+        """Compile source into a signed InstructionChannel (Phase 6).
+
+        This is the full compilation → InstructionChannel pipeline:
+        1. Compile HLF source → AST
+        2. Extract CapabilityManifest (Phase 5)
+        3. Run formal verification → VerificationReport (Phase 3)
+        4. Encode bytecode via HLFBytecode
+        5. Build signed InstructionChannel
+
+        Args:
+            source: HLF source text to compile.
+            tier: Trust tier for the instruction channel.
+            signer_key: Optional key for manifest cryptographic signing.
+            bytecoder: Optional HLFBytecode instance (auto-created if omitted).
+            verifier: Optional FormalVerifier instance (auto-created if omitted).
+            gas_limit: Maximum gas for verification.
+
+        Returns:
+            An InstructionChannel ready for two-channel execution.
+
+        Raises:
+            CompileError: If compilation fails.
+        """
+        from hlf_mcp.hlf.two_channel_executor import (
+            InstructionChannel,
+            build_instruction_channel,
+        )
+        from hlf_mcp.hlf.bytecode import HLFBytecode
+        from hlf_mcp.hlf.formal_verifier import FormalVerifier
+
+        # 1. Compile
+        result = self.compile(source)
+        ast = result["ast"]
+
+        # 2. Extract manifest
+        self._last_src_key = hashlib.sha256(source.strip().encode()).hexdigest()
+        manifest = EffectExtractor.extract(ast, source)
+
+        # 3. Formal verification
+        _verifier = verifier or FormalVerifier()
+        verification_report = _verifier.verify_ast(ast, gas_budget=gas_limit)
+
+        # 4. Encode bytecode
+        _bytecoder = bytecoder or HLFBytecode()
+        bytecode = _bytecoder.encode(ast)
+
+        # 5. Build signed instruction channel
+        channel = build_instruction_channel(
+            bytecode=bytecode,
+            manifest=manifest,
+            verification=verification_report,
+            program_id=manifest.program_id,
+            tier=tier,
+            signer_key=signer_key,
+        )
+
+        # Store result also in the compile result dict for backward compat
+        result["instruction_channel"] = channel
+        result["manifest"] = manifest
+        result["verification_report"] = verification_report
+
+        return channel
+
     # ── Post-parse expansion passes ──────────────────────────────────────────
 
     def _extract_templates(self, stmts: list[dict]) -> list[dict]:

@@ -125,6 +125,109 @@ class SwarmOrchestrator:
         """True if an LLM bridge is configured for intelligent generation."""
         return self.llm_bridge is not None
 
+    # ── Two-channel dispatch (Phase 6) ────────────────────────────────────────
+
+    def dispatch_two_channel(
+        self,
+        source: str,
+        *,
+        agent_id: str = "orchestrator",
+        role: str = "executor",
+        tier: str | None = None,
+        variables: dict[str, Any] | None = None,
+        capabilities: set[str] | None = None,
+        gas_limit: int = 500,
+    ) -> dict[str, Any]:
+        """Dispatch HLF source through the two-channel execution model.
+
+        This is the Phase 6 swarm dispatch path: instructions are separated
+        from data with full pointer provenance.  Every input carries a
+        ProvenanceChain that records its source and transformation history.
+
+        Args:
+            source: HLF source text to execute.
+            agent_id: Agent identifier for provenance tracking.
+            role: Role of the agent (planner, executor, verifier).
+            tier: Trust tier override (defaults to session_tier).
+            variables: Named input values for the data channel.
+            capabilities: Runtime-granted capabilities override.
+            gas_limit: Maximum gas for execution.
+
+        Returns:
+            Execution result dict with two-channel provenance trail.
+        """
+        from hlf_mcp.hlf.two_channel_executor import (
+            TwoChannelExecutor,
+            DataChannel,
+            build_data_channel,
+        )
+        from hlf_mcp.hlf.bytecode import HLFBytecode
+
+        effective_tier = tier or self.session_tier
+        effective_capabilities = capabilities or self.default_capabilities
+
+        # Build data channel with provenance from the calling agent
+        data = build_data_channel(
+            inputs=variables or {},
+            capabilities=effective_capabilities,
+            default_source=agent_id,
+            default_trust=0.95,
+        )
+
+        # Compile to instruction channel
+        try:
+            instruction = self.compiler.compile_to_instruction_channel(
+                source,
+                tier=effective_tier,
+                verifier=self.verifier,
+                gas_limit=gas_limit,
+            )
+        except CompileError as exc:
+            return {
+                "status": "compile_error",
+                "compiled": False,
+                "verified": False,
+                "executed": False,
+                "gate_decision": GateDecision.BLOCK,
+                "error": str(exc),
+                "two_channel": True,
+                "agent_id": agent_id,
+                "role": role,
+            }
+
+        # Execute via two-channel executor
+        executor = TwoChannelExecutor(
+            verifier=self.verifier,
+        )
+
+        exec_result = executor.execute(
+            instruction=instruction,
+            data=data,
+            tier=effective_tier,
+            gas_limit=gas_limit,
+        )
+
+        return {
+            "status": exec_result.status,
+            "compiled": True,
+            "verified": exec_result.gate_decision != GateDecision.BLOCK,
+            "gate_decision": exec_result.gate_decision,
+            "instruction_intact": exec_result.instruction_intact,
+            "executed": exec_result.executed,
+            "runtime": exec_result.runtime_result,
+            "provenance": {
+                name: chain.to_dict()
+                for name, chain in exec_result.provenance.items()
+            },
+            "provenance_hashes": dict(exec_result.provenance_hashes),
+            "two_channel": True,
+            "agent_id": agent_id,
+            "role": role,
+            "instruction_snapshot": exec_result.instruction_snapshot,
+            "data_snapshot": exec_result.data_snapshot,
+            "error": exec_result.error_message or None,
+        }
+
     # ── Live helpers — replace the donor's _expand_hlf / _enrich_hlf ──────────
 
     def _emit(

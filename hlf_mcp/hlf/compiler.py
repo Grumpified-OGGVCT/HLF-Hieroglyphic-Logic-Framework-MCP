@@ -24,6 +24,8 @@ from lark import Lark, Token, Transformer, UnexpectedInput, v_args
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 
 from hlf_mcp.hlf.grammar import ASCII_ALIASES, CONFUSABLES, GLYPHS, HLF_GRAMMAR
+from hlf_mcp.hlf.capability_manifest import CapabilityManifest
+from hlf_mcp.hlf.effect_extractor import EffectExtractor
 
 _log = logging.getLogger(__name__)
 
@@ -1237,6 +1239,57 @@ class HLFCompiler:
             _AST_CACHE.pop(next(iter(_AST_CACHE)))
         _AST_CACHE[_src_key] = result
         return result
+
+    def extract_manifest(self, source: str | None = None) -> CapabilityManifest:
+        """Extract a CapabilityManifest from the most recently compiled AST.
+
+        This runs AFTER compilation succeeds but BEFORE the program is handed
+        to the executor.  The manifest becomes part of the compiled output —
+        it is NOT optional.
+
+        Args:
+            source: Optional source text for computing program_id.
+                    If omitted, the source key from the most recent compilation
+                    is used.
+
+        Returns:
+            A fully populated CapabilityManifest.
+
+        Raises:
+            CompileError: If no AST is available (compile() must be called first).
+        """
+        # Use cached AST from most recent compilation
+        if not source:
+            # Try to use the most recently cached source key
+            pass
+
+        # We need the most recent AST — find it from the cache
+        ast = None
+        effective_source = source or ""
+        if _src_key := getattr(self, '_last_src_key', None):
+            cached = _AST_CACHE.get(_src_key)
+            if cached:
+                ast = cached.get("ast")
+
+        if ast is None:
+            raise CompileError(
+                "extract_manifest() requires a successful compile() call first. "
+                "No compiled AST available."
+            )
+
+        return EffectExtractor.extract(ast, effective_source)
+
+    def compile_and_manifest(self, source: str) -> tuple[dict[str, Any], CapabilityManifest]:
+        """Compile source AND extract the capability manifest in one call.
+
+        This is the recommended API for the full compilation pipeline.
+        Returns (compile_result, manifest).
+        """
+        result = self.compile(source)
+        # Store source key for extract_manifest
+        self._last_src_key = hashlib.sha256(source.strip().encode()).hexdigest()
+        manifest = EffectExtractor.extract(result["ast"], source)
+        return result, manifest
 
     # ── Post-parse expansion passes ──────────────────────────────────────────
 

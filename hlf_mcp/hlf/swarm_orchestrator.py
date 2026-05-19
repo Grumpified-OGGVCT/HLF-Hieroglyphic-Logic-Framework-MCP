@@ -26,6 +26,7 @@ from typing import Any, TYPE_CHECKING
 
 from hlf_mcp.hlf import HLFCompiler, language_to_hlf, hlf_source_to_english
 from hlf_mcp.hlf.compiler import CompileError
+from hlf_mcp.hlf.capability_manifest import CapabilityManifest
 from hlf_mcp.hlf.formal_verifier import (
     FormalVerifier,
     VerificationGate,
@@ -102,6 +103,8 @@ class SwarmOrchestrator:
         verifier: FormalVerifier | None = None,
         llm_bridge: HLFLLMBridge | None = None,
         consensus: SwarmLedger | None = None,
+        default_capabilities: set[str] | None = None,
+        session_tier: str = "hearth",
     ) -> None:
         self.compiler = HLFCompiler(strict_align=True)
         self.governance = governance or WitnessGovernance()
@@ -109,6 +112,11 @@ class SwarmOrchestrator:
         self.observer = observer or SwarmObserver()
         self.llm_bridge = llm_bridge
         self.consensus = consensus  # optional SwarmLedger for delegation/dissent/vote tracking
+        # Capability manifest gating
+        self.default_capabilities: set[str] = default_capabilities or {
+            "network", "model", "filesystem", "memory", "local"
+        }
+        self.session_tier: str = session_tier
 
     # ── Has LLM bridge? ─────────────────────────────────────────────────────
 
@@ -248,9 +256,14 @@ class SwarmOrchestrator:
         description: str,
         swarm_id: str,
     ) -> None:
-        """Populate verification phase results (compile + formal verify + NL)."""
+        """Populate verification phase results (compile + manifest + formal verify + NL)."""
         ver_results: list[dict[str, Any]] = []
         compile_ast: dict[str, Any] = {}
+        manifest_ok: bool = True
+        manifest_blocked_reasons: list[str] = []
+        manifest_trust_tier: str = "advisory"
+        manifest_capabilities: list[str] = []
+
         try:
             compile_result = self.compiler.compile(hlf_executed)
             compile_ok = compile_result is not None and compile_result.get("status") in (None, "ok")
@@ -259,6 +272,25 @@ class SwarmOrchestrator:
             compile_ok = False
             compile_result = {"status": "compile_error"}
 
+        # ── Capability Manifest extraction & gating ─────────────────────
+        if compile_ok and compile_ast:
+            try:
+                from hlf_mcp.hlf.effect_extractor import EffectExtractor
+                manifest = EffectExtractor.extract(compile_ast, hlf_executed)
+                manifest_trust_tier = manifest.trust_tier
+                manifest_capabilities = sorted(manifest.required_capabilities)
+
+                # Gate: check capabilities
+                admitted, reasons = manifest.full_check(
+                    self.default_capabilities, self.session_tier
+                )
+                manifest_ok = admitted
+                manifest_blocked_reasons = reasons
+            except Exception:
+                manifest_ok = False
+                manifest_blocked_reasons = ["Manifest extraction failed"]
+
+        # ── Formal Verification Gate ────────────────────────────────────
         try:
             if compile_ast:
                 report = self.verifier.verify_ast(compile_ast)
@@ -266,6 +298,10 @@ class SwarmOrchestrator:
                 gate_decision = VerificationGate.gate(report, "hearth")  # swarm agents are hearth-tier
         except Exception:
             ver_results = []
+            gate_decision = GateDecision.BLOCK
+
+        # If manifest blocked, override gate decision
+        if not manifest_ok:
             gate_decision = GateDecision.BLOCK
 
         gas_estimate = int(compile_result.get("gas_estimate", 0)) if compile_result else 0
@@ -286,6 +322,10 @@ class SwarmOrchestrator:
             "gas_estimate": gas_estimate,
             "verification_checks": len(ver_results),
             "gate_decision": gate_decision,
+            "manifest_ok": manifest_ok,
+            "manifest_blocked_reasons": manifest_blocked_reasons,
+            "manifest_trust_tier": manifest_trust_tier,
+            "manifest_capabilities": manifest_capabilities,
             "time_ms": (phase.finished_ns - phase.started_ns) / 1_000_000,
             "nl_summary": nl_summary,
         }
@@ -294,8 +334,8 @@ class SwarmOrchestrator:
         self._emit(
             swarm_id, phase.phase_id, phase.agent_id, phase.role,
             "complete",
-            f"Verifier: compile={'OK' if compile_ok else 'FAIL'}, {lint_errors} errors, "
-            f"gas={gas_estimate}, {len(ver_results)} checks",
+            f"Verifier: compile={'OK' if compile_ok else 'FAIL'}, manifest={'OK' if manifest_ok else 'BLOCKED'}, "
+            f"{lint_errors} errors, gas={gas_estimate}, {len(ver_results)} checks",
             phase.metrics,
         )
 

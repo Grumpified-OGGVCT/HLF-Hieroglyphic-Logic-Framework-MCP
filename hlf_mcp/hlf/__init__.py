@@ -13,8 +13,10 @@ from hlf_mcp.hlf.authority import (
 )
 from hlf_mcp.hlf.benchmark import HLFBenchmark
 from hlf_mcp.hlf.bytecode import HLFBytecode
+from hlf_mcp.hlf.capability_manifest import CapabilityManifest
 from hlf_mcp.hlf.codegen import HLFCodeGenerator
 from hlf_mcp.hlf.compiler import HLFCompiler
+from hlf_mcp.hlf.effect_extractor import EffectExtractor
 from hlf_mcp.hlf.embodied import (
     EmbodiedContractAssessment,
     assess_embodied_host_call,
@@ -68,8 +70,10 @@ __all__ = [
     "BRIDGE_RECOVERY_MATERIAL",
     "AUTHORITY_SURFACES",
     "HLFBytecode",
+    "CapabilityManifest",
     "HLFCodeGenerator",
     "HLFCompiler",
+    "EffectExtractor",
     "HLFFormatter",
     "HLFLinter",
     "HLFRuntime",

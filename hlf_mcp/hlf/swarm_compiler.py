@@ -36,6 +36,20 @@ class AgentDecl:
     input_spec: str | dict[str, Any]
     output_spec: str | dict[str, Any]
     constraints: list[str] = field(default_factory=list)
+    schema_variant: str = "full"  # "full", "summary", "delta", "proof"
+    persona: str = ""  # assigned persona name (e.g., "Builder", "Steward")
+
+
+@dataclass
+class PersonaDef:
+    """Persona-first agent definition."""
+    name: str
+    description: str = ""
+    capabilities: list[str] = field(default_factory=list)
+    trust_tier: str = "hearth"
+    default_constraints: list[str] = field(default_factory=list)
+    communication_style: str = "precise"
+    supervision: list[str] = field(default_factory=list)  # agents this persona supervises
 
 
 @dataclass
@@ -51,6 +65,7 @@ class SwarmSpec:
     effects: dict[str, Effect] = field(default_factory=dict)
     layers: list[list[str]] = field(default_factory=list)
     constraints: dict[str, str] = field(default_factory=dict)
+    personas: dict[str, PersonaDef] = field(default_factory=dict)
     architecture: dict[str, Any] = field(default_factory=dict)
     trace_config: dict[str, Any] = field(default_factory=dict)
     checkpoint_config: dict[str, Any] = field(default_factory=dict)
@@ -175,6 +190,8 @@ class SwarmCompiler:
                 continue
             if line.startswith("interface "):
                 i = self._parse_interface(lines, i, spec)
+            elif line.startswith("persona "):
+                i = self._parse_persona(lines, i, spec)
             elif line.startswith("agent "):
                 i = self._parse_agent(lines, i, spec)
             elif line.startswith("architecture {"):
@@ -241,22 +258,72 @@ class SwarmCompiler:
         input_spec: str | dict[str, Any] = "none"
         output_spec: str | dict[str, Any] = "none"
         constraints: list[str] = []
+        schema_variant = "full"
+        persona = ""
         i += 1
         while i < len(lines) and not lines[i].strip().startswith("}"):
             line = lines[i].strip().rstrip(",")
             if line.startswith("role:"):
                 role = line.split(":", 1)[1].strip().strip('"')
+            elif line.startswith("persona:"):
+                persona = line.split(":", 1)[1].strip().strip('"')
             elif line.startswith("input:"):
                 raw = line.split(":", 1)[1].strip()
                 input_spec = self._parse_type_or_dict(raw)
             elif line.startswith("output:"):
                 raw = line.split(":", 1)[1].strip()
                 output_spec = self._parse_type_or_dict(raw)
+            elif line.startswith("schema_variant:") or line.startswith("schema-variant:"):
+                schema_variant = line.split(":", 1)[1].strip().strip('"')
             elif line.startswith("constraints:"):
                 raw = line.split(":", 1)[1].strip()
                 constraints = [c.strip().strip('"') for c in raw.strip("[]").split(",") if c.strip()]
             i += 1
-        spec.agents[name] = AgentDecl(name, role, input_spec, output_spec, constraints)
+        spec.agents[name] = AgentDecl(name, role, input_spec, output_spec, constraints, schema_variant, persona)
+        return i + 1
+
+    def _parse_persona(self, lines: list[str], i: int, spec: SwarmSpec) -> int:
+        """Parse a persona block: persona Name { ... }."""
+        header = lines[i].strip()
+        name = header[len("persona "):].split("{")[0].strip()
+        description = ""
+        capabilities: list[str] = []
+        trust_tier = "hearth"
+        default_constraints: list[str] = []
+        communication_style = "precise"
+        supervision: list[str] = []
+        i += 1
+        while i < len(lines) and not lines[i].strip().startswith("}"):
+            line = lines[i].strip().rstrip(",")
+            if ":" in line:
+                k, v = line.split(":", 1)
+                k = k.strip()
+                v = v.strip().strip('"')
+                if k == "description":
+                    description = v
+                elif k == "capabilities":
+                    v_clean = v.strip("[]")
+                    capabilities = [c.strip().strip('"') for c in v_clean.split(",") if c.strip()]
+                elif k == "trust_tier":
+                    trust_tier = v
+                elif k == "default_constraints":
+                    v_clean = v.strip("[]")
+                    default_constraints = [c.strip().strip('"') for c in v_clean.split(",") if c.strip()]
+                elif k == "communication_style":
+                    communication_style = v
+                elif k == "supervision":
+                    v_clean = v.strip("[]")
+                    supervision = [s.strip().strip('"') for s in v_clean.split(",") if s.strip()]
+            i += 1
+        spec.personas[name] = PersonaDef(
+            name=name,
+            description=description,
+            capabilities=capabilities,
+            trust_tier=trust_tier,
+            default_constraints=default_constraints,
+            communication_style=communication_style,
+            supervision=supervision,
+        )
         return i + 1
 
     def _parse_type_or_dict(self, raw: str) -> str | dict[str, Any]:

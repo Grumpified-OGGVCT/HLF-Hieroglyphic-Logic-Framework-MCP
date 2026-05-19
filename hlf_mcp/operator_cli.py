@@ -11,6 +11,8 @@ from hlf_mcp.server_memory import apply_memory_governance
 from hlf_mcp.server_resources import render_resource_uri
 from hlf_mcp.server_translation import run_hlf_do
 from hlf_mcp.weekly_artifacts import summarize_weekly_artifacts
+from hlf_mcp.hlf.formal_verifier import FormalVerifier
+from hlf_mcp.hlf.compiler import HLFCompiler
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -104,6 +106,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Inspect packaged formal-verification status through a named operator command",
     )
     formal_verifier_parser.add_argument("--json", action="store_true")
+
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Run the formal verifier on a given HLF source file",
+    )
+    verify_parser.add_argument("source", help="Path to .hlf source file to verify")
+    verify_parser.add_argument("--json", action="store_true")
+    verify_parser.add_argument("--gas-budget", type=int, default=10_000, help="Gas budget for verification")
 
     entropy_anchor_parser = subparsers.add_parser(
         "entropy-anchor",
@@ -329,6 +339,85 @@ def _formal_verifier_command(args: argparse.Namespace) -> int:
     return _render_json_resource(ctx, "hlf://status/formal_verifier", as_json=bool(args.json))
 
 
+def _verify_command(args: argparse.Namespace) -> int:
+    """Verify an HLF source file using the formal verifier."""
+    source_path = Path(args.source)
+    if not source_path.exists():
+        payload = {
+            "status": "error",
+            "error": "file_not_found",
+            "path": str(source_path),
+        }
+        print_payload(payload, as_json=bool(args.json))
+        return 1
+
+    if source_path.suffix not in (".hlf", ".txt"):
+        payload = {
+            "status": "error",
+            "error": "not_hlf_file",
+            "path": str(source_path),
+            "suffix": source_path.suffix,
+        }
+        print_payload(payload, as_json=bool(args.json))
+        return 1
+
+    try:
+        source = source_path.read_text(encoding="utf-8")
+    except Exception as exc:
+        payload = {
+            "status": "error",
+            "error": "read_error",
+            "path": str(source_path),
+            "detail": str(exc),
+        }
+        print_payload(payload, as_json=bool(args.json))
+        return 1
+
+    compiler = HLFCompiler(strict_align=True)
+    verifier = FormalVerifier()
+
+    # Step 1: Validate
+    validation = compiler.validate(source)
+
+    # Step 2: Compile
+    compile_error = ""
+    try:
+        compile_result = compiler.compile(source)
+        compile_ok = compile_result is not None and compile_result.get("status") in (None, "ok")
+        compile_ast = compile_result.get("ast", {}) if compile_result else {}
+    except Exception as exc:
+        compile_ok = False
+        compile_ast = {}
+        compile_error = str(exc)
+
+    # Step 3: Verify
+    ver_results: list[dict[str, Any]] = []
+    gate_decision = "blocked"
+    if compile_ok and compile_ast:
+        try:
+            report = verifier.verify_ast(compile_ast, gas_budget=args.gas_budget)
+            ver_results = report.to_dict().get("results", [])
+            from hlf_mcp.hlf.formal_verifier import VerificationGate
+            gate_decision = str(VerificationGate.gate(report, "hearth"))
+        except Exception as exc:
+            ver_results = [{"error": str(exc)}]
+    elif not compile_ok:
+        ver_results = [{"error": f"Compilation failed: {compile_error or 'unknown'}"}]
+
+    payload: dict[str, Any] = {
+        "status": "ok" if compile_ok else "compile_error",
+        "path": str(source_path),
+        "source_lines": len(source.splitlines()),
+        "valid": validation.get("valid", False),
+        "compile_success": compile_ok,
+        "verification_checks": len(ver_results),
+        "gate_decision": gate_decision,
+        "results": ver_results,
+    }
+    print_payload(payload, as_json=bool(args.json))
+    return 0 if compile_ok else 1
+
+
 def _entropy_anchor_command(args: argparse.Namespace) -> int:
     ctx = build_server_context()
     return _render_json_resource(ctx, "hlf://status/entropy_anchor", as_json=bool(args.json))
@@ -398,6 +487,8 @@ def main(argv: list[str] | None = None) -> int:
         return _instinct_status_command(args)
     if args.command == "formal-verifier":
         return _formal_verifier_command(args)
+    if args.command == "verify":
+        return _verify_command(args)
     if args.command == "entropy-anchor":
         return _entropy_anchor_command(args)
     if args.command == "approval-review":

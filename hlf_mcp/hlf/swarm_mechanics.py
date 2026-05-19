@@ -15,6 +15,60 @@ from hlf_mcp.hlf.governance_proofs import (
 SWARM_ARTIFACT_KIND = "hlf_swarm_mechanics"
 SWARM_CONTRACT_VERSION = "1.0"
 
+# ── Output Schema Variants ──────────────────────────────────────────────────
+# Workers can emit different output schemas based on the context:
+#   "full"    — All fields, complete output (default)
+#   "summary" — Key fields only, condensed representation
+#   "delta"   — Changes only, diff from previous state
+#   "proof"   — Verification-focused, includes evidence and audit trail
+
+SCHEMA_VARIANTS = frozenset({"full", "summary", "delta", "proof"})
+
+WORKER_TEMPLATE = {
+    "full": {
+        "description": "Complete output with all fields",
+        "fields": ["agent_id", "role", "goal", "hlf_source", "scope", "constraints",
+                    "capabilities", "dependencies", "metrics", "status", "timestamp"],
+    },
+    "summary": {
+        "description": "Key fields only, condensed representation",
+        "fields": ["agent_id", "goal", "status", "metrics_summary"],
+    },
+    "delta": {
+        "description": "Changes only, diff from previous state",
+        "fields": ["agent_id", "changed_fields", "previous_hash", "new_hash"],
+    },
+    "proof": {
+        "description": "Verification-focused, includes evidence and audit trail",
+        "fields": ["agent_id", "claim", "proof", "evidence_chain", "verification_status"],
+    },
+}
+
+
+def resolve_schema_variant(variant: str) -> dict[str, Any]:
+    """Resolve a schema variant name to its template definition.
+
+    Args:
+        variant: One of "full", "summary", "delta", "proof".
+
+    Returns:
+        Template dict with description and fields.
+
+    Raises:
+        ValueError: If variant is not a recognized schema variant.
+    """
+    variant = variant.lower().strip()
+    if variant not in SCHEMA_VARIANTS:
+        raise ValueError(
+            f"Unknown schema variant '{variant}'. Must be one of: {', '.join(sorted(SCHEMA_VARIANTS))}"
+        )
+    return dict(WORKER_TEMPLATE[variant])
+
+
+def validate_schema_variant(variant: str) -> bool:
+    """Check if a schema variant name is valid."""
+    return variant.lower().strip() in SCHEMA_VARIANTS
+
 
 def build_swarm_mechanics_artifact(
     *,

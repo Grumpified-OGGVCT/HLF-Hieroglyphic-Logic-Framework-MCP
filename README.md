@@ -32,6 +32,8 @@ See `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_OPERATOR_BUILD_NOTES_2026
 [![HLF v0.5](https://img.shields.io/badge/HLF-v0.5.0-purple)](governance/bytecode_spec.yaml)
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![Readiness](https://img.shields.io/badge/readiness-64.7%25-orange)](docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md)
+[![Dashboard](https://img.shields.io/badge/dashboard-live-brightgreen)](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)
 
 ![HLF — Hieroglyphic Logic Framework · MCP Server](docs/social_preview.svg)
 
@@ -1758,6 +1760,112 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 - [ ] **Cross-model alignment test**: verify any LLM can produce valid HLF without fine-tuning
 - [ ] **Dream State self-improvement**: nightly DSPy regression on compressed HLF rules
 - [ ] **HLF self-programming**: the OS eventually writes its own HLF programs to orchestrate integrations
+
+---
+
+## 19. Swarm Coordination
+
+HLF's swarm coordination layer provides governed multi-agent orchestration with verification gating, capability manifests, and two-channel execution. This is the Phase 6 constitutive architecture surface.
+
+### Multi-Agent Orchestration
+
+Three specialized agents (Planner → Executor → Verifier) coordinate through the live HLF translation → compilation pipeline. When an LLM bridge is available, the planner and executor route through governed Ollama LLM calls for genuinely intelligent HLF generation rather than pattern-matched output.
+
+- **Planner**: Decomposes intent into structured HLF plans (⌘ GOAL, Δ actions, Ж constraints, Σ results)
+- **Executor**: Executes compiled HLF capsules with effect-bounded runtime enforcement
+- **Verifier**: Runs formal verification gates before allowing execution to proceed
+
+```python
+from hlf_mcp.hlf.swarm_orchestrator import SwarmOrchestrator
+from hlf_mcp.hlf.formal_verifier import FormalVerifier
+from hlf_mcp.hlf.swarm_observer import SwarmObserver
+from hlf_mcp.hlf.witness_governance import WitnessGovernance
+
+orchestrator = SwarmOrchestrator(
+    observer=SwarmObserver(),
+    governance=WitnessGovernance(),
+    verifier=FormalVerifier(),
+)
+
+# Run a 3-agent swarm: Planner → Executor → Verifier
+result = await orchestrator.run_swarm(
+    intent="Deploy auth service with rollback capability to staging",
+    agents=[
+        Agent("planner", "planner"),
+        Agent("executor", "executor"),
+        Agent("verifier", "verifier"),
+    ],
+)
+```
+
+### Verification Gating
+
+Every compiled HLF program passes through a **constitutive** (not advisory) verification gate before execution. The gate checks:
+
+- CapabilityManifest alignment (declared effects must match actual effects)
+- Trust tier requirements (sovereign, untrusted, advisory)
+- Input/output contract satisfaction
+- Proof surface validity
+
+Gates are tier-differentiated: `sovereign` tier programs may auto-pass, while `untrusted` programs are always gated.
+
+### Capability Manifests
+
+Every compiled HLF program produces a signed `CapabilityManifest` — a first-class compiled artifact that declares:
+
+- **Typed effects** the program produces (filesystem, network, subprocess, etc.)
+- **System capabilities** required
+- **Input/output contracts** with failure modes
+- **Proof surfaces** carried
+- **Minimum trust tier** for execution
+
+The manifest bridges the type system (Phase 1) and the verification gate (Phase 3). No manifest, no execution.
+
+### Two-Channel Execution
+
+The Phase 6 execution model separates code from data:
+
+| Channel | Contents | Properties |
+| --- | --- | --- |
+| **InstructionChannel** | Compiled bytecode, CapabilityManifest, VerificationReport, cryptographic signature | Immutable, verified, signed, tamper-evident |
+| **DataChannel** | Named inputs, runtime-granted capabilities, trust boundaries | Dynamic, provenance-tracked, degrading trust |
+
+Every data value carries a `ProvenanceChain` — immutable, cascading, and fully auditable — tracking where data came from, how it was transformed, and its current trust score.
+
+### Swarm MCP Tools
+
+The packaged MCP server exposes four swarm tools:
+
+- `hlf_swarm_run` — execute a 3-agent swarm (Planner → Executor → Verifier)
+- `hlf_swarm_progress` — progress event log for a running swarm
+- `hlf_swarm_witness` — trust/degradation status for an agent or swarm
+- `hlf_swarm_verify` — formal verification results for an HLF message
+
+### Quick-Start: Swarm Coordination
+
+```bash
+# Launch the MCP server
+uv run hlf-mcp
+
+# In another terminal, review swarm state
+uv run hlf-operator instinct-status --json
+uv run hlf-operator governed-route --json
+
+# Run the compounding benchmark (HKS memory + swarm translation)
+python compounding_benchmark.py
+
+# Review operator evidence
+uv run hlf-evidence list --status promoted
+```
+
+### Current Status
+
+- **Packaged**: SwarmOrchestrator, FormalVerifier, CapabilityManifest, TwoChannelExecutor
+- **Proof surface**: 57 two-channel tests, 108 manifest tests, 38 gate tests
+- **MCP exposure**: 4 swarm tools via `server_swarm.py`
+- **Dashboard**: [HLF Status Dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)
+
+See `hlf_mcp/hlf/swarm_orchestrator.py`, `hlf_mcp/hlf/two_channel_executor.py`, `hlf_mcp/hlf/capability_manifest.py`, and `hlf_mcp/server_swarm.py` for implementation details.
 
 ---
 

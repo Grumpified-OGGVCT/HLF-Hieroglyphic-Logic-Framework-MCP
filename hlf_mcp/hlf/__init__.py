@@ -41,6 +41,17 @@ from hlf_mcp.hlf.swarm_mechanics import (
     build_swarm_mechanics_artifact,
     materialize_swarm_hlf,
 )
+
+# Phase 7: Distributed Routing Fabric
+from hlf_mcp.hlf.routing.node_registry import NodeRegistry, RegisteredNode
+from hlf_mcp.hlf.routing.capability_router import CapabilityRouter, RouteMatch, WorkRequest
+from hlf_mcp.hlf.routing.load_balancer import LoadBalancer
+from hlf_mcp.hlf.routing.failover import FailoverManager, NodeFailureEvent
+
+# Phase 7: Knowledge Memory Contracts
+from hlf_mcp.hlf.knowledge.freshness_guarantee import FreshnessGuarantee, FreshnessGuaranteeChecker
+from hlf_mcp.hlf.knowledge.consistency_proof import ConsistencyProof, ConsistencyProofResult
+from hlf_mcp.hlf.knowledge.memory_lease import LeaseManager, LeaseViolationError, MemoryLease
 from hlf_mcp.hlf.symbolic_surfaces import (
     audit_symbolic_surface,
     compile_symbolic_surface,
@@ -123,4 +134,21 @@ __all__ = [
     "TwoChannelExecutor",
     "build_instruction_channel",
     "build_data_channel",
+    # Phase 7: Distributed Routing Fabric
+    "NodeRegistry",
+    "RegisteredNode",
+    "CapabilityRouter",
+    "RouteMatch",
+    "WorkRequest",
+    "LoadBalancer",
+    "FailoverManager",
+    "NodeFailureEvent",
+    # Phase 7: Knowledge Memory Contracts
+    "FreshnessGuarantee",
+    "FreshnessGuaranteeChecker",
+    "ConsistencyProof",
+    "ConsistencyProofResult",
+    "LeaseManager",
+    "LeaseViolationError",
+    "MemoryLease",
 ]

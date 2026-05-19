@@ -35,6 +35,22 @@ from hlf_mcp.hlf.routing import (  # noqa: E402
     select_model_by_tier,
 )
 
+# ── Imports for distributed routing subpackage tests ──────────────────────
+from hlf_mcp.hlf.routing.node_registry import (  # noqa: E402
+    NodeRegistry,
+    RegisteredNode,
+)
+from hlf_mcp.hlf.routing.capability_router import (  # noqa: E402
+    CapabilityRouter,
+    RouteMatch,
+    WorkRequest,
+)
+from hlf_mcp.hlf.routing.load_balancer import LoadBalancer  # noqa: E402
+from hlf_mcp.hlf.routing.failover import (  # noqa: E402
+    FailoverManager,
+    NodeFailureEvent,
+)
+
 
 # ── RouteProfile tests ─────────────────────────────────────────────────────
 
@@ -498,3 +514,484 @@ def test_route_with_fallback_evidence_denial():
     assert isinstance(profile, RouteProfile)
     assert profile.tier == "denied"
     assert profile.confidence == 0.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for hlf_mcp.hlf.routing PACKAGE (distributed routing fabric)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+# ── NodeRegistry tests ───────────────────────────────────────────────────────
+
+
+class TestNodeRegistry:
+    """Tests for NodeRegistry — distributed node discovery and registration."""
+
+    def test_node_registry_register(self):
+        """Register a node and verify it exists."""
+        registry = NodeRegistry()
+        node = registry.register(
+            "node-1", "10.0.0.1", 9090,
+            capabilities={"inference": 8, "embedding": 5},
+            metadata={"zone": "us-east"},
+        )
+        assert node.node_id == "node-1"
+        assert node.host == "10.0.0.1"
+        assert node.port == 9090
+        assert node.capabilities == {"inference": 8, "embedding": 5}
+        assert node.metadata == {"zone": "us-east"}
+        assert node.health == "healthy"
+        assert node.last_heartbeat > 0
+
+        # Verify retrieval
+        retrieved = registry.get_node("node-1")
+        assert retrieved is not None
+        assert retrieved.node_id == "node-1"
+        assert retrieved.host == "10.0.0.1"
+
+    def test_node_registry_unregister(self):
+        """Register then unregister, verify gone."""
+        registry = NodeRegistry()
+        registry.register("node-2", "10.0.0.2", 9091)
+        assert registry.get_node("node-2") is not None
+
+        result = registry.unregister("node-2")
+        assert result is True
+        assert registry.get_node("node-2") is None
+
+        # Unregistering again returns False
+        result = registry.unregister("node-2")
+        assert result is False
+
+    def test_node_registry_list_by_capability(self):
+        """Register nodes with different capabilities, filter by capability."""
+        registry = NodeRegistry()
+        registry.register("node-a", "10.0.0.1", 9090,
+                          capabilities={"inference": 8})
+        registry.register("node-b", "10.0.0.2", 9091,
+                          capabilities={"embedding": 5})
+        registry.register("node-c", "10.0.0.3", 9092,
+                          capabilities={"inference": 6, "embedding": 3})
+
+        inference_nodes = registry.list_by_capability("inference")
+        assert len(inference_nodes) == 2
+        ids = {n.node_id for n in inference_nodes}
+        assert ids == {"node-a", "node-c"}
+
+        embedding_nodes = registry.list_by_capability("embedding")
+        assert len(embedding_nodes) == 2
+        ids = {n.node_id for n in embedding_nodes}
+        assert ids == {"node-b", "node-c"}
+
+        # Unknown capability returns empty
+        none_nodes = registry.list_by_capability("unknown")
+        assert len(none_nodes) == 0
+
+    def test_node_registry_heartbeat(self):
+        """Heartbeat updates timestamp."""
+        import time
+        registry = NodeRegistry()
+        node = registry.register("node-1", "10.0.0.1", 9090)
+        original_ts = node.last_heartbeat
+
+        # Small sleep to ensure time difference
+        time.sleep(0.01)
+        result = registry.heartbeat("node-1")
+        assert result is True
+        assert node.last_heartbeat > original_ts
+
+        # Heartbeat on unknown node returns False
+        result = registry.heartbeat("nonexistent")
+        assert result is False
+
+    def test_node_registry_mark_unhealthy(self):
+        """mark_unhealthy sets health to unhealthy."""
+        registry = NodeRegistry()
+        registry.register("node-1", "10.0.0.1", 9090)
+        registry.mark_unhealthy("node-1")
+
+        node = registry.get_node("node-1")
+        assert node is not None
+        assert node.health == "unhealthy"
+
+        # Should be excluded from healthy_nodes
+        assert len(registry.healthy_nodes()) == 0
+        assert len(registry.operational_nodes()) == 0
+
+        # Unknown node returns False
+        result = registry.mark_unhealthy("nonexistent")
+        assert result is False
+
+    def test_node_registry_thread_safety(self):
+        """Concurrent registrations don't corrupt."""
+        import threading
+        registry = NodeRegistry()
+        errors = []
+
+        def register_node(node_id: str) -> None:
+            try:
+                registry.register(node_id, "10.0.0.1", 9090,
+                                  capabilities={"test": 1})
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = []
+        for i in range(50):
+            t = threading.Thread(
+                target=register_node,
+                args=(f"node-{i}",),
+                daemon=True,
+            )
+            threads.append(t)
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+        nodes = registry.list_nodes()
+        assert len(nodes) == 50
+        # Verify all nodes have valid health
+        for node in nodes:
+            assert node.health == "healthy"
+            assert node.host == "10.0.0.1"
+            assert node.capabilities == {"test": 1}
+
+
+# ── CapabilityRouter tests ───────────────────────────────────────────────────
+
+
+class TestCapabilityRouter:
+    """Tests for CapabilityRouter — capability-based routing to nodes."""
+
+    def _setup_registry_with_nodes(self) -> NodeRegistry:
+        """Helper to create a registry with diverse nodes."""
+        registry = NodeRegistry()
+        registry.register(
+            "node-inference", "10.0.0.1", 9090,
+            capabilities={"inference": 9, "embedding": 3},
+        )
+        registry.register(
+            "node-embedding", "10.0.0.2", 9091,
+            capabilities={"embedding": 8, "inference": 4},
+        )
+        registry.register(
+            "node-general", "10.0.0.3", 9092,
+            capabilities={"inference": 6, "embedding": 5, "vision": 7},
+        )
+        registry.register(
+            "node-visual", "10.0.0.4", 9093,
+            capabilities={"vision": 9},
+        )
+        # Unhealthy node — should be excluded by find_capable_nodes
+        registry.register(
+            "node-dead", "10.0.0.5", 9094,
+            capabilities={"inference": 10},
+        )
+        registry.mark_unhealthy("node-dead")
+        return registry
+
+    def test_capability_router_find_capable_nodes(self):
+        """Finds nodes with matching capability at sufficient proficiency."""
+        registry = self._setup_registry_with_nodes()
+        router = CapabilityRouter(registry)
+
+        # All nodes with inference capability at default min_proficiency=1
+        nodes = router.find_capable_nodes("inference")
+        ids = {n.node_id for n in nodes}
+        assert ids == {"node-inference", "node-embedding", "node-general"}
+        # At proficiency 5+ (node-embedding has only 4)
+        nodes = router.find_capable_nodes("inference", min_proficiency=5)
+        ids = {n.node_id for n in nodes}
+        assert ids == {"node-inference", "node-general"}
+
+        # Unhealthy node is excluded
+        assert "node-dead" not in {n.node_id for n in router.find_capable_nodes("inference")}
+
+        # Unknown capability
+        assert len(router.find_capable_nodes("unknown")) == 0
+
+    def test_capability_router_match_request(self):
+        """Matches a WorkRequest to the best node."""
+        registry = self._setup_registry_with_nodes()
+        router = CapabilityRouter(registry)
+
+        request = WorkRequest(
+            request_id="req-1",
+            capability="inference",
+            required_proficiency=5,
+        )
+        match = router.match_request(request)
+        assert match.matched is True
+        assert match.matched_node is not None
+        # node-inference has proficiency 9, node-general has 6 — best is node-inference
+        assert match.matched_node.node_id == "node-inference"
+        assert match.confidence > 0.8
+        assert "node-inference" in match.rationale
+
+        # Request with high proficiency threshold
+        request = WorkRequest(
+            request_id="req-2",
+            capability="inference",
+            required_proficiency=9,
+        )
+        match = router.match_request(request)
+        assert match.matched is True
+        assert match.matched_node.node_id == "node-inference"
+
+        # Request for capability nobody has
+        request = WorkRequest(
+            request_id="req-3",
+            capability="unknown",
+        )
+        match = router.match_request(request)
+        assert match.matched is False
+        assert match.matched_node is None
+        assert match.confidence == 0.0
+
+    def test_capability_router_exclude_nodes(self):
+        """Respects exclude_nodes in WorkRequest."""
+        registry = self._setup_registry_with_nodes()
+        router = CapabilityRouter(registry)
+
+        request = WorkRequest(
+            request_id="req-1",
+            capability="inference",
+            required_proficiency=1,
+            exclude_nodes={"node-inference"},
+        )
+        match = router.match_request(request)
+        assert match.matched is True
+        # Should skip node-inference, next best is node-general (proficiency 6)
+        assert match.matched_node.node_id == "node-general"
+
+        # Exclude all capable nodes
+        request = WorkRequest(
+            request_id="req-2",
+            capability="inference",
+            exclude_nodes={"node-inference", "node-general", "node-embedding", "node-dead"},
+        )
+        match = router.match_request(request)
+        assert match.matched is False
+        assert match.matched_node is None
+
+    def test_capability_router_require_healthy(self):
+        """Filters out unhealthy nodes when require_healthy=True."""
+        registry = self._setup_registry_with_nodes()
+        router = CapabilityRouter(registry)
+
+        # Mark node-inference as degraded
+        registry.mark_degraded("node-inference")
+
+        request = WorkRequest(
+            request_id="req-1",
+            capability="inference",
+            required_proficiency=1,
+        )
+        # With require_healthy=True (default in route_with_constraints)
+        matches = router.route_with_constraints(request, max_nodes=10, require_healthy=True)
+        ids = {m.matched_node.node_id for m in matches if m.matched_node}
+        assert "node-inference" not in ids  # degraded, excluded
+        assert "node-general" in ids
+
+        # With require_healthy=False, degraded nodes are included
+        matches = router.route_with_constraints(request, max_nodes=10, require_healthy=False)
+        ids = {m.matched_node.node_id for m in matches if m.matched_node}
+        assert "node-inference" in ids  # degraded but included
+        assert "node-general" in ids
+
+
+# ── LoadBalancer tests ───────────────────────────────────────────────────────
+
+
+class TestLoadBalancer:
+    """Tests for LoadBalancer — work distribution strategies."""
+
+    def _setup_balancer(self) -> LoadBalancer:
+        """Helper to create a LoadBalancer with pre-registered nodes."""
+        registry = NodeRegistry()
+        registry.register(
+            "node-1", "10.0.0.1", 9090,
+            capabilities={"inference": 8},
+        )
+        registry.register(
+            "node-2", "10.0.0.2", 9091,
+            capabilities={"inference": 8},
+        )
+        registry.register(
+            "node-3", "10.0.0.3", 9092,
+            capabilities={"inference": 7},
+        )
+        router = CapabilityRouter(registry)
+        return LoadBalancer(registry, router, strategy="round_robin")
+
+    def test_load_balancer_round_robin(self):
+        """Distributes across nodes in sequence."""
+        lb = self._setup_balancer()
+
+        request = WorkRequest(
+            request_id="rr-req",
+            capability="inference",
+            required_proficiency=1,
+        )
+
+        # Round-robin should cycle through eligible nodes
+        match1 = lb.distribute(request)
+        match2 = lb.distribute(request)
+        match3 = lb.distribute(request)
+        match4 = lb.distribute(request)  # Should wrap back to first
+
+        assert match1.matched_node.node_id == "node-1"
+        assert match2.matched_node.node_id == "node-2"
+        assert match3.matched_node.node_id == "node-3"
+        assert match4.matched_node.node_id == "node-1"
+
+    def test_load_balancer_least_loaded(self):
+        """Picks least loaded node."""
+        lb = self._setup_balancer()
+        lb.set_strategy("least_loaded")
+
+        # Manually set some load
+        lb.increment_active("node-1")
+        lb.increment_active("node-1")
+        lb.increment_active("node-2")
+
+        request = WorkRequest(
+            request_id="ll-req",
+            capability="inference",
+        )
+        match = lb.distribute(request)
+        # node-3 has 0, node-2 has 1, node-1 has 2 → pick node-3
+        assert match.matched_node.node_id == "node-3"
+        assert lb.active_count("node-3") == 1
+
+        # Clean up
+        lb.decrement_active("node-1")
+        lb.decrement_active("node-1")
+        lb.decrement_active("node-2")
+        lb.decrement_active("node-3")
+
+    def test_load_balancer_set_strategy(self):
+        """Switching strategies works."""
+        lb = self._setup_balancer()
+        assert lb.strategy == "round_robin"
+
+        # Switch to least_loaded
+        lb.set_strategy("least_loaded")
+        assert lb.strategy == "least_loaded"
+
+        # Switch back
+        lb.set_strategy("round_robin")
+        assert lb.strategy == "round_robin"
+
+        # Unknown strategy raises error
+        import pytest
+        with pytest.raises(ValueError, match="Unknown strategy"):
+            lb.set_strategy("random")
+
+
+# ── Failover tests ───────────────────────────────────────────────────────────
+
+
+class TestFailover:
+    """Tests for FailoverManager — failure handling and recovery."""
+
+    def _setup_failover(self) -> tuple[NodeRegistry, CapabilityRouter, LoadBalancer, FailoverManager]:
+        """Helper to create a full failover setup."""
+        registry = NodeRegistry()
+        registry.register(
+            "node-alpha", "10.0.0.1", 9090,
+            capabilities={"inference": 9, "embedding": 5},
+        )
+        registry.register(
+            "node-beta", "10.0.0.2", 9091,
+            capabilities={"inference": 8, "embedding": 6},
+        )
+        registry.register(
+            "node-gamma", "10.0.0.3", 9092,
+            capabilities={"embedding": 7},
+        )
+        router = CapabilityRouter(registry)
+        lb = LoadBalancer(registry, router, strategy="round_robin")
+        failover = FailoverManager(registry, router, lb, max_retries=3)
+        return registry, router, lb, failover
+
+    def test_failover_handle_failure(self):
+        """Node marked unhealthy, alternative found."""
+        registry, router, lb, failover = self._setup_failover()
+
+        # Simulate active tasks on node-alpha
+        lb.increment_active("node-alpha")
+        lb.increment_active("node-alpha")
+
+        match = failover.handle_failure("node-alpha")
+
+        # Node should be unhealthy
+        node = registry.get_node("node-alpha")
+        assert node.health == "unhealthy"
+
+        # Active tasks cleared
+        assert lb.active_count("node-alpha") == 0
+
+        # Alternative found — handle_failure tries capabilities in descending
+        # proficiency order. node-alpha's best cap is inference:9, but
+        # required_proficiency=9 excludes node-beta (inference:8). Falls back
+        # to embedding:5 → node-gamma (proficiency 7) beats node-beta (6).
+        assert match.matched is True
+        assert match.matched_node.node_id == "node-gamma"
+
+        # Failure event recorded
+        events = failover.failure_events
+        assert len(events) == 1
+        assert events[0].node_id == "node-alpha"
+
+    def test_failover_recover_node(self):
+        """Recover marks node healthy again."""
+        registry, router, lb, failover = self._setup_failover()
+
+        registry.mark_unhealthy("node-alpha")
+        assert registry.get_node("node-alpha").health == "unhealthy"
+
+        result = failover.recover_node("node-alpha")
+        assert result is True
+        assert registry.get_node("node-alpha").health == "healthy"
+
+        # Recovering unknown node returns False
+        result = failover.recover_node("nonexistent")
+        assert result is False
+
+    def test_failover_max_retries(self):
+        """Respects max_retries in failover_route."""
+        registry, router, lb, failover = self._setup_failover()
+        # Set max_retries to 2 for this test
+        failover._max_retries = 2
+
+        # Create a request excluding all nodes except the failing one
+        request = WorkRequest(
+            request_id="fail-req",
+            capability="inference",
+            exclude_nodes={"node-beta", "node-alpha"},  # only node-alpha has inference
+        )
+
+        # Patch time.sleep to avoid delays
+        with patch("time.sleep", return_value=None):
+            match = failover.failover_route(request, "node-alpha")
+
+        # All retries exhausted → no match
+        assert match.matched is False
+        assert match.matched_node is None
+        assert "exhausted" in match.rationale.lower()
+
+    def test_failover_node_failure_event(self):
+        """NodeFailureEvent dataclass works properly."""
+        event = NodeFailureEvent(
+            node_id="node-x",
+            reason="test failure",
+            previous_health="healthy",
+        )
+        d = event.to_dict()
+        assert d["node_id"] == "node-x"
+        assert d["reason"] == "test failure"
+        assert d["previous_health"] == "healthy"
+        assert "timestamp" in d

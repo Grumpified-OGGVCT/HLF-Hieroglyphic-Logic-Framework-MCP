@@ -152,6 +152,8 @@ argument: IDENT "=" value -> kv_arg
 value: ESCAPED_STRING    -> str_val
      | FLOAT             -> float_val
      | INT               -> int_val
+     | BOOL_TRUE         -> bool_true
+     | BOOL_FALSE        -> bool_false
      | VAR_REF           -> var_ref_val
      | PATH              -> path_val
      | IDENT             -> ident_val
@@ -248,6 +250,8 @@ expr_unary: MINUS expr_primary -> neg_expr
 ?expr_primary: ESCAPED_STRING -> str_val
              | FLOAT          -> float_val
              | INT            -> int_val
+             | BOOL_TRUE      -> bool_true
+             | BOOL_FALSE     -> bool_false
              | VAR_REF        -> var_ref_val
              | PATH           -> path_val
              | IDENT          -> ident_val
@@ -288,6 +292,8 @@ KW_AND.10:         "AND"
 KW_OR.10:          "OR"
 KW_NOT.10:         "NOT"
 KW_TEMPLATE.10:    "TEMPLATE"
+BOOL_TRUE.10:      "TRUE"
+BOOL_FALSE.10:     "FALSE"
 
 // ── Terminals ─────────────────────────────────────────────────────────────────
 CMP:     ">=" | "<=" | "!=" | "==" | ">" | "<"

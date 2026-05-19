@@ -711,6 +711,12 @@ class HLFTransformer(Transformer):
     def int_val(self, i):
         return _node("value", type="int", value=int(i))
 
+    def bool_true(self, tok):
+        return _node("value", type="bool", value=True)
+
+    def bool_false(self, tok):
+        return _node("value", type="bool", value=False)
+
     def ident_val(self, name):
         return _node("value", type="ident", value=str(name))
 

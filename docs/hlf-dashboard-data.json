@@ -1,0 +1,185 @@
+{
+  "dashboard_id": "936e87bdb50c120d",
+  "generated_at": "2026-05-19T20:59:21Z",
+  "overall_status": "degraded",
+  "pillar_score": {
+    "pillar": "gallery-operator-legibility",
+    "score_pct": 39.5,
+    "status": "bridge-active",
+    "target_pct": 75.0,
+    "components": {
+      "type_explorer": {
+        "status": "implemented",
+        "score_pct": 80
+      },
+      "verification_viewer": {
+        "status": "implemented",
+        "score_pct": 75
+      },
+      "manifest_viewer": {
+        "status": "implemented",
+        "score_pct": 70
+      },
+      "provenance_viewer": {
+        "status": "implemented",
+        "score_pct": 65
+      },
+      "operator_dashboard": {
+        "status": "implemented",
+        "score_pct": 60
+      }
+    }
+  },
+  "swarm": {
+    "source": "simulated",
+    "total_events": 42,
+    "recent_events": [
+      {
+        "swarm_id": "swarm-001",
+        "phase_id": "phase-compile",
+        "agent_id": "compiler-agent",
+        "role": "compiler",
+        "event_type": "complete",
+        "message": "Compiled 12 fixtures successfully",
+        "timestamp_ns": 1779224356992622848
+      },
+      {
+        "swarm_id": "swarm-001",
+        "phase_id": "phase-verify",
+        "agent_id": "verifier-agent",
+        "role": "verifier",
+        "event_type": "progress",
+        "message": "Verifying 8 properties...",
+        "timestamp_ns": 1779224358992622848
+      },
+      {
+        "swarm_id": "swarm-001",
+        "phase_id": "phase-govern",
+        "agent_id": "governor-agent",
+        "role": "governor",
+        "event_type": "started",
+        "message": "Constitutional check in progress",
+        "timestamp_ns": 1779224360992622848
+      }
+    ],
+    "active_agents": 3,
+    "has_active_phases": true
+  },
+  "verification": {
+    "source": "simulated",
+    "decisions": [
+      {
+        "program": "hello_world.hlf",
+        "decision": "PROCEED",
+        "checks_passed": 5,
+        "checks_total": 5,
+        "timestamp": "2026-05-19T20:59:21Z"
+      },
+      {
+        "program": "security_audit.hlf",
+        "decision": "WARN",
+        "checks_passed": 4,
+        "checks_total": 6,
+        "timestamp": "2026-05-19T20:59:21Z"
+      },
+      {
+        "program": "db_migration.hlf",
+        "decision": "PROCEED",
+        "checks_passed": 7,
+        "checks_total": 7,
+        "timestamp": "2026-05-19T20:59:21Z"
+      },
+      {
+        "program": "delegation.hlf",
+        "decision": "BLOCK",
+        "checks_passed": 2,
+        "checks_total": 5,
+        "timestamp": "2026-05-19T20:59:21Z"
+      }
+    ],
+    "summary": {
+      "total_programs": 4,
+      "proceed": 2,
+      "warn": 1,
+      "block": 1,
+      "pass_rate_pct": 50.0
+    }
+  },
+  "constitutional": {
+    "source": "simulated",
+    "violations": [
+      {
+        "rule_id": "R-3",
+        "rule_name": "Data Exfiltration",
+        "location": "network_output",
+        "detail": "Unsanitized data egress detected without explicit capability declaration",
+        "severity": "high",
+        "timestamp": "2026-05-19T20:59:21Z"
+      },
+      {
+        "rule_id": "R-2",
+        "rule_name": "Network Capability",
+        "location": "http_request",
+        "detail": "Network effect in untrusted code path",
+        "severity": "medium",
+        "timestamp": "2026-05-19T20:59:21Z"
+      }
+    ],
+    "summary": {
+      "total_violations": 2,
+      "high_severity": 1,
+      "medium_severity": 1,
+      "low_severity": 0,
+      "blocked_count": 1
+    }
+  },
+  "manifest_audit": {
+    "source": "simulated",
+    "deployments": [
+      {
+        "program": "security_audit.hlf",
+        "tier": "hearth",
+        "capabilities": [
+          "READ",
+          "WRITE",
+          "AUDIT"
+        ],
+        "approved": true,
+        "signature": "sha256:abc123def456",
+        "timestamp": "2026-05-19T20:59:21Z"
+      },
+      {
+        "program": "db_migration.hlf",
+        "tier": "hearth",
+        "capabilities": [
+          "READ",
+          "WRITE",
+          "FILE_IO"
+        ],
+        "approved": true,
+        "signature": "sha256:def789ghi012",
+        "timestamp": "2026-05-19T20:59:21Z"
+      },
+      {
+        "program": "agent_delegation.hlf",
+        "tier": "sovereign",
+        "capabilities": [
+          "READ",
+          "WRITE",
+          "NETWORK",
+          "AI_INFER"
+        ],
+        "approved": false,
+        "signature": "sha256:jkl345mno678",
+        "rejection_reason": "AI_INFER requires sovereign tier approval gate",
+        "timestamp": "2026-05-19T20:59:21Z"
+      }
+    ],
+    "summary": {
+      "total_deployments": 3,
+      "approved": 2,
+      "rejected": 1,
+      "approval_rate_pct": 66.7
+    }
+  }
+}

@@ -123,6 +123,20 @@ class VerificationReport:
         return sum(1 for result in self.results if result.status == VerificationStatus.ERROR)
 
     @property
+    def blocked_count(self) -> int:
+        """Count of results that would block execution at hearth tier."""
+        return sum(
+            1
+            for result in self.results
+            if result.status
+            in (
+                VerificationStatus.COUNTEREXAMPLE,
+                VerificationStatus.UNKNOWN,
+                VerificationStatus.SKIPPED,
+            )
+        )
+
+    @property
     def all_proven(self) -> bool:
         return (
             self.total_count > 0
@@ -144,6 +158,7 @@ class VerificationReport:
             "unknown": self.unknown_count,
             "skipped": self.skipped_count,
             "errors": self.error_count,
+            "blocked": self.blocked_count,
             "all_proven": self.all_proven,
             "total_duration_ms": round(self.total_duration_ms, 2),
             "z3_available": self.z3_enabled,
@@ -161,6 +176,99 @@ class VerificationReport:
             f"failed={self.failed_count}; solver={solver}; "
             f"duration_ms={self.total_duration_ms:.2f}"
         )
+
+
+class VerificationBlockedError(Exception):
+    """Raised when the verification gate blocks execution.
+
+    This is the constitutive enforcement mechanism: when a proof fails
+    at a tier that requires it, execution is blocked entirely rather
+    than proceeding with a warning.
+    """
+    def __init__(self, report: VerificationReport, tier: str) -> None:
+        self.report = report
+        self.tier = tier
+        super().__init__(
+            f"Verification blocked: {report.blocked_count} issues at tier '{tier}'"
+        )
+
+
+class GateDecision:
+    """Constants for verification gate decisions."""
+    PROCEED = "proceed"
+    BLOCK = "block"
+    WARN = "warn"
+
+
+class VerificationGate:
+    """Constitutive gate: proof required before execution.
+
+    Tier-differentiated gating logic:
+    - Hearth/Trusted: Any counterexample or unknown/skipped → BLOCK.
+      Only pure proven+no-issues → PROCEED.
+    - Approved/Watched (forge): Counterexamples → BLOCK.
+      Unknown/Skipped → WARN but PROCEED.
+    - Advisory/Untrusted (sovereign): PROCEED always (current behavior).
+    """
+
+    HEARTH_TIER: frozenset[str] = frozenset({"hearth", "trusted"})
+    STANDARD_TIER: frozenset[str] = frozenset({"approved", "watched", "forge"})
+    ADVISORY_TIER: frozenset[str] = frozenset({"untrusted", "advisory", "sovereign"})
+
+    @classmethod
+    def _normalize_tier(cls, tier: str) -> str:
+        """Normalize tier to its canonical group."""
+        normalized = str(tier or "").strip().lower()
+        if normalized in cls.HEARTH_TIER:
+            return "hearth"
+        if normalized in cls.STANDARD_TIER:
+            return "forge"
+        if normalized in cls.ADVISORY_TIER:
+            return "sovereign"
+        # Default: treat unknown tiers as advisory (safe default)
+        return "sovereign"
+
+    @staticmethod
+    def gate(report: VerificationReport, trust_tier: str) -> str:
+        """Return GateDecision: PROCEED, BLOCK, or WARN.
+
+        Args:
+            report: The verification report to evaluate.
+            trust_tier: The trust tier for the agent/session.
+
+        Returns:
+            One of GateDecision.PROCEED, GateDecision.BLOCK, or GateDecision.WARN.
+        """
+        normalized = VerificationGate._normalize_tier(trust_tier)
+
+        if normalized == "hearth":
+            # HEARTH / TRUSTED: strictest gating
+            # Any counterexample → BLOCK
+            if report.failed_count > 0 or report.error_count > 0:
+                return GateDecision.BLOCK
+            # Any unknown/skipped → BLOCK
+            if report.unknown_count > 0 or report.skipped_count > 0:
+                return GateDecision.BLOCK
+            # No constraints extracted at all → BLOCK
+            if report.total_count == 0:
+                return GateDecision.BLOCK
+            # Pure proven → PROCEED
+            return GateDecision.PROCEED
+
+        if normalized == "forge":
+            # APPROVED / WATCHED / FORGE: counterexamples → BLOCK
+            if report.failed_count > 0 or report.error_count > 0:
+                return GateDecision.BLOCK
+            # Unknown/Skipped → WARN but PROCEED
+            if report.unknown_count > 0 or report.skipped_count > 0:
+                return GateDecision.WARN
+            # No constraints extracted → WARN but PROCEED
+            if report.total_count == 0:
+                return GateDecision.WARN
+            return GateDecision.PROCEED
+
+        # ADVISORY / UNTRUSTED / SOVEREIGN: PROCEED always
+        return GateDecision.PROCEED
 
 
 def extract_constraints(ast: dict[str, Any]) -> list[dict[str, Any]]:
@@ -242,7 +350,11 @@ def _numeric_value(value: Any) -> float | None:
 
 
 def _infer_type(value: Any) -> str:
-    """Infer the HLF type string from a Python value."""
+    """Infer the HLF type string from a Python value.
+
+    Handles scalar types and parametric containers for
+    interoperability with TypedEffectDeclaration type annotations.
+    """
     if isinstance(value, bool):
         return "boolean"
     if isinstance(value, int):
@@ -311,17 +423,40 @@ def _extract_from_node(node: Any, constraints: list[dict[str, Any]]) -> None:
         type_ann = node.get("type")
         if isinstance(type_ann, dict) and type_ann.get("kind") == "type_ann":
             expected_type = type_ann.get("type", "")
+            # Handle parametric type annotations: List⟨ℕ⟩, Set⟨𝕊⟩, Map⟨𝕊,ℤ⟩
+            param_types = type_ann.get("param_types")
+            if param_types and expected_type:
+                expected_type = str(expected_type)
+            # Handle refinement type annotations: {var: T | pred}
+            refinement = type_ann.get("refinement")
+            if refinement and isinstance(refinement, dict):
+                expected_type = "refinement"
         elif isinstance(type_ann, str):
             expected_type = type_ann
         else:
             expected_type = _infer_type(value)
         if expected_type:
+            # Map HLF canonical type names to verifier type names
+            canonical_map = {
+                "integer": "integer",
+                "real": "real",
+                "rational": "rational",
+                "number": "number",
+                "string": "string",
+                "boolean": "boolean",
+                "list": "list",
+                "set": "set",
+                "map": "map",
+                "json": "json",
+                "refinement": "refinement",
+            }
+            resolved_type = canonical_map.get(str(expected_type).lower(), str(expected_type))
             constraints.append(
                 {
                     "kind": "type_invariant",
                     "name": f"type_{name}",
                     "variable": name,
-                    "expected_type": str(expected_type),
+                    "expected_type": resolved_type,
                     "value": value,
                 }
             )
@@ -1090,3 +1225,31 @@ class FormalVerifier:
             counterexample={"value": value},
             solver=self.solver_name,
         )
+
+    def verify(
+        self,
+        compiled_program: dict[str, Any],
+        *,
+        gas_budget: int = 10_000,
+        trust_tier: str = "hearth",
+    ) -> tuple[VerificationReport, str]:
+        """Verify a compiled program and return a gated decision.
+
+        This is the constitutive verification path: it runs the standard
+        verify_ast and then applies tier-differentiated gating.
+
+        Args:
+            compiled_program: The compiled AST to verify.
+            gas_budget: Gas budget for verification.
+            trust_tier: The trust tier for gating (hearth, forge, sovereign).
+
+        Returns:
+            Tuple of (VerificationReport, GateDecision string).
+            The caller should:
+            - PROCEED: execute normally
+            - BLOCK: raise VerificationBlockedError or return blocked status
+            - WARN: log warning but proceed
+        """
+        report = self.verify_ast(compiled_program, gas_budget=gas_budget)
+        decision = VerificationGate.gate(report, trust_tier)
+        return report, decision

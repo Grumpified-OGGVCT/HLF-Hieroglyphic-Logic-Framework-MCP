@@ -7,7 +7,12 @@ from typing import Any
 
 from hlf_mcp.hlf.bytecode import HLFBytecode
 from hlf_mcp.hlf.compiler import HLFCompiler
-from hlf_mcp.hlf.formal_verifier import FormalVerifier
+from hlf_mcp.hlf.formal_verifier import (
+    FormalVerifier,
+    VerificationGate,
+    GateDecision,
+    VerificationBlockedError,
+)
 from hlf_mcp.hlf.governance_proofs import (
     build_anchor,
     build_governance_proof,
@@ -62,12 +67,9 @@ def execute_code_bearing_hlf(
     ast = compile_result["ast"]
     diagnostics = linter.lint(source, gas_limit=gas_limit)
     lint_errors = [diag for diag in diagnostics if diag.get("level") == "error"]
-    verification_report = verifier.verify_ast(ast, gas_budget=gas_limit).to_dict()
-    verified = (
-        not lint_errors
-        and int(verification_report.get("failed", 0) or 0) == 0
-        and int(verification_report.get("errors", 0) or 0) == 0
-    )
+    verification_report_obj = verifier.verify_ast(ast, gas_budget=gas_limit)
+    verification_report = verification_report_obj.to_dict()
+    gate_decision = VerificationGate.gate(verification_report_obj, tier)
 
     audit_start = _audit(
         audit_logger,
@@ -77,7 +79,8 @@ def execute_code_bearing_hlf(
             "entrypoint": entrypoint,
             "gas_limit": gas_limit,
             "ast_sha256": ast.get("sha256", ""),
-            "verified": verified,
+            "gate_decision": gate_decision,
+            "tier": tier,
             "lint_error_count": len(lint_errors),
         },
     )
@@ -106,15 +109,29 @@ def execute_code_bearing_hlf(
             blocks=blocks,
             code=1,
         )
-    if not verified:
+    if gate_decision == GateDecision.BLOCK:
+        blocked_error = VerificationBlockedError(verification_report_obj, tier)
         return _blocked_result(
-            status="verification_error",
+            status="verification_blocked",
             trace_ref=trace_ref,
-            message="Formal verification did not admit code-bearing execution.",
+            message=str(blocked_error),
             trace=base_trace,
             blocks=blocks,
             code=1,
         )
+    if gate_decision == GateDecision.WARN:
+        # Log warning but proceed — the gate says WARN
+        if audit_logger and hasattr(audit_logger, "log"):
+            audit_logger.log(
+                "hlf_verification_warning",
+                {
+                    "trace_ref": trace_ref,
+                    "tier": tier,
+                    "blocked_count": verification_report_obj.blocked_count,
+                    "summary": verification_report_obj.summary(),
+                },
+                agent_role="code_bearing_hlf",
+            )
     if selected is None:
         message = (
             f"No code-bearing block matched entrypoint '{entrypoint}'."
@@ -141,6 +158,7 @@ def execute_code_bearing_hlf(
             trace=base_trace,
             blocks=blocks,
             audit_logger=audit_logger,
+            gate_decision=gate_decision,
         )
 
     try:
@@ -168,6 +186,7 @@ def execute_code_bearing_hlf(
             trace=base_trace,
             blocks=blocks,
             audit_logger=audit_logger,
+            gate_decision=gate_decision,
             code=1,
         )
 
@@ -195,6 +214,7 @@ def execute_code_bearing_hlf(
         trace=base_trace,
         blocks=blocks,
         audit_logger=audit_logger,
+        gate_decision=gate_decision,
         code=0 if executed else 1,
     )
 
@@ -315,9 +335,11 @@ def _success_result(
     trace: dict[str, Any],
     blocks: list[dict[str, Any]],
     audit_logger: Any | None,
+    gate_decision: str = GateDecision.PROCEED,
     code: int = 0,
 ) -> dict[str, Any]:
     message = _result_message(status, trace_ref, selected, executed, runtime_result)
+    verified = gate_decision != GateDecision.BLOCK
     audit = _audit(
         audit_logger,
         "hlf_code_bearing_result",
@@ -333,7 +355,8 @@ def _success_result(
     result = {
         "status": status,
         "compiled": True,
-        "verified": True,
+        "verified": verified,
+        "gate_decision": gate_decision,
         "executed": executed,
         "sandbox_mode": sandbox_mode,
         "trace_ref": trace_ref,

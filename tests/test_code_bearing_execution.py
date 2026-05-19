@@ -15,7 +15,7 @@ def test_function_block_executes_in_hlf_vm_sandbox() -> None:
         "Ω\n"
     )
 
-    result = execute_code_bearing_hlf(source, entrypoint="main")
+    result = execute_code_bearing_hlf(source, entrypoint="main", tier="sovereign")
 
     assert result["status"] == "ok"
     assert result["compiled"] is True
@@ -32,7 +32,7 @@ def test_function_block_executes_in_hlf_vm_sandbox() -> None:
 def test_hlf_code_glyph_body_executes_when_language_is_hlf() -> None:
     source = '[HLF-v3]\nΔ [CODE] name="inline" language="hlf" body="RESULT 0 \\"inline-ok\\""\nΩ\n'
 
-    result = execute_code_bearing_hlf(source, entrypoint="inline")
+    result = execute_code_bearing_hlf(source, entrypoint="inline", tier="sovereign")
 
     assert result["status"] == "ok"
     assert result["executed"] is True
@@ -43,7 +43,7 @@ def test_hlf_code_glyph_body_executes_when_language_is_hlf() -> None:
 def test_non_hlf_code_payload_is_compile_only_not_faked() -> None:
     source = '[HLF-v3]\nΔ [CODE] name="py" language="python" body="print(1)"\nΩ\n'
 
-    result = execute_code_bearing_hlf(source, entrypoint="py")
+    result = execute_code_bearing_hlf(source, entrypoint="py", tier="sovereign")
 
     assert result["status"] == "unsupported_language"
     assert result["compiled"] is True
@@ -56,7 +56,7 @@ def test_non_hlf_code_payload_is_compile_only_not_faked() -> None:
 def test_code_bearing_dry_run_returns_governed_result_without_execution() -> None:
     source = "[HLF-v3]\nFUNCTION main {\n  RESULT 0 \"dry\"\n}\nΩ\n"
 
-    result = execute_code_bearing_hlf(source, dry_run=True)
+    result = execute_code_bearing_hlf(source, dry_run=True, tier="sovereign")
 
     assert result["status"] == "dry_run_ok"
     assert result["executed"] is False

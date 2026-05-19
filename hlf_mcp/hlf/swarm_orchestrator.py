@@ -26,7 +26,11 @@ from typing import Any, TYPE_CHECKING
 
 from hlf_mcp.hlf import HLFCompiler, language_to_hlf, hlf_source_to_english
 from hlf_mcp.hlf.compiler import CompileError
-from hlf_mcp.hlf.formal_verifier import FormalVerifier
+from hlf_mcp.hlf.formal_verifier import (
+    FormalVerifier,
+    VerificationGate,
+    GateDecision,
+)
 from hlf_mcp.hlf.swarm_observer import SwarmObserver
 from hlf_mcp.hlf.swarm_consensus import SwarmLedger, VotePosition, QuorumType
 from hlf_mcp.hlf.witness_governance import WitnessGovernance, WitnessObservation
@@ -259,8 +263,10 @@ class SwarmOrchestrator:
             if compile_ast:
                 report = self.verifier.verify_ast(compile_ast)
                 ver_results = report.to_dict().get("results", [])
+                gate_decision = VerificationGate.gate(report, "hearth")  # swarm agents are hearth-tier
         except Exception:
             ver_results = []
+            gate_decision = GateDecision.BLOCK
 
         gas_estimate = int(compile_result.get("gas_estimate", 0)) if compile_result else 0
         lint_errors = len([r for r in ver_results if r.get("severity") == "error"])
@@ -279,6 +285,7 @@ class SwarmOrchestrator:
             "lint_errors": lint_errors,
             "gas_estimate": gas_estimate,
             "verification_checks": len(ver_results),
+            "gate_decision": gate_decision,
             "time_ms": (phase.finished_ns - phase.started_ns) / 1_000_000,
             "nl_summary": nl_summary,
         }

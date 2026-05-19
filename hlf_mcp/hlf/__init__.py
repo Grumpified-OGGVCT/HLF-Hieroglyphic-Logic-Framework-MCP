@@ -52,6 +52,42 @@ from hlf_mcp.hlf.routing.failover import FailoverManager, NodeFailureEvent
 from hlf_mcp.hlf.knowledge.freshness_guarantee import FreshnessGuarantee, FreshnessGuaranteeChecker
 from hlf_mcp.hlf.knowledge.consistency_proof import ConsistencyProof, ConsistencyProofResult
 from hlf_mcp.hlf.knowledge.memory_lease import LeaseManager, LeaseViolationError, MemoryLease
+
+# Phase 8: Orchestration Lifecycle Hardening — plan_versioning is
+# safe to import eagerly; checkpoint_executor creates a circular
+# dependency via multi_phase_executor → hlf.__init__, so we expose
+# it through a lazy accessor.
+from hlf_mcp.hlf.plan_versioning import PlanVersion, PlanHistory
+
+
+def _get_checkpoint_types() -> tuple:
+    """Lazy-load checkpoint executor types to avoid circular imports."""
+    from hlf_mcp.hlf.checkpoint_executor import (  # noqa: PLC0415
+        Checkpoint,
+        CheckpointManager,
+        CheckpointableExecutor,
+        CheckpointedExecutionResult,
+    )
+    return Checkpoint, CheckpointManager, CheckpointableExecutor, CheckpointedExecutionResult
+
+
+def __getattr__(name: str):
+    """Deferred attribute access for checkpoint types."""
+    _checkpoint_attrs = {
+        "Checkpoint",
+        "CheckpointManager",
+        "CheckpointableExecutor",
+        "CheckpointedExecutionResult",
+    }
+    if name in _checkpoint_attrs:
+        idx = {
+            "Checkpoint": 0,
+            "CheckpointManager": 1,
+            "CheckpointableExecutor": 2,
+            "CheckpointedExecutionResult": 3,
+        }[name]
+        return _get_checkpoint_types()[idx]
+    raise AttributeError(f"module 'hlf_mcp.hlf' has no attribute '{name}'")
 from hlf_mcp.hlf.symbolic_surfaces import (
     audit_symbolic_surface,
     compile_symbolic_surface,
@@ -151,4 +187,11 @@ __all__ = [
     "LeaseManager",
     "LeaseViolationError",
     "MemoryLease",
+    # Phase 8: Orchestration Lifecycle Hardening
+    "PlanVersion",
+    "PlanHistory",
+    "Checkpoint",
+    "CheckpointManager",
+    "CheckpointableExecutor",
+    "CheckpointedExecutionResult",
 ]

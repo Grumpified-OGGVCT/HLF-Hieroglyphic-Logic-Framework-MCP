@@ -5,6 +5,9 @@ Collects and displays active swarm state, verification gate decisions,
 constitutional violations, and manifest audit trails. Outputs structured
 JSON consumable by the GitHub Pages dashboard at docs/index.html.
 
+Supports live telemetry integration via hlf_mcp.gallery.telemetry for
+real-time monitoring, trend history, and alert threshold visualization.
+
 Usage:
     python -m hlf_mcp.gallery.operator_dashboard
 """
@@ -16,6 +19,7 @@ import json
 import sys
 import time
 import uuid
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -406,22 +410,278 @@ def generate_dashboard_json(
     return json_str
 
 
+# ── Alert Thresholds ───────────────────────────────────────────────────────────
+
+
+def compute_alert_threshold(score_pct: float) -> str:
+    """Compute the alert threshold label for a readiness score.
+
+    Threshold bands:
+        - Below 50%: critical (red)
+        - 50% to below 65%: degraded (yellow)
+        - 65% and above: healthy (green)
+
+    Args:
+        score_pct: Readiness score as a percentage (0-100).
+
+    Returns:
+        Alert label: 'critical', 'degraded', or 'healthy'.
+    """
+    if score_pct < 50.0:
+        return "critical"
+    elif score_pct < 65.0:
+        return "degraded"
+    else:
+        return "healthy"
+
+
+def compute_alert_color(score_pct: float) -> str:
+    """Compute the Rich color tag for a readiness score.
+
+    Args:
+        score_pct: Readiness score as a percentage (0-100).
+
+    Returns:
+        Color name: 'red', 'yellow', or 'green'.
+    """
+    if score_pct < 50.0:
+        return "red"
+    elif score_pct < 65.0:
+        return "yellow"
+    else:
+        return "green"
+
+
+def compute_pillar_alerts(
+    components: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Compute alert thresholds for all dashboard components.
+
+    Each component gets an alert level and color based on its score.
+
+    Args:
+        components: Dictionary of component name -> {status, score_pct, ...}
+
+    Returns:
+        Dictionary of component name -> {alert, color, score_pct, ...}
+    """
+    result: dict[str, dict[str, Any]] = {}
+    for name, info in components.items():
+        score = info.get("score_pct", 0)
+        result[name] = {
+            **info,
+            "alert": compute_alert_threshold(score),
+            "alert_color": compute_alert_color(score),
+        }
+    return result
+
+
+# ── Trend Data ──────────────────────────────────────────────────────────────────
+
+_MAX_TREND_SNAPSHOTS = 50
+_trend_buffer: deque[dict[str, Any]] = deque(maxlen=_MAX_TREND_SNAPSHOTS)
+
+
+def record_trend_snapshot(dashboard_data: dict[str, Any]) -> None:
+    """Record a dashboard data snapshot into the trend buffer."""
+    pillar = dashboard_data.get("pillar_score", {})
+    components = pillar.get("components", {})
+    trend_entry = {
+        "timestamp": dashboard_data.get("generated_at", _now_iso()),
+        "overall_status": dashboard_data.get("overall_status", "unknown"),
+        "score_pct": pillar.get("score_pct", 0),
+        "component_scores": {
+            name: info.get("score_pct", 0) for name, info in components.items()
+        },
+    }
+    _trend_buffer.append(trend_entry)
+
+
+def get_trend_history() -> list[dict[str, Any]]:
+    """Return the trend history buffer as a list, oldest first."""
+    return list(_trend_buffer)
+
+
+def clear_trend_history() -> None:
+    """Clear the trend history buffer."""
+    _trend_buffer.clear()
+
+
+def build_dashboard_with_trend(
+    swarm_observer: Any | None = None,
+    record: bool = True,
+) -> dict[str, Any]:
+    """Build dashboard data including trend history and alert thresholds.
+
+    Args:
+        swarm_observer: Optional live SwarmObserver instance.
+        record: If True, record this snapshot into the trend buffer.
+
+    Returns:
+        Dashboard dictionary with trend_history and components_with_alerts.
+    """
+    dashboard = build_dashboard_data(swarm_observer)
+    if record:
+        record_trend_snapshot(dashboard)
+    pillar = dashboard["pillar_score"]
+    components = pillar.get("components", {})
+    pillar["components_with_alerts"] = compute_pillar_alerts(components)
+    pillar["overall_alert"] = compute_alert_threshold(pillar["score_pct"])
+    pillar["overall_alert_color"] = compute_alert_color(pillar["score_pct"])
+    dashboard["trend_history"] = list(_trend_buffer)
+    return dashboard
+
+
+# ── Live Telemetry Integration ─────────────────────────────────────────────────
+
+
+def integrate_telemetry_snapshot(
+    dashboard: dict[str, Any],
+    telemetry_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Enrich a dashboard with live telemetry data.
+
+    Args:
+        dashboard: Existing dashboard data from build_dashboard_data().
+        telemetry_data: Snapshot dictionary from TelemetryCollector.snapshot().
+
+    Returns:
+        Enriched dashboard dictionary with live telemetry values.
+    """
+    if "swarm_health" in telemetry_data:
+        th = telemetry_data["swarm_health"]
+        dashboard["swarm"]["source"] = th.get("source", "telemetry")
+        dashboard["swarm"]["active_agents"] = th.get(
+            "active_agents", dashboard["swarm"].get("active_agents", 0)
+        )
+        dashboard["swarm"]["has_active_phases"] = th.get("healthy_phases", 0) > 0
+
+    if "verification_gate" in telemetry_data:
+        vg = telemetry_data["verification_gate"]
+        dashboard["verification"]["source"] = vg.get("source", "telemetry")
+        summary = dashboard["verification"].get("summary", {})
+        summary["pass_rate_pct"] = vg.get(
+            "pass_rate_pct", summary.get("pass_rate_pct", 50.0)
+        )
+        dashboard["verification"]["summary"] = summary
+
+    if "constitutional_violations" in telemetry_data:
+        cv = telemetry_data["constitutional_violations"]
+        dashboard["constitutional"]["source"] = cv.get("source", "telemetry")
+        summary = dashboard["constitutional"].get("summary", {})
+        summary["total_violations"] = cv.get(
+            "total_violations", summary.get("total_violations", 0)
+        )
+        summary["high_severity"] = cv.get(
+            "high_severity", summary.get("high_severity", 0)
+        )
+        summary["medium_severity"] = cv.get(
+            "medium_severity", summary.get("medium_severity", 0)
+        )
+        summary["low_severity"] = cv.get(
+            "low_severity", summary.get("low_severity", 0)
+        )
+        summary["blocked_count"] = cv.get(
+            "blocked_actions", summary.get("blocked_count", 0)
+        )
+        dashboard["constitutional"]["summary"] = summary
+
+    if "manifest_audit" in telemetry_data:
+        ma = telemetry_data["manifest_audit"]
+        dashboard["manifest_audit"]["source"] = ma.get("source", "telemetry")
+        summary = dashboard["manifest_audit"].get("summary", {})
+        summary["approval_rate_pct"] = ma.get(
+            "approval_rate_pct", summary.get("approval_rate_pct", 66.7)
+        )
+        summary["approved"] = ma.get(
+            "approved_deployments", summary.get("approved", 0)
+        )
+        summary["rejected"] = ma.get(
+            "rejected_deployments", summary.get("rejected", 0)
+        )
+        summary["total_deployments"] = ma.get(
+            "total_deployments", summary.get("total_deployments", 0)
+        )
+        dashboard["manifest_audit"]["summary"] = summary
+
+    telemetry_readiness = telemetry_data.get("overall_readiness_pct")
+    if telemetry_readiness is not None:
+        if telemetry_readiness >= 65:
+            dashboard["overall_status"] = "healthy"
+        elif telemetry_readiness >= 50:
+            dashboard["overall_status"] = "degraded"
+        else:
+            dashboard["overall_status"] = "critical"
+
+    dashboard["telemetry"] = {
+        "integrated": True,
+        "snapshot_id": telemetry_data.get("snapshot_id", ""),
+        "alert_thresholds": telemetry_data.get("alert_thresholds", {}),
+    }
+    return dashboard
+
+
+def display_dashboard_with_alerts(dashboard: dict[str, Any]) -> None:
+    """Display the dashboard with alert threshold coloring.
+
+    Args:
+        dashboard: Dashboard data with components_with_alerts.
+    """
+    pillar = dashboard.get("pillar_score", {})
+    components_with_alerts = pillar.get("components_with_alerts", {})
+
+    if _RICH and components_with_alerts:
+        console = Console()
+        console.print()
+        console.rule("[bold cyan]Component Alert Thresholds[/bold cyan]")
+
+        alert_table = Table(title="Alert Status by Component", box=box.SIMPLE)
+        alert_table.add_column("Component", style="cyan")
+        alert_table.add_column("Score", style="white")
+        alert_table.add_column("Alert", style="white")
+        alert_table.add_column("Bar")
+
+        for name, info in components_with_alerts.items():
+            s = info.get("score_pct", 0)
+            alert = info.get("alert", "unknown")
+            color = info.get("alert_color", "white")
+            bar = "█" * int(s / 10) + "░" * (10 - int(s / 10))
+            alert_icon = (
+                "🔴" if alert == "critical"
+                else "🟡" if alert == "degraded"
+                else "🟢"
+            )
+            alert_table.add_row(
+                name.replace("_", " ").title(),
+                f"{s}%",
+                f"[{color}]{alert_icon} {alert.upper()}[/{color}]",
+                f"[{color}]{bar}[/{color}]",
+            )
+
+        console.print(alert_table)
+        console.print()
+
+
 def demo() -> None:
     """Run the operator dashboard demonstration.
 
     Collects all dashboard metrics, displays them with rich formatting,
-    and generates the dashboard JSON file.
+    generates the dashboard JSON file, records trend snapshot, and
+    displays alert thresholds.
     """
-    dashboard = build_dashboard_data()
+    dashboard = build_dashboard_with_trend(record=True)
     display_dashboard(dashboard)
+    display_dashboard_with_alerts(dashboard)
 
     # Generate the JSON data file
     json_output = generate_dashboard_json()
     if _RICH:
         Console().print(f"\n[dim]Dashboard JSON written to docs/hlf-dashboard-data.json[/dim]")
+        Console().print(f"[dim]Trend snapshots recorded: {len(get_trend_history())}[/dim]")
         Console().print(f"[dim]Size: {len(json_output)} bytes[/dim]")
     else:
         print(f"\n  Dashboard JSON written to docs/hlf-dashboard-data.json")
+        print(f"  Trend snapshots recorded: {len(get_trend_history())}")
         print(f"  Size: {len(json_output)} bytes")
 
 

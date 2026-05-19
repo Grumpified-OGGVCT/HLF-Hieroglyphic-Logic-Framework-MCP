@@ -438,6 +438,67 @@ def _collect_generated_at(
     return latest.isoformat().replace("+00:00", "Z")
 
 
+def _collect_gallery_dashboard_json(repo_root: Path) -> dict[str, Any]:
+    """Load the gallery operator dashboard JSON if it exists."""
+    dashboard_json_path = repo_root / "docs" / "hlf-dashboard-data.json"
+    if not dashboard_json_path.exists():
+        return {"available": False, "error": "hlf-dashboard-data.json not found"}
+
+    try:
+        payload = json.loads(dashboard_json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"available": False, "error": "hlf-dashboard-data.json is invalid JSON"}
+
+    pillar = payload.get("pillar_score", {})
+    components = pillar.get("components", {})
+    swarm = payload.get("swarm", {})
+    verification = payload.get("verification", {})
+    constitutional = payload.get("constitutional", {})
+    manifest_audit = payload.get("manifest_audit", {})
+
+    return {
+        "available": True,
+        "dashboard_id": payload.get("dashboard_id", ""),
+        "generated_at": payload.get("generated_at", ""),
+        "overall_status": payload.get("overall_status", "unknown"),
+        "pillar_score_pct": pillar.get("score_pct", 0),
+        "pillar_target_pct": pillar.get("target_pct", 75.0),
+        "pillar_status": pillar.get("status", "unknown"),
+        "components": [
+            {
+                "name": name.replace("_", " ").title(),
+                "status": info.get("status", "unknown"),
+                "score_pct": info.get("score_pct", 0),
+            }
+            for name, info in components.items()
+        ],
+        "swarm": {
+            "total_events": swarm.get("total_events", 0),
+            "active_agents": swarm.get("active_agents", 0),
+            "has_active_phases": swarm.get("has_active_phases", False),
+        },
+        "verification": {
+            "total_programs": verification.get("summary", {}).get("total_programs", 0),
+            "proceed": verification.get("summary", {}).get("proceed", 0),
+            "warn": verification.get("summary", {}).get("warn", 0),
+            "block": verification.get("summary", {}).get("block", 0),
+            "pass_rate_pct": verification.get("summary", {}).get("pass_rate_pct", 0),
+        },
+        "constitutional": {
+            "total_violations": constitutional.get("summary", {}).get("total_violations", 0),
+            "high_severity": constitutional.get("summary", {}).get("high_severity", 0),
+            "medium_severity": constitutional.get("summary", {}).get("medium_severity", 0),
+            "low_severity": constitutional.get("summary", {}).get("low_severity", 0),
+        },
+        "manifest_audit": {
+            "total_deployments": manifest_audit.get("summary", {}).get("total_deployments", 0),
+            "approved": manifest_audit.get("summary", {}).get("approved", 0),
+            "rejected": manifest_audit.get("summary", {}).get("rejected", 0),
+            "approval_rate_pct": manifest_audit.get("summary", {}).get("approval_rate_pct", 0),
+        },
+    }
+
+
 def collect_status_data(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
     docs_dir = repo_root / "docs"
     dashboard_path = _load_latest_doc(docs_dir, DASHBOARD_GLOB)
@@ -457,6 +518,7 @@ def collect_status_data(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
         "readiness_trend": _collect_readiness_trend(docs_dir),
         "strongest_pillar": strongest_pillar,
         "weakest_pillar": weakest_pillar,
+        "gallery_operator": _collect_gallery_dashboard_json(repo_root),
         "source_materials": [
             "SSOT_HLF_MCP.md",
             dashboard["path"],
@@ -465,6 +527,7 @@ def collect_status_data(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
             "docs/HLF_READINESS_REFRESH_PROCEDURE.md",
             "docs/HLF_MERGE_READINESS_SUMMARY_2026-03-20.md",
             "docs/HLF_BRANCH_AWARE_CLAIMS_LEDGER_2026-03-20.md",
+            "docs/hlf-dashboard-data.json",
         ],
     }
 
@@ -1186,7 +1249,80 @@ def _render_dynamic_table(rows: list[dict[str, str]]) -> str:
         """.strip()
 
 
-def render_status_index_html(data: dict[str, Any]) -> str:
+def _render_gallery_operator_section(gallery: dict[str, Any]) -> str:
+    """Render the gallery operator dashboard section for the status page."""
+    if not gallery.get("available"):
+        return ""
+
+    component_rows = "\n".join(
+        f"""<tr>
+            <td>{html.escape(c["name"])}</td>
+            <td>{html.escape(c["status"])}</td>
+            <td>{c["score_pct"]}%</td>
+            <td><div class="mini-bar" style="--width:{c['score_pct']}%"></div></td>
+        </tr>"""
+        for c in gallery.get("components", [])
+    )
+
+    return f"""
+    <section class="panel span-6 panel-proof">
+        <div class="panel-heading">
+            <h2>Gallery Operator Dashboard</h2>
+            <span class="panel-kicker">Live operator legibility surface</span>
+        </div>
+        <div class="hero-card hero-card-status">
+            <div class="hero-label">Gallery Readiness</div>
+            <div class="hero-value">{gallery.get("pillar_score_pct", 0)}%</div>
+            <div class="hero-meta">{html.escape(gallery.get("pillar_status", ""))}</div>
+            <p class="hero-text">Target: {gallery.get("pillar_target_pct", 75)}% | Status: {html.escape(gallery.get("overall_status", ""))}</p>
+        </div>
+        <div class="table-wrap compact-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Status</th>
+                        <th>Score</th>
+                        <th>Bar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {component_rows}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel span-6 panel-brief">
+        <div class="panel-heading">
+            <h2>Operator Telemetry</h2>
+            <span class="panel-kicker">Swarm, verification, violations, audit</span>
+        </div>
+        <div class="metric-grid">
+            <article class="metric-card metric-card-medium">
+                <div class="metric-label">Swarm Health</div>
+                <div class="metric-value">{gallery.get("swarm", {}).get("active_agents", 0)} agents</div>
+                <p class="metric-text">{gallery.get("swarm", {}).get("total_events", 0)} events</p>
+            </article>
+            <article class="metric-card metric-card-medium">
+                <div class="metric-label">Verification Gate</div>
+                <div class="metric-value">{gallery.get("verification", {}).get("pass_rate_pct", 0)}% pass</div>
+                <p class="metric-text">{gallery.get("verification", {}).get("proceed", 0)} proceed / {gallery.get("verification", {}).get("block", 0)} blocked</p>
+            </article>
+            <article class="metric-card metric-card-medium">
+                <div class="metric-label">Constitutional Violations</div>
+                <div class="metric-value">{gallery.get("constitutional", {}).get("total_violations", 0)} total</div>
+                <p class="metric-text">{gallery.get("constitutional", {}).get("high_severity", 0)} high, {gallery.get("constitutional", {}).get("medium_severity", 0)} medium</p>
+            </article>
+            <article class="metric-card metric-card-medium">
+                <div class="metric-label">Manifest Audit</div>
+                <div class="metric-value">{gallery.get("manifest_audit", {}).get("approval_rate_pct", 0)}% approved</div>
+                <p class="metric-text">{gallery.get("manifest_audit", {}).get("approved", 0)}/{gallery.get("manifest_audit", {}).get("total_deployments", 0)} deployments</p>
+            </article>
+        </div>
+        <p class="section-note">Dashboard generated at {html.escape(gallery.get("generated_at", "n/a"))}</p>
+    </section>
+    """
     dashboard = data["dashboard"]
     scorecard = data["scorecard"]
     status_lane_cards = "\n".join(
@@ -1350,6 +1486,8 @@ def render_status_index_html(data: dict[str, Any]) -> str:
         </div>
                 <p class="section-note">These strips remain evidence-backed score renderings. They do not replace the underlying readiness tables in the markdown authority.</p>
       </section>
+
+            {_render_gallery_operator_section(data.get("gallery_operator", {}))}
 
             {
         _render_decision_panel(

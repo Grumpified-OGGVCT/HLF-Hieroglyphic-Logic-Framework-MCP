@@ -1,0 +1,7 @@
+[HLF-v3]
+# Self-hosting smoke test: HLF coordinating HLF
+SET filename = "hlf_self_test_output.txt"
+SET content = "HLF self-hosting verified"
+RESULT TRUE
+Ω
+

@@ -25,7 +25,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
 
 from hlf_mcp.hlf.capability_manifest import (
     CapabilityManifest,
@@ -42,6 +42,11 @@ from hlf_mcp.hlf.typed_contracts import (
     TypeContract,
 )
 from hlf_mcp.hlf.two_channel_executor import ProvenanceChain, DataChannel
+
+if TYPE_CHECKING:
+    from hlf_mcp.ecosystem.rate_limiter import RateLimiter
+    from hlf_mcp.ecosystem.circuit_breaker import CircuitBreaker, CircuitOpenError
+    from hlf_mcp.ecosystem.credential_manager import CredentialManager
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -272,6 +277,15 @@ class RESTBridge:
         from fastapi import FastAPI
         app = FastAPI()
         bridge.mount_to_app(app, [manifest])
+
+    Hardening (optional):
+        bridge = RESTBridge(
+            rate_limiter=RateLimiter(global_rate=100, global_burst=200),
+            circuit_breaker=CircuitBreaker(name="rest_bridge"),
+            credential_manager=CredentialManager(master_secret="my-secret"),
+        )
+        # Routes mounted via mount_to_app() now validate credentials,
+        # enforce rate limits, and use circuit breaking.
     """
 
     title: str = "HLF REST API"
@@ -279,6 +293,12 @@ class RESTBridge:
     description: str = "Auto-generated REST API from HLF capability manifests"
     tier: str = "hearth"
     api_keys: dict[str, str] = field(default_factory=dict)  # key_id → description
+
+    # ── Hardening (optional — backward compatible) ────────────────────────────
+
+    rate_limiter: object | None = field(default=None, repr=False)
+    circuit_breaker: object | None = field(default=None, repr=False)
+    credential_manager: object | None = field(default=None, repr=False)
 
     # ── OpenAPI Generation ───────────────────────────────────────────────────
 
@@ -392,7 +412,7 @@ class RESTBridge:
         effect: TypedEffectDeclaration,
         executor: Callable[..., Any],
     ) -> None:
-        """Mount a single effect as a FastAPI route."""
+        """Mount a single effect as a FastAPI route with hardening middleware."""
         try:
             from fastapi import HTTPException, Request
             from fastapi.responses import JSONResponse
@@ -402,6 +422,12 @@ class RESTBridge:
         method = _determine_http_method(effect.effect_class)
         path = _effect_to_path(effect, manifest)
         trust_tier = EFFECT_TO_TRUST_TIER.get(effect.effect_class, "advisory")
+        effect_name = effect.effect_class.value
+
+        # Capture hardening references at route-definition time
+        _rate_limiter = self.rate_limiter
+        _circuit_breaker = self.circuit_breaker
+        _credential_manager = self.credential_manager
 
         async def _handler(
             request: Request,
@@ -410,6 +436,31 @@ class RESTBridge:
             _effect: TypedEffectDeclaration = effect,
             _tier: str = trust_tier,
         ) -> JSONResponse:
+            # ── Credential validation (hardening) ─────────────────────────
+            if _credential_manager is not None:
+                from hlf_mcp.ecosystem.credential_manager import CredentialManager
+                if isinstance(_credential_manager, CredentialManager):
+                    api_key = request.headers.get("X-API-Key", "")
+                    if api_key:
+                        cred = _credential_manager.validate_for_tier(api_key, _tier)
+                        if cred is None:
+                            raise HTTPException(
+                                status_code=401,
+                                detail="Invalid or insufficient API key for required trust tier",
+                            )
+
+            # ── Rate limiting (hardening) ─────────────────────────────────
+            if _rate_limiter is not None:
+                from hlf_mcp.ecosystem.rate_limiter import RateLimiter
+                if isinstance(_rate_limiter, RateLimiter):
+                    if not _rate_limiter.consume(effect_name):
+                        headers = _rate_limiter.headers(effect_name)
+                        raise HTTPException(
+                            status_code=429,
+                            detail="Rate limit exceeded",
+                            headers=headers,
+                        )
+
             # Trust tier enforcement
             session_tier = request.headers.get("X-HLF-Trust-Tier", "advisory")
             required_ord = TRUST_TIER_ORDER.get(_tier, 0)
@@ -431,11 +482,33 @@ class RESTBridge:
                 if key not in params:
                     params[key] = val
 
+            # ── Circuit breaker → executor (hardening) ────────────────────
             try:
-                result = executor(_manifest, _effect, params)
+                if _circuit_breaker is not None:
+                    from hlf_mcp.ecosystem.circuit_breaker import CircuitBreaker, CircuitOpenError
+                    if isinstance(_circuit_breaker, CircuitBreaker):
+                        result = _circuit_breaker.call(_execute_with_fallback, executor, _manifest, _effect, params)
+                    else:
+                        result = executor(_manifest, _effect, params)
+                else:
+                    result = executor(_manifest, _effect, params)
             except ValueError as exc:
+                if _circuit_breaker is not None:
+                    from hlf_mcp.ecosystem.circuit_breaker import CircuitBreaker
+                    if isinstance(_circuit_breaker, CircuitBreaker):
+                        _circuit_breaker.record_failure()
                 raise HTTPException(status_code=400, detail=str(exc))
+            except CircuitOpenError as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail=str(exc),
+                    headers={"Retry-After": str(int(exc.retry_after))},
+                )
             except Exception as exc:
+                if _circuit_breaker is not None:
+                    from hlf_mcp.ecosystem.circuit_breaker import CircuitBreaker
+                    if isinstance(_circuit_breaker, CircuitBreaker):
+                        _circuit_breaker.record_failure()
                 raise HTTPException(status_code=500, detail=str(exc))
 
             provenance = ProvenanceChain(
@@ -449,6 +522,14 @@ class RESTBridge:
             response.headers["X-HLF-Trust-Tier"] = _tier
             response.headers["X-HLF-Effect-Class"] = _effect.effect_class.value
             response.headers["X-HLF-Program-Id"] = _manifest.program_id
+
+            # ── Rate limit headers in response ────────────────────────────
+            if _rate_limiter is not None:
+                from hlf_mcp.ecosystem.rate_limiter import RateLimiter
+                if isinstance(_rate_limiter, RateLimiter):
+                    for k, v in _rate_limiter.headers(effect_name).items():
+                        response.headers[k] = v
+
             return response
 
         handler_name = f"hlf_{_effect_class_to_category(effect.effect_class)}_{effect.function_name or 'handler'}"
@@ -549,6 +630,21 @@ class RESTBridge:
             "compiled_at": manifest.compiled_at,
             "trust_tier": EFFECT_TO_TRUST_TIER.get(effect.effect_class, "advisory"),
         }
+
+    @staticmethod
+    def _execute_with_fallback(
+        executor: Callable[..., Any],
+        manifest: CapabilityManifest,
+        effect: TypedEffectDeclaration,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute with circuit breaker compatibility wrapper.
+
+        This is a thin shim that adapts the existing executor signature
+        ``executor(manifest, effect, params) → dict`` for use with the
+        circuit breaker's ``call()`` method.
+        """
+        return executor(manifest, effect, params)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

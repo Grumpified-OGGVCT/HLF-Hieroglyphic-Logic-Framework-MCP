@@ -27,7 +27,7 @@ MCP Tool schema reference:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from hlf_mcp.hlf.capability_manifest import (
     CapabilityManifest,
@@ -48,6 +48,11 @@ from hlf_mcp.hlf.two_channel_executor import (
     InstructionChannel,
     DataChannel,
 )
+
+if TYPE_CHECKING:
+    from hlf_mcp.ecosystem.rate_limiter import RateLimiter
+    from hlf_mcp.ecosystem.circuit_breaker import CircuitBreaker, CircuitOpenError
+    from hlf_mcp.ecosystem.retry_policy import RetryPolicy
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -227,10 +232,25 @@ class MCPBridge:
         tools = bridge.register_tools(manifest)
         # tools is a list of MCPToolRegistration objects
         # Each registration.to_mcp_tool() produces a standard MCP tool dict
+
+    Hardening (optional):
+        bridge = MCPBridge(
+            rate_limiter=RateLimiter(global_rate=100, global_burst=200),
+            circuit_breaker=CircuitBreaker(name="mcp_bridge"),
+            retry_policy=RetryPolicy(max_retries=3),
+        )
+        # Tool calls through dispatch_tool_call() are now hardened
+        bridge.dispatch_tool_call("hlf_file_read__read_data", {"file_path": "/tmp/x"})
     """
 
     session_id: str = ""
     tier: str = "hearth"
+
+    # ── Hardening (optional — backward compatible) ────────────────────────────
+
+    rate_limiter: object | None = field(default=None, repr=False)
+    circuit_breaker: object | None = field(default=None, repr=False)
+    retry_policy: object | None = field(default=None, repr=False)
 
     # ── Main API ─────────────────────────────────────────────────────────────
 
@@ -314,6 +334,86 @@ class MCPBridge:
             for reg in registrations:
                 tools.append(reg.to_mcp_tool())
         return tools
+
+    # ── Hardened tool call dispatch ───────────────────────────────────────────
+
+    def dispatch_tool_call(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        *,
+        executor: Any = None,
+        effect_name: str = "",
+    ) -> dict[str, Any]:
+        """Execute a tool call through the hardening pipeline.
+
+        Applies rate limiting → circuit breaking → retry policy (in that order)
+        around the actual tool execution.  If no hardening components are
+        configured, falls through directly to the executor.
+
+        Args:
+            tool_name: The MCP tool name being invoked.
+            params: The input parameters for the tool.
+            executor: Callable(tool_name, params) → result dict.
+            effect_name: Optional effect name for per-effect rate limiting
+                         (e.g., "file_read", "web_search").
+
+        Returns:
+            The tool execution result dict.
+
+        Raises:
+            CircuitOpenError: If the circuit breaker is open.
+            Exception: Any exception from the executor after retry exhaustion.
+        """
+        effect = effect_name or tool_name
+
+        # ── Rate limiting ─────────────────────────────────────────────────
+        rl = self.rate_limiter
+        if rl is not None:
+            from hlf_mcp.ecosystem.rate_limiter import RateLimiter
+            if isinstance(rl, RateLimiter):
+                if not rl.consume(effect):
+                    headers = rl.headers(effect)
+                    return {
+                        "status": "rate_limited",
+                        "error": "Rate limit exceeded",
+                        "retry_after": headers.get("X-RateLimit-Reset", "1"),
+                        **{k: v for k, v in headers.items()},
+                    }
+
+        # ── Circuit breaker → executor ────────────────────────────────────
+        cb = self.circuit_breaker
+        rp = self.retry_policy
+
+        def _execute() -> dict[str, Any]:
+            nonlocal executor
+            if executor is not None:
+                return executor(tool_name, params)
+            return {
+                "status": "ok",
+                "tool": tool_name,
+                "params": params,
+                "note": "No executor configured — echo mode",
+            }
+
+        # Circuit breaker wrapper
+        if cb is not None:
+            from hlf_mcp.ecosystem.circuit_breaker import CircuitBreaker
+            if isinstance(cb, CircuitBreaker):
+                # Retry policy wrapper inside circuit breaker
+                if rp is not None:
+                    from hlf_mcp.ecosystem.retry_policy import RetryPolicy
+                    if isinstance(rp, RetryPolicy):
+                        return cb.call(rp.execute, _execute)
+                return cb.call(_execute)
+
+        # Retry policy only (no circuit breaker)
+        if rp is not None:
+            from hlf_mcp.ecosystem.retry_policy import RetryPolicy
+            if isinstance(rp, RetryPolicy):
+                return rp.execute(_execute)
+
+        return _execute()
 
     # ── Single effect registration ───────────────────────────────────────────
 

@@ -4,7 +4,8 @@ HLF Ecosystem Integration Bridge
 Claim lane: bridge_contract
 
 This package holds ecosystem bridge contracts, language-SDK adapters,
-and transport compatibility documentation for non-Python HLF consumers.
+transport compatibility documentation, and production hardening components
+for non-Python HLF consumers.
 
 Current truth:
 - The HLF MCP server (Python/FastMCP) is the only executable surface.
@@ -15,4 +16,84 @@ Current truth:
 
 No SDK stubs for Java, Go, or Rust exist yet. This package documents
 the bridge path and will hold SDK adapters as they are built.
+
+Hardening components (production):
+- rate_limiter: TokenBucket rate limiter with per-effect + global scoping
+- circuit_breaker: CircuitBreaker with CLOSED/OPEN/HALF_OPEN states
+- retry_policy: RetryPolicy with exponential backoff + jitter
+- credential_manager: CredentialManager with scoped API keys + rotation
 """
+
+# ── Bridge exports ────────────────────────────────────────────────────────────
+
+from hlf_mcp.ecosystem.mcp_bridge import (
+    MCPBridge,
+    MCPToolRegistration,
+    register_manifest_as_mcp_tools,
+    manifest_to_mcp_tool_schemas,
+)
+
+from hlf_mcp.ecosystem.rest_bridge import (
+    RESTBridge,
+    RESTEndpoint,
+    generate_openapi_from_manifests,
+    generate_openapi_json_from_manifests,
+)
+
+# ── Hardening exports ─────────────────────────────────────────────────────────
+
+from hlf_mcp.ecosystem.rate_limiter import (
+    TokenBucket,
+    RateLimiter,
+)
+
+from hlf_mcp.ecosystem.circuit_breaker import (
+    CircuitState,
+    CircuitOpenError,
+    CircuitBreaker,
+)
+
+from hlf_mcp.ecosystem.retry_policy import (
+    RetryDecision,
+    RetryPolicy,
+    READ_RETRY_POLICY,
+    WRITE_RETRY_POLICY,
+    DEFAULT_RETRY_POLICY,
+    retry_policy_for_effect,
+)
+
+from hlf_mcp.ecosystem.credential_manager import (
+    CredentialScope,
+    Credential,
+    CredentialManager,
+)
+
+__all__ = [
+    # Bridges
+    "MCPBridge",
+    "MCPToolRegistration",
+    "register_manifest_as_mcp_tools",
+    "manifest_to_mcp_tool_schemas",
+    "RESTBridge",
+    "RESTEndpoint",
+    "generate_openapi_from_manifests",
+    "generate_openapi_json_from_manifests",
+    # Rate limiting
+    "TokenBucket",
+    "RateLimiter",
+    # Circuit breaking
+    "CircuitState",
+    "CircuitOpenError",
+    "CircuitBreaker",
+    # Retry policies
+    "RetryDecision",
+    "RetryPolicy",
+    "READ_RETRY_POLICY",
+    "WRITE_RETRY_POLICY",
+    "DEFAULT_RETRY_POLICY",
+    "retry_policy_for_effect",
+    # Credential management
+    "CredentialScope",
+    "Credential",
+    "CredentialManager",
+]

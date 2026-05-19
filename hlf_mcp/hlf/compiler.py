@@ -1154,10 +1154,33 @@ class HLFCompiler:
         # Pass 2: Collect env
         env = _pass1_collect_env(stmts)
 
+        # ── Constitutional Check Hook ────────────────────────────────────────
+        # Runs BEFORE the ethics governor.  Constitution is about what's
+        # fundamentally disallowed (program structure); ethics is about
+        # what's conditionally allowed (content/rules).
+        _strict = os.environ.get("HLF_STRICT", "1") != "0"
+        try:
+            from hlf_mcp.hlf.ethics.constitutional_check import (
+                ConstitutionalViolationError,
+                check_constitution,
+            )
+            check_constitution(ast=ast, source=normalized, tier="hearth")
+        except ConstitutionalViolationError as _cve:
+            _msg = (
+                f"Constitutional violation [{_cve.rule}] at {_cve.location}: "
+                f"{_cve.detail}"
+            )
+            if _strict:
+                raise CompileError(_msg) from _cve
+            _log.warning("[HLF_STRICT=0] Constitutional violation suppressed: %s", _msg)
+        except Exception as _e:  # pragma: no cover — fail closed
+            raise CompileError(
+                f"Constitutional check internal error (fail-closed): {_e}"
+            ) from _e
+
         # Pass 2.5: Ethics Governor — hard-law enforcement before any expansion.
         # Runs constitutional, rogue-detection, and self-termination layers.
         # When HLF_STRICT=0, violations are logged as warnings instead of raising.
-        _strict = os.environ.get("HLF_STRICT", "1") != "0"
         try:
             from hlf_mcp.hlf.ethics.governor import GovernorError
             from hlf_mcp.hlf.ethics.governor import check as _ethics_check

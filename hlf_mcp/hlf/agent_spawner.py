@@ -274,25 +274,55 @@ Example response format:
                     lines = lines[:-1]
                 cleaned = "\n".join(lines)
 
-            # Strategy 2: Extract JSON object (find outermost braces)
+            # Strategy 2: Extract first complete JSON object (brace-counting, not rfind)
             start_idx = cleaned.find("{")
-            end_idx = cleaned.rfind("}")
-            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                json_str = cleaned[start_idx:end_idx+1]
-                try:
-                    files = json.loads(json_str)
-                except json.JSONDecodeError:
-                    json_str = repair_truncated_json(json_str)
-                    files = json.loads(json_str)
-
-                for path, content in files.items():
-                    if not isinstance(content, str):
+            if start_idx != -1:
+                # Find end of first complete JSON object using brace counting
+                brace_count = 0
+                in_string = False
+                escape_next = False
+                end_idx = -1
+                for i in range(start_idx, len(cleaned)):
+                    ch = cleaned[i]
+                    if escape_next:
+                        escape_next = False
                         continue
-                    full = os.path.join(work_dir, path)
-                    os.makedirs(os.path.dirname(full), exist_ok=True)
-                    with open(full, "w", encoding="utf-8") as f:
-                        f.write(content)
-                    files_written.append(path)
+                    if ch == '\\':
+                        escape_next = True
+                        continue
+                    if ch == '"':
+                        in_string = not in_string
+                        continue
+                    if in_string:
+                        continue
+                    if ch == '{':
+                        brace_count += 1
+                    elif ch == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            end_idx = i
+                            break
+
+                # Fallback: if brace-counting fails (unbalanced), try rfind for truncated output
+                if end_idx == -1:
+                    end_idx = cleaned.rfind("}")
+
+                if end_idx != -1 and end_idx > start_idx:
+                    json_str = cleaned[start_idx:end_idx+1]
+                    try:
+                        files = json.loads(json_str)
+                    except json.JSONDecodeError:
+                        json_str = repair_truncated_json(json_str)
+                        files = json.loads(json_str)
+
+                    for path, content in files.items():
+                        if not isinstance(content, str):
+                            continue
+                        full = os.path.join(work_dir, path)
+                        os.makedirs(os.path.dirname(full), exist_ok=True)
+                        with open(full, "w", encoding="utf-8") as f:
+                            f.write(content)
+                        files_written.append(path)
         except Exception:
             with open(os.path.join(work_dir, "fallback_output.txt"), "w", encoding="utf-8") as f:
                 f.write(response_text)

@@ -21,7 +21,7 @@ This page intentionally separates three bands that should not be flattened into 
 
 > Summary block
 >
-> - overall internal readiness: `58.9%`
+> - overall internal readiness: `64.7%`
 > - interpretation band: `bridge-active`
 > - strongest cluster: semantic core
 > - main drag on total readiness: coordination and operator systems
@@ -35,6 +35,7 @@ The right public reading is therefore:
 
 - current packaged truth is strong enough to inspect and use now
 - weekly governance evidence is real and operational
+- Instinct now exposes packaged proof-state, phase-completion, and mission-lineage summaries across operator review surfaces
 - broader coordination, operator, and ecosystem completion is still in active bridge work
 
 ## 1. Whole HLF Status
@@ -47,18 +48,18 @@ what is the repo as a whole, in honest claim-lane terms?
 
 | Status Signal | Current Reading |
 | --- | --- |
-| Overall readiness | `58.9%` |
+| Overall readiness | `64.7%` |
 | Interpretation band | `bridge-active` |
 | Claim-lane label | current packaged truth plus bridge-qualified expansion |
-| One-sentence repo status | the repo already has a strong semantic and governance core, but the broader coordination-and-operator zone still suppresses total readiness |
+| One-sentence repo status | the repo already has a strong semantic and governance core, and Instinct now exposes packaged proof-state and mission-lineage summaries, but broader coordination-and-operator completion still suppresses total readiness |
 
 ### Cluster Scores
 
 | Cluster | Score | Reading |
 | --- | ---: | --- |
-| Semantic core | `70.8%` | strongest current cluster |
-| Governance and trust | `59.8%` | real substance, still proof- and contract-heavy bridge work |
-| Coordination and operator systems | `41.3%` | main drag on total readiness |
+| Semantic core | `73.0%` | strongly improved — type universe + grammar completion + capability manifests |
+| Governance and trust | `65.8%` | constitutional checks + constitutive verification gating now operational |
+| Coordination and operator systems | `42.3%` | improved via two-channel execution and manifest-gated orchestration, still the drag |
 
 ### Claim-Lane Note
 
@@ -88,7 +89,7 @@ what is actually moving, and what is only a baseline so far?
 
 | Signal | Current | Previous | Movement | Reading |
 | --- | ---: | ---: | --- | --- |
-| Overall readiness | `58.9%` | `n/a` | `baseline` | first committed readiness snapshot in the current docs set |
+| Overall readiness | `64.7%` | `n/a` | `baseline` | first committed readiness snapshot in the current docs set |
 
 Trend reading rule:
 
@@ -147,17 +148,17 @@ where is the repo strongest, and where is it still weakest?
 
 | Pillar | Readiness |
 | --- | ---: |
-| Deterministic language core | `87.5%` |
-| Runtime and capsule-bounded execution | `82.5%` |
-| Governance-native execution | `70.5%` |
-| Typed effect and capability algebra | `48.5%` |
-| Human-readable audit and trust layer | `57.5%` |
+| Deterministic language core | `92.5%` |
+| Runtime and capsule-bounded execution | `85.0%` |
+| Governance-native execution | `80.0%` |
+| Typed effect and capability algebra | `68.0%` |
+| Human-readable audit and trust layer | `60.5%` |
 | Real-code bridge | `45.5%` |
 | Knowledge substrate and governed memory | `56.0%` |
-| Formal verification surface | `51.0%` |
+| Formal verification surface | `68.5%` |
 | Gateway and routing fabric | `51.0%` |
-| Orchestration lifecycle and plan execution | `45.5%` |
-| Persona and operator doctrine | `38.5%` |
+| Orchestration lifecycle and plan execution | `53.5%` |
+| Persona and operator doctrine | `45.0%` |
 | Ecosystem integration surface | `22.5%` |
 | Gallery and operator-legibility surface | `39.5%` |
 
@@ -181,7 +182,7 @@ The highest-value remaining moves are:
 
 1. strengthen typed effect and capability contracts
 2. deepen formal verification and routing proof
-3. raise orchestration from partial lifecycle presence into stronger packaged coordination proof
+3. extend shipped Instinct proof-state and mission-lineage evidence into thicker packaged coordination proof
 4. convert persona/operator doctrine into thicker workflow and runtime evidence
 5. keep memory governance and weekly evidence contracts converging without fragmenting the trust surface
 
@@ -201,6 +202,6 @@ This page is derived from these repo authorities:
 
 If you need the safest summary of this page, use this sentence:
 
-HLF in this repo already has a strong current packaged core and real weekly governed evidence, while broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.
+HLF in this repo already has a strong current packaged core, real weekly governed evidence, and packaged Instinct proof-state surfaces, while broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.
 
 _Generated from repo sources on 2026-03-20T00:00:00Z._

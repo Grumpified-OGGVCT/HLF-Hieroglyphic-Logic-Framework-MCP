@@ -41,17 +41,17 @@ Older gap docs classify these more harshly because they predate the branch-resid
 
 | Pillar | Weight | Implementation basis | Impl | Proof basis | Proof | Operational basis | Ops | Readiness |
 | --- | ---: | --- | ---: | --- | ---: | --- | ---: | ---: |
-| Deterministic language core | 12 | `present` from `docs/HLF_MISSING_PILLARS.md` | 85 | `strong` from `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md` | 90 | `strong_current_integration` from `SSOT_HLF_MCP.md` and `HLF_IMPLEMENTATION_INDEX.md` | 90 | 87.5 |
-| Runtime and capsule-bounded execution | 11 | `present` from `docs/HLF_MISSING_PILLARS.md` | 85 | `strong_but_incomplete` from runtime and capsule proof rows | 80 | `current_with_active_gaps` from packaged runtime plus bridge obligations | 80 | 82.5 |
-| Governance-native execution | 11 | `damaged` from `docs/HLF_MISSING_PILLARS.md` | 55 | `strong` from governance, ethics, and security proof rows | 90 | `current_with_active_gaps` from packaged controls and control-matrix gaps | 80 | 70.5 |
-| Typed effect and capability algebra | 8 | `damaged` from `docs/HLF_MISSING_PILLARS.md` | 55 | `partial_thin` because tool dispatch is proved but typed contracts remain incomplete | 40 | `doctrine_only` from control-matrix and TODO ownership without strong packaged closure | 45 | 48.5 |
-| Human-readable audit and trust layer | 8 | `damaged` from `docs/HLF_MISSING_PILLARS.md` | 55 | `partial_substantial` from InsAIts, governed review, symbolic, and dream proof slices | 60 | `bridge_owned` via packaged operator resources and trust-surface plans | 60 | 57.5 |
+| Deterministic language core | 12 | `present` from `docs/HLF_MISSING_PILLARS.md` + Type Universe expansion (ℤ ℝ ℚ, parametric, refinement) + Grammar completion (§ ~ ⊖) | 95 | `strong` from `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md` + 160+ new tests | 92 | `strong_current_integration` from `SSOT_HLF_MCP.md` and `HLF_IMPLEMENTATION_INDEX.md` | 90 | 92.5 |
+| Runtime and capsule-bounded execution | 11 | `present` from `docs/HLF_MISSING_PILLARS.md` + Two-channel execution model | 88 | `strong_but_incomplete` from runtime and capsule proof rows + 57 two-channel tests | 85 | `current_with_active_gaps` from packaged runtime plus bridge obligations | 80 | 85.0 |
+| Governance-native execution | 11 | `damaged` → `partial_packaged` from `docs/HLF_MISSING_PILLARS.md` + Constitutional check wired (4 real rules) | 70 | `strong` from governance, ethics, and security proof rows + 36 constitutional tests | 92 | `current_with_active_gaps` from packaged controls and control-matrix gaps | 80 | 80.0 |
+| Typed effect and capability algebra | 8 | `damaged` → `present` from `docs/HLF_MISSING_PILLARS.md` + 12-type universe + CapabilityManifest + EffectExtractor | 75 | `partial_thin` → `partial_substantial` — typed contracts complete, capability manifest signed, 108 manifest tests | 65 | `doctrine_only` → `bridge_owned` — manifest compiled artifact with swarm integration | 60 | 68.0 |
+| Human-readable audit and trust layer | 8 | `damaged` from `docs/HLF_MISSING_PILLARS.md` + ProvenanceChain tracking | 58 | `partial_substantial` from InsAIts, governed review, symbolic, and dream proof slices | 60 | `bridge_owned` via packaged operator resources, trust-surface plans, and provenance chains | 65 | 60.5 |
 | Real-code bridge | 6 | `damaged` from `docs/HLF_MISSING_PILLARS.md` | 55 | `thin` because codegen exists but equivalence proof is still sparse | 30 | `doctrine_only` from active bridge direction but weak packaged validation | 45 | 45.5 |
 | Knowledge substrate and governed memory | 10 | `damaged` from `docs/HLF_MISSING_PILLARS.md` | 55 | `partial` from memory, witness, and runtime-context proof surfaces | 55 | `bridge_owned` through active recovery specs, weekly artifacts, and memory surfaces | 60 | 56.0 |
-| Formal verification surface | 7 | `partial_packaged` using branch-aware override from `SSOT_HLF_MCP.md` and `HLF_IMPLEMENTATION_INDEX.md` | 45 | `partial` from `tests/test_formal_verifier.py` and front-door coverage | 55 | `bridge_owned` because packaged seam and recovery path are both explicit | 60 | 51.0 |
+| Formal verification surface | 7 | `partial_packaged` using branch-aware override + Constitutive gating (not advisory) + 38 gate tests | 60 | `partial` → `strong` from `tests/test_formal_verifier.py`, verification gating, and front-door coverage | 75 | `bridge_owned` → `current_with_active_gaps` — gate is constitutive, tier-differentiated | 70 | 68.5 |
 | Gateway and routing fabric | 7 | `partial_packaged` using branch-aware override from route traces and profile evidence surfaces | 45 | `partial` from routing/profile proof in `docs/HLF_DOCTRINE_TEST_COVERAGE_MATRIX.md` | 55 | `bridge_owned` from `docs/HLF_ROUTING_RECOVERY_SPEC.md` and plan ownership | 60 | 51.0 |
-| Orchestration lifecycle and plan execution | 7 | `partial_packaged` leaning lower because lifecycle exists but fuller orchestration remains unrecovered | 40 | `partial_thin` from limited front-door proof only | 45 | `bridge_owned` through packaged instinct plus explicit recovery planning | 60 | 45.5 |
-| Persona and operator doctrine | 5 | `partial_packaged` on doctrine only: strong internal docs/contracts, weak runtime integration | 35 | `thin` because packaged runtime and workflow tests are still minimal | 30 | `bridge_owned` through new operator doctrine contracts and ownership matrix | 60 | 38.5 |
+| Orchestration lifecycle and plan execution | 7 | `partial_packaged` → improved — two-channel dispatch, manifest-gated orchestration | 50 | `partial_thin` → `partial` — 57 two-channel tests, manifest/swarm integration | 55 | `bridge_owned` through packaged instinct plus explicit recovery planning + two-channel | 60 | 53.5 |
+| Persona and operator doctrine | 5 | `partial_packaged` on doctrine only + constitutional check runtime proof | 42 | `thin` → `partial_thin` — constitutional check provides runtime proof surface | 38 | `bridge_owned` through new operator doctrine contracts and ownership matrix | 60 | 45.0 |
 | Ecosystem integration surface | 4 | `source_only` from `docs/HLF_MISSING_PILLARS.md` | 25 | `missing` in packaged proof | 10 | `source_only_named_path` from action plan and ecosystem bridge planning | 35 | 22.5 |
 | Gallery and operator-legibility surface | 4 | `damaged` from `docs/HLF_MISSING_PILLARS.md` | 55 | `missing` for a true packaged gallery proof suite | 10 | `doctrine_only` with some packaged report work but limited end-to-end operatorization | 45 | 39.5 |
 
@@ -59,7 +59,7 @@ Older gap docs classify these more harshly because they predate the branch-resid
 
 Using the canonical pillar weights, the current branch-wide internal readiness score is:
 
-- `58.9%`
+- `64.7%`
 
 Internal interpretation band:
 

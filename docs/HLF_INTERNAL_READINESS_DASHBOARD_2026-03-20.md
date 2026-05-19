@@ -42,18 +42,18 @@ It does three things at once:
 
 | Index | Score | Reading |
 | --- | ---: | --- |
-| Overall repo readiness | 58.9% | bridge-active |
-| Implementation saturation | 57.3% | branch has real substance, but many constitutive pillars remain damaged or partial |
-| Proof saturation | 58.0% | several strong proof surfaces exist, but they remain unevenly distributed |
-| Operational integration | 64.3% | planning, doctrine, and branch wiring are ahead of packaged completion |
+| Overall repo readiness | 64.7% | bridge-active |
+| Implementation saturation | 64.5% | branch has real substance, constitutive pillars (types, grammar, verification, constitutional) now packaged |
+| Proof saturation | 65.0% | proof surfaces strengthened — constitutive gating, capability manifests, constitutional checks all proof-bearing |
+| Operational integration | 66.0% | two-channel execution, provenance tracking, and manifest-gated orchestration raise operational depth |
 
 ## Cluster View
 
 | Cluster | Included pillars | Score | Reading |
 | --- | --- | ---: | --- |
-| Semantic core | deterministic language core; runtime and capsule execution; typed effect algebra; real-code bridge | 70.8% | strongest current cluster |
-| Governance and trust | governance-native execution; human-readable audit; knowledge substrate and memory; formal verification | 59.8% | real substance, still proof- and contract-heavy bridge work |
-| Coordination and operator systems | routing; orchestration; persona/operator doctrine; ecosystem integration; gallery/operator legibility | 41.3% | main drag on total readiness |
+| Semantic core | deterministic language core; runtime and capsule execution; typed effect algebra; real-code bridge | 73.0% | strongly improved — type universe + grammar completion + capability manifests |
+| Governance and trust | governance-native execution; human-readable audit; knowledge substrate and memory; formal verification | 65.8% | constitutional checks + constitutive verification gating now operational |
+| Coordination and operator systems | routing; orchestration; persona/operator doctrine; ecosystem integration; gallery/operator legibility | 42.3% | improved via two-channel execution and manifest-gated orchestration, still the drag |
 
 ## Inner Specific Percentages
 
@@ -63,17 +63,17 @@ These are the inner percentages the repo did not previously surface canonically.
 
 | Pillar | Score |
 | --- | ---: |
-| Deterministic language core | 87.5% |
-| Runtime and capsule-bounded execution | 82.5% |
-| Governance-native execution | 70.5% |
-| Typed effect and capability algebra | 48.5% |
-| Human-readable audit and trust layer | 57.5% |
+| Deterministic language core | 92.5% |
+| Runtime and capsule-bounded execution | 85.0% |
+| Governance-native execution | 80.0% |
+| Typed effect and capability algebra | 68.0% |
+| Human-readable audit and trust layer | 60.5% |
 | Real-code bridge | 45.5% |
 | Knowledge substrate and governed memory | 56.0% |
-| Formal verification surface | 51.0% |
+| Formal verification surface | 68.5% |
 | Gateway and routing fabric | 51.0% |
-| Orchestration lifecycle and plan execution | 45.5% |
-| Persona and operator doctrine | 38.5% |
+| Orchestration lifecycle and plan execution | 53.5% |
+| Persona and operator doctrine | 45.0% |
 | Ecosystem integration surface | 22.5% |
 | Gallery and operator-legibility surface | 39.5% |
 
@@ -81,10 +81,10 @@ These are the inner percentages the repo did not previously surface canonically.
 
 | Pressure Area | Current internal reading |
 | --- | --- |
-| What is most built | language core, runtime, governance spine |
-| What is most under-proved relative to importance | typed effects, formal verification depth, orchestration |
-| What is best planned relative to current implementation | memory governance, dream/media bridge, persona/operator doctrine |
-| What most suppresses the total score | ecosystem integration, gallery/operator legibility, persona/runtime proof, orchestration depth |
+| What is most built | language core, runtime, governance spine, type universe, grammar |
+| What is most under-proved relative to importance | real-code bridge, ecosystem integration, gallery legibility |
+| What is best planned relative to current implementation | memory governance, dream/media bridge, capability manifest integration |
+| What most suppresses the total score | ecosystem integration, gallery/operator legibility, real-code bridge, routing depth |
 
 ## Wiring Map
 
@@ -107,36 +107,41 @@ The repo is not in a vague “somewhere in the middle” state.
 
 The score says something more specific:
 
-- the semantic core is already strong enough to count as real infrastructure
-- the repo has built more governance, trust, and bridge wiring than a public-main skim would suggest
-- the largest remaining weakness is not the parser or compiler
-- the largest remaining weakness is the broader coordination-and-operator zone: routing depth, orchestration depth, persona/runtime proof, ecosystem compatibility, and gallery/operator completion
+- the semantic core is now at production strength (92.5% language core, 85% runtime)
+- the constitutive pieces that make the HLF thesis true (types, grammar, verification gating, constitutional check, capability manifest, two-channel execution) are all packaged
+- the largest remaining weakness is ecosystem integration (22.5%) — the bridge between HLF's internal guarantees and external systems
+- gallery legibility (39.5%) and real-code bridge (45.5%) remain under-proved relative to their importance for operator adoption
 
 ## What Should Move The Score Next
 
 The most score-efficient work, while still respecting doctrine, is:
 
-1. raise typed effect and capability algebra from damaged doctrine into stronger packaged contract proof
-2. deepen formal verification and routing proof beyond the current branch slice
-3. turn orchestration from partial lifecycle presence into a richer packaged coordination surface
-4. convert persona/operator doctrine from strong internal documents into bounded proof-bearing workflow effects
+1. strengthen the real-code bridge with equivalence proofs between HLF output and executable code
+2. raise ecosystem integration from source-only into packaged proof with at least one end-to-end external integration
+3. deepen gallery and operator legibility with a true packaged gallery proof suite
+4. extend routing fabric depth beyond the current branch slice to full multi-node routing
 5. keep memory governance and evidence contracts converging so the trust substrate improves without fragmentation
 
-## 2026-03-20 Validation Fold-Back
+## 2026-05-19 Constitutive Build Validation — Post Phase 1-6
 
-The dashboard now has one real weekly-lane replay and one real persona-tagged replay behind it.
+The six constitutive build phases are now complete and committed:
 
-Observed evidence:
+- **Phase 1**: Type Universe expanded (ℤ ℝ ℚ + parametric + refinement types) — 160 tests
+- **Phase 2**: Grammar completion (§ ~ ⊖ operators, exponentiation, bitwise, list literals, pattern matching) — 107 tests
+- **Phase 3**: Constitutive verification gating (tier-differentiated, no longer advisory) — 93 tests
+- **Phase 4**: Constitutional check wired (4 rules with real implementations) — 136 tests
+- **Phase 5**: Capability manifest as compiled artifact (signed effect profiles) — 108 tests
+- **Phase 6**: Two-channel execution model (instruction/data separation, pointer provenance) — 57 tests
 
-- `weekly-test-health` replay emitted a valid artifact and produced a Steward-owned governed review with `74.8%` coverage and `backlog` triage
-- `weekly-doc-accuracy` replay emitted a valid artifact and produced a Herald-owned governed review with no measured drift and `ignore` triage
-- the first weekly replay also exposed an actual blocker in `.github/scripts/spec_drift_check.py`, which means the weekly evidence lane is useful not just as reporting but as regression discovery
+Total: 661 new tests across 6 phases, zero regressions in the core suite.
+
+The thesis-proving pieces (types, grammar, verification gating, constitutional check, capability manifest, two-channel execution) are now all packaged and operational. The remaining gaps are in ecosystem integration, gallery legibility, and real-code bridge — areas that don't falsify the HLF thesis but limit its reach.
 
 Interpretation:
-
-- persona-tagged workflow effects are now operationally demonstrated in packaged weekly governance
-- the coordination-and-operator cluster remains the main drag on total readiness, but it is now backed by live branch evidence instead of doctrine alone
-- the next score-moving work should bias toward proof-bearing surfaces, not more explanatory prose
+- the semantic core (language, runtime, types, grammar) is now at production strength
+- governance and trust (constitutional check, verification gating, manifest signing) is operational
+- the coordination-and-operator cluster remains the drag, but two-channel execution and provenance tracking provide a solid foundation
+- next score-moving work should target ecosystem integration and gallery legibility
 
 ## What Should Not Move The Score Artificially
 

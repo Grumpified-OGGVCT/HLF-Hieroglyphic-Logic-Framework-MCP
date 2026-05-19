@@ -40,7 +40,7 @@ class SpawnHandle:
 @dataclass
 class SpawnResult:
     agent_id: str
-    status: str  # pending | running | complete | error | timeout
+    status: str  # pending | running | complete | error | timeout | blocked
     stdout: str = ""
     stderr: str = ""
     files_written: list[str] = field(default_factory=list)
@@ -48,6 +48,7 @@ class SpawnResult:
     error: str | None = None
     elapsed_ms: float = 0.0
     tokens_used: int = 0
+    persona_block: dict[str, Any] | None = None  # gate details when blocked
 
 
 class SpawnerBackend(Protocol):
@@ -403,8 +404,95 @@ if __name__ == "__main__":
         self.model = model
         self._procs: dict[str, subprocess.Popen[str]] = {}
         self._work_dirs: dict[str, str] = {}
+        self._blocked: dict[str, dict[str, Any]] = {}  # agent_id → block reason
+
+    @staticmethod
+    def _check_persona_gates(agent_id: str, **kwargs: Any) -> dict[str, Any] | None:
+        """Check persona gates before spawning agent.
+
+        Called during spawn(). If persona gate configuration is passed via
+        kwargs, this resolves the contract and checks for rejected gates.
+        Returns block info dict if the agent is blocked, None if clear.
+
+        Persona gate config keys (all optional, passed via kwargs):
+            persona_source: str — source identifier for change class mapping
+            persona_review_type: str — "weekly_artifact", "evolution_planning", "model_drift"
+            persona_severity: str — "info", "warning", "critical"
+            persona_triage_lane: str — "backlog", "current_batch", etc.
+            persona_contract: dict — pre-resolved contract (bypasses resolution)
+        """
+        # Only enforce if persona info is explicitly provided
+        has_persona_config = any(
+            k in kwargs for k in (
+                "persona_source", "persona_review_type", "persona_severity",
+                "persona_triage_lane", "persona_contract",
+            )
+        )
+        if not has_persona_config:
+            return None
+
+        try:
+            from hlf_mcp.persona_contract import resolve_persona_contract
+        except ImportError:
+            return None
+
+        # If a pre-resolved contract is provided, use it directly
+        existing = kwargs.get("persona_contract")
+        if existing and isinstance(existing, dict):
+            contract = existing
+        else:
+            contract = resolve_persona_contract(
+                source=kwargs.get("persona_source"),
+                review_type=kwargs.get("persona_review_type"),
+                severity=kwargs.get("persona_severity"),
+                recommended_triage_lane=kwargs.get("persona_triage_lane"),
+                existing=kwargs.get("persona_contract"),
+            )
+
+        # Check for rejected gates — any rejected gate blocks the agent
+        gate_results = contract.get("gate_results", {})
+        rejected: list[str] = []
+        for gate_name, gate_val in gate_results.items():
+            if isinstance(gate_val, dict) and gate_val.get("status") == "rejected":
+                rejected.append(gate_name)
+
+        if rejected:
+            return {
+                "blocked": True,
+                "agent_id": agent_id,
+                "rejected_gates": rejected,
+                "owner_persona": contract.get("owner_persona"),
+                "change_class": contract.get("change_class"),
+                "lane": contract.get("lane"),
+                "escalate_to_persona": contract.get("escalate_to_persona"),
+                "operator_summary": contract.get("operator_summary"),
+                "all_gate_results": gate_results,
+            }
+
+        return None
 
     def spawn(self, agent_id: str, role: str, task: str, model: str = "", **kwargs: Any) -> SpawnHandle:
+        # ── Persona gate pre-check ──────────────────────────────────────────
+        blocked = self._check_persona_gates(agent_id, **kwargs)
+        if blocked:
+            work_dir = tempfile.mkdtemp(prefix=f"hlf_agent_{agent_id}_")
+            self._work_dirs[agent_id] = work_dir
+            self._blocked[agent_id] = blocked
+            status_data = {
+                "agent_id": agent_id,
+                "status": "blocked_persona",
+                "block_reason": blocked,
+            }
+            with open(os.path.join(work_dir, "status.json"), "w", encoding="utf-8") as f:
+                json.dump(status_data, f, indent=2)
+            return SpawnHandle(
+                agent_id=agent_id,
+                backend="subprocess",
+                token=str(uuid.uuid4()),
+                work_dir=work_dir,
+                meta={"blocked": True, "block_reason": blocked},
+            )
+
         work_dir = tempfile.mkdtemp(prefix=f"hlf_agent_{agent_id}_")
         model = model or self.model
         config = {
@@ -449,6 +537,16 @@ if __name__ == "__main__":
         )
 
     def wait(self, handle: SpawnHandle, timeout: float = 300.0) -> SpawnResult:
+        # Blocked agents return immediately
+        if handle.meta.get("blocked"):
+            block_reason = handle.meta.get("block_reason", {})
+            return SpawnResult(
+                agent_id=handle.agent_id,
+                status="blocked",
+                error=f"Persona gates rejected: {block_reason.get('rejected_gates', [])}",
+                persona_block=block_reason,
+            )
+
         proc = self._procs.get(handle.agent_id)
         if proc is None:
             return SpawnResult(agent_id=handle.agent_id, status="error", error="process not found")

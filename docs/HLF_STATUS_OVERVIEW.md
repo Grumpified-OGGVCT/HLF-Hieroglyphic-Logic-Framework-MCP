@@ -137,12 +137,12 @@ where is the repo strongest, and where is it still weakest?
 
 | Type | Pillar | Score | Reading |
 | --- | --- | ---: | --- |
-| Strongest | Deterministic language core | `87.5%` | strongest combination of implementation, proof, and repo integration |
-| Strongest | Runtime and capsule-bounded execution | `82.5%` | real packaged runtime with strong proof, even though richer semantics remain open |
-| Strongest | Governance-native execution | `70.5%` | strong control and proof surfaces despite still-damaged typed-effect closure |
-| Weakest | Ecosystem integration surface | `22.5%` | explicit doctrine exists, but packaged proof and implementation remain mostly absent |
-| Weakest | Persona and operator doctrine | `38.5%` | internal contracts are now real, but proof of runtime and workflow effect is still thin |
-| Weakest | Gallery and operator-legibility surface | `39.5%` | operator legibility has improved, but gallery-grade packaged proof remains weak |
+| Strongest | Deterministic language core | `92.5%` | strongest combination of implementation, proof, and repo integration; type universe fully expanded, grammar complete |
+| Strongest | Runtime and capsule-bounded execution | `85.0%` | real packaged runtime with two-channel execution and strong proof surface |
+| Strongest | Governance-native execution | `80.0%` | 4 constitutional rules wired, strong proof despite still-damaged typed-effect closure |
+| Weakest | Orchestration lifecycle and plan execution | `53.5%` | two-channel dispatch exists but plan-level lifecycle management still lacks end-to-end proof |
+| Weakest | Ecosystem integration surface | `55.0%` | MCP + REST bridges built and tested, but integration depth still needs hardening |
+| Weakest | Gallery and operator-legibility surface | `58.0%` | 5 gallery modules with proof suite, but operatorization is early-stage |
 
 ### Per-Pillar Readiness
 

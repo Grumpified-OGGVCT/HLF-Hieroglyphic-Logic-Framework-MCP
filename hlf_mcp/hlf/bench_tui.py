@@ -1,16 +1,25 @@
 """
-hlf bench --tui  —  Terminal dashboard for HLF benchmark visualization.
+hlf bench --tui  —  Self-improving swarm visualization dashboard.
 
-Zero-dependency curses TUI that loads benchmark metrics.json and displays:
+Zero-dependency curses TUI for HLF benchmark monitoring:
   • Swarm execution summary (agents, tokens, time, quality)
   • Per-agent breakdown with status, tokens, output files
   • HLF vs NL side-by-side comparison (when two files provided)
   • Live watch mode (--watch polls for metrics updates)
+  • Self-improving trend view (--self-improve <dir> or point at iteration dir)
+
+The self-improving mode loads multiple iterations and visualizes:
+  • Quality score trending with iteration-over-iteration deltas
+  • Token efficiency trends
+  • Agent completion growth
+  • HKS exemplar accumulation
 
 Usage:
   hlf-bench results/metrics.json
   hlf-bench results-hlf/metrics.json results-nl/metrics.json  # comparison
   hlf-bench --watch results/metrics.json                       # live mode
+  hlf-bench --self-improve self-improve-results/               # trend mode
+  hlf-bench self-improve-results/                              # auto-detect dir
 """
 from __future__ import annotations
 
@@ -18,6 +27,7 @@ import argparse
 import curses
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -128,19 +138,184 @@ class BenchmarkMetrics:
         )
 
 
+# ── Iteration Series (Self-Improving Mode) ─────────────────────────────────────
+
+@dataclass
+class IterationPoint:
+    """A single iteration in a self-improving swarm run."""
+    index: int
+    path: str
+    metrics: BenchmarkMetrics
+    label: str = ""
+
+
+@dataclass
+class IterationSeries:
+    """Multiple iterations loaded from a self-improving swarm output directory."""
+    iterations: list[IterationPoint] = field(default_factory=list)
+
+    @classmethod
+    def from_directory(cls, dirpath: str) -> "IterationSeries":
+        """Load all iterations from a directory. Expects iter-N/metrics.json or
+        N/metrics.json, or any metric files prefixed by iteration number."""
+        root = Path(dirpath)
+        if not root.is_dir():
+            return cls()
+
+        iterations: list[IterationPoint] = []
+
+        # Pattern 1: iter-1/metrics.json, iter-2/metrics.json, ...
+        for child in sorted(root.iterdir(), key=lambda p: p.name):
+            m = re.match(r'iter[-_]?(\d+)', child.name, re.IGNORECASE)
+            if child.is_dir():
+                metrics_file = child / "metrics.json"
+                if metrics_file.exists():
+                    idx = int(m.group(1)) if m else len(iterations) + 1
+                    try:
+                        bm = BenchmarkMetrics.from_file(str(metrics_file))
+                        iterations.append(IterationPoint(
+                            index=idx, path=str(metrics_file), metrics=bm,
+                            label=child.name
+                        ))
+                    except (json.JSONDecodeError, FileNotFoundError):
+                        pass
+                # Also check numbered subdirs like v1, v2, ...
+                elif not m:
+                    m2 = re.match(r'v(\d+)', child.name, re.IGNORECASE)
+                    if m2:
+                        metrics_file = child / "metrics.json"
+                        if metrics_file.exists():
+                            idx = int(m2.group(1))
+                            try:
+                                bm = BenchmarkMetrics.from_file(str(metrics_file))
+                                iterations.append(IterationPoint(
+                                    index=idx, path=str(metrics_file), metrics=bm,
+                                    label=child.name
+                                ))
+                            except (json.JSONDecodeError, FileNotFoundError):
+                                pass
+
+        # Pattern 2: Single directory with metrics-1.json, metrics-2.json, ...
+        if not iterations:
+            for child in sorted(root.iterdir(), key=lambda p: p.name):
+                m = re.match(r'metrics[-_]?(\d+)\.json', child.name, re.IGNORECASE)
+                if m and child.is_file():
+                    idx = int(m.group(1))
+                    try:
+                        bm = BenchmarkMetrics.from_file(str(child))
+                        iterations.append(IterationPoint(
+                            index=idx, path=str(child), metrics=bm,
+                            label=f"iter-{idx}"
+                        ))
+                    except (json.JSONDecodeError, FileNotFoundError):
+                        pass
+
+        # Sort by index
+        iterations.sort(key=lambda ip: ip.index)
+        return cls(iterations=iterations)
+
+    @classmethod
+    def from_files(cls, files: list[str]) -> "IterationSeries":
+        """Load from explicit list of metrics files with numeric naming."""
+        iterations: list[IterationPoint] = []
+        for i, f in enumerate(files):
+            try:
+                bm = BenchmarkMetrics.from_file(f)
+                # Try to extract index from filename
+                m = re.search(r'(\d+)', Path(f).stem)
+                idx = int(m.group(1)) if m else i + 1
+                iterations.append(IterationPoint(
+                    index=idx, path=f, metrics=bm,
+                    label=Path(f).parent.name if Path(f).parent.name != '.' else Path(f).stem
+                ))
+            except (json.JSONDecodeError, FileNotFoundError):
+                pass
+        iterations.sort(key=lambda ip: ip.index)
+        return cls(iterations=iterations)
+
+    @property
+    def quality_trend(self) -> list[float]:
+        return [ip.metrics.quality_score for ip in self.iterations]
+
+    @property
+    def token_trend(self) -> list[int]:
+        return [ip.metrics.total_tokens for ip in self.iterations]
+
+    @property
+    def completion_trend(self) -> list[float]:
+        return [ip.metrics.success_rate for ip in self.iterations]
+
+    @property
+    def file_trend(self) -> list[int]:
+        return [ip.metrics.files_produced for ip in self.iterations]
+
+    @property
+    def best_quality(self) -> float:
+        return max(self.quality_trend) if self.quality_trend else 0.0
+
+    @property
+    def quality_delta(self) -> float:
+        """Improvement from first to last iteration."""
+        qt = self.quality_trend
+        if len(qt) < 2:
+            return 0.0
+        return qt[-1] - qt[0]
+
+    @property
+    def token_delta_pct(self) -> float:
+        """Token change from first to last iteration (negative = savings)."""
+        tt = self.token_trend
+        if len(tt) < 2 or tt[0] == 0:
+            return 0.0
+        return ((tt[-1] - tt[0]) / tt[0]) * 100
+
+
+# ── Sparkline Utility ──────────────────────────────────────────────────────────
+
+def sparkline(values: list[float], width: int, min_v: float | None = None,
+              max_v: float | None = None) -> str:
+    """Render a unicode sparkline for a series of values."""
+    if not values or width <= 0:
+        return " " * max(width, 0)
+
+    mn = min_v if min_v is not None else min(values)
+    mx = max_v if max_v is not None else max(values)
+    rng = mx - mn
+    if rng == 0:
+        rng = 1
+
+    blocks = "▁▂▃▄▅▆▇█"
+    result: list[str] = []
+    step = max(1, len(values) / width)
+
+    for i in range(width):
+        idx = min(int(i * step), len(values) - 1)
+        # Take max of a small window for better visibility
+        window_start = max(0, int(i * step) - 1)
+        window_end = min(len(values), int((i + 1) * step) + 1)
+        val = max(values[window_start:window_end]) if window_start < window_end else values[idx]
+        block_idx = min(len(blocks) - 1, max(0, int((val - mn) / rng * (len(blocks) - 1))))
+        result.append(blocks[block_idx])
+
+    return "".join(result)
+
+
 # ── TUI Application ────────────────────────────────────────────────────────────
 
 class BenchTUI:
     """Curses-based benchmark dashboard."""
 
-    def __init__(self, metrics: list[BenchmarkMetrics], watch: bool = False, interval: float = 2.0):
+    def __init__(self, metrics: list[BenchmarkMetrics], watch: bool = False,
+                 interval: float = 2.0, iterations: Optional[IterationSeries] = None):
         self.metrics = metrics  # 0 = HLF (or primary), 1 = NL (optional comparison)
         self.watch = watch
         self.interval = interval
+        self.iterations = iterations  # self-improving mode data
         self.running = True
         self.scroll_offset = 0
         self.selected_idx = 0
-        self.view_mode = "summary"  # "summary", "agents", "comparison", "tokens"
+        self.view_mode = "summary"  # "summary", "agents", "comparison", "tokens", "trends"
+        self._highlight_iter = -1  # highlighted iteration in trend view
 
         # Screen sections
         self.stdscr: Optional[curses.window] = None
@@ -232,6 +407,9 @@ class BenchTUI:
         elif key in (ord("4"),) and len(self.metrics) >= 2:
             self.view_mode = "comparison"
             self.scroll_offset = 0
+        elif key in (ord("5"),) and self.iterations and self.iterations.iterations:
+            self.view_mode = "trends"
+            self.scroll_offset = 0
         elif key == ord("r"):
             self._reload_metrics()
         elif key == curses.KEY_UP:
@@ -262,6 +440,10 @@ class BenchTUI:
         _, w = win.getmaxyx()
 
         title = " HLF BENCH TUI "
+        if self.iterations and self.iterations.iterations:
+            n = len(self.iterations.iterations)
+            title = f" HLF SELF-IMPROVING SWARM — {n} iterations "
+
         win.bkgd(" ", curses.color_pair(7))
         win.addstr(0, (w - len(title)) // 2, title, curses.color_pair(7) | curses.A_BOLD)
 
@@ -288,6 +470,8 @@ class BenchTUI:
             self._draw_agents(win, h, w)
         elif self.view_mode == "tokens":
             self._draw_tokens(win, h, w)
+        elif self.view_mode == "trends" and self.iterations and self.iterations.iterations:
+            self._draw_trends(win, h, w)
         else:
             self._draw_summary(win, h, w)
 
@@ -371,7 +555,12 @@ class BenchTUI:
             win.addstr(y, 1, " (no agent data)", curses.color_pair(3))
 
         # Nav help at bottom of body
-        nav = " 1:Summary  2:Agents  3:Tokens" + ("  4:Comparison" if len(self.metrics) >= 2 else "") + "  ↑↓:Scroll  q:Quit  r:Reload"
+        nav_parts = ["1:Summary", "2:Agents", "3:Tokens"]
+        if len(self.metrics) >= 2:
+            nav_parts.append("4:Comparison")
+        if self.iterations and self.iterations.iterations:
+            nav_parts.append("5:Trends")
+        nav = "  " + "  ".join(nav_parts) + "  ↑↓:Scroll  q:Quit  r:Reload"
         win.addstr(h - 1, 1, nav[: w - 2], curses.color_pair(4))
 
     def _draw_agents(self, win: curses.window, h: int, w: int) -> None:
@@ -538,6 +727,166 @@ class BenchTUI:
         nav = "1:Summary  2:Agents  3:Tokens  4:Comparison  q:Quit"
         win.addstr(h - 1, 1, nav[: w - 2], curses.color_pair(4))
 
+    def _draw_trends(self, win: curses.window, h: int, w: int) -> None:
+        """Self-improving swarm trend visualization across iterations."""
+        if not self.iterations:
+            return
+        its = self.iterations.iterations
+        if not its:
+            return
+        y = 0
+
+        win.addstr(y, 1, " Self-Improving Swarm Trends", curses.color_pair(5) | curses.A_BOLD)
+        y += 1
+
+        # ── Quality Trend ──────────────────────────────────────────────────
+        y += 1
+        win.addstr(y, 1, " Quality Score", curses.A_BOLD)
+        y += 1
+
+        q_values = self.iterations.quality_trend
+        spark_w = min(60, w - 25)
+        spark = sparkline(q_values, spark_w)
+        win.addstr(y, 3, spark, curses.color_pair(5))
+        y += 1
+
+        # Quality values with delta markers
+        line_parts: list[str] = []
+        prev_q = None
+        for ip in its:
+            q = ip.metrics.quality_score
+            if prev_q is not None and q != prev_q:
+                delta = "↑" if q > prev_q else "↓"
+                color_code = "\x01" if q > prev_q else "\x02"  # placeholder for color
+                line_parts.append(f"{ip.index}:{q:.2f}{delta}")
+            else:
+                line_parts.append(f"{ip.index}:{q:.2f} ")
+            prev_q = q
+        trend_line = "  ".join(line_parts)
+        quality_color = (
+            curses.color_pair(1) if self.iterations.quality_delta >= 0
+            else curses.color_pair(2)
+        )
+        win.addstr(y, 1, f" {trend_line}"[: w - 2],
+                   quality_color if self.iterations.quality_delta != 0 else curses.A_NORMAL)
+        y += 1
+
+        delta_q = self.iterations.quality_delta
+        win.addstr(y, 1, f" Δ: {delta_q:+.4f}  |  Best: {self.iterations.best_quality:.4f}  |  "
+                   f"{len(its)} iterations",
+                   curses.color_pair(1) if delta_q >= 0 else curses.color_pair(2))
+        y += 2
+
+        # ── Token Trend ────────────────────────────────────────────────────
+        win.addstr(y, 1, "─" * (w - 2))
+        y += 1
+        win.addstr(y, 1, " Token Efficiency", curses.A_BOLD)
+        y += 1
+
+        t_values = [float(t) for t in self.iterations.token_trend]
+        t_spark = sparkline(t_values, spark_w)
+        win.addstr(y, 3, t_spark, curses.color_pair(4))
+        y += 1
+
+        # Token values
+        token_parts = []
+        for ip in its:
+            token_parts.append(f"{ip.index}:{ip.metrics.total_tokens:,}")
+        win.addstr(y, 1, f" {'  '.join(token_parts)}"[: w - 2])
+        y += 1
+
+        t_delta = self.iterations.token_delta_pct
+        tok_color = curses.color_pair(1) if t_delta <= 0 else curses.color_pair(2)
+        tok_label = "savings" if t_delta <= 0 else "increase"
+        win.addstr(y, 1, f" Δ: {t_delta:+.0f}% token {tok_label} across iterations", tok_color)
+        y += 2
+
+        # ── Agent Completion Trend ─────────────────────────────────────────
+        win.addstr(y, 1, " Agent Completion", curses.A_BOLD)
+        y += 1
+
+        c_values = [c * 100 for c in self.iterations.completion_trend]
+        c_spark = sparkline(c_values, spark_w, min_v=0, max_v=100)
+        win.addstr(y, 3, c_spark, curses.color_pair(1))
+        y += 1
+
+        comp_parts = []
+        for ip in its:
+            m = ip.metrics
+            comp_parts.append(f"{ip.index}:{m.complete}/{m.total_agents}")
+        win.addstr(y, 1, f" {'  '.join(comp_parts)}"[: w - 2])
+        y += 2
+
+        # ── Files Produced Trend ───────────────────────────────────────────
+        win.addstr(y, 1, " Files Produced", curses.A_BOLD)
+        y += 1
+
+        f_values = [float(f) for f in self.iterations.file_trend]
+        f_spark = sparkline(f_values, spark_w)
+        win.addstr(y, 3, f_spark, curses.color_pair(4))
+        y += 1
+
+        file_parts = []
+        for ip in its:
+            file_parts.append(f"{ip.index}:{ip.metrics.files_produced}")
+        win.addstr(y, 1, f" {'  '.join(file_parts)}"[: w - 2])
+        y += 2
+
+        # ── Per-Iteration Summary Table ────────────────────────────────────
+        if y + len(its) + 2 < h:
+            win.addstr(y, 1, "─" * (w - 2))
+            y += 1
+            win.addstr(y, 1, " Iteration Detail", curses.A_BOLD)
+            y += 1
+
+            # Header
+            header = f" {'Iter':<6s} {'Agents':<8s} {'Tokens':>10s} {'Wall':>8s} {'Files':>6s} {'Quality':>10s}  ΔQuality"
+            win.addstr(y, 1, header[: w - 2], curses.A_UNDERLINE)
+            y += 1
+
+            prev_q_detail = None
+            for ip in its:
+                if y >= h - 2:
+                    break
+                m = ip.metrics
+                q_str = f"{m.quality_score:.4f}"
+                if prev_q_detail is not None:
+                    dq = m.quality_score - prev_q_detail
+                    delta_str = f" {dq:+.4f}"
+                    dq_color = curses.color_pair(1) if dq >= 0 else curses.color_pair(2)
+                else:
+                    delta_str = "  —"
+                    dq_color = curses.A_NORMAL
+                prev_q_detail = m.quality_score
+
+                status_color = (
+                    curses.color_pair(1) if m.errors == 0
+                    else curses.color_pair(2)
+                )
+                line = (f" {ip.label:<6s} {m.complete}/{m.total_agents:<5s} "
+                        f"{m.total_tokens:>10,} {m.elapsed_sec:>7.0f}s "
+                        f"{m.files_produced:>5}  {q_str:>10s}{delta_str}")
+                win.addstr(y, 1, line[: w - 2], status_color)
+                win.addstr(y, 1 + len(line) - len(delta_str) if len(line) < w else w - len(delta_str) - 1,
+                           delta_str, dq_color)
+                y += 1
+
+            # Total row
+            if y < h - 1:
+                total_tokens = sum(ip.metrics.total_tokens for ip in its)
+                total_files = sum(ip.metrics.files_produced for ip in its)
+                total_time = sum(ip.metrics.total_ms for ip in its) / 1000
+                win.addstr(y, 1, f" {'TOTAL':<6s} {'':<8s} {total_tokens:>10,} {total_time:>7.0f}s "
+                           f"{total_files:>5}  {'':>10s}", curses.A_BOLD)
+                y += 1
+
+        # Nav
+        nav_parts = ["1:Summary", "2:Agents", "3:Tokens", "5:Trends"]
+        if len(self.metrics) >= 2:
+            nav_parts.insert(3, "4:Comparison")
+        nav = "  " + "  ".join(nav_parts) + "  PgUp/PgDn:Scroll  q:Quit"
+        win.addstr(h - 1, 1, nav[: w - 2], curses.color_pair(4))
+
     def _draw_footer(self) -> None:
         win = self.footer_win
         if not win:
@@ -545,13 +894,21 @@ class BenchTUI:
         win.erase()
         _, w = win.getmaxyx()
 
-        if len(self.metrics) >= 2:
+        if self.iterations and self.iterations.iterations:
+            it = self.iterations
+            line = (f" {len(it.iterations)} iterations | "
+                    f"Quality: {it.quality_trend[0]:.4f} → {it.quality_trend[-1]:.4f} "
+                    f"(Δ{it.quality_delta:+.4f}) | "
+                    f"Tokens: Δ{it.token_delta_pct:+.0f}%")
+        elif len(self.metrics) >= 2:
             line = f" HLF: {self.metrics[0].summary_line}  │  NL: {self.metrics[1].summary_line}"
         else:
             line = f" {self.metrics[0].summary_line}"
         win.addstr(0, 1, line[: w - 2], curses.color_pair(4))
 
         watch_marker = " ⏳ LIVE" if self.watch else ""
+        if self.iterations and self.iterations.iterations:
+            watch_marker = " 🔄 SELF-IMPROVING"
         win.addstr(1, w - len(watch_marker) - 2, watch_marker, curses.color_pair(3) | curses.A_BOLD)
         win.noutrefresh()
 
@@ -560,11 +917,11 @@ class BenchTUI:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="HLF Benchmark TUI — visualize swarm execution and compare HLF vs NL.",
+        description="HLF Self-Improving Swarm TUI — visualize swarm execution and quality trends.",
         prog="hlf-bench",
     )
     parser.add_argument(
-        "metrics", nargs="+", help="Path(s) to metrics.json file(s). Two files enable comparison mode."
+        "metrics", nargs="*", help="Path(s) to metrics.json file(s). Two files enable comparison mode."
     )
     parser.add_argument(
         "--watch", "-w", action="store_true",
@@ -574,26 +931,63 @@ def main() -> None:
         "--interval", "-i", type=float, default=2.0,
         help="Poll interval in seconds for --watch mode (default: 2.0).",
     )
+    parser.add_argument(
+        "--self-improve", "-s", type=str, default=None,
+        help="Self-improving mode: path to directory containing multiple iterations.",
+    )
     args = parser.parse_args()
 
-    # Load metrics
-    loaded: list[BenchmarkMetrics] = []
-    for path in args.metrics:
-        if not os.path.isfile(path):
-            print(f"Error: file not found: {path}", file=sys.stderr)
-            sys.exit(1)
-        try:
-            loaded.append(BenchmarkMetrics.from_file(path))
-        except json.JSONDecodeError as e:
-            print(f"Error: invalid JSON in {path}: {e}", file=sys.stderr)
-            sys.exit(1)
+    # Load iterations if self-improving mode
+    iterations: Optional[IterationSeries] = None
 
-    if not loaded:
-        print("Error: no valid metrics files provided.", file=sys.stderr)
+    if args.self_improve:
+        if not os.path.isdir(args.self_improve):
+            print(f"Error: not a directory: {args.self_improve}", file=sys.stderr)
+            sys.exit(1)
+        iterations = IterationSeries.from_directory(args.self_improve)
+        if not iterations.iterations:
+            print(f"Error: no iterations found in {args.self_improve}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Loaded {len(iterations.iterations)} iterations from {args.self_improve}")
+        # Use the last iteration as primary metrics for summary view
+        last_iter = iterations.iterations[-1].metrics
+        loaded = [last_iter]
+        # If we have enough iterations, show the first one as comparison
+        if len(iterations.iterations) >= 2:
+            loaded.append(iterations.iterations[0].metrics)
+    elif args.metrics:
+        loaded: list[BenchmarkMetrics] = []
+        # Auto-detect: if a single argument is a directory, enter self-improve mode
+        if len(args.metrics) == 1 and os.path.isdir(args.metrics[0]):
+            iterations = IterationSeries.from_directory(args.metrics[0])
+            if iterations.iterations:
+                print(f"Auto-detected directory with {len(iterations.iterations)} iterations")
+                last_iter = iterations.iterations[-1].metrics
+                loaded = [last_iter]
+                if len(iterations.iterations) >= 2:
+                    loaded.append(iterations.iterations[0].metrics)
+            else:
+                print(f"Error: no iterations found in {args.metrics[0]}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            for path in args.metrics:
+                if not os.path.isfile(path):
+                    print(f"Error: file not found: {path}", file=sys.stderr)
+                    sys.exit(1)
+                try:
+                    loaded.append(BenchmarkMetrics.from_file(path))
+                except json.JSONDecodeError as e:
+                    print(f"Error: invalid JSON in {path}: {e}", file=sys.stderr)
+                    sys.exit(1)
+
+        if not loaded:
+            print("Error: no valid metrics files provided.", file=sys.stderr)
+            sys.exit(1)
+    else:
+        parser.print_help()
         sys.exit(1)
 
-    # If only one file, it's the primary. If two, first = HLF, second = NL.
-    app = BenchTUI(loaded, watch=args.watch, interval=args.interval)
+    app = BenchTUI(loaded, watch=args.watch, interval=args.interval, iterations=iterations)
     app.run()
 
 

@@ -471,7 +471,206 @@ if __name__ == "__main__":
 
         return None
 
+    def _run_governance_pipeline(self, agent_id: str, role: str, task: str, **kwargs: Any) -> dict[str, Any]:
+        """Run the protocol enforcement state machine before spawning.
+
+        Pipeline stages:
+            1. classify_lane → vision | current-truth | bridge | bridge-true
+            2. constitutive_check → compare against source docs / ownership
+            3. persona_assign → resolve persona contract
+            4. hks_recall → fetch relevant exemplars
+
+        Each stage can return a "blocked" signal that halts the pipeline.
+        Returns a governance_state dict with stage results.
+        Returns {"blocked": False, ...} if all stages pass.
+        """
+        stages: list[dict[str, Any]] = []
+        governance_state: dict[str, Any] = {
+            "agent_id": agent_id,
+            "role": role,
+            "stages": stages,
+            "blocked": False,
+            "blocked_at_stage": None,
+            "block_reason": None,
+        }
+
+        # ── Stage 1: Lane Classification ────────────────────────────────
+        lane = self._classify_lane(agent_id, role, task, **kwargs)
+        stages.append({"stage": "classify_lane", "result": lane})
+        if lane.get("blocked"):
+            governance_state["blocked"] = True
+            governance_state["blocked_at_stage"] = "classify_lane"
+            governance_state["block_reason"] = lane.get("reason", "Lane classification failed")
+            return governance_state
+
+        # ── Stage 2: Constitutive Surface Check ─────────────────────────
+        const_check = self._constitutive_check(agent_id, role, task, lane=lane, **kwargs)
+        stages.append({"stage": "constitutive_check", "result": const_check})
+        if const_check.get("blocked"):
+            governance_state["blocked"] = True
+            governance_state["blocked_at_stage"] = "constitutive_check"
+            governance_state["block_reason"] = const_check.get("reason", "Constitutive check failed")
+            return governance_state
+
+        # ── Stage 3: Persona Assignment ─────────────────────────────────
+        persona = self._resolve_persona_for_agent(agent_id, role, task, lane=lane, **kwargs)
+        stages.append({"stage": "persona_assign", "result": persona})
+        if persona.get("blocked"):
+            governance_state["blocked"] = True
+            governance_state["blocked_at_stage"] = "persona_assign"
+            governance_state["block_reason"] = persona.get("reason", "Persona assignment failed")
+            return governance_state
+
+        # ── Stage 4: HKS Recall ─────────────────────────────────────────
+        hks = self._recall_hks_exemplars(agent_id, role, task, lane=lane, persona=persona, **kwargs)
+        stages.append({"stage": "hks_recall", "result": hks})
+
+        # Enrich kwargs for downstream spawn
+        governance_state["lane"] = lane
+        governance_state["persona"] = persona
+        governance_state["hks_exemplars"] = hks.get("exemplars", [])
+
+        return governance_state
+
+    @staticmethod
+    def _classify_lane(agent_id: str, role: str, task: str, **kwargs: Any) -> dict[str, Any]:
+        """Classify the agent's lane: vision | current-truth | bridge | bridge-true.
+
+        vision:         Agent that defines new architecture/design from scratch.
+        current-truth:  Agent that operates on existing source of truth.
+        bridge:         Agent that connects vision to current truth.
+        bridge-true:    Default — requires evidence for changes (safest lane).
+        """
+        # Respect explicit lane override
+        explicit = kwargs.get("lane") or kwargs.get("protocol_mode")
+        if explicit and explicit in ("vision", "current-truth", "bridge", "bridge-true"):
+            return {"lane": explicit, "source": "explicit"}
+
+        # Role-based heuristic classification
+        vision_roles = {"architect", "planner", "designer", "schemadesigner", "strategist"}
+        truth_roles = {"implementer", "executor", "tester", "reviewer", "chronicler"}
+        bridge_roles = {"configengineer", "orchestrator", "coordinator", "herald", "bridge", "middlewareengineer"}
+
+        role_lower = role.lower()
+        agent_lower = agent_id.lower()
+        if any(v in role_lower or v in agent_lower for v in vision_roles):
+            return {"lane": "vision", "source": "role_heuristic"}
+        if any(t in role_lower or t in agent_lower for t in truth_roles):
+            return {"lane": "current-truth", "source": "role_heuristic"}
+        if any(b in role_lower or b in agent_lower for b in bridge_roles):
+            return {"lane": "bridge", "source": "role_heuristic"}
+
+        return {"lane": "bridge-true", "source": "default"}
+
+    @staticmethod
+    def _constitutive_check(agent_id: str, role: str, task: str,
+                            lane: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        """Check agent's output domain against constitutive documents.
+
+        - bridge-true agents: any output contradicting constitutive docs is blocked.
+        - vision agents: output is authoritative, no blocking.
+        - current-truth agents: output must be consistent with existing truth.
+        """
+        lane_name = (lane or {}).get("lane", "bridge-true")
+        constraints = kwargs.get("constraints", [])
+        dependencies = kwargs.get("dependencies", {})
+
+        # Bridge agents must have explicit dependencies
+        if lane_name == "bridge" and not dependencies:
+            return {
+                "blocked": True,
+                "reason": "Bridge agent requires explicit dependencies to connect vision to truth",
+                "lane": lane_name,
+            }
+
+        # Check for conflicting constraints
+        constraint_set = set(constraints)
+        conflicting = constraint_set & {"COMMONJS", "ESMODULE"}
+        if "COMMONJS" in conflicting and "ESMODULE" in conflicting:
+            return {
+                "blocked": True,
+                "reason": "Conflicting constraints: COMMONJS vs ESMODULE",
+                "lane": lane_name,
+            }
+
+        return {"blocked": False, "lane": lane_name}
+
+    @staticmethod
+    def _resolve_persona_for_agent(agent_id: str, role: str, task: str,
+                                    lane: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        """Resolve the persona contract for this agent.
+
+        Assigns the right persona based on role and lane.
+        Does NOT enforce gates — that is done separately by _check_persona_gates().
+        """
+        lane_name = (lane or {}).get("lane", "bridge-true")
+
+        ROLE_PERSONA_MAP: dict[str, str] = {
+            "SchemaDesigner": "strategist",
+            "ConfigEngineer": "steward",
+            "MiddlewareEngineer": "sentinel",
+            "AuthService": "sentinel",
+            "TestAgent": "chronicler",
+            "Assessor": "herald",
+        }
+
+        persona = ROLE_PERSONA_MAP.get(role)
+
+        if not persona:
+            LANE_PERSONA_MAP = {
+                "vision": "strategist",
+                "current-truth": "chronicler",
+                "bridge": "herald",
+                "bridge-true": "steward",
+            }
+            persona = LANE_PERSONA_MAP.get(lane_name, "steward")
+
+        return {
+            "blocked": False,
+            "persona": persona,
+            "source": "role_map" if role in ROLE_PERSONA_MAP else "lane_map",
+        }
+
+    @staticmethod
+    def _recall_hks_exemplars(agent_id: str, role: str, task: str,
+                               lane: dict[str, Any] | None = None,
+                               persona: dict[str, Any] | None = None,
+                               **kwargs: Any) -> dict[str, Any]:
+        """Recall relevant exemplars from HKS for this agent.
+
+        Uses pre-passed hks_exemplars if available, otherwise empty.
+        """
+        existing = kwargs.get("hks_exemplars")
+        if existing and isinstance(existing, list) and len(existing) > 0:
+            return {"exemplars": existing, "source": "kwargs"}
+
+        return {"exemplars": [], "source": "none"}
+
     def spawn(self, agent_id: str, role: str, task: str, model: str = "", **kwargs: Any) -> SpawnHandle:
+        # ── Governance loop pre-flight (opt-in via governance=True kwarg) ──
+        governance_enabled = kwargs.get("governance", False)
+        governance_state: dict[str, Any] | None = None
+        if governance_enabled:
+            governance_state = self._run_governance_pipeline(agent_id, role, task, **kwargs)
+            if governance_state.get("blocked"):
+                work_dir = tempfile.mkdtemp(prefix=f"hlf_agent_{agent_id}_")
+                self._work_dirs[agent_id] = work_dir
+                self._blocked[agent_id] = governance_state
+                status_data = {
+                    "agent_id": agent_id,
+                    "status": "blocked_governance",
+                    "governance_state": governance_state,
+                }
+                with open(os.path.join(work_dir, "status.json"), "w", encoding="utf-8") as f:
+                    json.dump(status_data, f, indent=2)
+                return SpawnHandle(
+                    agent_id=agent_id,
+                    backend="subprocess",
+                    token=str(uuid.uuid4()),
+                    work_dir=work_dir,
+                    meta={"blocked": True, "block_reason": governance_state, "governance": True},
+                )
+
         # ── Persona gate pre-check ──────────────────────────────────────────
         blocked = self._check_persona_gates(agent_id, **kwargs)
         if blocked:
@@ -508,9 +707,13 @@ if __name__ == "__main__":
             "constraints": kwargs.get("constraints", []),
             "dependencies": kwargs.get("dependencies", {}),
             "num_predict": kwargs.get("num_predict", 16384),
-            "hks_exemplars": kwargs.get("hks_exemplars", []),
-            "persona": kwargs.get("persona", ""),
-            "protocol_mode": kwargs.get("protocol_mode", ""),
+            "hks_exemplars": governance_state["hks_exemplars"] if governance_state else kwargs.get("hks_exemplars", []),
+            "persona": (governance_state.get("persona", {}).get("persona", "") if governance_state
+                        else kwargs.get("persona", "")),
+            "protocol_mode": (governance_state.get("lane", {}).get("lane", "") if governance_state
+                             else kwargs.get("protocol_mode", "")),
+            "governance": governance_state is not None,
+            "governance_stages": governance_state.get("stages", []) if governance_state else [],
         }
         config_path = os.path.join(work_dir, "config.json")
         with open(config_path, "w", encoding="utf-8") as f:

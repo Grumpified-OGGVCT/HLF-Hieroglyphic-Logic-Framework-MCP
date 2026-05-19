@@ -71,10 +71,16 @@ statement: glyph_stmt
          | pipe_stmt
          | template_stmt
 
+         // ── RFC 9005: Glyph-based statements (additive — keyword forms co-exist) ──
+         | glyph_assign_stmt
+         | struct_stmt
+         | sync_stmt
+         | cond_stmt
+
 // ── Glyph statement ───────────────────────────────────────────────────────────
 glyph_stmt: GLYPH tag? arg_list? validate_annot?
 
-GLYPH: /[ΔЖ⨝⌘∇⩕⊎⌂Σ]/
+GLYPH: /[ΔЖ⨝⌘∇⩕⌂Σ]/
 
 // ── Pipe operator (statement chaining) ────────────────────────────────────────
 PIPE: "→"
@@ -82,13 +88,38 @@ pipe_stmt: glyph_stmt (PIPE statement)+
          | tool_stmt (PIPE statement)+
          | call_stmt (PIPE statement)+
 
+// ── RFC 9005: Glyph-based assignment (←) ──────────────────────────────────────
+glyph_assign_stmt: IDENT type_ann? ASSIGN_GLYPH assign_rhs epistemic?
+assign_rhs: expr | call_stmt | tool_stmt
+
+// ── RFC 9005: Type annotations (:: TYPE_SYM | param_type_sym | refine_type) ──
+type_ann: TYPE_ANN (TYPE_SYM | param_type_sym | refine_type)
+
+// ── RFC 9005: Epistemic confidence modifier (_{ρ:val}) ────────────────────────
+EPISTEMIC_START.10: "_{"
+CONFIDENCE_NUM.5: /[0-9]+(\.[0-9]+)?/
+epistemic: EPISTEMIC_START "ρ" ":" CONFIDENCE_NUM "}"
+
+// ── RFC 9007: Struct definitions (≡) ──────────────────────────────────────────
+struct_stmt: IDENT STRUCT_GLYPH LBRACE struct_field ("," struct_field)* RBRACE epistemic?
+struct_field: STRUCT_FIELD_IDENT ":" TYPE_SYM
+STRUCT_FIELD_IDENT.5: /[a-zA-Z_][a-zA-Z0-9_\-@]*/
+
+// ── RFC 9005: Sync barrier (⋈) ────────────────────────────────────────────────
+sync_stmt: SYNC_GLYPH LBRACKET IDENT ("," IDENT)* RBRACKET PIPE statement epistemic?
+
+// ── RFC 9005: Conditional logic (⊎ ⇒ ⇌) ──────────────────────────────────────
+cond_stmt: COND_GLYPH cond_expr THEN_GLYPH statement (ELSE_GLYPH statement)? epistemic?
+cond_expr: expr
+
 tag: LBRACKET TAG_NAME RBRACKET
 TAG_NAME: /[A-Z][A-Z0-9_]*/
 
 arg_list: argument+
 
 argument: IDENT "=" value -> kv_arg
-        | value            -> pos_arg
+         | REF IDENT       -> ref_arg
+         | value            -> pos_arg
 
 value: ESCAPED_STRING    -> str_val
      | FLOAT             -> float_val
@@ -167,10 +198,11 @@ RBRACE: "}"
 
 ?expr: expr_or
 
-expr_or:  expr_and (KW_OR  expr_and)*
-expr_and: expr_not (KW_AND expr_not)*
+expr_or:  expr_and ((KW_OR | OR_GLYPH) expr_and)*
+expr_and: expr_not ((KW_AND | AND_GLYPH) expr_not)*
 
 ?expr_not: KW_NOT expr_not -> not_expr
+         | NEG_GLYPH expr_primary -> not_expr
          | expr_cmp
 
 expr_cmp: expr_add (CMP expr_add)*
@@ -225,6 +257,29 @@ KW_TEMPLATE.10:    "TEMPLATE"
 
 // ── Terminals ─────────────────────────────────────────────────────────────────
 CMP:     ">=" | "<=" | "!=" | "==" | ">" | "<"
+
+// ── RFC 9005/9007: Unicode operator glyphs ────────────────────────────────────
+ASSIGN_GLYPH.10: "←"
+STRUCT_GLYPH.10: "≡"
+SYNC_GLYPH.10:   "⋈"
+COND_GLYPH.10:   "⊎"
+THEN_GLYPH.10:   "⇒"
+ELSE_GLYPH.10:   "⇌"
+NEG_GLYPH.10:    "¬"
+AND_GLYPH.10:    "∩"
+OR_GLYPH.10:     "∪"
+TYPE_ANN.10:     "::"
+REF.10:          "&"
+TYPE_SYM.10:     "ℕ" | "ℤ" | "ℝ" | "ℚ" | "𝕊" | "𝔹" | "𝕁" | "𝔸"
+
+// ── Parametric types: List⟨T⟩, Set⟨T⟩, Map⟨K,V⟩ ─────────────────────────────
+CHEVRON_OPEN.10:  "⟨"
+CHEVRON_CLOSE.10: "⟩"
+param_type_sym.10: TYPE_SYM CHEVRON_OPEN TYPE_SYM ("," TYPE_SYM)* CHEVRON_CLOSE
+
+// ── Refinement types: {var: ℕ | var > 0} ────────────────────────────────────
+refine_type.10: LBRACE PARAM_IDENT ":" TYPE_SYM "|" expr RBRACE
+
 PATH.5:    /\/[^\s"\[\]\{\}\n]+/
 FLOAT.3:   /[+-]?[0-9]+\.[0-9]+/
 INT.2:     /[+-]?[0-9]+/
@@ -268,6 +323,77 @@ GLYPHS = {
         "ascii": "SUMMARY",
         "opcode": None,
         "syntax": "statement",
+    },
+    # ── RFC 9005/9007: Operator glyphs (inline, not standalone statements) ──
+    "←": {
+        "name": "LEFT_ARROW",
+        "role": "assign",
+        "ascii": "<-",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "≡": {
+        "name": "IDENTICAL_TO",
+        "role": "struct_def",
+        "ascii": "struct",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "⋈": {
+        "name": "BOWTIE_JOIN",
+        "role": "sync_barrier",
+        "ascii": "SYNC",
+        "opcode": 0x62,
+        "syntax": "statement",
+    },
+    "⇒": {
+        "name": "RIGHT_DOUBLE_ARROW",
+        "role": "then",
+        "ascii": "=>",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "⇌": {
+        "name": "RIGHT_LEFT_HARPOON",
+        "role": "else",
+        "ascii": "else",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "¬": {
+        "name": "NOT_SIGN",
+        "role": "negate",
+        "ascii": "NOT",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "∩": {
+        "name": "INTERSECTION",
+        "role": "and",
+        "ascii": "AND",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "∪": {
+        "name": "UNION_MATH",
+        "role": "or",
+        "ascii": "OR",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "::": {
+        "name": "DOUBLE_COLON",
+        "role": "type_annotate",
+        "ascii": "::",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "&": {
+        "name": "AMPERSAND",
+        "role": "reference",
+        "ascii": "&",
+        "opcode": None,
+        "syntax": "operator",
     },
 }
 

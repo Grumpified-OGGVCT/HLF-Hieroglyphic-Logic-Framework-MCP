@@ -111,6 +111,13 @@ TYPE_FLOAT = 0x02
 TYPE_STRING = 0x03
 TYPE_BOOL = 0x04
 TYPE_NULL = 0x05
+TYPE_RATIONAL = 0x06  # (numerator int64, denominator int64) pair
+TYPE_INTEGER = 0x07   # ℤ — signed integer
+TYPE_REAL = 0x08      # ℝ — real (float64)
+TYPE_LIST = 0x09      # List⟨T⟩ — parametric list
+TYPE_SET = 0x0A       # Set⟨T⟩ — parametric set
+TYPE_MAP = 0x0B       # Map⟨K,V⟩ — parametric map
+TYPE_REFINEMENT = 0x0C  # {var: T | pred} — refinement type
 
 
 class ConstantPool:
@@ -162,9 +169,9 @@ def _encode_const(value: Any) -> bytes:
     if isinstance(value, bool):
         return bytes([TYPE_BOOL]) + struct.pack("<B", 1 if value else 0)
     if isinstance(value, int):
-        return bytes([TYPE_INT]) + struct.pack("<q", value)
+        return bytes([TYPE_INTEGER]) + struct.pack("<q", value)  # ℤ — signed 64-bit
     if isinstance(value, float):
-        return bytes([TYPE_FLOAT]) + struct.pack("<d", value)
+        return bytes([TYPE_REAL]) + struct.pack("<d", value)  # ℝ — float64
     # string (default)
     enc = str(value).encode("utf-8")
     return bytes([TYPE_STRING]) + struct.pack("<I", len(enc)) + enc
@@ -180,14 +187,28 @@ def _decode_const(data: bytes) -> tuple[Any, int]:
         if len(data) < 2:
             return False, 2
         return bool(data[1]), 2
-    if typ == TYPE_INT:
+    if typ == TYPE_INTEGER:  # ℤ — signed int64
         if len(data) < 9:
             return 0, 9
         return struct.unpack("<q", data[1:9])[0], 9
-    if typ == TYPE_FLOAT:
+    if typ == TYPE_INT:  # Legacy TYPE_INT (0x01) — keep for backward compat
+        if len(data) < 9:
+            return 0, 9
+        return struct.unpack("<q", data[1:9])[0], 9
+    if typ == TYPE_REAL:  # ℝ — float64
         if len(data) < 9:
             return 0.0, 9
         return struct.unpack("<d", data[1:9])[0], 9
+    if typ == TYPE_FLOAT:  # Legacy TYPE_FLOAT (0x02) — keep for backward compat
+        if len(data) < 9:
+            return 0.0, 9
+        return struct.unpack("<d", data[1:9])[0], 9
+    if typ == TYPE_RATIONAL:  # ℚ — (numerator int64, denominator int64)
+        if len(data) < 17:
+            return (0, 1), 17
+        num = struct.unpack("<q", data[1:9])[0]
+        den = struct.unpack("<q", data[9:17])[0]
+        return (num, den), 17
     if typ == TYPE_STRING:
         if len(data) < 5:
             return "", 5

@@ -80,7 +80,8 @@ class TestHlfType:
 
     def test_from_json_schema_type(self):
         assert HlfType.from_json_schema_type("string") == HlfType.STRING
-        assert HlfType.from_json_schema_type("integer") == HlfType.NUMBER
+        assert HlfType.from_json_schema_type("integer") == HlfType.INTEGER
+        assert HlfType.from_json_schema_type("number") == HlfType.NUMBER
         assert HlfType.from_json_schema_type("boolean") == HlfType.BOOLEAN
         assert HlfType.from_json_schema_type("object") == HlfType.JSON
         assert HlfType.from_json_schema_type("array") == HlfType.JSON

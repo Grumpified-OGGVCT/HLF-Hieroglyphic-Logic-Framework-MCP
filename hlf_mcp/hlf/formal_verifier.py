@@ -241,6 +241,25 @@ def _numeric_value(value: Any) -> float | None:
     return None
 
 
+def _infer_type(value: Any) -> str:
+    """Infer the HLF type string from a Python value."""
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "real"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "list"
+    if isinstance(value, dict):
+        return "json"
+    if isinstance(value, tuple) and len(value) == 2 and all(isinstance(v, int) for v in value):
+        return "rational"
+    return ""
+
+
 def _extract_from_node(node: Any, constraints: list[dict[str, Any]]) -> None:
     if not isinstance(node, dict):
         return
@@ -288,25 +307,21 @@ def _extract_from_node(node: Any, constraints: list[dict[str, Any]]) -> None:
     elif tag == "SET" or kind == "set_stmt":
         value = _decode_value(node.get("value"))
         name = str(node.get("name", f"value_{len(constraints)}"))
-        if isinstance(value, bool):
-            expected_type = "boolean"
-        elif isinstance(value, (int, float)):
-            expected_type = "number"
-        elif isinstance(value, str):
-            expected_type = "string"
-        elif isinstance(value, list):
-            expected_type = "list"
-        elif isinstance(value, dict):
-            expected_type = "dict"
+        # Check for type annotation (from glyph_assign_stmt type_ann)
+        type_ann = node.get("type")
+        if isinstance(type_ann, dict) and type_ann.get("kind") == "type_ann":
+            expected_type = type_ann.get("type", "")
+        elif isinstance(type_ann, str):
+            expected_type = type_ann
         else:
-            expected_type = ""
+            expected_type = _infer_type(value)
         if expected_type:
             constraints.append(
                 {
                     "kind": "type_invariant",
                     "name": f"type_{name}",
                     "variable": name,
-                    "expected_type": expected_type,
+                    "expected_type": str(expected_type),
                     "value": value,
                 }
             )
@@ -389,10 +404,16 @@ class FallbackSolver:
         start = time.time()
         type_map = {
             "number": (int, float),
+            "integer": (int,),
+            "real": (int, float),
+            "rational": (tuple, int, float),  # tuple for (num, den) pairs
             "string": (str,),
             "boolean": (bool,),
             "list": (list,),
+            "set": (list,),    # HLF Set⟨T⟩ runtime representation as list
+            "map": (dict,),    # HLF Map⟨K,V⟩ runtime representation as dict
             "dict": (dict,),
+            "json": (dict, list),
         }
         expected = type_map.get(expected_type)
         if expected is None:
@@ -401,6 +422,65 @@ class FallbackSolver:
                 status=VerificationStatus.UNKNOWN,
                 kind=ConstraintKind.TYPE_INVARIANT,
                 message=f"Unknown type '{expected_type}'",
+                solver="fallback",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        # For rational, check both tuple and numeric forms
+        if expected_type == "rational":
+            if isinstance(value, tuple) and len(value) == 2 and all(isinstance(v, int) for v in value):
+                if value[1] == 0:
+                    return VerificationResult(
+                        property_name=name or "type_check",
+                        status=VerificationStatus.COUNTEREXAMPLE,
+                        kind=ConstraintKind.TYPE_INVARIANT,
+                        message="Rational denominator cannot be zero",
+                        counterexample={"value": str(value), "actual_type": "rational_zero_denom"},
+                        solver="fallback",
+                        duration_ms=(time.time() - start) * 1000,
+                    )
+                return VerificationResult(
+                    property_name=name or "type_check",
+                    status=VerificationStatus.RUNTIME_CHECKED,
+                    kind=ConstraintKind.TYPE_INVARIANT,
+                    message=f"Value is a valid rational (num={value[0]}, den={value[1]}) (runtime check)",
+                    solver="fallback",
+                    duration_ms=(time.time() - start) * 1000,
+                )
+            if isinstance(value, (int, float)):
+                if isinstance(value, bool):
+                    return VerificationResult(
+                        property_name=name or "type_check",
+                        status=VerificationStatus.COUNTEREXAMPLE,
+                        kind=ConstraintKind.TYPE_INVARIANT,
+                        message=f"Expected rational, got boolean",
+                        counterexample={"value": str(value), "actual_type": "bool"},
+                        solver="fallback",
+                        duration_ms=(time.time() - start) * 1000,
+                    )
+                return VerificationResult(
+                    property_name=name or "type_check",
+                    status=VerificationStatus.RUNTIME_CHECKED,
+                    kind=ConstraintKind.TYPE_INVARIANT,
+                    message=f"Value matches rational (numeric repr) (runtime check)",
+                    solver="fallback",
+                    duration_ms=(time.time() - start) * 1000,
+                )
+            return VerificationResult(
+                property_name=name or "type_check",
+                status=VerificationStatus.COUNTEREXAMPLE,
+                kind=ConstraintKind.TYPE_INVARIANT,
+                message=f"Expected rational, got '{type(value).__name__}'",
+                counterexample={"value": str(value), "actual_type": type(value).__name__},
+                solver="fallback",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        if isinstance(value, bool) and expected_type != (bool,):
+            return VerificationResult(
+                property_name=name or "type_check",
+                status=VerificationStatus.COUNTEREXAMPLE,
+                kind=ConstraintKind.TYPE_INVARIANT,
+                message=f"Expected '{expected_type}', got boolean",
+                counterexample={"value": str(value), "actual_type": "bool"},
                 solver="fallback",
                 duration_ms=(time.time() - start) * 1000,
             )
@@ -515,10 +595,16 @@ class Z3Solver:
         start = time.time()
         type_map = {
             "number": (int, float),
+            "integer": (int,),
+            "real": (int, float),
+            "rational": (tuple, int, float),
             "string": (str,),
             "boolean": (bool,),
             "list": (list,),
+            "set": (list,),
+            "map": (dict,),
             "dict": (dict,),
+            "json": (dict, list),
         }
         expected = type_map.get(expected_type)
         if expected is None:
@@ -527,6 +613,55 @@ class Z3Solver:
                 status=VerificationStatus.UNKNOWN,
                 kind=ConstraintKind.TYPE_INVARIANT,
                 message=f"Unknown type '{expected_type}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        # For rational, check both tuple and numeric forms
+        if expected_type == "rational":
+            if isinstance(value, tuple) and len(value) == 2 and all(isinstance(v, int) for v in value):
+                if value[1] == 0:
+                    return VerificationResult(
+                        property_name=name or "type_check",
+                        status=VerificationStatus.COUNTEREXAMPLE,
+                        kind=ConstraintKind.TYPE_INVARIANT,
+                        message="Rational denominator cannot be zero",
+                        counterexample={"value": str(value), "actual_type": "rational_zero_denom"},
+                        solver="z3",
+                        duration_ms=(time.time() - start) * 1000,
+                    )
+                return VerificationResult(
+                    property_name=name or "type_check",
+                    status=VerificationStatus.PROVEN,
+                    kind=ConstraintKind.TYPE_INVARIANT,
+                    message=f"SMT-proven: valid rational (num={value[0]}, den={value[1]})",
+                    solver="z3",
+                    duration_ms=(time.time() - start) * 1000,
+                )
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return VerificationResult(
+                    property_name=name or "type_check",
+                    status=VerificationStatus.PROVEN,
+                    kind=ConstraintKind.TYPE_INVARIANT,
+                    message=f"SMT-proven: value matches rational (numeric repr)",
+                    solver="z3",
+                    duration_ms=(time.time() - start) * 1000,
+                )
+            return VerificationResult(
+                property_name=name or "type_check",
+                status=VerificationStatus.COUNTEREXAMPLE,
+                kind=ConstraintKind.TYPE_INVARIANT,
+                message=f"Expected rational, got '{type(value).__name__}'",
+                counterexample={"value": str(value), "actual_type": type(value).__name__},
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        if isinstance(value, bool) and expected_type != (bool,):
+            return VerificationResult(
+                property_name=name or "type_check",
+                status=VerificationStatus.COUNTEREXAMPLE,
+                kind=ConstraintKind.TYPE_INVARIANT,
+                message=f"Expected '{expected_type}', got boolean",
+                counterexample={"value": str(value), "actual_type": "bool"},
                 solver="z3",
                 duration_ms=(time.time() - start) * 1000,
             )

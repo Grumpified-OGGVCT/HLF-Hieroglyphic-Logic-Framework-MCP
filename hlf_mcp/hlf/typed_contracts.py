@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Union
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -42,16 +42,26 @@ from typing import Any
 class HlfType(Enum):
     """Canonical HLF type symbols with their Unicode glyphs and JSON-Schema mappings."""
     STRING = "string"
-    NUMBER = "number"
+    NUMBER = "number"        # ℕ — Natural numbers (non-negative)
+    INTEGER = "integer"      # ℤ — Signed integers
+    REAL = "real"            # ℝ — Real numbers (floats)
+    RATIONAL = "rational"    # ℚ — Rational numbers (exact ratio)
     BOOLEAN = "boolean"
     JSON = "json"
     ANY = "any"
+    LIST = "list"            # List⟨T⟩ — parametric list
+    SET = "set"              # Set⟨T⟩ — parametric set
+    MAP = "map"              # Map⟨K,V⟩ — parametric map
+    REFINEMENT = "refinement"  # {var: T | pred} — refinement type
 
     @property
     def glyph(self) -> str:
         _glyphs: dict[HlfType, str] = {
             HlfType.STRING: "\U0001d54a",   # 𝕊
             HlfType.NUMBER: "\u2115",        # ℕ
+            HlfType.INTEGER: "\u2124",       # ℤ
+            HlfType.REAL: "\u211d",          # ℝ
+            HlfType.RATIONAL: "\u211a",      # ℚ
             HlfType.BOOLEAN: "\U0001d539",   # 𝔹
             HlfType.JSON: "\U0001d541",      # 𝕁
             HlfType.ANY: "\U0001d538",       # 𝔸
@@ -63,6 +73,9 @@ class HlfType(Enum):
         _reverse: dict[str, HlfType] = {
             "\U0001d54a": cls.STRING,
             "\u2115": cls.NUMBER,
+            "\u2124": cls.INTEGER,
+            "\u211d": cls.REAL,
+            "\u211a": cls.RATIONAL,
             "\U0001d539": cls.BOOLEAN,
             "\U0001d541": cls.JSON,
             "\U0001d538": cls.ANY,
@@ -74,11 +87,17 @@ class HlfType(Enum):
         _mapping: dict[HlfType, str] = {
             HlfType.STRING: "string",
             HlfType.NUMBER: "number",
+            HlfType.INTEGER: "integer",
+            HlfType.REAL: "number",
+            HlfType.RATIONAL: "number",
             HlfType.BOOLEAN: "boolean",
             HlfType.JSON: "object",
             HlfType.ANY: "any",
+            HlfType.LIST: "array",
+            HlfType.SET: "array",
+            HlfType.MAP: "object",
         }
-        return _mapping[self]
+        return _mapping.get(self, "any")
 
     @classmethod
     def from_json_schema_type(cls, schema_type: str) -> HlfType:
@@ -87,7 +106,7 @@ class HlfType(Enum):
         _reverse: dict[str, HlfType] = {
             "string": cls.STRING,
             "number": cls.NUMBER,
-            "integer": cls.NUMBER,
+            "integer": cls.INTEGER,
             "boolean": cls.BOOLEAN,
             "object": cls.JSON,
             "array": cls.JSON,
@@ -95,6 +114,85 @@ class HlfType(Enum):
             "any": cls.ANY,
         }
         return _reverse.get(normalized, cls.ANY)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Parametric & Refinement Types
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Composite type for all HLF type representations
+HlfTypeAnnotation = Union[HlfType, "ParametricType", "RefinementType"]
+
+
+@dataclass(slots=True)
+class ParametricType:
+    """A parametric type: List⟨ℕ⟩, Set⟨𝕊⟩, Map⟨𝕊, ℤ⟩.
+
+    The *base* is the container kind (LIST, SET, MAP) and *params* are
+    the type parameters.  Arity is validated at compile-time:
+      - List, Set: exactly 1 parameter
+      - Map: exactly 2 parameters (key, value)
+    """
+    base: HlfType
+    params: tuple[HlfType, ...]
+
+    @classmethod
+    def from_ast(cls, base_str: str, param_strs: list[str]) -> ParametricType:
+        """Build from AST glyph strings (e.g. base='List', params=['ℕ'])."""
+        base_map: dict[str, HlfType] = {
+            "List": HlfType.LIST,
+            "Set": HlfType.SET,
+            "Map": HlfType.MAP,
+        }
+        base = base_map.get(base_str, HlfType.LIST)
+        params = tuple(
+            HlfType.from_glyph(p) or HlfType.ANY
+            for p in param_strs
+        )
+        return cls(base=base, params=params)
+
+    def validate_arity(self) -> tuple[bool, str]:
+        """Check that the parametric type has the correct number of parameters."""
+        if self.base == HlfType.MAP:
+            if len(self.params) != 2:
+                return False, f"Map⟨K,V⟩ requires exactly 2 type params, got {len(self.params)}"
+        elif self.base in (HlfType.LIST, HlfType.SET):
+            if len(self.params) != 1:
+                return False, f"{self.base.name}⟨T⟩ requires exactly 1 type param, got {len(self.params)}"
+        return True, ""
+
+    def to_glyph_str(self) -> str:
+        """Render as Unicode glyph string, e.g. 'List⟨ℕ⟩'."""
+        param_str = ", ".join(p.glyph for p in self.params)
+        return f"{self.base.name}⟨{param_str}⟩"
+
+    def __hash__(self) -> int:
+        return hash((self.base, self.params))
+
+    def __repr__(self) -> str:
+        return self.to_glyph_str()
+
+
+@dataclass(slots=True)
+class RefinementType:
+    """A refinement type: {var: ℕ | var > 0}.
+
+    The *variable* names the bound identifier, *base_type* is the
+    underlying HLF type, and *predicate* is the boolean expression
+    that constrains valid inhabitants.
+    """
+    variable: str
+    base_type: HlfType
+    predicate: str  # The expression AST or string representation
+
+    def to_glyph_str(self) -> str:
+        return f"{{{self.variable}: {self.base_type.glyph} | {self.predicate}}}"
+
+    def __hash__(self) -> int:
+        return hash((self.variable, self.base_type, self.predicate))
+
+    def __repr__(self) -> str:
+        return self.to_glyph_str()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -393,6 +491,30 @@ class TypeContract:
                 return False, f"'{self.name}' value {value} > maximum {self.constraints['maximum']}"
             return True, ""
 
+        if self.hlf_type == HlfType.INTEGER:
+            if not isinstance(value, int) or isinstance(value, bool):
+                return False, f"'{self.name}' expected integer, got {type(value).__name__}"
+            if self.constraints.get("minimum") is not None and value < self.constraints["minimum"]:
+                return False, f"'{self.name}' value {value} < minimum {self.constraints['minimum']}"
+            if self.constraints.get("maximum") is not None and value > self.constraints["maximum"]:
+                return False, f"'{self.name}' value {value} > maximum {self.constraints['maximum']}"
+            return True, ""
+
+        if self.hlf_type == HlfType.REAL:
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                return False, f"'{self.name}' expected real, got {type(value).__name__}"
+            return True, ""
+
+        if self.hlf_type == HlfType.RATIONAL:
+            # Rational is represented as a tuple (numerator, denominator)
+            if isinstance(value, tuple) and len(value) == 2 and all(isinstance(v, int) for v in value):
+                if value[1] == 0:
+                    return False, f"'{self.name}' rational denominator cannot be zero"
+                return True, ""
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return True, ""
+            return False, f"'{self.name}' expected rational (int pair or number), got {type(value).__name__}"
+
         if self.hlf_type == HlfType.BOOLEAN:
             if not isinstance(value, bool):
                 return False, f"'{self.name}' expected boolean, got {type(value).__name__}"
@@ -516,6 +638,25 @@ class OutputContract:
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 return True, ""
             return False, f"'{self.function_name}' expected number return, got {type(value).__name__}"
+
+        if self.return_type == HlfType.INTEGER:
+            if isinstance(value, int) and not isinstance(value, bool):
+                return True, ""
+            return False, f"'{self.function_name}' expected integer return, got {type(value).__name__}"
+
+        if self.return_type == HlfType.REAL:
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return True, ""
+            return False, f"'{self.function_name}' expected real return, got {type(value).__name__}"
+
+        if self.return_type == HlfType.RATIONAL:
+            if isinstance(value, tuple) and len(value) == 2 and all(isinstance(v, int) for v in value):
+                if value[1] != 0:
+                    return True, ""
+                return False, f"'{self.function_name}' rational denominator cannot be zero"
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return True, ""
+            return False, f"'{self.function_name}' expected rational return, got {type(value).__name__}"
 
         if self.return_type == HlfType.BOOLEAN:
             if isinstance(value, bool):

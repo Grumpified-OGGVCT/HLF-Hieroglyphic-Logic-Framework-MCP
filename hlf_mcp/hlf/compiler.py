@@ -123,6 +123,15 @@ def _human(node: dict[str, Any]) -> str:
     if kind == "template_stmt":
         body_count = len(node.get("body", {}).get("statements", []))
         return f"template {node.get('name')} with {body_count} stmt(s)"
+    if kind == "struct_stmt":
+        field_count = len(node.get("fields", []))
+        return f"struct {node.get('name')} with {field_count} field(s)"
+    if kind == "sync_stmt":
+        ids = node.get("wait_for", [])
+        return f"sync barrier on [{', '.join(ids)}]"
+    if kind == "cond_stmt":
+        cond = _expr_str(node.get("condition"))
+        return f"glyph conditional: {cond}"
     return kind
 
 
@@ -443,6 +452,152 @@ class HLFTransformer(Transformer):
     def pos_arg(self, value):
         return _node("pos_arg", value=value)
 
+    def ref_arg(self, _ref, name):
+        """Pass-by-reference argument: &IDENT."""
+        return _node("ref_arg", name=str(name))
+
+    # ── RFC 9005: Glyph-based assignment (←) ────────────────────────────────
+
+    def glyph_assign_stmt(self, name, *rest):
+        """Glyph-based assignment: IDENT type_ann? ← assign_rhs epistemic?"""
+        typ = None
+        rhs = None
+        conf = None
+        for item in rest:
+            if isinstance(item, dict):
+                kind = item.get("kind", "")
+                if kind == "type_ann":
+                    typ = item["type"]
+                elif kind == "epistemic":
+                    conf = item["confidence"]
+                elif item.get("kind") not in ("_tag", "validate_annot"):
+                    rhs = item
+        n = _node("assign_stmt", name=str(name), expr=rhs)
+        if typ:
+            n["type"] = typ
+        if conf is not None:
+            n["confidence"] = conf
+        n["human_readable"] = _human(n)
+        return n
+
+    def assign_rhs(self, value):
+        """Right-hand side of glyph assignment: expr | call_stmt | tool_stmt."""
+        return value
+
+    def type_ann(self, _ann, type_sym):
+        """Type annotation: :: TYPE_SYM | param_type_sym | refine_type."""
+        # type_sym can be a Token (TYPE_SYM), or a dict from param_type_sym/refine_type
+        if isinstance(type_sym, dict):
+            return _node("type_ann", type=type_sym)
+        return _node("type_ann", type=str(type_sym))
+
+    # ── Parametric types: List⟨T⟩, Set⟨T⟩, Map⟨K,V⟩ ────────────────────────────
+
+    def param_type_sym(self, base, _open, *rest):
+        """Parametric type: TYPE_SYM ⟨ TYPE_SYM (, TYPE_SYM)* ⟩.
+        
+        Args are: [base_token, CHEVRON_OPEN, ...type_params..., CHEVRON_CLOSE]
+        The closing chevron is the last Token in rest.
+        """
+        # Filter out Token objects (chevrons) and keep type params
+        params = []
+        for item in rest:
+            if isinstance(item, Token):
+                continue  # skip CHEVRON_CLOSE and commas
+            params.append(str(item))
+        return _node("param_type", base=str(base), params=params)
+
+    # ── Refinement types: {var: TYPE_SYM | pred} ──────────────────────────────
+
+    def refine_type(self, _lbrace, var, _colon, base_type, _pipe, predicate, _rbrace):
+        """Refinement type: { var : TYPE_SYM | expr }."""
+        return _node(
+            "refine_type",
+            variable=str(var),
+            base_type=str(base_type),
+            predicate=predicate,
+        )
+
+    # ── RFC 9005: Epistemic confidence modifier ───────────────────────────────
+
+    def epistemic(self, *_args):
+        """Epistemic modifier: _{ρ:NUMBER}. Returns confidence float."""
+        # _args: [EPISTEMIC_START, RHO, COLON, CONFIDENCE_NUM, RBRACE]
+        for a in _args:
+            if isinstance(a, Token) and a.type in ("CONFIDENCE_NUM", "INT", "FLOAT"):
+                return _node("epistemic", confidence=float(str(a)))
+        return _node("epistemic", confidence=1.0)
+
+    # ── RFC 9007: Struct definitions ─────────────────────────────────────────
+
+    def struct_stmt(self, name, _eq, _lbrace, *rest):
+        """Struct definition: NAME ≡ { field: TYPE, ... } epistemic?"""
+        fields = []
+        conf = None
+        for item in rest:
+            if isinstance(item, dict) and item.get("kind") == "struct_field":
+                fields.append(item)
+            elif isinstance(item, dict) and item.get("kind") == "epistemic":
+                conf = item["confidence"]
+        n = _node("struct_stmt", name=str(name), fields=fields)
+        if conf is not None:
+            n["confidence"] = conf
+        n["human_readable"] = _human(n)
+        return n
+
+    def struct_field(self, name, *_args):
+        """Struct field: IDENT : TYPE_SYM."""
+        # _args: [COLON, TYPE_SYM]
+        field_type = str(_args[-1]) if _args else "any"
+        return _node("struct_field", name=str(name), type=field_type)
+
+    # ── RFC 9005: Sync barrier ───────────────────────────────────────────────
+
+    def sync_stmt(self, _glyph, _lb, *rest):
+        """Sync barrier: ⋈ [ID, ...] → statement epistemic?"""
+        ids = []
+        body = None
+        conf = None
+        for item in rest:
+            if isinstance(item, Token) and item.type == "IDENT":
+                ids.append(str(item))
+            elif isinstance(item, Token) and item.type == "PIPE":
+                continue
+            elif isinstance(item, dict):
+                if item.get("kind") == "epistemic":
+                    conf = item["confidence"]
+                elif body is None:
+                    body = item
+        n = _node("sync_stmt", wait_for=ids, body=body)
+        if conf is not None:
+            n["confidence"] = conf
+        n["human_readable"] = _human(n)
+        return n
+
+    # ── RFC 9005: Conditional logic (⊎ ⇒ ⇌) ─────────────────────────────────
+
+    def cond_stmt(self, _glyph, condition, _then, then_body, *rest):
+        """Conditional: ⊎ condition ⇒ statement (⇌ statement)? epistemic?"""
+        else_body = None
+        conf = None
+        for item in rest:
+            if isinstance(item, Token) and item.type == "ELSE_GLYPH":
+                continue
+            elif isinstance(item, dict):
+                if item.get("kind") == "epistemic":
+                    conf = item["confidence"]
+                elif else_body is None:
+                    else_body = item
+        n = _node("cond_stmt", condition=condition, then_body=then_body, else_body=else_body)
+        if conf is not None:
+            n["confidence"] = conf
+        n["human_readable"] = _human(n)
+        return n
+
+    def cond_expr(self, expr):
+        """Conditional expression (proxy to expr)."""
+        return expr
+
     # ── Values ───────────────────────────────────────────────────────────────
 
     def str_val(self, s):
@@ -543,34 +698,94 @@ _VAR_RE = re.compile(r"\$\{(\w+)\}")  # ${VAR} expansion
 def _pass0_normalize(source: str) -> tuple[str, list[tuple[int, str, str]]]:
     """NFKC normalization + ASCII glyph alias substitution + confusable chars.
 
+    HLF-protected characters (type symbols, operators, glyphs) are saved before
+    NFKC normalization and restored afterward, preventing destruction of
+    mathematical Unicode symbols used as HLF language tokens.
+
     Order:
-      0a. NFKC canonical decomposition
-      0b. ASCII glyph aliases (word-boundary, line-start only)
+      0a. ASCII glyph aliases (word-boundary, line-start only) — pre-NFKC
+      0b. HLF-protected char save → NFKC normalize → restore
       0c. Char-level homoglyph CONFUSABLES substitution
 
     Returns (normalized_source, replacements_list)
     """
-    normalized = unicodedata.normalize("NFKC", source)
     replacements: list[tuple[int, str, str]] = []
 
-    # Step 0b: collapse ASCII glyph aliases at line-start positions only.
+    # Step 0a: collapse ASCII glyph aliases at line-start positions only.
     def _sub_alias(m: re.Match) -> str:
         glyph = ASCII_ALIASES[m.group(2)]
         replacements.append((m.start(2), m.group(2), glyph))
         return m.group(1) + glyph
 
-    normalized = _ALIAS_PATTERN.sub(_sub_alias, normalized)
+    source = _ALIAS_PATTERN.sub(_sub_alias, source)
 
-    # Step 0b2: ASCII pipe alias |> → →
-    _pipe_found = normalized.count("|>")
+    # Step 0a2: ASCII pipe alias |> → →
+    _pipe_found = source.count("|>")
     if _pipe_found:
-        normalized = normalized.replace("|>", "→")
+        source = source.replace("|>", "→")
         replacements.append((0, "|>", "→ (pipe operator)"))
 
-    # Step 0c: char-level homoglyph substitution.
+    # Step 0b: Save HLF-protected characters, NFKC-normalize, then restore.
+    # Without this, NFKC destroys mathematical symbols: ℕ→N, 𝕊→S, etc.
+    _HLF_PROTECTED: frozenset[str] = frozenset({
+        # Type symbols
+        "\u2115",      # ℕ — Number type
+        "\u2124",      # ℤ — Integer type
+        "\u211D",      # ℝ — Real type
+        "\u211A",      # ℚ — Rational type
+        "\U0001D54A",  # 𝕊 — String type
+        "\U0001D539",  # 𝔹 — Boolean type
+        "\U0001D541",  # 𝕁 — JSON type
+        "\U0001D538",  # 𝔸 — Any type
+        # Chevrons for parametric types
+        "\u27E8",      # ⟨ — Left chevron
+        "\u27E9",      # ⟩ — Right chevron
+        # Operators
+        "\u21A6",  # ↦ — Tool execution
+        "\u03C4",  # τ — Tool marker
+        "\u228E",  # ⊎ — Conditional
+        "\u21D2",  # ⇒ — Then
+        "\u21CC",  # ⇌ — Else
+        "\u00AC",  # ¬ — Negation
+        "\u2229",  # ∩ — Intersection
+        "\u222A",  # ∪ — Union
+        "\u2190",  # ← — Assignment
+        "\u2225",  # ∥ — Parallel
+        "\u22C8",  # ⋈ — Sync barrier
+        "\u2261",  # ≡ — Struct definition
+        "\u2318",  # ⌘ — Command glyph
+        "\u0416",  # Ж — Constraint glyph
+        "\u2207",  # ∇ — Parameter glyph
+        "\u2A55",  # ⩕ — Priority glyph
+        "\u2A1D",  # ⨝ — Join glyph
+        "\u0394",  # Δ — Delta glyph
+        "\u03A9",  # Ω — Terminator
+        "\u03A3",  # Σ — Define macro
+        "\u2302",  # ⌂ — Memory operator
+        "\u03C1",  # ρ — Epistemic modifier
+    })
+
+    chars = list(source)
+    protected_positions: dict[int, str] = {}
+    for i, ch in enumerate(chars):
+        if ch in _HLF_PROTECTED:
+            protected_positions[i] = ch
+            chars[i] = "\x00"  # placeholder
+
+    intermediate = "".join(chars)
+    normalized = unicodedata.normalize("NFKC", intermediate)
+
+    chars = list(normalized)
+    for pos, original in protected_positions.items():
+        if pos < len(chars):
+            chars[pos] = original
+
+    # Step 0c: char-level homoglyph substitution (skip protected chars).
     result = []
-    for i, char in enumerate(normalized):
-        if char in CONFUSABLES:
+    for i, char in enumerate(chars):
+        if char in _HLF_PROTECTED:
+            result.append(char)
+        elif char in CONFUSABLES:
             repl = CONFUSABLES[char]
             replacements.append((i, char, repl))
             result.append(repl)

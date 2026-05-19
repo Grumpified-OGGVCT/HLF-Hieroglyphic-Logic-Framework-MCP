@@ -581,19 +581,38 @@ def _types_compatible(a: HlfType, b: HlfType) -> bool:
     Rules:
     - ANY accepts anything (top type)
     - Same types are always compatible
-    - JSON accepts STRING / NUMBER / BOOLEAN / JSON
+    - NUMBER is compatible with INTEGER, REAL, RATIONAL
+    - REAL is compatible with INTEGER, RATIONAL, NUMBER
+    - INTEGER is compatible with NUMBER, REAL, RATIONAL
+    - RATIONAL is compatible with NUMBER, REAL
+    - JSON accepts STRING / NUMBER / INTEGER / REAL / RATIONAL / BOOLEAN / JSON
+    - LIST/STRING/BOOLEAN/JSON are compatible with JSON
+    - SET is compatible with LIST (runtime list repr)
     - All other pairs are incompatible
     """
     if a == b:
         return True
     if b == HlfType.ANY:
         return True
+    # Numeric type hierarchy: any numeric is compatible with any numeric
+    _numeric_types = {HlfType.NUMBER, HlfType.INTEGER, HlfType.REAL, HlfType.RATIONAL}
+    if a in _numeric_types and b in _numeric_types:
+        return True
     if b == HlfType.JSON and a in {
         HlfType.STRING,
         HlfType.NUMBER,
+        HlfType.INTEGER,
+        HlfType.REAL,
+        HlfType.RATIONAL,
         HlfType.BOOLEAN,
         HlfType.JSON,
+        HlfType.LIST,
+        HlfType.SET,
+        HlfType.MAP,
     }:
+        return True
+    # Set and List are compatible (runtime repr overlap)
+    if {a, b} == {HlfType.LIST, HlfType.SET}:
         return True
     return False
 

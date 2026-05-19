@@ -132,6 +132,25 @@ def _human(node: dict[str, Any]) -> str:
     if kind == "cond_stmt":
         cond = _expr_str(node.get("condition"))
         return f"glyph conditional: {cond}"
+    if kind == "prose_stmt":
+        return f"prose bridge: {_expr_str(node.get('expr'))} § {node.get('prose', '')[:40]}…"
+    if kind == "aesthetic_stmt":
+        mod = node.get("modifier", {})
+        return f"aesthetic modulation: {_expr_str(node.get('expr'))} ~ {mod.get('value', '?')}"
+    if kind == "negate_stmt":
+        body_kind = node.get("body", {}).get("kind", "?")
+        return f"negative constraint on {body_kind}"
+    if kind == "list_literal":
+        n = len(node.get("elements", []))
+        return f"list literal with {n} element(s)"
+    if kind == "match_expr":
+        n = len(node.get("arms", []))
+        return f"pattern match on {_expr_str(node.get('subject'))} with {n} arm(s)"
+    if kind == "prose_expr":
+        return f"{_expr_str(node.get('expr'))} § \"{node.get('prose', '')[:30]}…\""
+    if kind == "aesthetic_expr":
+        mod = node.get("modifier", {})
+        return f"{_expr_str(node.get('expr'))} ~ {mod.get('value', '?')}"
     return kind
 
 
@@ -154,6 +173,16 @@ def _expr_str(e: Any) -> str:
             return f"{e.get('op')} {_expr_str(e.get('operand'))}"
         if kind == "paren_expr":
             return f"({_expr_str(e.get('expr'))})"
+        if kind == "prose_expr":
+            return f"{_expr_str(e.get('expr'))} § \"{e.get('prose', '')[:20]}…\""
+        if kind == "aesthetic_expr":
+            mod = e.get("modifier", {})
+            return f"{_expr_str(e.get('expr'))} ~ {mod.get('value', '?')}"
+        if kind == "list_literal":
+            elems = [_expr_str(el) for el in e.get("elements", [])]
+            return f"[{', '.join(elems)}]"
+        if kind == "match_expr":
+            return f"match {_expr_str(e.get('subject'))} {{…}}"
     return str(e)
 
 
@@ -576,16 +605,45 @@ class HLFTransformer(Transformer):
 
     # ── RFC 9005: Conditional logic (⊎ ⇒ ⇌) ─────────────────────────────────
 
-    def cond_stmt(self, _glyph, condition, _then, then_body, *rest):
-        """Conditional: ⊎ condition ⇒ statement (⇌ statement)? epistemic?"""
+    def cond_stmt(self, _glyph, *rest):
+        """Conditional: ⊎ condition ⇒ statement (⇌ statement)? epistemic?
+                      | ⊎ tag arg_list? epistemic?"""
+        if not rest:
+            return _node("cond_stmt", condition=None, then_body=None, else_body=None)
+        first = rest[0]
+        if isinstance(first, dict) and first.get("kind") == "_tag":
+            # Glyph-stmt-compatible form: ⊎ [TAG] arg_list? epistemic?
+            tag = first["name"]
+            args = []
+            conf = None
+            for item in rest[1:]:
+                if isinstance(item, dict) and item.get("kind") == "epistemic":
+                    conf = item["confidence"]
+                elif isinstance(item, list):
+                    args.extend(item)
+                elif isinstance(item, dict):
+                    args.append(item)
+            n = _node("glyph_stmt", glyph="⊎", tag=tag, arguments=args)
+            if conf is not None:
+                n["confidence"] = conf
+            n["human_readable"] = _human(n)
+            return n
+        # Standard conditional form: ⊎ condition ⇒ statement (⇌ statement)? epistemic?
+        condition = first
+        then_body = None
         else_body = None
         conf = None
-        for item in rest:
-            if isinstance(item, Token) and item.type == "ELSE_GLYPH":
+        remaining = list(rest[1:])
+        for i, item in enumerate(remaining):
+            if isinstance(item, Token) and item.type == "THEN_GLYPH":
+                continue
+            elif isinstance(item, Token) and item.type == "ELSE_GLYPH":
                 continue
             elif isinstance(item, dict):
                 if item.get("kind") == "epistemic":
                     conf = item["confidence"]
+                elif then_body is None:
+                    then_body = item
                 elif else_body is None:
                     else_body = item
         n = _node("cond_stmt", condition=condition, then_body=then_body, else_body=else_body)
@@ -597,6 +655,47 @@ class HLFTransformer(Transformer):
     def cond_expr(self, expr):
         """Conditional expression (proxy to expr)."""
         return expr
+
+    # ── RFC 9005 §12.2: Prose bridge (§) ──────────────────────────────────────
+
+    def prose_stmt(self, expr, _section, prose):
+        """Prose bridge: expr § ESCAPED_STRING."""
+        conf = None
+        n = _node("prose_stmt", expr=expr, prose=str(prose)[1:-1])
+        n["human_readable"] = _human(n)
+        return n
+
+    def prose_body(self, s):
+        """Prose body (escaped string)."""
+        return str(s)
+
+    # ── RFC 9005 §12.3: Aesthetic modulation (~) ───────────────────────────────
+
+    def aesthetic_stmt(self, expr, _tilde, modifier):
+        """Aesthetic modulation: expr ~ qualifier."""
+        n = _node("aesthetic_stmt", expr=expr, modifier=modifier)
+        n["human_readable"] = _human(n)
+        return n
+
+    def aesthetic_modifier(self, value):
+        """Pass-through for aesthetic modifier."""
+        return value
+
+    def str_qualifier(self, s):
+        """String qualifier for aesthetic modulation."""
+        return _node("qualifier", type="string", value=str(s)[1:-1])
+
+    def ident_qualifier(self, name):
+        """Identifier qualifier for aesthetic modulation."""
+        return _node("qualifier", type="ident", value=str(name))
+
+    # ── RFC 9005 §12.4: Negative constraint (⊖) ────────────────────────────────
+
+    def negate_stmt(self, _negate, stmt):
+        """Negative constraint: ⊖ statement."""
+        n = _node("negate_stmt", body=stmt)
+        n["human_readable"] = _human(n)
+        return n
 
     # ── Values ───────────────────────────────────────────────────────────────
 
@@ -644,6 +743,81 @@ class HLFTransformer(Transformer):
 
     def paren_expr(self, inner):
         return _node("paren_expr", expr=inner)
+
+    # ── Expression: Bitwise ──────────────────────────────────────────────────
+
+    def expr_bitwise(self, *operands):
+        return _fold_binop_with_ops(operands)
+
+    # ── Expression: Prose bridge (§) ─────────────────────────────────────────
+
+    def expr_prose(self, *operands):
+        """Expression-level prose bridge: expr § prose_body (repeated)."""
+        items = [o for o in operands if not isinstance(o, Token)]
+        if len(items) == 1:
+            return items[0]
+        expr = items[0]
+        for prose_tok in items[1:]:
+            prose_val = str(prose_tok)[1:-1] if isinstance(prose_tok, Token) else prose_tok
+            expr = _node("prose_expr", expr=expr, prose=prose_val)
+        return expr
+
+    # ── Expression: Aesthetic modulation (~) ─────────────────────────────────
+
+    def expr_aesthetic(self, *operands):
+        """Expression-level aesthetic modulation: expr ~ qualifier (repeated)."""
+        items = [o for o in operands if not isinstance(o, Token)]
+        if len(items) == 1:
+            return items[0]
+        expr = items[0]
+        for modifier in items[1:]:
+            expr = _node("aesthetic_expr", expr=expr, modifier=modifier)
+        return expr
+
+    # ── Expression: Exponentiation (^ right-assoc) ───────────────────────────
+
+    def expr_unary(self, child):
+        """Pass-through for expr_unary → expr_primary or neg_expr."""
+        return child
+
+    def expr_exp(self, *operands):
+        """Exponentiation: expr_unary (^ expr_exp)?  Right-associative."""
+        items = [o for o in operands if not isinstance(o, Token)]
+        if len(items) == 1:
+            return items[0]
+        # items = [base, exponent] — right-associative
+        base, exponent = items
+        return _node("binop", op="^", left=base, right=exponent)
+
+    # ── List literal ─────────────────────────────────────────────────────────
+
+    def list_literal(self, _open, *args):
+        """List literal: ⟨ expr (, expr)* ⟩."""
+        items = [a for a in args if not isinstance(a, Token)]
+        return _node("list_literal", elements=items)
+
+    # ── Pattern match ────────────────────────────────────────────────────────
+
+    def match_expr(self, _kw, subject, _lbrace, *arms_and_close):
+        """Pattern match: MATCH expr { arm (, arm)* }."""
+        arms = [a for a in arms_and_close if isinstance(a, dict) and a.get("kind") == "match_arm"]
+        return _node("match_expr", subject=subject, arms=arms)
+
+    def match_arm(self, pattern, _arrow, body):
+        """Match arm: pattern => expr."""
+        return _node("match_arm", pattern=pattern, body=body)
+
+    def str_pattern(self, s):
+        """String literal pattern."""
+        return _node("pattern", type="string", value=str(s)[1:-1])
+
+    def int_pattern(self, i):
+        """Integer literal pattern."""
+        return _node("pattern", type="int", value=int(i))
+
+    def ident_pattern(self, name):
+        """Identifier pattern (variable binding)."""
+        return _node("pattern", type="ident", value=str(name))
 
     # ── Terminals ────────────────────────────────────────────────────────────
 
@@ -763,6 +937,10 @@ def _pass0_normalize(source: str) -> tuple[str, list[tuple[int, str, str]]]:
         "\u03A3",  # Σ — Define macro
         "\u2302",  # ⌂ — Memory operator
         "\u03C1",  # ρ — Epistemic modifier
+        # Phase 2 operators
+        "\u00A7",  # § — Prose bridge
+        "\u2296",  # ⊖ — Negative constraint
+        "\u2295",  # ⊕ — Bitwise XOR
     })
 
     chars = list(source)
@@ -1192,6 +1370,10 @@ def _estimate_gas(statements: list[dict]) -> int:
         "log_stmt": 1,
         "result_stmt": 1,
         "return_stmt": 1,
+        "prose_stmt": 2,
+        "aesthetic_stmt": 2,
+        "negate_stmt": 2,
+        "cond_stmt": 3,
     }
     total = 0
     for stmt in statements:

@@ -77,6 +77,11 @@ statement: glyph_stmt
          | sync_stmt
          | cond_stmt
 
+         // ── RFC 9005 §12.2–12.4: Expression operator statements ──
+         | prose_stmt
+         | aesthetic_stmt
+         | negate_stmt
+
 // ── Glyph statement ───────────────────────────────────────────────────────────
 glyph_stmt: GLYPH tag? arg_list? validate_annot?
 
@@ -110,7 +115,30 @@ sync_stmt: SYNC_GLYPH LBRACKET IDENT ("," IDENT)* RBRACKET PIPE statement episte
 
 // ── RFC 9005: Conditional logic (⊎ ⇒ ⇌) ──────────────────────────────────────
 cond_stmt: COND_GLYPH cond_expr THEN_GLYPH statement (ELSE_GLYPH statement)? epistemic?
+         | COND_GLYPH tag arg_list? epistemic?   // glyph_stmt-compatible form
 cond_expr: expr
+
+// ── RFC 9005 §12.2: Prose bridge (§) ─────────────────────────────────────────
+prose_stmt: expr_or SECTION prose_body
+prose_body: ESCAPED_STRING
+
+// ── RFC 9005 §12.3: Aesthetic modulation (~) ─────────────────────────────────
+aesthetic_stmt: expr_or TILDE aesthetic_modifier
+aesthetic_modifier: ESCAPED_STRING  -> str_qualifier
+                  | IDENT            -> ident_qualifier
+
+// ── RFC 9005 §12.4: Negative constraint (⊖) ──────────────────────────────────
+negate_stmt: NEGATE statement
+
+// ── List literal ─────────────────────────────────────────────────────────────
+list_literal: CHEVRON_OPEN expr ("," expr)* CHEVRON_CLOSE
+
+// ── Pattern match ────────────────────────────────────────────────────────────
+match_expr: KW_MATCH expr LBRACE match_arm ("," match_arm)* RBRACE
+match_arm: pattern MATCH_ARROW expr
+pattern: ESCAPED_STRING  -> str_pattern
+       | INT             -> int_pattern
+       | IDENT            -> ident_pattern
 
 tag: LBRACKET TAG_NAME RBRACKET
 TAG_NAME: /[A-Z][A-Z0-9_]*/
@@ -199,7 +227,9 @@ RBRACE: "}"
 ?expr: expr_or
 
 expr_or:  expr_and ((KW_OR | OR_GLYPH) expr_and)*
-expr_and: expr_not ((KW_AND | AND_GLYPH) expr_not)*
+expr_and: expr_bitwise ((KW_AND | AND_GLYPH) expr_bitwise)*
+
+expr_bitwise: expr_not ((REF | BIT_OR | XOR_GLYPH) expr_not)*
 
 ?expr_not: KW_NOT expr_not -> not_expr
          | NEG_GLYPH expr_primary -> not_expr
@@ -208,10 +238,12 @@ expr_and: expr_not ((KW_AND | AND_GLYPH) expr_not)*
 expr_cmp: expr_add (CMP expr_add)*
 
 expr_add: expr_mul ((ADDOP | MINUS) expr_mul)*
-expr_mul: expr_unary ((MULOP) expr_unary)*
+expr_mul: expr_exp ((MULOP) expr_exp)*
 
-?expr_unary: MINUS expr_primary -> neg_expr
-           | expr_primary
+expr_exp: expr_unary (CARET expr_exp)?  // right-associative exponentiation
+
+expr_unary: MINUS expr_primary -> neg_expr
+          | expr_primary
 
 ?expr_primary: ESCAPED_STRING -> str_val
              | FLOAT          -> float_val
@@ -220,6 +252,8 @@ expr_mul: expr_unary ((MULOP) expr_unary)*
              | PATH           -> path_val
              | IDENT          -> ident_val
              | "(" expr ")"   -> paren_expr
+             | list_literal
+             | match_expr
 
 ADDOP: "+"
 MULOP: "*" | "/" | "%"
@@ -257,6 +291,16 @@ KW_TEMPLATE.10:    "TEMPLATE"
 
 // ── Terminals ─────────────────────────────────────────────────────────────────
 CMP:     ">=" | "<=" | "!=" | "==" | ">" | "<"
+
+// ── RFC 9005 §12.2–12.4: Expression operators ─────────────────────────────────
+SECTION.10: "§"         // Prose bridge operator (U+00A7)
+TILDE.10:   "~"         // Aesthetic modulation operator (U+007E)
+NEGATE.10:  "⊖"         // Negative constraint operator (U+2296)
+CARET.10:   "^"         // Exponentiation
+BIT_OR.10:  "|"         // Bitwise OR
+XOR_GLYPH.10: "⊕"       // Bitwise XOR (U+2295)
+MATCH_ARROW.10: "=>"    // Pattern match arm separator
+KW_MATCH.10: "MATCH"    // Pattern match keyword
 
 // ── RFC 9005/9007: Unicode operator glyphs ────────────────────────────────────
 ASSIGN_GLYPH.10: "←"
@@ -395,6 +439,42 @@ GLYPHS = {
         "opcode": None,
         "syntax": "operator",
     },
+    # ── RFC 9005 §12.2–12.4: Expression operators ──
+    "§": {
+        "name": "SECTION",
+        "role": "prose_bridge",
+        "ascii": "PROSE",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "~": {
+        "name": "TILDE",
+        "role": "aesthetic_modulation",
+        "ascii": "~",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "⊖": {
+        "name": "CIRCLED_MINUS",
+        "role": "negate_constraint",
+        "ascii": "NEGATE",
+        "opcode": 0x63,
+        "syntax": "operator",
+    },
+    "^": {
+        "name": "CARET",
+        "role": "exponentiation",
+        "ascii": "^",
+        "opcode": None,
+        "syntax": "operator",
+    },
+    "⊕": {
+        "name": "XOR_GLYPH",
+        "role": "bitwise_xor",
+        "ascii": "XOR",
+        "opcode": None,
+        "syntax": "operator",
+    },
 }
 
 STATEMENT_GLYPHS = {
@@ -482,6 +562,9 @@ ASCII_ALIASES: dict[str, str] = {
     # OMEGA Ω — end / terminate
     "END": "Ω",
     "OMEGA": "Ω",
+    # ── RFC 9005 §12.2–12.4: Expression operator aliases ──
+    "NEGATE": "⊖",
+    "PROSE": "§",
 }
 
 # Homoglyph confusables map (Pass 0 normalization)

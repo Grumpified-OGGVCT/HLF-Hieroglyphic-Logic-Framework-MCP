@@ -526,3 +526,324 @@ def test_template_after_reference_still_works():
     stmts = result["ast"]["statements"]
     enforce_stmts = [s for s in stmts if s.get("glyph") == "Ж"]
     assert len(enforce_stmts) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 2: Prose Bridge (§), Aesthetic Modulation (~), Negative Constraint (⊖)
+#          Exponentiation, Bitwise, List Literals, Pattern Matching
+# ═══════════════════════════════════════════════════════════════════════════════
+
+PROSE_BRIDGE = """\
+[HLF-v3]
+"some expression" § "verify output matches expected schema"
+Ω
+"""
+
+PROSE_BRIDGE_EXPR = """\
+[HLF-v3]
+my_var § "the answer to everything"
+Ω
+"""
+
+AESTHETIC_STMT = """\
+[HLF-v3]
+output_data ~ pretty
+Ω
+"""
+
+AESTHETIC_STRING = """\
+[HLF-v3]
+output_data ~ "compressed"
+Ω
+"""
+
+NEGATE_CONSTRAINT = """\
+[HLF-v3]
+⊖ Ж [CONSTRAINT] mode="write"
+Ω
+"""
+
+EXPONENTIATION = """\
+[HLF-v3]
+ASSIGN result = 2 ^ 3
+Ω
+"""
+
+EXPONENT_RIGHT_ASSOC = """\
+[HLF-v3]
+ASSIGN result = 2 ^ 3 ^ 2
+Ω
+"""
+
+BITWISE_AND = """\
+[HLF-v3]
+ASSIGN mask = flags & 255
+Ω
+"""
+
+BITWISE_OR = """\
+[HLF-v3]
+ASSIGN combined = a | b
+Ω
+"""
+
+BITWISE_XOR = """\
+[HLF-v3]
+ASSIGN xored = x ⊕ y
+Ω
+"""
+
+BITWISE_MIXED = """\
+[HLF-v3]
+ASSIGN result = a & b | c ⊕ d
+Ω
+"""
+
+LIST_LITERAL_SRC = """\
+[HLF-v3]
+ASSIGN items = ⟨1, 2, 3⟩
+Ω
+"""
+
+LIST_LITERAL_SINGLE = """\
+[HLF-v3]
+ASSIGN item = ⟨42⟩
+Ω
+"""
+
+LIST_LITERAL_MIXED = """\
+[HLF-v3]
+ASSIGN mixed = ⟨1, "hello", true⟩
+Ω
+"""
+
+PATTERN_MATCH = """\
+[HLF-v3]
+ASSIGN result = MATCH status {
+  "ok" => 0,
+  "error" => 1
+}
+Ω
+"""
+
+PATTERN_MATCH_INT = """\
+[HLF-v3]
+ASSIGN result = MATCH code {
+  200 => "success",
+  404 => "not_found",
+  500 => "server_error"
+}
+Ω
+"""
+
+PATTERN_MATCH_IDENT = """\
+[HLF-v3]
+ASSIGN result = MATCH value {
+  something => "found",
+  other => "fallback"
+}
+Ω
+"""
+
+
+# ── Prose Bridge (§) ──────────────────────────────────────────────────────────
+
+def test_prose_bridge_parse():
+    result = COMPILER.compile(PROSE_BRIDGE)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    assert stmts[0]["kind"] == "prose_stmt"
+    assert stmts[0]["prose"] == "verify output matches expected schema"
+    assert "human_readable" in stmts[0]
+
+
+def test_prose_bridge_expr_form():
+    result = COMPILER.compile(PROSE_BRIDGE_EXPR)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    assert stmts[0]["kind"] == "prose_stmt"
+    assert "the answer to everything" in stmts[0]["prose"]
+
+
+# ── Aesthetic Modulation (~) ──────────────────────────────────────────────────
+
+def test_aesthetic_ident_qualifier():
+    result = COMPILER.compile(AESTHETIC_STMT)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    assert stmts[0]["kind"] == "aesthetic_stmt"
+    modifier = stmts[0]["modifier"]
+    assert modifier["kind"] == "qualifier"
+    assert modifier["type"] == "ident"
+    assert modifier["value"] == "pretty"
+
+
+def test_aesthetic_string_qualifier():
+    result = COMPILER.compile(AESTHETIC_STRING)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    assert stmts[0]["kind"] == "aesthetic_stmt"
+    modifier = stmts[0]["modifier"]
+    assert modifier["kind"] == "qualifier"
+    assert modifier["type"] == "string"
+    assert modifier["value"] == "compressed"
+
+
+# ── Negative Constraint (⊖) ───────────────────────────────────────────────────
+
+def test_negate_constraint_parse():
+    result = COMPILER.compile(NEGATE_CONSTRAINT)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    assert stmts[0]["kind"] == "negate_stmt"
+    body = stmts[0]["body"]
+    assert body["kind"] == "glyph_stmt"
+    assert body["glyph"] == "Ж"
+    assert body["tag"] == "CONSTRAINT"
+
+
+# ── Exponentiation (^) ────────────────────────────────────────────────────────
+
+def test_exponentiation():
+    result = COMPILER.compile(EXPONENTIATION)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "binop"
+    assert expr["op"] == "^"
+    assert expr["left"]["value"] == 2
+    assert expr["right"]["value"] == 3
+
+
+def test_exponentiation_right_associative():
+    result = COMPILER.compile(EXPONENT_RIGHT_ASSOC)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "binop"
+    assert expr["op"] == "^"
+    assert expr["left"]["value"] == 2
+    # Right-assoc: 2 ^ (3 ^ 2) → right is (3 ^ 2)
+    assert expr["right"]["kind"] == "binop"
+    assert expr["right"]["op"] == "^"
+    assert expr["right"]["left"]["value"] == 3
+    assert expr["right"]["right"]["value"] == 2
+
+
+# ── Bitwise Operations (&, |, ^) ──────────────────────────────────────────────
+
+def test_bitwise_and():
+    result = COMPILER.compile(BITWISE_AND)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "binop"
+    assert expr["op"] == "&"
+
+
+def test_bitwise_or():
+    result = COMPILER.compile(BITWISE_OR)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "binop"
+    assert expr["op"] == "|"
+
+
+def test_bitwise_xor():
+    result = COMPILER.compile(BITWISE_XOR)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "binop"
+    assert expr["op"] == "⊕"
+
+
+def test_bitwise_mixed_operators():
+    result = COMPILER.compile(BITWISE_MIXED)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    # a & b | c ⊕ d  → left-assoc: ((a & b) | c) ⊕ d
+    assert expr["kind"] == "binop"
+    assert expr["op"] == "⊕"
+
+
+# ── List Literals ⟨…⟩ ────────────────────────────────────────────────────────
+
+def test_list_literal_multi():
+    result = COMPILER.compile(LIST_LITERAL_SRC)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "list_literal"
+    elements = expr["elements"]
+    assert len(elements) == 3
+    assert elements[0]["value"] == 1
+    assert elements[1]["value"] == 2
+    assert elements[2]["value"] == 3
+
+
+def test_list_literal_single():
+    result = COMPILER.compile(LIST_LITERAL_SINGLE)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "list_literal"
+    assert len(expr["elements"]) == 1
+    assert expr["elements"][0]["value"] == 42
+
+
+def test_list_literal_mixed_types():
+    result = COMPILER.compile(LIST_LITERAL_MIXED)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "list_literal"
+    elements = expr["elements"]
+    assert len(elements) == 3
+    assert elements[0]["type"] == "int"
+    assert elements[1]["type"] == "string"
+    assert elements[2]["type"] == "ident"
+
+
+# ── Pattern Matching ──────────────────────────────────────────────────────────
+
+def test_pattern_match_string():
+    result = COMPILER.compile(PATTERN_MATCH)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    expr = stmts[0]["expr"]
+    assert expr["kind"] == "match_expr"
+    assert expr["subject"]["kind"] == "value"
+    arms = expr["arms"]
+    assert len(arms) == 2
+    assert arms[0]["kind"] == "match_arm"
+    assert arms[0]["pattern"]["type"] == "string"
+    assert arms[0]["pattern"]["value"] == "ok"
+    assert arms[0]["body"]["value"] == 0
+    assert arms[1]["pattern"]["value"] == "error"
+    assert arms[1]["body"]["value"] == 1
+
+
+def test_pattern_match_int():
+    result = COMPILER.compile(PATTERN_MATCH_INT)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    arms = stmts[0]["expr"]["arms"]
+    assert len(arms) == 3
+    assert arms[0]["pattern"]["type"] == "int"
+    assert arms[0]["pattern"]["value"] == 200
+    assert arms[1]["pattern"]["value"] == 404
+    assert arms[2]["pattern"]["value"] == 500
+
+
+def test_pattern_match_ident():
+    result = COMPILER.compile(PATTERN_MATCH_IDENT)
+    assert result["errors"] == []
+    stmts = result["ast"]["statements"]
+    arms = stmts[0]["expr"]["arms"]
+    assert len(arms) == 2
+    assert arms[0]["pattern"]["type"] == "ident"
+    assert arms[0]["pattern"]["value"] == "something"
+    assert arms[1]["pattern"]["value"] == "other"

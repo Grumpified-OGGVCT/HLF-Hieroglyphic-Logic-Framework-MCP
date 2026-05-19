@@ -2,7 +2,7 @@
 goal: Provide the first percent-backed scorecard across the major HLF pillars using the canonical internal readiness model
 version: 1.0
 date_created: 2026-03-20
-last_updated: 2026-03-20-v2
+last_updated: 2026-03-20-v3
 owner: GitHub Copilot
 status: 'In progress'
 tags: [readiness, scorecard, pillars, governance, internal]
@@ -50,16 +50,16 @@ Older gap docs classify these more harshly because they predate the branch-resid
 | Knowledge substrate and governed memory | 10 | `damaged` → `present` — freshness guarantee, consistency proof, memory lease (20 tests) | 70 | `partial` → `partial_substantial` — cross-witness agreement proofs, fork detection, trust-tier-aware freshness | 70 | `bridge_owned` → `current_with_active_gaps` — scoped lease system, entropy-anchor drift integration | 70 | 70.0 |
 | Formal verification surface | 7 | `partial_packaged` using branch-aware override + Constitutive gating (not advisory) + 38 gate tests | 60 | `partial` → `strong` from `tests/test_formal_verifier.py`, verification gating, and front-door coverage | 75 | `bridge_owned` → `current_with_active_gaps` — gate is constitutive, tier-differentiated | 70 | 68.5 |
 | Gateway and routing fabric | 7 | `partial_packaged` → `present` — node registry, capability router, load balancer, failover (51 tests) | 70 | `partial` → `partial_substantial` — thread-safe discovery, proficiency-based routing, round-robin + least-loaded | 68 | `bridge_owned` → `current_with_active_gaps` — failover with retry logic, health-check loop | 68 | 68.5 |
-| Orchestration lifecycle and plan execution | 7 | `partial_packaged` → improved — two-channel dispatch, manifest-gated orchestration | 50 | `partial_thin` → `partial` — 57 two-channel tests, manifest/swarm integration | 55 | `bridge_owned` through packaged instinct plus explicit recovery planning + two-channel | 60 | 53.5 |
+| Orchestration lifecycle and plan execution | 7 | `partial_packaged` → hardened — two-channel dispatch + plan_versioning (versioning, rollback, diff, chain integrity) + checkpoint_executor (save/resume, multi-phase integration) | 62 | `partial_thin` → `partial` — 57 two-channel tests + 30 orchestration lifecycle tests (12 awaiting lifecycle methods) | 62 | `bridge_owned` → hardened — checkpointable execution with plan history, versioning, and rollback | 65 | 63.0 |
 | Persona and operator doctrine | 5 | `partial_packaged` → `present` — Steward/Herald/Builder/Sentinel with runtime proof pipeline (24 tests) | 60 | `thin` → `partial_substantial` — 4-persona pipeline proven, constitutional check integrated | 55 | `bridge_owned` → `current_with_active_gaps` — operator doctrine contracts, persona gating wired | 60 | 58.0 |
-| Ecosystem integration surface | 4 | `source_only` → `present` — MCP bridge (auto-registers effects as MCP tools) + REST bridge (FastAPI + OpenAPI, 68 tests) | 60 | `missing` → `partial_thin` — 68 integration tests, both bridges wrap compiled CapabilityManifests | 50 | `source_only_named_path` → `bridge_owned` — real bridges through full compilation pipeline | 55 | 55.0 |
-| Gallery and operator-legibility surface | 4 | `damaged` → `present` — type explorer, verification viewer, manifest viewer, provenance viewer, operator dashboard (25 tests) | 70 | `missing` → `partial_thin` — proof suite for all 5 gallery modules | 45 | `doctrine_only` → `bridge_owned` — interactive operator dashboard with live proof status | 58 | 58.0 |
+| Ecosystem integration surface | 4 | `source_only` → hardened — MCP bridge + REST bridge with rate limiting, circuit breaking (CLOSED/OPEN/HALF_OPEN), retry policy (exponential backoff + jitter), credential manager (scoped keys, HMAC, TTL, rotation) | 78 | `missing` → `partial_substantial` — 121 tests (68 bridge + 53 hardening) | 65 | `source_only_named_path` → hardened — production-ready middleware stack on both bridges | 65 | 70.0 |
+| Gallery and operator-legibility surface | 4 | `damaged` → hardened — type/verification/manifest/provenance viewers + operator dashboard + TelemetryCollector (live readiness polling, ndjson streaming, trend buffer) + operator CLI (Rich dashboard, snapshot/JSON, watch mode, subcommands) | 82 | `missing` → `partial_substantial` — 65 tests (25 gallery + 40 operatorization) | 65 | `doctrine_only` → hardened — live dashboard with alerts, CLI tooling, telemetry streaming | 70 | 73.0 |
 
 ## Weighted Result
 
 Using the canonical pillar weights, the current branch-wide internal readiness score is:
 
-- `71.2%`
+- `73.4%`
 
 Internal interpretation band:
 
@@ -77,21 +77,20 @@ Internal interpretation band:
 
 | Pillar | Score | Why it lags |
 | --- | ---: | --- |
-| Orchestration lifecycle and plan execution | 53.5 | two-channel dispatch exists but plan-level lifecycle management still lacks end-to-end proof |
-| Ecosystem integration surface | 55.0 | MCP + REST bridges built and tested, but integration depth still needs hardening |
-| Gallery and operator-legibility surface | 58.0 | 5 gallery modules with proof suite, but operatorization is early-stage |
+| Orchestration lifecycle and plan execution | 63.0 | plan versioning and checkpointing built, but lifecycle methods (classify_and_plan, execute_plan_with_routing) not yet wired |
+| Persona and operator doctrine | 58.0 | 4-persona pipeline with runtime proofs, but operator doctrine contracts still partial |
+| Human-readable audit and trust layer | 60.5 | provenance chain tracking exists, but InsAIts and governed review proofs are still thin |
 
 ## Immediate Scoring Pressure Points
 
-The fastest legitimate readiness gains are not in the already-strong language core.
-
-They are in:
+The fastest legitimate readiness gains are in:
 
 1. typed effect and capability algebra
 2. knowledge substrate and governed memory contracts
 3. formal verification proof depth
-4. routing and orchestration restoration
+4. orchestration lifecycle completion (classify_and_plan, execute_plan_with_routing, CoVE gate)
 5. persona and operator doctrine proof surfaces
+6. human-readable audit and trust layer (InsAIts + governed review proofs)
 
 ## 2026-03-20 Live Validation Checkpoint
 

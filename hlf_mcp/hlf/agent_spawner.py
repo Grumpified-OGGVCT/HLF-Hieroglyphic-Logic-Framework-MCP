@@ -214,25 +214,59 @@ def main():
     fallback_model = cfg.get("fallback_model", "")
     max_retries = cfg.get("max_retries", 2)
     retry_backoff = cfg.get("retry_backoff", 2.0)
+    hks_exemplars = cfg.get("hks_exemplars", [])
+    persona = cfg.get("persona", "")
+    protocol_mode = cfg.get("protocol_mode", "")
     os.makedirs(work_dir, exist_ok=True)
     start = time.time()
+    constraints = cfg.get('constraints', [])
+
     prompt = f"""You are Agent {agent_id} ({role}).
 
 TASK:
 {task}
 
-CONSTRAINTS: {', '.join(cfg.get('constraints', []))}
+CONSTRAINTS: {', '.join(constraints)}
 DEPENDENCIES: {json.dumps(cfg.get('dependencies', {}))}
-
+"""
+    if protocol_mode:
+        prompt += f"""
+PROTOCOL MODE: {protocol_mode}
+- Before beginning work, classify your lane: vision | current-truth | bridge
+- Compare any surface claims against constitutive documents before changing them
+- If ambiguity is outcome-changing, stop and escalate — do not proceed
+- Every claim must reference its evidence source
+"""
+    if persona:
+        prompt += f"""
+PERSONA: {persona}
+- Operate within the {persona} persona's authority boundaries
+- Tag all output files with persona-aware responsibility markers
+"""
+    if hks_exemplars:
+        prompt += """
+KNOWLEDGE STORE EXEMPLARS (use these as reference patterns):
+"""
+        for ex in hks_exemplars:
+            source = ex.get("source", "unknown")
+            score = ex.get("score", 0)
+            context = ex.get("context", "no context")
+            prompt += f"- [{source}] (score: {score}): {context}\n"
+        prompt += "Apply these patterns when generating output. Prefer established patterns over novel approaches.\n"
+    if "MIGRATION-OWNERSHIP" in constraints or "ENTRY-POINT-OWNERSHIP" in constraints:
+        prompt += """
+OWNERSHIP WARNING: You are NOT authorized to create files in domains owned by other agents. Respect MIGRATION-OWNERSHIP and ENTRY-POINT-OWNERSHIP boundaries.
+"""
+    prompt += """
 CRITICAL INSTRUCTIONS:
 1. Produce ALL the files listed in your output spec.
-2. Return ONLY a single JSON object. Start with {{ and end with }}.
+2. Return ONLY a single JSON object. Start with { and end with }}.
 3. Every value in the JSON must be a string containing the complete file content.
 4. Do NOT include explanations, commentary, markdown formatting, or code fences.
 5. Do NOT truncate — write every file in full.
 
 Example response format:
-{{"server.js": "const express = require('express');\\nconst app = express();\\n// ... full file content ...", "routes/auth.js": "const express = require('express');\\nconst router = express.Router();\\n// ... full file content ..."}}
+{"server.js": "const express = require('express');\\nconst app = express();\\n// ... full file content ...", "routes/auth.js": "const express = require('express');\\nconst router = express.Router();\\n// ... full file content ..."}
 """
     # Retry loop with fallback model support
     models_to_try = [model]
@@ -386,6 +420,9 @@ if __name__ == "__main__":
             "constraints": kwargs.get("constraints", []),
             "dependencies": kwargs.get("dependencies", {}),
             "num_predict": kwargs.get("num_predict", 16384),
+            "hks_exemplars": kwargs.get("hks_exemplars", []),
+            "persona": kwargs.get("persona", ""),
+            "protocol_mode": kwargs.get("protocol_mode", ""),
         }
         config_path = os.path.join(work_dir, "config.json")
         with open(config_path, "w", encoding="utf-8") as f:

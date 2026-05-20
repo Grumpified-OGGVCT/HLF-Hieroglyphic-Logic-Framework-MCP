@@ -5,13 +5,18 @@ Supports round-robin, least-loaded, weighted-round-robin, least-connections,
 and resource-aware strategies.  Tracks active task counts, connection counts,
 and resource utilisation per node.  Delegates capability matching to
 CapabilityRouter.
+
+Now includes route-trace evidence generation on every route choice,
+with fail-closed enforcement when evidence is insufficient.
 """
 
 from __future__ import annotations
 
-import itertools
-import random
+import hashlib
+import json
 import threading
+import time
+import uuid
 from typing import Any
 
 from hlf_mcp.hlf.routing.node_registry import NodeRegistry, RegisteredNode
@@ -45,6 +50,10 @@ class LoadBalancer:
         ``memory_gb``, ``gpu_vram_gb``) to compute available capacity.
         Selects node with most available resources relative to current load.
 
+    Each distribute() call now produces a RouteEvidence snapshot for
+    audit trail and traceability.  Evidence can be retrieved via
+    ``last_evidence`` property.
+
     Thread-safe: the internal counters are guarded by a lock.
     """
 
@@ -62,6 +71,9 @@ class LoadBalancer:
         self._rr_counters: dict[str, int] = {}  # capability → next index
         self._weighted_counters: dict[str, float] = {}  # capability → fractional index
         self._lock = threading.Lock()
+
+        # Evidence tracking
+        self._last_evidence: Any = None  # RouteEvidence — lazy import to avoid circular
 
     # ── Strategy management ───────────────────────────────────────────────
 
@@ -125,19 +137,35 @@ class LoadBalancer:
 
     # ── Distribution ──────────────────────────────────────────────────────
 
+    @property
+    def last_evidence(self) -> Any:
+        """Return the most recent RouteEvidence snapshot (or None)."""
+        return self._last_evidence
+
     def distribute(self, request: WorkRequest) -> RouteMatch:
         """Distribute *request* to the best node using the configured strategy.
 
         First finds all capable nodes via CapabilityRouter, then applies
         the strategy to select one.  Returns an unmatched RouteMatch if
         no capable nodes are available.
+
+        Generates a RouteEvidence snapshot on every call for audit trail.
         """
+        from hlf_mcp.hlf.routing.failover import RouteEvidence  # lazy import
+
         matches = self._router.route_with_constraints(
             request,
             max_nodes=100,
             require_healthy=True,
         )
         if not matches:
+            evidence = RouteEvidence(
+                selected_node=None,
+                candidates_considered=[],
+                selection_reason="No capable healthy nodes available for distribution.",
+                policy_basis=self._strategy,
+            )
+            self._last_evidence = evidence
             return RouteMatch(
                 matched_node=None,
                 confidence=0.0,
@@ -148,6 +176,13 @@ class LoadBalancer:
             m.matched_node for m in matches if m.matched_node is not None
         ]
         if not capable_nodes:
+            evidence = RouteEvidence(
+                selected_node=None,
+                candidates_considered=[],
+                selection_reason="No capable healthy nodes available for distribution.",
+                policy_basis=self._strategy,
+            )
+            self._last_evidence = evidence
             return RouteMatch(
                 matched_node=None,
                 confidence=0.0,
@@ -167,6 +202,29 @@ class LoadBalancer:
         else:
             selected = self._select_round_robin(request.capability, capable_nodes)
 
+        # Build evidence snapshot
+        candidate_ids = [n.node_id for n in capable_nodes]
+        health_evidence: dict[str, str] = {}
+        match_scores: dict[str, int] = {}
+        for node in capable_nodes:
+            health_evidence[node.node_id] = node.health
+            match_scores[node.node_id] = node.capabilities.get(request.capability, 0)
+
+        proficiency = selected.capabilities.get(request.capability, 0)
+
+        evidence = RouteEvidence(
+            selected_node=selected.node_id,
+            candidates_considered=candidate_ids,
+            selection_reason=(
+                f"Selected '{selected.node_id}' via {self._strategy} "
+                f"(proficiency={proficiency}) from {len(capable_nodes)} candidates"
+            ),
+            policy_basis=self._strategy,
+            health_check_evidence=health_evidence,
+            capability_match_scores=match_scores,
+        )
+        self._last_evidence = evidence
+
         # Re-fetch the full match info from the router for confidence/rationale
         for match in matches:
             if match.matched_node and match.matched_node.node_id == selected.node_id:
@@ -174,7 +232,6 @@ class LoadBalancer:
                 return match
 
         # Fallback: build a fresh match
-        proficiency = selected.capabilities.get(request.capability, 0)
         conf = min(0.95, 0.5 + proficiency / 10.0)
         self.increment_active(selected.node_id)
         return RouteMatch(
@@ -185,6 +242,58 @@ class LoadBalancer:
                 f"(proficiency={proficiency})."
             ),
         )
+
+    def distribute_with_evidence(
+        self, request: WorkRequest
+    ) -> tuple[RouteMatch, Any]:
+        """Distribute *request* and return (match, evidence) tuple.
+
+        The evidence includes full candidate snapshots with health checks
+        and capability match scores for audit trail.
+        """
+        match = self.distribute(request)
+        return match, self._last_evidence
+
+    def distribute_with_fail_closed(
+        self, request: WorkRequest, threshold: Any = None
+    ) -> tuple[RouteMatch, Any]:
+        """Distribute with fail-closed enforcement.
+
+        If *threshold* is None, defaults to STANDARD.
+        Returns (match, evidence).  If evidence is insufficient,
+        returns an unmatched RouteMatch with rationale explaining
+        which evidence was missing (fail-closed).
+
+        Args:
+            request: The work request to route.
+            threshold: Evidence threshold to enforce (RouteEvidenceThreshold).
+        """
+        from hlf_mcp.hlf.routing.failover import (
+            RouteEvidence,
+            RouteEvidenceThreshold,
+        )
+
+        if threshold is None:
+            threshold = RouteEvidenceThreshold.STANDARD
+
+        match = self.distribute(request)
+        evidence = self._last_evidence
+
+        if evidence is not None and not evidence.meets_threshold(threshold):
+            missing = evidence.missing_for_threshold(threshold)
+            return (
+                RouteMatch(
+                    matched_node=None,
+                    confidence=0.0,
+                    rationale=(
+                        f"Fail-closed: route evidence below threshold "
+                        f"'{threshold.name}'. Missing: {', '.join(missing)}."
+                    ),
+                ),
+                evidence,
+            )
+
+        return match, evidence
 
     # ── Internal selection helpers ────────────────────────────────────────
 

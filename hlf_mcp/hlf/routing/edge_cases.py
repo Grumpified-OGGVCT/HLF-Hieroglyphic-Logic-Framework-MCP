@@ -31,7 +31,10 @@ from hlf_mcp.hlf.routing.capability_router import (
     WorkRequest,
 )
 from hlf_mcp.hlf.routing.load_balancer import LoadBalancer
-from hlf_mcp.hlf.routing.failover import FailoverManager
+from hlf_mcp.hlf.routing.failover import (
+    FailoverManager,
+    RouteEvidenceThreshold,
+)
 
 
 # ── Enums & data classes ─────────────────────────────────────────────────────
@@ -45,6 +48,7 @@ class RoutingEdgeCase(Enum):
     LOAD_BALANCER_STARVATION = "load_balancer_starvation"
     FAILOVER_CASCADE = "failover_cascade"
     HEALTH_CHECK_FLAPPING = "health_check_flapping"
+    EVIDENCE_THRESHOLD_VIOLATION = "evidence_threshold_violation"
 
 
 @dataclass
@@ -681,6 +685,181 @@ def test_health_check_flapping() -> EdgeCaseResult:
     )
 
 
+def test_evidence_threshold_violation() -> EdgeCaseResult:
+    """Verify fail-closed enforcement when route evidence is insufficient.
+
+    Tests that:
+      - Missing health check → fail-closed at STRICT threshold
+      - Missing capability match → fail-closed at STRICT threshold
+      - Missing policy basis → fail-closed at STANDARD threshold
+      - NONE threshold allows routing with no evidence
+      - Explicit error lists which evidence was missing
+    """
+    from hlf_mcp.hlf.routing.failover import RouteEvidence
+
+    registry = NodeRegistry()
+    router = CapabilityRouter(registry)
+    lb = LoadBalancer(registry, router, strategy="round_robin")
+
+    registry.register(
+        "ev-node-a", "10.0.0.1", 9090,
+        capabilities={"inference": 9},
+    )
+    registry.register(
+        "ev-node-b", "10.0.0.2", 9091,
+        capabilities={"inference": 8},
+    )
+
+    request = WorkRequest(
+        request_id="evidence-req",
+        capability="inference",
+        required_proficiency=1,
+    )
+
+    observations: list[str] = []
+    recommendations: list[str] = []
+    status = "passed"
+    metrics: dict[str, Any] = {}
+
+    # ── Test 1: STRICT threshold with full evidence → should pass ──────────
+    match, evidence = lb.distribute_with_evidence(request)
+    if match.matched:
+        strict_ok = evidence.meets_threshold(RouteEvidenceThreshold.STRICT)
+        metrics["strict_with_full_evidence"] = strict_ok
+        if strict_ok:
+            observations.append(
+                "STRICT threshold accepted full evidence from distribute()"
+            )
+        else:
+            observations.append(
+                f"STRICT threshold rejected full evidence: "
+                f"{evidence.missing_for_threshold(RouteEvidenceThreshold.STRICT)}"
+            )
+            status = "warning"
+
+    # ── Test 2: Minimal evidence → fail-closed at STANDARD ──────────────────
+    minimal_evidence = RouteEvidence(
+        selected_node="ev-node-a",
+        candidates_considered=["ev-node-a", "ev-node-b"],
+        selection_reason="",  # missing selection_reason
+        policy_basis="",       # missing policy_basis
+    )
+    meets_standard = minimal_evidence.meets_threshold(RouteEvidenceThreshold.STANDARD)
+    metrics["minimal_vs_standard"] = meets_standard
+    if meets_standard:
+        observations.append(
+            "Evidence without reason/policy passed STANDARD (unexpected)"
+        )
+        status = "failed"
+        recommendations.append(
+            "STANDARD threshold should require selection_reason and policy_basis"
+        )
+    else:
+        missing = minimal_evidence.missing_for_threshold(
+            RouteEvidenceThreshold.STANDARD
+        )
+        observations.append(
+            f"Evidence missing reason/policy correctly rejected at STANDARD: "
+            f"missing={missing}"
+        )
+        metrics["missing_at_standard"] = missing
+
+    # ── Test 3: Missing health check → fail-closed at STRICT ───────────────
+    no_health_evidence = RouteEvidence(
+        selected_node="ev-node-a",
+        candidates_considered=["ev-node-a", "ev-node-b"],
+        selection_reason="Test reason",
+        policy_basis="round_robin",
+        health_check_evidence={},  # empty
+        capability_match_scores={"ev-node-a": 9, "ev-node-b": 8},
+    )
+    meets_strict = no_health_evidence.meets_threshold(
+        RouteEvidenceThreshold.STRICT
+    )
+    metrics["no_health_vs_strict"] = meets_strict
+    if meets_strict:
+        observations.append(
+            "Evidence without health checks passed STRICT (unexpected)"
+        )
+        status = "failed"
+        recommendations.append(
+            "STRICT threshold should require health_check_evidence"
+        )
+    else:
+        missing = no_health_evidence.missing_for_threshold(
+            RouteEvidenceThreshold.STRICT
+        )
+        observations.append(
+            f"Evidence missing health checks correctly fail-closed at STRICT: "
+            f"missing={missing}"
+        )
+        metrics["missing_health_at_strict"] = missing
+
+    # ── Test 4: Missing capability match → fail-closed at STRICT ───────────
+    no_cap_evidence = RouteEvidence(
+        selected_node="ev-node-a",
+        candidates_considered=["ev-node-a", "ev-node-b"],
+        selection_reason="Test reason",
+        policy_basis="round_robin",
+        health_check_evidence={"ev-node-a": "healthy", "ev-node-b": "healthy"},
+        capability_match_scores={},  # empty
+    )
+    meets_strict2 = no_cap_evidence.meets_threshold(RouteEvidenceThreshold.STRICT)
+    metrics["no_capability_vs_strict"] = meets_strict2
+    if meets_strict2:
+        observations.append(
+            "Evidence without capability scores passed STRICT (unexpected)"
+        )
+        status = "failed"
+        recommendations.append(
+            "STRICT threshold should require capability_match_scores"
+        )
+    else:
+        missing = no_cap_evidence.missing_for_threshold(
+            RouteEvidenceThreshold.STRICT
+        )
+        observations.append(
+            f"Evidence missing capability scores correctly fail-closed at STRICT: "
+            f"missing={missing}"
+        )
+        metrics["missing_capability_at_strict"] = missing
+
+    # ── Test 5: NONE threshold allows everything ───────────────────────────
+    none_ok = minimal_evidence.meets_threshold(RouteEvidenceThreshold.NONE)
+    metrics["none_accepts_minimal"] = none_ok
+    if none_ok:
+        observations.append("NONE threshold correctly accepts minimal evidence")
+    else:
+        observations.append("NONE threshold rejected minimal evidence (unexpected)")
+        status = "failed"
+
+    # ── Test 6: Fail-closed via distribute_with_fail_closed ─────────────────
+    fail_match, fail_evidence = lb.distribute_with_fail_closed(
+        request, threshold=RouteEvidenceThreshold.STRICT
+    )
+    metrics["fail_closed_distribute_matched"] = fail_match.matched
+    if fail_match.matched:
+        observations.append("distribute_with_fail_closed at STRICT matched (expected)")
+    else:
+        observations.append(
+            f"distribute_with_fail_closed at STRICT fail-closed: "
+            f"{fail_match.rationale}"
+        )
+
+    if status == "passed":
+        recommendations.append(
+            "Fail-closed enforcement via RouteEvidenceThreshold works correctly"
+        )
+
+    return EdgeCaseResult(
+        edge_case=RoutingEdgeCase.EVIDENCE_THRESHOLD_VIOLATION,
+        status=status,
+        observations=observations,
+        recommendations=recommendations,
+        metrics=metrics,
+    )
+
+
 def run_all_edge_cases() -> dict[RoutingEdgeCase, EdgeCaseResult]:
     """Run all edge case tests and return results."""
     results: dict[RoutingEdgeCase, EdgeCaseResult] = {}
@@ -693,4 +872,7 @@ def run_all_edge_cases() -> dict[RoutingEdgeCase, EdgeCaseResult]:
     results[RoutingEdgeCase.LOAD_BALANCER_STARVATION] = test_load_balancer_starvation()
     results[RoutingEdgeCase.FAILOVER_CASCADE] = test_failover_cascade()
     results[RoutingEdgeCase.HEALTH_CHECK_FLAPPING] = test_health_check_flapping()
+    results[RoutingEdgeCase.EVIDENCE_THRESHOLD_VIOLATION] = (
+        test_evidence_threshold_violation()
+    )
     return results

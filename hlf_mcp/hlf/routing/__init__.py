@@ -58,6 +58,10 @@ from hlf_mcp.hlf.routing.failover import (
     CircuitBreaker,
     FailoverManager,
     NodeFailureEvent,
+    RouteEvidence,
+    FallbackDecision,
+    FallbackHop,
+    RouteEvidenceThreshold,
 )
 from hlf_mcp.hlf.routing.stress_testing import (
     StressScenario,
@@ -70,11 +74,16 @@ from hlf_mcp.hlf.routing.edge_cases import (
     run_all_edge_cases,
     test_capability_mismatch,
     test_empty_registry,
+    test_evidence_threshold_violation,
     test_failover_cascade,
     test_health_check_flapping,
     test_load_balancer_starvation,
     test_race_condition_register_unregister,
     test_single_node_failure,
+)
+from hlf_mcp.hlf.routing.route_trace import (
+    RouteTraceLedger,
+    TraceRecord,
 )
 
 # ── Proxy the original module-level routing API ─────────────────────────
@@ -127,6 +136,13 @@ __all__ = [
     "FailoverManager",
     "NodeFailureEvent",
     "CircuitBreaker",
+    # Route-trace contracts
+    "RouteEvidence",
+    "FallbackDecision",
+    "FallbackHop",
+    "RouteEvidenceThreshold",
+    "RouteTraceLedger",
+    "TraceRecord",
     # Stress testing
     "StressScenario",
     "StressResult",
@@ -141,6 +157,7 @@ __all__ = [
     "test_load_balancer_starvation",
     "test_failover_cascade",
     "test_health_check_flapping",
+    "test_evidence_threshold_violation",
     "run_all_edge_cases",
     # Re-exported from original module (model-level routing)
     "RouteProfile",

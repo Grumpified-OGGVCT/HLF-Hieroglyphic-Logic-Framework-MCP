@@ -4,11 +4,15 @@ FailoverManager — handles node failures with automatic re-routing.
 Detects stale heartbeats, marks nodes unhealthy, and re-routes work
 to healthy alternatives.  Works with the LoadBalancer and CapabilityRouter
 to maintain availability in distributed deployments.
+
+Includes a circuit breaker to prevent routing to repeatedly-failing nodes
+and configurable exponential backoff for failover retries.
 """
 
 from __future__ import annotations
 
 import logging
+import random
 import threading
 import time
 from dataclasses import dataclass, field
@@ -50,11 +54,117 @@ class NodeFailureEvent:
         }
 
 
+# ── Circuit Breaker ──────────────────────────────────────────────────────────
+
+
+@dataclass
+class CircuitBreaker:
+    """Circuit breaker for a single node.
+
+    Tracks consecutive failures.  When failures exceed
+    *failure_threshold*, the circuit "opens" — routing stops to that
+    node for a *cooldown_seconds* period.  After cooldown, one request
+    is allowed through ("half-open"); if it succeeds the circuit closes,
+    if it fails it opens again with a longer cooldown.
+
+    Attributes:
+        node_id: The node this breaker protects.
+        failure_threshold: Consecutive failures before opening.
+        cooldown_seconds: How long to wait before trying again.
+        half_open_max_requests: How many requests to allow in half-open state.
+    """
+
+    node_id: str
+    failure_threshold: int = 5
+    cooldown_seconds: float = 30.0
+    half_open_max_requests: int = 1
+
+    _consecutive_failures: int = field(default=0, repr=False)
+    _state: str = field(default="closed", repr=False)  # "closed" | "open" | "half_open"
+    _opened_at: float = field(default=0.0, repr=False)
+    _half_open_requests: int = field(default=0, repr=False)
+    _cooldown_multiplier: float = field(default=1.0, repr=False)
+
+    # ── Failure / success recording ──────────────────────────────────────
+
+    def record_failure(self) -> str:
+        """Record a failure against this node and return the new state."""
+        self._consecutive_failures += 1
+        if self._state == "half_open":
+            # Half-open failure → open again with longer cooldown
+            self._state = "open"
+            self._opened_at = time.time()
+            self._cooldown_multiplier *= 2.0
+            self._half_open_requests = 0
+        elif self._state == "closed" and self._consecutive_failures >= self.failure_threshold:
+            self._state = "open"
+            self._opened_at = time.time()
+        return self._state
+
+    def record_success(self) -> str:
+        """Record a success against this node and return the new state."""
+        if self._state == "half_open":
+            self._state = "closed"
+            self._consecutive_failures = 0
+            self._cooldown_multiplier = 1.0
+            self._half_open_requests = 0
+        elif self._state == "closed":
+            self._consecutive_failures = 0
+        return self._state
+
+    # ── State queries ────────────────────────────────────────────────────
+
+    def is_circuit_open(self) -> bool:
+        """Return True if the circuit is currently open (node should be skipped).
+
+        An open circuit transitions to half-open after *cooldown_seconds*
+        times the current cooldown multiplier.
+        """
+        if self._state == "open":
+            effective_cooldown = self.cooldown_seconds * self._cooldown_multiplier
+            if time.time() - self._opened_at >= effective_cooldown:
+                self._state = "half_open"
+                self._half_open_requests = 0
+                return False
+            return True
+        if self._state == "half_open":
+            # In half-open, allow up to half_open_max_requests
+            if self._half_open_requests < self.half_open_max_requests:
+                return False
+            return True
+        return False  # closed → not open
+
+    def circuit_state(self) -> str:
+        """Return the current circuit state: "closed", "open", or "half_open"."""
+        # Refresh state in case cooldown has elapsed
+        self.is_circuit_open()
+        return self._state
+
+    def reset(self) -> None:
+        """Reset the circuit breaker to closed state."""
+        self._consecutive_failures = 0
+        self._state = "closed"
+        self._opened_at = 0.0
+        self._cooldown_multiplier = 1.0
+        self._half_open_requests = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise circuit breaker state for inspection."""
+        return {
+            "node_id": self.node_id,
+            "state": self.circuit_state(),
+            "consecutive_failures": self._consecutive_failures,
+            "cooldown_multiplier": self._cooldown_multiplier,
+            "is_open": self.is_circuit_open(),
+        }
+
+
 class FailoverManager:
     """Handles node failure detection and automatic re-routing.
 
     Integrates with NodeRegistry for health tracking, CapabilityRouter for
     finding alternatives, and LoadBalancer for distribution strategy.
+    Includes circuit breaker per node and configurable exponential backoff.
 
     Usage:
         manager = FailoverManager(registry, router, lb, max_retries=3)
@@ -71,6 +181,10 @@ class FailoverManager:
         load_balancer: LoadBalancer,
         max_retries: int = 3,
         heartbeat_timeout: float = 30.0,
+        backoff_base: float = 0.5,
+        backoff_multiplier: float = 2.0,
+        backoff_max: float = 30.0,
+        backoff_jitter: bool = True,
     ) -> None:
         self._registry = registry
         self._router = router
@@ -82,6 +196,15 @@ class FailoverManager:
         self._running = False
         self._health_thread: threading.Thread | None = None
 
+        # Backoff configuration
+        self._backoff_base = backoff_base
+        self._backoff_multiplier = backoff_multiplier
+        self._backoff_max = backoff_max
+        self._backoff_jitter = backoff_jitter
+
+        # Circuit breaker registry (per-node)
+        self._circuit_breakers: dict[str, CircuitBreaker] = {}
+
     # ── Failure handling ──────────────────────────────────────────────────
 
     def handle_failure(self, node_id: str) -> RouteMatch:
@@ -91,12 +214,18 @@ class FailoverManager:
         and the router is used to find a best alternative for the capability
         most commonly served by the failed node.
 
+        Records the failure in the circuit breaker for *node_id*.
+
         Returns a RouteMatch to the alternative node, or an unmatched match
         if no alternative is available.
         """
         node = self._registry.get_node(node_id)
         previous_health = node.health if node else "unknown"
         self._registry.mark_unhealthy(node_id)
+
+        # Record to circuit breaker
+        cb = self._get_or_create_breaker(node_id)
+        cb.record_failure()
 
         # Clear active tasks for the failed node
         active_count = self._load_balancer.active_count(node_id)
@@ -145,7 +274,13 @@ class FailoverManager:
         )
 
     def recover_node(self, node_id: str) -> bool:
-        """Explicitly recover a node to healthy status."""
+        """Explicitly recover a node to healthy status.
+
+        Also resets the circuit breaker for this node and records a
+        success to close an open/half-open circuit.
+        """
+        cb = self._get_or_create_breaker(node_id)
+        cb.record_success()
         return self._registry.mark_healthy(node_id)
 
     # ── Re-routing ────────────────────────────────────────────────────────
@@ -153,13 +288,19 @@ class FailoverManager:
     def failover_route(self, request: WorkRequest, failed_node_id: str) -> RouteMatch:
         """Route *request* to a different node after *failed_node_id* fails.
 
-        Excludes the failed node from consideration and retries up to
-        *max_retries* with exponential backoff.
+        Excludes the failed node from consideration and skips any nodes
+        whose circuit breaker is open.  Retries up to *max_retries* with
+        configurable exponential backoff.
 
         Returns a match to an alternative, or unmatched if exhausted.
         """
         excluded = set(request.exclude_nodes)
         excluded.add(failed_node_id)
+
+        # Also exclude any nodes with open circuits
+        for nid, cb in self._circuit_breakers.items():
+            if cb.is_circuit_open() and nid not in excluded:
+                excluded.add(nid)
 
         retry_request = WorkRequest(
             request_id=request.request_id,
@@ -180,9 +321,12 @@ class FailoverManager:
                     failed_node_id,
                     match.matched_node.node_id,
                 )
+                # Record success in circuit breaker for the matched node
+                cb = self._get_or_create_breaker(match.matched_node.node_id)
+                cb.record_success()
                 return match
 
-            delay = 0.5 * (2 ** (attempt - 1))
+            delay = self._compute_backoff(attempt)
             logger.debug(
                 "Failover route attempt %d/%d failed, retrying in %.1fs",
                 attempt,
@@ -199,6 +343,20 @@ class FailoverManager:
                 f"for request '{request.request_id}' after failure of '{failed_node_id}'."
             ),
         )
+
+    def _compute_backoff(self, attempt: int) -> float:
+        """Compute exponential backoff delay for *attempt* (1-indexed).
+
+        Formula: base * (multiplier ** (attempt - 1)), capped at *backoff_max*.
+        If *backoff_jitter* is enabled, adds ±25% random jitter.
+        """
+        delay = self._backoff_base * (self._backoff_multiplier ** (attempt - 1))
+        if delay > self._backoff_max:
+            delay = self._backoff_max
+        if self._backoff_jitter:
+            jitter = delay * 0.25 * (2.0 * random.random() - 1.0)
+            delay = max(0.0, delay + jitter)
+        return delay
 
     # ── Health check loop ─────────────────────────────────────────────────
 
@@ -272,3 +430,50 @@ class FailoverManager:
         """Clear all recorded failure events."""
         with self._lock:
             self._failure_history.clear()
+
+    # ── Circuit breaker management ────────────────────────────────────────
+
+    def _get_or_create_breaker(self, node_id: str) -> CircuitBreaker:
+        """Get or create a circuit breaker for *node_id*."""
+        with self._lock:
+            if node_id not in self._circuit_breakers:
+                self._circuit_breakers[node_id] = CircuitBreaker(node_id=node_id)
+            return self._circuit_breakers[node_id]
+
+    def record_failure(self, node_id: str) -> str:
+        """Record a failure in the circuit breaker; return new state."""
+        cb = self._get_or_create_breaker(node_id)
+        return cb.record_failure()
+
+    def record_success(self, node_id: str) -> str:
+        """Record a success in the circuit breaker; return new state."""
+        cb = self._get_or_create_breaker(node_id)
+        return cb.record_success()
+
+    def is_circuit_open(self, node_id: str) -> bool:
+        """Return True if the circuit for *node_id* is currently open."""
+        cb = self._circuit_breakers.get(node_id)
+        if cb is None:
+            return False
+        return cb.is_circuit_open()
+
+    def circuit_state(self, node_id: str) -> str:
+        """Return the circuit state for *node_id* ("closed"|"open"|"half_open")."""
+        cb = self._circuit_breakers.get(node_id)
+        if cb is None:
+            return "closed"
+        return cb.circuit_state()
+
+    def reset_circuit_breaker(self, node_id: str) -> None:
+        """Reset the circuit breaker for *node_id* to closed."""
+        cb = self._circuit_breakers.get(node_id)
+        if cb is not None:
+            cb.reset()
+
+    def circuit_breaker_status(self) -> dict[str, dict[str, Any]]:
+        """Return a snapshot of all circuit breaker states."""
+        with self._lock:
+            return {
+                nid: cb.to_dict()
+                for nid, cb in self._circuit_breakers.items()
+            }

@@ -55,8 +55,26 @@ from hlf_mcp.hlf.routing.capability_router import (
 )
 from hlf_mcp.hlf.routing.load_balancer import LoadBalancer
 from hlf_mcp.hlf.routing.failover import (
+    CircuitBreaker,
     FailoverManager,
     NodeFailureEvent,
+)
+from hlf_mcp.hlf.routing.stress_testing import (
+    StressScenario,
+    StressResult,
+    RoutingStressTest,
+)
+from hlf_mcp.hlf.routing.edge_cases import (
+    EdgeCaseResult,
+    RoutingEdgeCase,
+    run_all_edge_cases,
+    test_capability_mismatch,
+    test_empty_registry,
+    test_failover_cascade,
+    test_health_check_flapping,
+    test_load_balancer_starvation,
+    test_race_condition_register_unregister,
+    test_single_node_failure,
 )
 
 # ── Proxy the original module-level routing API ─────────────────────────
@@ -108,6 +126,22 @@ __all__ = [
     "LoadBalancer",
     "FailoverManager",
     "NodeFailureEvent",
+    "CircuitBreaker",
+    # Stress testing
+    "StressScenario",
+    "StressResult",
+    "RoutingStressTest",
+    # Edge cases
+    "RoutingEdgeCase",
+    "EdgeCaseResult",
+    "test_empty_registry",
+    "test_single_node_failure",
+    "test_capability_mismatch",
+    "test_race_condition_register_unregister",
+    "test_load_balancer_starvation",
+    "test_failover_cascade",
+    "test_health_check_flapping",
+    "run_all_edge_cases",
     # Re-exported from original module (model-level routing)
     "RouteProfile",
     "route_request",

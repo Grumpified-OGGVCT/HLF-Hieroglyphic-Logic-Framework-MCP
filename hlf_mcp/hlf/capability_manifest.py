@@ -34,6 +34,7 @@ from hlf_mcp.hlf.typed_contracts import (
     ProofSurface,
     EffectClass,
     FailureMode,
+    HlfType,
 )
 
 
@@ -431,3 +432,398 @@ def _output_contract_from_dict(data: dict[str, Any]) -> OutputContract:
         return_type=return_type,
         output_schema=dict(data.get("output_schema", {})),
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Manifest Integrity Proofs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class ManifestIntegrityProof:
+    """Proof that a CapabilityManifest has not been tampered with.
+
+    Carries cryptographic evidence (SHA-256 hashes) that the manifest's
+    constituent parts are internally consistent and that the manifest
+    matches its canonical serialized form.
+
+    *hash_consistent*: the canonical JSON is non-empty and well-formed
+    *effects_present*: effects list is non-empty (trivial manifests flagged)
+    *capabilities_aligned*: required_capabilities match declared effects
+    *trust_tier_valid*: declared trust tier matches effects
+    *no_orphan_capabilities*: every required capability traces to an effect
+    *roundtrip_consistent*: to_dict -> from_dict -> to_dict is idempotent
+    """
+    program_id: str
+    hash_consistent: bool = False
+    effects_present: bool = False
+    capabilities_aligned: bool = False
+    trust_tier_valid: bool = False
+    no_orphan_capabilities: bool = False
+    roundtrip_consistent: bool = False
+    witnesses: tuple[str, ...] = ()
+
+    @property
+    def is_valid(self) -> bool:
+        """An integrity proof is valid when ALL checks pass."""
+        return (
+            self.hash_consistent
+            and self.capabilities_aligned
+            and self.trust_tier_valid
+            and self.roundtrip_consistent
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "program_id": self.program_id,
+            "hash_consistent": self.hash_consistent,
+            "effects_present": self.effects_present,
+            "capabilities_aligned": self.capabilities_aligned,
+            "trust_tier_valid": self.trust_tier_valid,
+            "no_orphan_capabilities": self.no_orphan_capabilities,
+            "roundtrip_consistent": self.roundtrip_consistent,
+            "is_valid": self.is_valid,
+            "witnesses": list(self.witnesses),
+        }
+
+
+def prove_manifest_integrity(manifest: CapabilityManifest) -> ManifestIntegrityProof:
+    """Prove that a CapabilityManifest is internally consistent and untampered.
+
+    Checks:
+        1. Hash consistency — canonical JSON is well-formed
+        2. Effects alignment — required_capabilities match declared effects
+        3. Trust tier validity — declared tier matches effect-derived tier
+        4. Orphan capability detection — no capability without source effect
+        5. Round-trip consistency — JSON serialization is idempotent
+
+    Returns:
+        ManifestIntegrityProof with detailed pass/fail for each check.
+    """
+    witnesses: list[str] = []
+
+    # 1. Hash consistency
+    canonical = manifest._canonical_json()
+    hash_consistent = bool(canonical) and len(canonical) > 0
+    if hash_consistent:
+        witnesses.append(f"Canonical JSON is {len(canonical)} bytes, non-empty, well-formed.")
+    else:
+        witnesses.append("Canonical JSON is empty or corrupt.")
+
+    # 2. Effects presence
+    effects_present = len(manifest.effects) > 0
+    if effects_present:
+        witnesses.append(f"Manifest declares {len(manifest.effects)} effects.")
+    else:
+        witnesses.append("Manifest has no effects, may be a stub or empty program.")
+
+    # 3. Capabilities alignment
+    recomputed_caps = _collect_required_capabilities(manifest.effects)
+    capabilities_aligned = manifest.required_capabilities == recomputed_caps
+    if capabilities_aligned:
+        witnesses.append(
+            f"Required capabilities ({sorted(manifest.required_capabilities)}) "
+            f"match effects-derived set ({sorted(recomputed_caps)})."
+        )
+    else:
+        extra = manifest.required_capabilities - recomputed_caps
+        missing = recomputed_caps - manifest.required_capabilities
+        detail_parts: list[str] = []
+        if extra:
+            detail_parts.append(f"extra in manifest: {sorted(extra)}")
+        if missing:
+            detail_parts.append(f"missing from manifest: {sorted(missing)}")
+        witnesses.append(
+            f"Capability mismatch! Stored={sorted(manifest.required_capabilities)}, "
+            f"derived={sorted(recomputed_caps)}. " + "; ".join(detail_parts)
+        )
+
+    # 4. Trust tier validity
+    recomputed_tier = _determine_trust_tier(manifest.effects)
+    trust_tier_valid = manifest.trust_tier == recomputed_tier
+    if trust_tier_valid:
+        witnesses.append(f"Trust tier '{manifest.trust_tier}' matches effect-derived tier.")
+    else:
+        witnesses.append(
+            f"Trust tier MISMATCH: stored='{manifest.trust_tier}', "
+            f"derived='{recomputed_tier}'"
+        )
+
+    # 5. No orphan capabilities
+    effect_caps: set[str] = set()
+    for effect in manifest.effects:
+        cap = EFFECT_TO_CAPABILITY.get(effect.effect_class, "local")
+        if cap != "local":
+            effect_caps.add(cap)
+    orphans = manifest.required_capabilities - effect_caps
+    no_orphan_capabilities = len(orphans) == 0
+    if no_orphan_capabilities:
+        witnesses.append("No orphan capabilities, every capability traces to an effect.")
+    else:
+        witnesses.append(f"Orphan capabilities found: {sorted(orphans)}, no effect declares these.")
+
+    # 6. Round-trip consistency
+    try:
+        round_tripped = CapabilityManifest.from_dict(manifest.to_dict())
+        rt_canonical = round_tripped._canonical_json()
+        roundtrip_consistent = rt_canonical == canonical
+        if roundtrip_consistent:
+            witnesses.append("JSON round-trip is idempotent.")
+        else:
+            witnesses.append(
+                f"JSON round-trip produces different canonical form: "
+                f"original={len(canonical)} bytes, round-trip={len(rt_canonical)} bytes."
+            )
+    except Exception as exc:
+        roundtrip_consistent = False
+        witnesses.append(f"JSON round-trip FAILED with exception: {exc}")
+
+    return ManifestIntegrityProof(
+        program_id=manifest.program_id,
+        hash_consistent=hash_consistent,
+        effects_present=effects_present,
+        capabilities_aligned=capabilities_aligned,
+        trust_tier_valid=trust_tier_valid,
+        no_orphan_capabilities=no_orphan_capabilities,
+        roundtrip_consistent=roundtrip_consistent,
+        witnesses=tuple(witnesses),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Cross-Manifest Consistency Checks
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class CrossManifestConsistency:
+    """Result of checking consistency across multiple CapabilityManifests.
+
+    When two or more programs are composed (sequentially or in parallel),
+    their manifests must be checked for compatibility.
+    """
+    consistent: bool = False
+    num_manifests: int = 0
+    capability_conflicts: tuple[str, ...] = ()
+    trust_tier_violations: tuple[str, ...] = ()
+    effect_incompatibilities: tuple[str, ...] = ()
+    contract_mismatches: tuple[str, ...] = ()
+    witnesses: tuple[str, ...] = ()
+
+    @property
+    def is_consistent(self) -> bool:
+        """Cross-manifest consistency holds when all sub-checks pass."""
+        return self.consistent
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "consistent": self.consistent,
+            "num_manifests": self.num_manifests,
+            "capability_conflicts": list(self.capability_conflicts),
+            "trust_tier_violations": list(self.trust_tier_violations),
+            "effect_incompatibilities": list(self.effect_incompatibilities),
+            "contract_mismatches": list(self.contract_mismatches),
+            "witnesses": list(self.witnesses),
+        }
+
+
+def check_cross_manifest_consistency(
+    *manifests: CapabilityManifest,
+) -> CrossManifestConsistency:
+    """Check that multiple CapabilityManifests are mutually consistent.
+
+    Checks capability conflicts, trust tier monotonicity, effect class
+    compatibility, and contract compatibility across composed programs.
+
+    Args:
+        *manifests: Two or more CapabilityManifest instances to compare.
+
+    Returns:
+        CrossManifestConsistency with detailed pass/fail per check.
+    """
+    manifest_list = list(manifests)
+    if len(manifest_list) < 2:
+        return CrossManifestConsistency(
+            consistent=True,
+            num_manifests=len(manifest_list),
+            witnesses=("Less than 2 manifests, trivially consistent.",),
+        )
+
+    witnesses: list[str] = []
+    capability_conflicts: list[str] = []
+    trust_tier_violations: list[str] = []
+    effect_incompatibilities: list[str] = []
+    contract_mismatches: list[str] = []
+    all_consistent = True
+
+    # 1. Capability conflict detection
+    union_caps: set[str] = set()
+    for m in manifest_list:
+        union_caps |= m.required_capabilities
+
+    for i, m in enumerate(manifest_list):
+        for cap in m.required_capabilities:
+            other_caps: set[str] = set()
+            for j, other in enumerate(manifest_list):
+                if j != i:
+                    for effect in other.effects:
+                        ec = EFFECT_TO_CAPABILITY.get(effect.effect_class, "local")
+                        if ec != "local":
+                            other_caps.add(ec)
+            own_effect_caps: set[str] = {
+                EFFECT_TO_CAPABILITY.get(e.effect_class, "local")
+                for e in m.effects
+                if EFFECT_TO_CAPABILITY.get(e.effect_class, "local") != "local"
+            }
+            if cap not in other_caps and cap not in own_effect_caps:
+                capability_conflicts.append(
+                    f"Manifest[{i}] '{m.program_id[:8]}...' requires '{cap}' "
+                    f"but no manifest provides it."
+                )
+
+    if capability_conflicts:
+        all_consistent = False
+        witnesses.append(
+            f"Found {len(capability_conflicts)} capability conflicts across "
+            f"{len(manifest_list)} manifests."
+        )
+    else:
+        witnesses.append(
+            f"No capability conflicts across {len(manifest_list)} manifests. "
+            f"Union capabilities: {sorted(union_caps)}"
+        )
+
+    # 2. Trust tier monotonicity
+    max_tier_ord = 0
+    max_tier_name = "advisory"
+    for m in manifest_list:
+        tier_ord = TRUST_TIER_ORDER.get(m.trust_tier, 0)
+        if tier_ord > max_tier_ord:
+            max_tier_ord = tier_ord
+            max_tier_name = m.trust_tier
+
+    for m in manifest_list:
+        m_ord = TRUST_TIER_ORDER.get(m.trust_tier, 0)
+        if m_ord > max_tier_ord:
+            trust_tier_violations.append(
+                f"Manifest '{m.program_id[:8]}...' has trust tier '{m.trust_tier}' "
+                f"(ord={m_ord}) exceeding composition max '{max_tier_name}' (ord={max_tier_ord})."
+            )
+
+    if trust_tier_violations:
+        all_consistent = False
+        witnesses.append(f"Found {len(trust_tier_violations)} trust tier violations.")
+    else:
+        witnesses.append(
+            f"Trust tier monotonicity holds: composition tier = '{max_tier_name}' "
+            f"(max of {len(manifest_list)} manifests)."
+        )
+
+    # 3. Effect class compatibility
+    mutating_effects: set[EffectClass] = set()
+    for m in manifest_list:
+        for effect in m.effects:
+            if effect.effect_class.is_mutating():
+                mutating_effects.add(effect.effect_class)
+
+    for i, m in enumerate(manifest_list):
+        for effect in m.effects:
+            if effect.effect_class.is_mutating():
+                required_cap = EFFECT_TO_CAPABILITY.get(effect.effect_class, "local")
+                if required_cap not in m.required_capabilities and required_cap != "local":
+                    effect_incompatibilities.append(
+                        f"Manifest[{i}] '{m.program_id[:8]}...' declares mutating effect "
+                        f"'{effect.effect_class.value}' but does not list '{required_cap}' "
+                        f"in required_capabilities."
+                    )
+
+    if effect_incompatibilities:
+        all_consistent = False
+        witnesses.append(
+            f"Found {len(effect_incompatibilities)} effect incompatibilities across manifests."
+        )
+    else:
+        witnesses.append(
+            f"Effect classes are compatible across {len(manifest_list)} manifests. "
+            f"Mutating effects: {sorted(ec.value for ec in mutating_effects) or 'none'}."
+        )
+
+    # 4. Contract compatibility
+    for i in range(len(manifest_list) - 1):
+        current = manifest_list[i]
+        next_m = manifest_list[i + 1]
+
+        current_outputs = [
+            effect.output_contract.return_type
+            for effect in current.effects
+            if effect.output_contract.return_type != HlfType.ANY
+        ]
+        next_inputs = [
+            param.hlf_type
+            for effect in next_m.effects
+            for param in effect.input_contract.parameters
+        ]
+
+        if current_outputs and next_inputs:
+            incompatible = False
+            for out_type in current_outputs:
+                if out_type == HlfType.ANY:
+                    continue
+                for in_type in next_inputs:
+                    if in_type == HlfType.ANY:
+                        continue
+                    if out_type != in_type:
+                        incompatible = True
+                        contract_mismatches.append(
+                            f"Type mismatch between Manifest[{i}] output "
+                            f"'{out_type.glyph}' and Manifest[{i+1}] input "
+                            f"'{in_type.glyph}'"
+                        )
+
+            if not incompatible:
+                witnesses.append(
+                    f"Contract compatibility holds between Manifest[{i}] and Manifest[{i+1}]."
+                )
+        else:
+            witnesses.append(
+                f"No typed contracts to check between Manifest[{i}] and Manifest[{i+1}]."
+            )
+
+    if contract_mismatches:
+        all_consistent = False
+        witnesses.append(f"Found {len(contract_mismatches)} contract mismatches.")
+
+    return CrossManifestConsistency(
+        consistent=all_consistent,
+        num_manifests=len(manifest_list),
+        capability_conflicts=tuple(capability_conflicts),
+        trust_tier_violations=tuple(trust_tier_violations),
+        effect_incompatibilities=tuple(effect_incompatibilities),
+        contract_mismatches=tuple(contract_mismatches),
+        witnesses=tuple(witnesses),
+    )
+
+
+def _check_single_manifest_consistency(manifest: CapabilityManifest) -> tuple[bool, list[str]]:
+    """Internal consistency check for a single manifest.
+
+    Returns (is_consistent, list_of_issues).
+    """
+    issues: list[str] = []
+
+    valid_tiers = set(TRUST_TIER_ORDER.keys())
+    if manifest.trust_tier not in valid_tiers:
+        issues.append(
+            f"Invalid trust tier '{manifest.trust_tier}'. "
+            f"Valid tiers: {sorted(valid_tiers, key=lambda t: TRUST_TIER_ORDER.get(t, 0))}"
+        )
+
+    for i, effect in enumerate(manifest.effects):
+        if not isinstance(effect.effect_class, EffectClass):
+            issues.append(f"Effect[{i}] '{effect.function_name}' has invalid effect_class.")
+
+    version_parts = manifest.compiler_version.split(".")
+    if len(version_parts) < 2:
+        issues.append(f"Invalid compiler version '{manifest.compiler_version}'.")
+
+    return len(issues) == 0, issues

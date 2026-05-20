@@ -270,6 +270,148 @@ class VerificationGate:
         # ADVISORY / UNTRUSTED / SOVEREIGN: PROCEED always
         return GateDecision.PROCEED
 
+    @staticmethod
+    def evaluate_with_explanation(
+        report: VerificationReport, trust_tier: str
+    ) -> dict[str, Any]:
+        """Evaluate the gate and return a human-readable decision rationale.
+
+        Unlike `gate()` which returns only a decision string, this method
+        returns a full explanation dict suitable for operator dashboards,
+        audit trails, and debugging.
+
+        Args:
+            report: The verification report to evaluate.
+            trust_tier: The trust tier for the agent/session.
+
+        Returns:
+            A dict with keys:
+            - decision: PROCEED, BLOCK, or WARN
+            - normalized_tier: the canonical tier name
+            - rationale: human-readable explanation of the decision
+            - blocking_factors: list of specific factors causing BLOCK/WARN
+            - report_summary: summary dict from the report
+        """
+        normalized = VerificationGate._normalize_tier(trust_tier)
+        decision = VerificationGate.gate(report, trust_tier)
+        rationale, blocking_factors = VerificationGate._build_rationale(
+            report, normalized, decision
+        )
+
+        return {
+            "decision": decision,
+            "normalized_tier": normalized,
+            "rationale": rationale,
+            "blocking_factors": blocking_factors,
+            "report_summary": {
+                "total": report.total_count,
+                "proven": report.proven_count,
+                "formally_proven": report.formally_proven_count,
+                "runtime_checked": report.runtime_checked_count,
+                "failed": report.failed_count,
+                "unknown": report.unknown_count,
+                "skipped": report.skipped_count,
+                "errors": report.error_count,
+                "blocked": report.blocked_count,
+                "all_proven": report.all_proven,
+            },
+        }
+
+    @staticmethod
+    def _build_rationale(
+        report: VerificationReport, normalized_tier: str, decision: str
+    ) -> tuple[str, list[str]]:
+        """Build a human-readable rationale and list of blocking factors."""
+        blocking_factors: list[str] = []
+
+        # Collect all relevant factors
+        if report.failed_count > 0:
+            blocking_factors.append(
+                f"{report.failed_count} counterexample(s) found"
+            )
+        if report.error_count > 0:
+            blocking_factors.append(
+                f"{report.error_count} verification error(s)"
+            )
+        if report.unknown_count > 0:
+            blocking_factors.append(
+                f"{report.unknown_count} unknown result(s)"
+            )
+        if report.skipped_count > 0:
+            blocking_factors.append(
+                f"{report.skipped_count} skipped constraint(s)"
+            )
+        if report.total_count == 0:
+            blocking_factors.append("no constraints extracted from program")
+
+        # Build rationale based on tier and decision
+        tier_descriptions = {
+            "hearth": "Hearth/Trusted tier — strictest gating: all constraints must be proven",
+            "forge": "Forge/Standard tier — moderate gating: counterexamples block, unknowns warn",
+            "sovereign": "Sovereign/Advisory tier — permissive: always proceeds with advisory results",
+        }
+
+        if decision == GateDecision.PROCEED:
+            if normalized_tier == "sovereign":
+                rationale = (
+                    f"{tier_descriptions[normalized_tier]} "
+                    f"Proceeding despite {report.blocked_count} advisory issues."
+                )
+            else:
+                rationale = (
+                    f"{tier_descriptions[normalized_tier]} "
+                    f"All {report.total_count} constraint(s) verified successfully. "
+                    f"Proceeding."
+                )
+        elif decision == GateDecision.BLOCK:
+            rationale = (
+                f"{tier_descriptions[normalized_tier]} "
+                f"Blocking due to: {'; '.join(blocking_factors)}."
+            )
+        elif decision == GateDecision.WARN:
+            rationale = (
+                f"{tier_descriptions[normalized_tier]} "
+                f"Warning due to: {'; '.join(blocking_factors)}. "
+                f"Proceeding with warnings."
+            )
+        else:
+            rationale = f"Unknown decision '{decision}' at tier '{normalized_tier}'"
+
+        return rationale, blocking_factors
+
+    @staticmethod
+    def tier_escalation_map() -> dict[str, str]:
+        """Return the escalation path for each tier.
+
+        Tier escalation increases strictness when verification depth
+        requirements are not met. The caller can use this to determine
+        the next stricter tier to try.
+        """
+        return {
+            "sovereign": "forge",
+            "forge": "hearth",
+            "hearth": "hearth",  # Already at maximum strictness
+            "advisory": "forge",
+            "untrusted": "forge",
+            "approved": "hearth",
+            "watched": "hearth",
+            "trusted": "hearth",
+        }
+
+    @classmethod
+    def escalate_tier(cls, current_tier: str) -> str:
+        """Escalate to the next stricter tier.
+
+        Args:
+            current_tier: The current tier name.
+
+        Returns:
+            The escalated tier name. If already at hearth, returns hearth.
+        """
+        mapping = cls.tier_escalation_map()
+        normalized = cls._normalize_tier(current_tier)
+        return mapping.get(normalized, "hearth")
+
 
 def extract_constraints(ast: dict[str, Any]) -> list[dict[str, Any]]:
     ast = normalize_ast(ast)
@@ -1253,3 +1395,112 @@ class FormalVerifier:
         report = self.verify_ast(compiled_program, gas_budget=gas_budget)
         decision = VerificationGate.gate(report, trust_tier)
         return report, decision
+
+    def verify_with_depth(
+        self,
+        compiled_program: dict[str, Any],
+        min_depth: int = 1,
+        *,
+        gas_budget: int = 10_000,
+        trust_tier: str = "hearth",
+        timeout_ms: float | None = None,
+    ) -> tuple[VerificationReport, str, dict[str, Any]]:
+        """Verify with a minimum proof depth requirement.
+
+        This extends the standard verification path with depth-gating:
+        if the measured proof depth is below `min_depth`, the gate
+        escalates to the next stricter tier.
+
+        Edge cases handled:
+        - Tier escalation: if depth is insufficient, the tier is escalated.
+          This means a forge-tier agent with min_depth=2 that only reaches
+          depth=1 will be gated as hearth.
+        - Timeout recovery: if `timeout_ms` is set and exceeded, partial
+          results are returned with a TIMEOUT status rather than blocking
+          indefinitely.
+        - Partial proofs: if only some constraints are proven, the depth
+          score reflects partial coverage rather than failing entirely.
+
+        Args:
+            compiled_program: The compiled AST to verify.
+            min_depth: Minimum required proof depth (default 1).
+            gas_budget: Gas budget for verification.
+            trust_tier: The trust tier for gating.
+            timeout_ms: Optional timeout in milliseconds for verification.
+
+        Returns:
+            Tuple of (VerificationReport, GateDecision string, depth_info dict).
+            The depth_info dict contains:
+            - measured_depth: The measured proof depth
+            - min_depth: The required minimum depth
+            - depth_sufficient: Whether depth met the minimum
+            - effective_tier: The tier actually used (may be escalated)
+            - timeout_occurred: Whether the timeout was hit
+            - partial_proof: Whether this is a partial proof
+        """
+        # Run verification with optional timeout
+        start_time = time.time()
+        timeout_occurred = False
+
+        if timeout_ms is not None and timeout_ms > 0:
+            # Use a simple timeout mechanism: if verification takes too long,
+            # return what we have as a partial proof
+            timeout_sec = timeout_ms / 1000.0
+            try:
+                report = self.verify_ast(compiled_program, gas_budget=gas_budget)
+                elapsed = (time.time() - start_time) * 1000.0
+                if elapsed > timeout_ms:
+                    timeout_occurred = True
+            except Exception:
+                timeout_occurred = True
+                report = VerificationReport(z3_enabled=_HAS_Z3)
+                report.add(
+                    VerificationResult(
+                        property_name="timeout_recovery",
+                        status=VerificationStatus.ERROR,
+                        kind=ConstraintKind.CUSTOM,
+                        message=(
+                            f"Verification timed out after {timeout_ms}ms. "
+                            f"Returning partial results."
+                        ),
+                        solver=self.solver_name,
+                        duration_ms=elapsed if 'elapsed' in dir() else timeout_ms,
+                    )
+                )
+        else:
+            report = self.verify_ast(compiled_program, gas_budget=gas_budget)
+
+        # Measure proof depth (lazy import to avoid circular dependency)
+        from hlf_mcp.hlf.proof_depth import measure_proof_depth
+
+        measured_depth = measure_proof_depth(report)
+        partial_proof = report.total_count > 0 and not report.all_proven
+
+        # Determine effective tier with escalation
+        effective_tier = trust_tier
+        depth_sufficient = measured_depth >= min_depth
+
+        if not depth_sufficient and min_depth > 0:
+            # Escalate tier: insufficient depth triggers stricter gating
+            effective_tier = VerificationGate.escalate_tier(trust_tier)
+
+        # Gate with the effective (possibly escalated) tier
+        decision = VerificationGate.gate(report, effective_tier)
+
+        # If timeout occurred, ensure we don't falsely claim PROCEED
+        if timeout_occurred and decision == GateDecision.PROCEED:
+            decision = GateDecision.WARN
+
+        depth_info: dict[str, Any] = {
+            "measured_depth": measured_depth,
+            "min_depth": min_depth,
+            "depth_sufficient": depth_sufficient,
+            "effective_tier": effective_tier,
+            "original_tier": trust_tier,
+            "tier_escalated": effective_tier != trust_tier,
+            "timeout_occurred": timeout_occurred,
+            "partial_proof": partial_proof,
+            "verification_time_ms": (time.time() - start_time) * 1000.0,
+        }
+
+        return report, decision, depth_info

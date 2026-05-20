@@ -13,10 +13,22 @@ from hlf_mcp.hlf.authority import (
 )
 from hlf_mcp.hlf.benchmark import HLFBenchmark
 from hlf_mcp.hlf.bytecode import HLFBytecode
-from hlf_mcp.hlf.capability_manifest import CapabilityManifest
+from hlf_mcp.hlf.capability_manifest import (
+    CapabilityManifest,
+    CrossManifestConsistency,
+    ManifestIntegrityProof,
+    check_cross_manifest_consistency,
+    prove_manifest_integrity,
+)
 from hlf_mcp.hlf.codegen import HLFCodeGenerator
 from hlf_mcp.hlf.compiler import HLFCompiler
-from hlf_mcp.hlf.effect_extractor import EffectExtractor
+from hlf_mcp.hlf.effect_extractor import (
+    EffectCompositionProof,
+    EffectExtractor,
+    prove_conditional_composition,
+    prove_parallel_composition,
+    prove_sequential_composition,
+)
 from hlf_mcp.hlf.embodied import (
     EmbodiedContractAssessment,
     assess_embodied_host_call,
@@ -26,6 +38,25 @@ from hlf_mcp.hlf.embodied import (
 )
 from hlf_mcp.hlf.formatter import HLFFormatter
 from hlf_mcp.hlf.linter import HLFLinter
+from hlf_mcp.hlf.operand_coverage import (
+    CANONICAL_OPERATORS,
+    OperandCoverage,
+    OperandMatrix,
+    Operator,
+    OperatorFamily,
+    find_operand_gaps,
+    generate_coverage_report,
+    prove_operand_completeness,
+)
+from hlf_mcp.hlf.parametric_proofs import (
+    ParametricProofResult,
+    ParametricProver,
+    RefinementProofResult,
+    prove_list_invariance,
+    prove_map_key_uniqueness,
+    prove_refinement_soundness,
+    prove_set_uniqueness,
+)
 from hlf_mcp.hlf.runtime import HLFRuntime
 from hlf_mcp.hlf.two_channel_executor import (
     ProvenanceChain,
@@ -46,7 +77,20 @@ from hlf_mcp.hlf.swarm_mechanics import (
 from hlf_mcp.hlf.routing.node_registry import NodeRegistry, RegisteredNode
 from hlf_mcp.hlf.routing.capability_router import CapabilityRouter, RouteMatch, WorkRequest
 from hlf_mcp.hlf.routing.load_balancer import LoadBalancer
-from hlf_mcp.hlf.routing.failover import FailoverManager, NodeFailureEvent
+from hlf_mcp.hlf.routing.failover import CircuitBreaker, FailoverManager, NodeFailureEvent
+from hlf_mcp.hlf.routing.stress_testing import StressScenario, StressResult, RoutingStressTest
+from hlf_mcp.hlf.routing.edge_cases import (
+    EdgeCaseResult,
+    RoutingEdgeCase,
+    run_all_edge_cases,
+    test_capability_mismatch,
+    test_empty_registry,
+    test_failover_cascade,
+    test_health_check_flapping,
+    test_load_balancer_starvation,
+    test_race_condition_register_unregister,
+    test_single_node_failure,
+)
 
 # Phase 7: Knowledge Memory Contracts
 from hlf_mcp.hlf.knowledge.freshness_guarantee import FreshnessGuarantee, FreshnessGuaranteeChecker
@@ -110,6 +154,34 @@ from hlf_mcp.hlf.review_proof import (
     audit_review_gaps,
     generate_review_proof_markdown,
 )
+# Phase 10: Formal Verification Proof Depth Hardening
+from hlf_mcp.hlf.formal_verifier import (
+    ConstraintKind,
+    FormalVerifier,
+    GateDecision,
+    VerificationBlockedError,
+    VerificationGate,
+    VerificationReport,
+    VerificationResult,
+    VerificationStatus,
+    z3_available,
+)
+from hlf_mcp.hlf.counterexample_quality import (
+    Counterexample,
+    CounterexampleGenerator,
+    compare_counterexamples,
+    explain_counterexample,
+    generate_minimal_counterexample,
+    suggest_fix,
+)
+from hlf_mcp.hlf.proof_depth import (
+    ProofDepth,
+    ProofObligation,
+    deepen_proof,
+    generate_proof_obligations,
+    measure_proof_depth,
+    rank_obligations_by_impact,
+)
 from hlf_mcp.hlf.symbolic_surfaces import (
     audit_symbolic_surface,
     compile_symbolic_surface,
@@ -149,12 +221,37 @@ __all__ = [
     "AUTHORITY_SURFACES",
     "HLFBytecode",
     "CapabilityManifest",
+    "CrossManifestConsistency",
+    "ManifestIntegrityProof",
+    "check_cross_manifest_consistency",
+    "prove_manifest_integrity",
     "HLFCodeGenerator",
     "HLFCompiler",
+    "EffectCompositionProof",
     "EffectExtractor",
+    "prove_conditional_composition",
+    "prove_parallel_composition",
+    "prove_sequential_composition",
     "HLFFormatter",
     "HLFLinter",
     "HLFRuntime",
+    # Phase 8: Operand Coverage & Parametric Proofs
+    "CANONICAL_OPERATORS",
+    "OperandCoverage",
+    "OperandMatrix",
+    "Operator",
+    "OperatorFamily",
+    "ParametricProofResult",
+    "ParametricProver",
+    "RefinementProofResult",
+    "find_operand_gaps",
+    "generate_coverage_report",
+    "prove_list_invariance",
+    "prove_map_key_uniqueness",
+    "prove_operand_completeness",
+    "prove_refinement_soundness",
+    "prove_set_uniqueness",
+    # Phase 7: Swarm / Embodied
     "SWARM_ARTIFACT_KIND",
     "EmbodiedContractAssessment",
     "assess_embodied_host_call",
@@ -201,6 +298,21 @@ __all__ = [
     "LoadBalancer",
     "FailoverManager",
     "NodeFailureEvent",
+    "CircuitBreaker",
+    # Phase 7b: Routing Stress Testing & Edge Cases
+    "StressScenario",
+    "StressResult",
+    "RoutingStressTest",
+    "RoutingEdgeCase",
+    "EdgeCaseResult",
+    "test_empty_registry",
+    "test_single_node_failure",
+    "test_capability_mismatch",
+    "test_race_condition_register_unregister",
+    "test_load_balancer_starvation",
+    "test_failover_cascade",
+    "test_health_check_flapping",
+    "run_all_edge_cases",
     # Phase 7: Knowledge Memory Contracts
     "FreshnessGuarantee",
     "FreshnessGuaranteeChecker",
@@ -232,4 +344,26 @@ __all__ = [
     "generate_review_checklist",
     "audit_review_gaps",
     "generate_review_proof_markdown",
+    # Phase 10: Formal Verification Proof Depth Hardening
+    "ConstraintKind",
+    "FormalVerifier",
+    "GateDecision",
+    "VerificationBlockedError",
+    "VerificationGate",
+    "VerificationReport",
+    "VerificationResult",
+    "VerificationStatus",
+    "z3_available",
+    "Counterexample",
+    "CounterexampleGenerator",
+    "compare_counterexamples",
+    "explain_counterexample",
+    "generate_minimal_counterexample",
+    "suggest_fix",
+    "ProofDepth",
+    "ProofObligation",
+    "deepen_proof",
+    "generate_proof_obligations",
+    "measure_proof_depth",
+    "rank_obligations_by_impact",
 ]

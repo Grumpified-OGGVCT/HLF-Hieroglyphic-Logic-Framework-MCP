@@ -1,6 +1,6 @@
 {
-  "dashboard_id": "9fe05ee82d4f0ff3",
-  "generated_at": "2026-05-19T22:00:37Z",
+  "dashboard_id": "328cae9477a1a7d0",
+  "generated_at": "2026-05-20T02:08:56Z",
   "overall_status": "degraded",
   "pillar_score": {
     "pillar": "gallery-operator-legibility",
@@ -41,7 +41,7 @@
         "role": "compiler",
         "event_type": "complete",
         "message": "Compiled 12 fixtures successfully",
-        "timestamp_ns": 1779228032118544384
+        "timestamp_ns": 1779242931913506304
       },
       {
         "swarm_id": "swarm-001",
@@ -50,7 +50,7 @@
         "role": "verifier",
         "event_type": "progress",
         "message": "Verifying 8 properties...",
-        "timestamp_ns": 1779228034118544384
+        "timestamp_ns": 1779242933913506304
       },
       {
         "swarm_id": "swarm-001",
@@ -59,7 +59,7 @@
         "role": "governor",
         "event_type": "started",
         "message": "Constitutional check in progress",
-        "timestamp_ns": 1779228036118544384
+        "timestamp_ns": 1779242935913506304
       }
     ],
     "active_agents": 3,
@@ -73,28 +73,28 @@
         "decision": "PROCEED",
         "checks_passed": 5,
         "checks_total": 5,
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       },
       {
         "program": "security_audit.hlf",
         "decision": "WARN",
         "checks_passed": 4,
         "checks_total": 6,
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       },
       {
         "program": "db_migration.hlf",
         "decision": "PROCEED",
         "checks_passed": 7,
         "checks_total": 7,
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       },
       {
         "program": "delegation.hlf",
         "decision": "BLOCK",
         "checks_passed": 2,
         "checks_total": 5,
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       }
     ],
     "summary": {
@@ -114,7 +114,7 @@
         "location": "network_output",
         "detail": "Unsanitized data egress detected without explicit capability declaration",
         "severity": "high",
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       },
       {
         "rule_id": "R-2",
@@ -122,7 +122,7 @@
         "location": "http_request",
         "detail": "Network effect in untrusted code path",
         "severity": "medium",
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       }
     ],
     "summary": {
@@ -146,7 +146,7 @@
         ],
         "approved": true,
         "signature": "sha256:abc123def456",
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       },
       {
         "program": "db_migration.hlf",
@@ -158,7 +158,7 @@
         ],
         "approved": true,
         "signature": "sha256:def789ghi012",
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       },
       {
         "program": "agent_delegation.hlf",
@@ -172,7 +172,7 @@
         "approved": false,
         "signature": "sha256:jkl345mno678",
         "rejection_reason": "AI_INFER requires sovereign tier approval gate",
-        "timestamp": "2026-05-19T22:00:37Z"
+        "timestamp": "2026-05-20T02:08:56Z"
       }
     ],
     "summary": {

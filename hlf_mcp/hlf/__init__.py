@@ -97,6 +97,47 @@ from hlf_mcp.hlf.knowledge.freshness_guarantee import FreshnessGuarantee, Freshn
 from hlf_mcp.hlf.knowledge.consistency_proof import ConsistencyProof, ConsistencyProofResult
 from hlf_mcp.hlf.knowledge.memory_lease import LeaseManager, LeaseViolationError, MemoryLease
 
+# Phase 11: Knowledge Substrate Hardening
+from hlf_mcp.hlf.entropy_anchor import (
+    DriftDetector,
+    DriftReport,
+    DriftSeverity,
+    EntropyAnchor,
+    ReAnchorDecision,
+    ReAnchoringProtocol,
+)
+from hlf_mcp.hlf.cross_witness import (
+    CrossWitnessProof,
+    CrossWitnessProver,
+    DisagreementReport,
+    DisagreementResolver,
+    QuorumPolicy,
+    ResolutionStrategy,
+)
+from hlf_mcp.hlf.memory_lease_hardening import (
+    EvictionResult,
+    LeaseAuditRecord,
+    LeaseAuditor,
+    LeaseMigration,
+    LeaseNegotiator,
+    LeasePriority,
+    MemoryPressureHandler,
+    MemoryTier,
+    MigrationPlan,
+    NegotiatedLease,
+)
+from hlf_mcp.hlf.knowledge_provenance import (
+    DerivationKind,
+    GapReport,
+    ProvenanceChain as KnowledgeProvenanceChain,
+    ProvenanceGapDetector,
+    ProvenanceNode,
+    ProvenanceVerification,
+    ProvenanceVerifier,
+    TrustRoot,
+    TrustRootRegistry,
+)
+
 # Phase 8: Orchestration Lifecycle Hardening — plan_versioning is
 # safe to import eagerly; checkpoint_executor creates a circular
 # dependency via multi_phase_executor → hlf.__init__, so we expose
@@ -154,6 +195,31 @@ from hlf_mcp.hlf.review_proof import (
     audit_review_gaps,
     generate_review_proof_markdown,
 )
+# Phase 9b: Audit & Trust Layer Hardening — Diff, Debt, Remediation, Trending
+from hlf_mcp.hlf.audit_diff import (
+    DiffOperation,
+    AuditDiffEntry,
+    AuditDiff,
+)
+from hlf_mcp.hlf.trust_debt import (
+    DebtItem,
+    TrustDebtQuantifier,
+)
+from hlf_mcp.hlf.remediation_planner import (
+    RemediationPriority,
+    RemediationStatus,
+    RemediationTask,
+    RemediationPlan,
+    RemediationPlanner,
+)
+from hlf_mcp.hlf.trust_trending import (
+    TrendDirection,
+    AlertLevel,
+    TrustSnapshot,
+    TrendReport,
+    TrendAlert,
+    TrustTrending,
+)
 # Phase 10: Formal Verification Proof Depth Hardening
 from hlf_mcp.hlf.formal_verifier import (
     ConstraintKind,
@@ -206,6 +272,58 @@ from hlf_mcp.hlf.translator import (
     language_to_hlf,
     resolve_language,
     translation_diagnostics,
+)
+
+# Phase 12: Real-Code Bridge Hardening — HLF↔Python equivalence
+from hlf_mcp.hlf.python_type_coercion import (
+    CoercionSafety,
+    CoercionRule,
+    CoercionResult,
+    TypeCoercionContract,
+)
+from hlf_mcp.hlf.import_whitelist import (
+    CapabilityTier,
+    ImportRule,
+    ImportCheck,
+    ImportWhitelist,
+)
+from hlf_mcp.hlf.sandbox_executor import (
+    SandboxResult,
+    SandboxConfig,
+    SandboxExecution,
+    GasMeter,
+    SandboxExecutor,
+)
+from hlf_mcp.hlf.error_translation import (
+    ViolationCategory,
+    TranslatedViolation,
+    PythonExceptionMapping,
+    ErrorTranslator,
+)
+
+# Phase 8b: Orchestration Failure Recovery & Rebalancing
+from hlf_mcp.hlf.orchestration_failure_recovery import (
+    VectorClock,
+    SwarmLeaderElection,
+    ElectionResult,
+    SplitBrainDetector,
+    SplitBrainReport,
+    StalePlanCache,
+    CacheEntry,
+    CrashRecovery,
+    RecoveryResult,
+)
+from hlf_mcp.hlf.plan_rebalancing import (
+    PlanRebalancer,
+    RebalanceResult,
+    TaskAffinityMap,
+)
+from hlf_mcp.hlf.swarm_handoff import (
+    SwarmHandoffContract,
+    SwarmHandoffManager,
+    HandoffReceipt,
+    CapabilityAttestation,
+    HandoffStatus,
 )
 
 __all__ = [
@@ -345,6 +463,22 @@ __all__ = [
     "audit_review_gaps",
     "generate_review_proof_markdown",
     # Phase 10: Formal Verification Proof Depth Hardening
+    "DiffOperation",
+    "AuditDiffEntry",
+    "AuditDiff",
+    "DebtItem",
+    "TrustDebtQuantifier",
+    "RemediationPriority",
+    "RemediationStatus",
+    "RemediationTask",
+    "RemediationPlan",
+    "RemediationPlanner",
+    "TrendDirection",
+    "AlertLevel",
+    "TrustSnapshot",
+    "TrendReport",
+    "TrendAlert",
+    "TrustTrending",
     "ConstraintKind",
     "FormalVerifier",
     "GateDecision",
@@ -366,4 +500,75 @@ __all__ = [
     "generate_proof_obligations",
     "measure_proof_depth",
     "rank_obligations_by_impact",
+    # Phase 8b: Orchestration Failure Recovery & Rebalancing
+    "VectorClock",
+    "SwarmLeaderElection",
+    "ElectionResult",
+    "SplitBrainDetector",
+    "SplitBrainReport",
+    "StalePlanCache",
+    "CacheEntry",
+    "CrashRecovery",
+    "RecoveryResult",
+    "PlanRebalancer",
+    "RebalanceResult",
+    "TaskAffinityMap",
+    "SwarmHandoffContract",
+    "SwarmHandoffManager",
+    "HandoffReceipt",
+    "CapabilityAttestation",
+    "HandoffStatus",
+    # Phase 11: Knowledge Substrate Hardening — Entropy Anchor Drift
+    "DriftDetector",
+    "DriftReport",
+    "DriftSeverity",
+    "EntropyAnchor",
+    "ReAnchoringProtocol",
+    "ReAnchorDecision",
+    # Phase 11: Knowledge Substrate Hardening — Cross-Witness Agreement
+    "CrossWitnessProof",
+    "CrossWitnessProver",
+    "DisagreementReport",
+    "DisagreementResolver",
+    "QuorumPolicy",
+    "ResolutionStrategy",
+    # Phase 11: Knowledge Substrate Hardening — Memory Lease Hardening
+    "EvictionResult",
+    "LeaseAuditRecord",
+    "LeaseAuditor",
+    "LeaseMigration",
+    "LeaseNegotiator",
+    "LeasePriority",
+    "MemoryPressureHandler",
+    "MemoryTier",
+    "MigrationPlan",
+    "NegotiatedLease",
+    # Phase 11: Knowledge Substrate Hardening — Knowledge Provenance
+    "DerivationKind",
+    "GapReport",
+    "KnowledgeProvenanceChain",
+    "ProvenanceGapDetector",
+    "ProvenanceNode",
+    "ProvenanceVerification",
+    "ProvenanceVerifier",
+    "TrustRoot",
+    "TrustRootRegistry",
+    # Phase 12: Real-Code Bridge Hardening — HLF↔Python equivalence
+    "CoercionSafety",
+    "CoercionRule",
+    "CoercionResult",
+    "TypeCoercionContract",
+    "CapabilityTier",
+    "ImportRule",
+    "ImportCheck",
+    "ImportWhitelist",
+    "SandboxResult",
+    "SandboxConfig",
+    "SandboxExecution",
+    "GasMeter",
+    "SandboxExecutor",
+    "ViolationCategory",
+    "TranslatedViolation",
+    "PythonExceptionMapping",
+    "ErrorTranslator",
 ]

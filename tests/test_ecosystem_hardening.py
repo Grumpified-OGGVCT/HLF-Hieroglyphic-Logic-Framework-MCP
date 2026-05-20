@@ -76,6 +76,30 @@ from hlf_mcp.hlf.typed_contracts import (
     ProofRequirement,
     HlfType,
     TypeContract,
+    ParametricType,
+    RefinementType,
+)
+from hlf_mcp.ecosystem.schema_translator import (
+    SchemaTranslator,
+    SchemaFormat,
+    SchemaTranslationResult,
+)
+from hlf_mcp.ecosystem.distributed_rate_limiter import (
+    DistributedRateLimiter,
+    CoordinationMode,
+    RateLimitState,
+)
+from hlf_mcp.ecosystem.resilience_coordinator import (
+    ResilienceCoordinator,
+    ResiliencePolicy,
+    ResilienceEvent,
+    ResilienceAction,
+)
+from hlf_mcp.ecosystem.bridge_health import (
+    BridgeHealthAggregator,
+    BridgeHealth,
+    HealthAggregation,
+    HealthStatus,
 )
 
 
@@ -744,3 +768,688 @@ class TestCredentialManagerEdgeCases:
         signature = cm.sign_credential(raw_key)
         assert cm.verify_credential_signature(raw_key, signature) is True
         assert cm.verify_credential_signature(raw_key, "bad_signature") is False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Schema Translator Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSchemaTranslator:
+    """Tests for SchemaTranslator — HLF type → JSON Schema / OpenAPI."""
+
+    def test_schema_translator_int_to_json(self):
+        """HlfType INTEGER maps to {"type": "integer"}."""
+        translator = SchemaTranslator(name="test-translator")
+        result = translator.hlf_type_to_json_schema(HlfType.INTEGER)
+        assert result == {"type": "integer"}
+
+    def test_schema_translator_list_to_json(self):
+        """LIST[INT] maps correctly with items."""
+        translator = SchemaTranslator(name="test-translator")
+        list_int_type = ParametricType(
+            base=HlfType.LIST,
+            params=(HlfType.INTEGER,),
+        )
+        result = translator.hlf_type_to_json_schema(list_int_type)
+        assert result["type"] == "array"
+        assert result["items"] == {"type": "integer"}
+
+    def test_schema_translator_optional_to_json(self):
+        """OPTIONAL[STR] maps to anyOf with null via contract."""
+        translator = SchemaTranslator(name="test-translator")
+        tc = TypeContract(
+            name="email",
+            hlf_type=HlfType.STRING,
+            required=False,
+        )
+        contract = InputContract(
+            function_name="send_notification",
+            parameters=[tc],
+        )
+        result = translator.contract_to_schema(contract, SchemaFormat.JSON_SCHEMA)
+        prop_schema = result.schema["properties"]["email"]
+        assert "anyOf" in prop_schema
+        assert {"type": "null"} in prop_schema["anyOf"]
+
+    def test_schema_translator_contract_to_schema(self):
+        """InputContract translates to JSON Schema with required fields."""
+        translator = SchemaTranslator(name="test-translator")
+        tc_name = TypeContract(
+            name="username",
+            hlf_type=HlfType.STRING,
+            required=True,
+        )
+        tc_age = TypeContract(
+            name="age",
+            hlf_type=HlfType.INTEGER,
+            required=True,
+        )
+        contract = InputContract(
+            function_name="create_user",
+            parameters=[tc_name, tc_age],
+        )
+        result = translator.contract_to_schema(contract, SchemaFormat.JSON_SCHEMA)
+        assert result.schema["type"] == "object"
+        assert "username" in result.schema["properties"]
+        assert "age" in result.schema["properties"]
+        assert result.schema["required"] == ["username", "age"]
+        assert result.format == SchemaFormat.JSON_SCHEMA
+
+    def test_schema_translator_manifest_to_openapi(self):
+        """CapabilityManifest produces valid OpenAPI structure with paths, info, servers."""
+        translator = SchemaTranslator(name="test-translator")
+
+        # Build mock TypedEffectDeclaration with proper contracts
+        input_contract = InputContract(
+            function_name="hello_world",
+            parameters=[
+                TypeContract(name="name", hlf_type=HlfType.STRING, required=True),
+            ],
+        )
+        output_contract = OutputContract(
+            function_name="hello_world",
+            return_type=HlfType.STRING,
+        )
+
+        MockEffect = type("MockEffect", (), {
+            "function_name": "hello_world",
+            "effect_class": EffectClass.LOCAL_ANALYSIS,
+            "safety_class": "none",
+            "input_contract": input_contract,
+            "output_contract": output_contract,
+        })
+
+        MockManifest = type("MockManifest", (), {
+            "program_id": "abc123def456abc123def456abc123def456abc123def456",
+            "compiler_version": "3.0.0",
+            "trust_tier": "advisory",
+            "effects": [MockEffect],
+        })
+
+        manifest = MockManifest()
+        spec = translator.manifest_to_openapi(manifest, base_url="http://localhost:8000")
+
+        assert spec["openapi"] == "3.0.3"
+        assert "info" in spec
+        assert "servers" in spec
+        assert spec["servers"][0]["url"] == "http://localhost:8000"
+        assert "paths" in spec
+        assert "/effects/hello_world" in spec["paths"]
+        path_item = spec["paths"]["/effects/hello_world"]
+        assert "post" in path_item
+        assert path_item["post"]["operationId"] == "execute_hello_world"
+
+    def test_schema_translator_validate_payload_valid(self):
+        """Valid payload passes validation."""
+        translator = SchemaTranslator(name="test-translator")
+        tc = TypeContract(name="name", hlf_type=HlfType.STRING, required=True)
+        contract = InputContract(function_name="greet", parameters=[tc])
+        valid, errors = translator.validate_payload({"name": "Alice"}, contract)
+        assert valid is True
+        assert errors == []
+
+    def test_schema_translator_validate_payload_invalid(self):
+        """Missing required field returns errors."""
+        translator = SchemaTranslator(name="test-translator")
+        tc = TypeContract(name="name", hlf_type=HlfType.STRING, required=True)
+        contract = InputContract(function_name="greet", parameters=[tc])
+        valid, errors = translator.validate_payload({}, contract)
+        assert valid is False
+        assert len(errors) > 0
+
+    def test_schema_translator_generate_client_sdk(self):
+        """Python SDK string contains expected patterns."""
+        translator = SchemaTranslator(name="test-translator")
+        tc = TypeContract(
+            name="username",
+            hlf_type=HlfType.STRING,
+            required=True,
+            constraints={"description": "User handle"},
+        )
+        contract = InputContract(function_name="create_user", parameters=[tc])
+        sdk_code = translator.generate_client_sdk(contract, language="python")
+        assert "class CreateUserInput" in sdk_code
+        assert "BaseModel" in sdk_code
+        assert "username" in sdk_code
+        assert "from pydantic" in sdk_code
+
+    def test_schema_translator_string_to_json(self):
+        """HlfType STRING maps to {"type": "string"}."""
+        translator = SchemaTranslator(name="test-translator")
+        result = translator.hlf_type_to_json_schema(HlfType.STRING)
+        assert result == {"type": "string"}
+
+    def test_schema_translator_boolean_to_json(self):
+        """HlfType BOOLEAN maps to {"type": "boolean"}."""
+        translator = SchemaTranslator(name="test-translator")
+        result = translator.hlf_type_to_json_schema(HlfType.BOOLEAN)
+        assert result == {"type": "boolean"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Distributed Rate Limiter Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestDistributedRateLimiter:
+    """Tests for DistributedRateLimiter — multi-instance token coordination."""
+
+    def test_distributed_limiter_register_instance(self):
+        """Register an instance and verify it returns an instance_id."""
+        limiter = DistributedRateLimiter(
+            name="test-dlr",
+            total_capacity=100.0,
+            refill_rate=10.0,
+            max_instances=5,
+        )
+        iid = limiter.register_instance()
+        assert iid.startswith("hlf-dlr-")
+        assert iid in limiter.instances
+        assert limiter.instances[iid].tokens_available > 0
+
+    def test_distributed_limiter_acquire_tokens(self):
+        """Acquire consumes tokens from the instance's allocation."""
+        limiter = DistributedRateLimiter(total_capacity=100.0, refill_rate=50.0)
+        iid = limiter.register_instance()
+        # First acquire should succeed with enough capacity
+        result = limiter.acquire(iid, tokens=1.0)
+        assert result is True
+        # Tokens should have been consumed
+        state = limiter.instances[iid]
+        assert state.tokens_available < 100.0
+
+    def test_distributed_limiter_deregister(self):
+        """Deregister removes an instance."""
+        limiter = DistributedRateLimiter(total_capacity=100.0)
+        iid = limiter.register_instance()
+        assert iid in limiter.instances
+        removed = limiter.deregister_instance(iid)
+        assert removed is True
+        assert iid not in limiter.instances
+
+    def test_distributed_limiter_fairness_score(self):
+        """Jain's fairness index computed for registered instances."""
+        limiter = DistributedRateLimiter(total_capacity=100.0)
+        limiter.register_instance()
+        limiter.register_instance()
+        score = limiter.fairness_score()
+        assert 0.0 <= score <= 1.0
+        # With equal allocation, fairness should be 1.0
+        assert score == pytest.approx(1.0, abs=0.01)
+
+    def test_distributed_limiter_rebalance(self):
+        """Rebalance distributes tokens across instances."""
+        limiter = DistributedRateLimiter(total_capacity=1000.0, refill_rate=0.001)
+        iid1 = limiter.register_instance("inst-a")
+        iid2 = limiter.register_instance("inst-b")
+        # Consume tokens from iid1 — with very low refill_rate, negligible auto-refill
+        limiter.acquire(iid1, tokens=200.0)
+        limiter.acquire(iid1, tokens=200.0)
+        diff_before = abs(
+            limiter.instances[iid1].tokens_available
+            - limiter.instances[iid2].tokens_available
+        )
+        limiter.rebalance()
+        diff_after = abs(
+            limiter.instances[iid1].tokens_available
+            - limiter.instances[iid2].tokens_available
+        )
+        assert diff_after < diff_before  # Rebalance should reduce disparity
+
+    def test_distributed_limiter_heartbeat(self):
+        """sync_heartbeat updates the reported_at timestamp."""
+        limiter = DistributedRateLimiter(total_capacity=100.0)
+        iid = limiter.register_instance()
+        original_ts = limiter.instances[iid].reported_at
+        # Small delay to ensure timestamp changes
+        time.sleep(0.01)
+        limiter.sync_heartbeat(iid)
+        assert limiter.instances[iid].reported_at != original_ts
+
+    def test_distributed_limiter_max_instances(self):
+        """max_instances limit enforced."""
+        limiter = DistributedRateLimiter(total_capacity=100.0, max_instances=2)
+        limiter.register_instance("inst-a")
+        limiter.register_instance("inst-b")
+        with pytest.raises(RuntimeError, match="max_instances"):
+            limiter.register_instance("inst-c")
+
+    def test_distributed_limiter_global_state(self):
+        """State dict returned by get_global_state has expected keys."""
+        limiter = DistributedRateLimiter(
+            name="test-global",
+            total_capacity=100.0,
+            refill_rate=10.0,
+        )
+        limiter.register_instance("instance-1")
+        state = limiter.get_global_state()
+        assert state["name"] == "test-global"
+        assert state["total_capacity"] == 100.0
+        assert state["instance_count"] == 1
+        assert "fairness_index" in state
+        assert "per_instance" in state
+        assert "instance-1" in state["per_instance"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Resilience Coordinator Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestResilienceCoordinator:
+    """Tests for ResilienceCoordinator — unified resilience cascade."""
+
+    @staticmethod
+    def _make_circuit_breaker():
+        """Create a mock circuit breaker with state tracking."""
+        class MockCB:
+            def __init__(self):
+                self.state = CircuitState.CLOSED
+                self.trip_count = 0
+                self.failure_count = 0
+                self._probe_successes = 0
+                self._probe_failures = 0
+
+            def trip(self):
+                self.state = CircuitState.OPEN
+                self.trip_count += 1
+
+            def reset(self):
+                self.state = CircuitState.CLOSED
+                self.failure_count = 0
+                self.trip_count = 0
+
+            def record_success(self):
+                if self.state == CircuitState.HALF_OPEN:
+                    self._probe_successes += 1
+                    if self._probe_successes >= 3:
+                        self.state = CircuitState.CLOSED
+                        self.failure_count = 0
+
+            def record_failure(self):
+                if self.state == CircuitState.CLOSED:
+                    self.failure_count += 1
+                    if self.failure_count >= 5:
+                        self.state = CircuitState.OPEN
+                        self.trip_count += 1
+                elif self.state == CircuitState.HALF_OPEN:
+                    self.state = CircuitState.OPEN
+                    self.trip_count += 1
+
+            def is_open(self):
+                return self.state == CircuitState.OPEN
+
+        return MockCB()
+
+    @staticmethod
+    def _make_credential_manager():
+        """Create a mock credential manager."""
+        class MockCM:
+            def __init__(self):
+                self._creds = [{"key_id": "key-1"}, {"key_id": "key-2"}]
+                self._rotation_count = 0
+
+            def list_active(self):
+                return list(self._creds)
+
+            def rotate_credential(self, key_id):
+                self._rotation_count += 1
+                return {"key_id": f"rotated-{key_id}", "value": "new-secret"}
+
+            def stats(self):
+                return {"active": len(self._creds), "rotations": self._rotation_count}
+
+            def count_active(self):
+                return len(self._creds)
+
+        return MockCM()
+
+    @staticmethod
+    def _make_retry_policy():
+        """Create a mock retry policy."""
+        class MockRP:
+            def __init__(self):
+                self.base_delay = 1.0
+                self.max_delay = 30.0
+                self.max_retries = 3
+
+            def stats(self):
+                return {
+                    "max_retries": self.max_retries,
+                    "base_delay": self.base_delay,
+                }
+
+        return MockRP()
+
+    def test_resilience_register_service(self):
+        """Service registered successfully with all components."""
+        coordinator = ResilienceCoordinator(name="test-coordinator")
+        cb = self._make_circuit_breaker()
+        cm = self._make_credential_manager()
+        rp = self._make_retry_policy()
+        coordinator.register_service("test-svc", cb, cm, rp)
+        assert "test-svc" in coordinator.circuit_breakers
+        assert "test-svc" in coordinator.credential_managers
+        assert "test-svc" in coordinator.retry_policies
+        assert "test-svc" in coordinator.failure_counters
+
+    def test_resilience_handle_auth_failure(self):
+        """Auth failure opens circuit + rotates credentials after threshold."""
+        coordinator = ResilienceCoordinator(
+            name="test-coordinator",
+            policy=ResiliencePolicy(
+                auth_failure_threshold=2,
+                credential_rotation_on_open=True,
+            ),
+        )
+        cb = self._make_circuit_breaker()
+        cm = self._make_credential_manager()
+        rp = self._make_retry_policy()
+        coordinator.register_service("test-svc", cb, cm, rp)
+
+        # First auth failure — should not trip yet
+        events1 = coordinator.handle_failure("test-svc", PermissionError("unauthorized"))
+        assert cb.state == CircuitState.CLOSED
+
+        # Second auth failure — should trip circuit + rotate credentials
+        events2 = coordinator.handle_failure("test-svc", PermissionError("forbidden"))
+        assert cb.state == CircuitState.OPEN
+        assert cb.trip_count == 1
+        actions = [e.action for e in events2]
+        assert ResilienceAction.OPEN_CIRCUIT in actions
+        assert ResilienceAction.ROTATE_CREDENTIALS in actions
+
+    def test_resilience_handle_timeout(self):
+        """Timeout opens circuit immediately."""
+        coordinator = ResilienceCoordinator(name="test-coordinator")
+        cb = self._make_circuit_breaker()
+        cm = self._make_credential_manager()
+        rp = self._make_retry_policy()
+        coordinator.register_service("test-svc", cb, cm, rp)
+
+        events = coordinator.handle_failure("test-svc", TimeoutError("timed out"))
+        assert cb.state == CircuitState.OPEN
+        assert any(e.action == ResilienceAction.OPEN_CIRCUIT for e in events)
+
+    def test_resilience_handle_success_closes_circuit(self):
+        """Success after HALF_OPEN closes circuit."""
+        coordinator = ResilienceCoordinator(name="test-coordinator")
+        cb = self._make_circuit_breaker()
+        cm = self._make_credential_manager()
+        rp = self._make_retry_policy()
+        coordinator.register_service("test-svc", cb, cm, rp)
+
+        # First open the circuit
+        coordinator.handle_failure("test-svc", TimeoutError("timeout"))
+        assert cb.state == CircuitState.OPEN
+
+        # Transition to HALF_OPEN and record success probes
+        cb.state = CircuitState.HALF_OPEN
+        cb._probe_successes = 2
+        events = coordinator.handle_success("test-svc")
+        assert cb.state == CircuitState.CLOSED
+        assert any(e.action == ResilienceAction.CLOSE_CIRCUIT for e in events)
+        assert any(e.action == ResilienceAction.RESET_FAILURE_COUNT for e in events)
+
+    def test_resilience_get_service_status(self):
+        """Status returns circuit state, failure count."""
+        coordinator = ResilienceCoordinator(name="test-coordinator")
+        cb = self._make_circuit_breaker()
+        cm = self._make_credential_manager()
+        rp = self._make_retry_policy()
+        coordinator.register_service("test-svc", cb, cm, rp)
+
+        coordinator.handle_failure("test-svc", TimeoutError("timeout"))
+        status = coordinator.get_service_status("test-svc")
+        assert status["service_name"] == "test-svc"
+        assert status["registered"] is True
+        assert status["failure_counters"]["timeout"] >= 1
+        assert status["circuit"] is not None
+        assert status["circuit"]["state"] == "OPEN"
+
+    def test_resilience_global_status(self):
+        """Aggregated status across all registered services."""
+        coordinator = ResilienceCoordinator(name="test-coordinator")
+        cb1 = self._make_circuit_breaker()
+        cm1 = self._make_credential_manager()
+        rp1 = self._make_retry_policy()
+        coordinator.register_service("svc-a", cb1, cm1, rp1)
+
+        cb2 = self._make_circuit_breaker()
+        cm2 = self._make_credential_manager()
+        rp2 = self._make_retry_policy()
+        coordinator.register_service("svc-b", cb2, cm2, rp2)
+
+        gs = coordinator.global_status()
+        assert gs["coordinator"] == "test-coordinator"
+        assert gs["service_count"] == 2
+        assert "svc-a" in gs["services"]
+        assert "svc-b" in gs["services"]
+        assert "global_health_score" in gs
+        assert "health_interpretation" in gs
+
+    def test_resilience_simulate_cascade(self):
+        """Simulation returns events without side effects."""
+        coordinator = ResilienceCoordinator(
+            name="test-coordinator",
+            policy=ResiliencePolicy(
+                auth_failure_threshold=2,
+                credential_rotation_on_open=True,
+            ),
+        )
+        cb = self._make_circuit_breaker()
+        cm = self._make_credential_manager()
+        rp = self._make_retry_policy()
+        coordinator.register_service("test-svc", cb, cm, rp)
+
+        # Simulate a cascade of "auth", "auth", "timeout"
+        sim_results = coordinator.simulate_cascade("test-svc", ["auth", "auth", "timeout"])
+
+        assert len(sim_results) == 3
+        # Step 0: first auth — no threshold yet
+        assert len(sim_results[0]) == 0
+        # Step 1: second auth — triggers OPEN_CIRCUIT + ROTATE_CREDENTIALS
+        step1_actions = [e.action for e in sim_results[1]]
+        assert ResilienceAction.OPEN_CIRCUIT in step1_actions
+        assert ResilienceAction.ROTATE_CREDENTIALS in step1_actions
+        # Step 2: timeout — triggers OPEN_CIRCUIT
+        step2_actions = [e.action for e in sim_results[2]]
+        assert ResilienceAction.OPEN_CIRCUIT in step2_actions
+
+        # Real state should be untouched (simulation only)
+        assert cb.state == CircuitState.CLOSED
+        assert coordinator.failure_counters.get("test-svc", {}).get("total", 0) == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Bridge Health Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBridgeHealth:
+    """Tests for BridgeHealthAggregator — bridge health monitoring."""
+
+    @staticmethod
+    def _make_mock_bridge(bridge_type="mcp", **attrs):
+        """Create a mock bridge with expected attributes."""
+        defaults = {
+            "tool_registrations": {"tool_a": {}, "tool_b": {}} if bridge_type == "mcp" else None,
+            "endpoints": [{"path": "/health"}, {"path": "/api"}] if bridge_type == "rest" else None,
+            "circuit_breaker": None,
+            "rate_limiter": None,
+            "credential_manager": None,
+        }
+        defaults.update(attrs)
+
+        class MockBridge:
+            pass
+
+        bridge = MockBridge()
+        for k, v in defaults.items():
+            if v is not None or hasattr(bridge, k) is False:
+                setattr(bridge, k, v)
+
+        def stats_method():
+            return {"requests": 42, "errors": 2}
+
+        bridge.stats = stats_method
+        return bridge
+
+    def test_bridge_health_register(self):
+        """Bridge registered with type."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+        bridge = self._make_mock_bridge("mcp")
+        aggregator.register_bridge("mcp-main", "mcp", bridge)
+        assert "mcp-main" in aggregator.bridges
+        assert aggregator.bridges["mcp-main"][0] == "mcp"
+
+    def test_bridge_health_register_invalid_type(self):
+        """Invalid bridge type raises ValueError."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+        bridge = self._make_mock_bridge("mcp")
+        with pytest.raises(ValueError, match="bridge_type"):
+            aggregator.register_bridge("bad-bridge", "invalid", bridge)
+
+    def test_bridge_health_check(self):
+        """Health check returns BridgeHealth with metrics."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+        bridge = self._make_mock_bridge("mcp")
+        aggregator.register_bridge("mcp-main", "mcp", bridge)
+        health = aggregator.check_bridge("mcp-main")
+        assert isinstance(health, BridgeHealth)
+        assert health.bridge_name == "mcp-main"
+        assert health.bridge_type == "mcp"
+        assert health.latency_ms >= 0
+        assert health.error_rate == 0.0
+
+    def test_bridge_health_check_rest(self):
+        """REST bridge health check returns BridgeHealth with metrics."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+        bridge = self._make_mock_bridge("rest")
+        aggregator.register_bridge("rest-api", "rest", bridge)
+        health = aggregator.check_bridge("rest-api")
+        assert isinstance(health, BridgeHealth)
+        assert health.bridge_type == "rest"
+        assert "registered_endpoints" in health.details
+
+    def test_bridge_health_check_all(self):
+        """Aggregation has overall_score and bridge_healths."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+        bridge1 = self._make_mock_bridge("mcp")
+        bridge2 = self._make_mock_bridge("rest")
+        aggregator.register_bridge("mcp-main", "mcp", bridge1)
+        aggregator.register_bridge("rest-api", "rest", bridge2)
+        aggregation = aggregator.check_all()
+        assert isinstance(aggregation, HealthAggregation)
+        assert aggregation.overall_score >= 0.0
+        assert len(aggregation.bridge_healths) == 2
+        assert isinstance(aggregation.bridge_healths[0], BridgeHealth)
+
+    def test_bridge_health_score_computation(self):
+        """health_score computes weighted value."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+        health = BridgeHealth(
+            bridge_name="test",
+            bridge_type="mcp",
+            latency_ms=100.0,
+            error_rate=0.0,
+            uptime_pct=100.0,
+            consecutive_failures=0,
+        )
+        score = aggregator.health_score(health)
+        assert 0.9 <= score <= 1.0  # Perfect health should be near 1.0
+
+        # Degraded health
+        bad_health = BridgeHealth(
+            bridge_name="degraded",
+            bridge_type="mcp",
+            latency_ms=4000.0,
+            error_rate=0.5,
+            uptime_pct=80.0,
+            consecutive_failures=5,
+        )
+        bad_score = aggregator.health_score(bad_health)
+        assert bad_score < 0.7
+
+    def test_bridge_health_trend_analysis(self):
+        """Trend shows direction."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+        bridge = self._make_mock_bridge("mcp")
+        aggregator.register_bridge("mcp-main", "mcp", bridge)
+
+        # Run multiple health checks to build history
+        for _ in range(5):
+            aggregator.check_bridge("mcp-main")
+
+        trends = aggregator.trend_analysis(window=10)
+        assert "mcp-main" in trends
+        assert trends["mcp-main"]["direction"] in ("stable", "improving", "degrading")
+        assert "slope" in trends["mcp-main"]
+        assert "confidence" in trends["mcp-main"]
+
+    def test_bridge_health_recommendations(self):
+        """Degraded bridges generate recommendations."""
+        aggregator = BridgeHealthAggregator(
+            name="test-agg",
+            degradation_threshold=0.9,
+            unhealthy_threshold=0.5,
+        )
+
+        # Create a DEGRADED health with high latency
+        degraded = HealthAggregation(
+            overall_status=HealthStatus.DEGRADED,
+            overall_score=0.75,
+            bridge_healths=[
+                BridgeHealth(
+                    bridge_name="slow-bridge",
+                    bridge_type="mcp",
+                    status=HealthStatus.DEGRADED,
+                    latency_ms=2000.0,
+                    error_rate=0.0,
+                    uptime_pct=95.0,
+                ),
+            ],
+            degraded_bridges=["slow-bridge"],
+            unhealthy_bridges=[],
+        )
+        recs = aggregator.generate_recommendations(degraded)
+        assert len(recs) > 0
+        assert any("latency" in r.lower() for r in recs)
+
+    def test_bridge_health_alerts(self):
+        """Alerts generated for unhealthy bridges."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+
+        aggregation = HealthAggregation(
+            overall_status=HealthStatus.UNHEALTHY,
+            overall_score=0.3,
+            bridge_healths=[
+                BridgeHealth(
+                    bridge_name="down-bridge",
+                    bridge_type="mcp",
+                    status=HealthStatus.DOWN,
+                    consecutive_failures=5,
+                    error_rate=1.0,
+                ),
+                BridgeHealth(
+                    bridge_name="unhealthy-bridge",
+                    bridge_type="rest",
+                    status=HealthStatus.UNHEALTHY,
+                    error_rate=0.6,
+                ),
+            ],
+            degraded_bridges=[],
+            unhealthy_bridges=["down-bridge", "unhealthy-bridge"],
+        )
+        alerts = aggregator.alert_on_degradation(aggregation)
+        assert len(alerts) >= 2
+        severities = [a["severity"] for a in alerts]
+        assert "critical" in severities
+        assert "warning" in severities
+
+    def test_bridge_health_check_unregistered_raises(self):
+        """Checking an unregistered bridge raises KeyError."""
+        aggregator = BridgeHealthAggregator(name="test-agg")
+        with pytest.raises(KeyError):
+            aggregator.check_bridge("nonexistent")

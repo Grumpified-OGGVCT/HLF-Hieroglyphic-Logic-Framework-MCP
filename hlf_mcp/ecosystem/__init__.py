@@ -22,6 +22,12 @@ Hardening components (production):
 - circuit_breaker: CircuitBreaker with CLOSED/OPEN/HALF_OPEN states
 - retry_policy: RetryPolicy with exponential backoff + jitter
 - credential_manager: CredentialManager with scoped API keys + rotation
+
+Integration depth hardening (ecosystem):
+- schema_translator: SchemaTranslator — HLF contracts → JSON Schema / OpenAPI
+- distributed_rate_limiter: DistributedRateLimiter — multi-instance coordination
+- resilience_coordinator: ResilienceCoordinator — unified resilience cascade
+- bridge_health: BridgeHealthAggregator — aggregated health + alerts
 """
 
 # ── Bridge exports ────────────────────────────────────────────────────────────
@@ -68,6 +74,34 @@ from hlf_mcp.ecosystem.credential_manager import (
     CredentialManager,
 )
 
+# ── Integration depth hardening exports ───────────────────────────────────────
+
+from hlf_mcp.ecosystem.schema_translator import (
+    SchemaFormat,
+    SchemaTranslationResult,
+    SchemaTranslator,
+)
+
+from hlf_mcp.ecosystem.distributed_rate_limiter import (
+    CoordinationMode,
+    RateLimitState,
+    DistributedRateLimiter,
+)
+
+from hlf_mcp.ecosystem.resilience_coordinator import (
+    ResilienceAction,
+    ResilienceEvent,
+    ResiliencePolicy,
+    ResilienceCoordinator,
+)
+
+from hlf_mcp.ecosystem.bridge_health import (
+    HealthStatus,
+    BridgeHealth,
+    HealthAggregation,
+    BridgeHealthAggregator,
+)
+
 __all__ = [
     # Bridges
     "MCPBridge",
@@ -96,4 +130,22 @@ __all__ = [
     "CredentialScope",
     "Credential",
     "CredentialManager",
+    # Schema translation
+    "SchemaFormat",
+    "SchemaTranslationResult",
+    "SchemaTranslator",
+    # Distributed rate limiting
+    "CoordinationMode",
+    "RateLimitState",
+    "DistributedRateLimiter",
+    # Resilience coordination
+    "ResilienceAction",
+    "ResilienceEvent",
+    "ResiliencePolicy",
+    "ResilienceCoordinator",
+    # Bridge health aggregation
+    "HealthStatus",
+    "BridgeHealth",
+    "HealthAggregation",
+    "BridgeHealthAggregator",
 ]

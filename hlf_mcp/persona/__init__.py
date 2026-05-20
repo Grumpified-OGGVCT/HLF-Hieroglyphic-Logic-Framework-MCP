@@ -1,9 +1,13 @@
 """
-HLF Persona Package — operator doctrine contracts and constitutional gate integration.
+HLF Persona Package — operator doctrine contracts, constitutional gate integration,
+doctrine drift detection, composition proofs, and capability decay tracking.
 
 Modules:
   operator_doctrine  — per-persona DoctrineContract, compliance validation, HLF conversion
   gate_integration   — PersonaGate, constitutional check integration, transition proofs
+  doctrine_drift     — DoctrineDriftDetector, drift analysis, corrective HLF constraints
+  composition_proofs — PersonaCompositionProver, handoff composition verification
+  capability_decay   — CapabilityDecayModel, freshness tracking, re-certification triggers
 
 Primary entry points::
 
@@ -21,6 +25,17 @@ Primary entry points::
         check_persona_assignment,
         PersonaTransitionProof,
         prove_persona_transition,
+        DoctrineDriftDetector,
+        DriftReport,
+        DriftConstraint,
+        PersonaCompositionProver,
+        CompositionProof,
+        CompositionConflict,
+        CompositionConstraint,
+        CapabilityDecayModel,
+        CapabilityRecord,
+        DecayReport,
+        RecertificationTrigger,
     )
 """
 
@@ -43,6 +58,23 @@ from .gate_integration import (
     check_persona_assignment,
     prove_persona_transition,
 )
+from .doctrine_drift import (
+    DoctrineDriftDetector,
+    DriftConstraint,
+    DriftReport,
+)
+from .composition_proofs import (
+    CompositionConflict,
+    CompositionConstraint,
+    CompositionProof,
+    PersonaCompositionProver,
+)
+from .capability_decay import (
+    CapabilityDecayModel,
+    CapabilityRecord,
+    DecayReport,
+    RecertificationTrigger,
+)
 
 __all__ = [
     # operator_doctrine
@@ -62,4 +94,18 @@ __all__ = [
     "check_persona_assignment",
     "PersonaTransitionProof",
     "prove_persona_transition",
+    # doctrine_drift
+    "DoctrineDriftDetector",
+    "DriftReport",
+    "DriftConstraint",
+    # composition_proofs
+    "PersonaCompositionProver",
+    "CompositionProof",
+    "CompositionConflict",
+    "CompositionConstraint",
+    # capability_decay
+    "CapabilityDecayModel",
+    "CapabilityRecord",
+    "DecayReport",
+    "RecertificationTrigger",
 ]

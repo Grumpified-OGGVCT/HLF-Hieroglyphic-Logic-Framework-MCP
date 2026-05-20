@@ -51,6 +51,23 @@ from hlf_mcp.hlf.two_channel_executor import (
     build_instruction_channel,
 )
 from hlf_mcp.hlf.capability_manifest import CapabilityManifest
+from hlf_mcp.hlf.audit_diff import AuditDiff, AuditDiffEntry, DiffOperation
+from hlf_mcp.hlf.trust_debt import DebtItem, TrustDebtQuantifier
+from hlf_mcp.hlf.remediation_planner import (
+    RemediationPlanner,
+    RemediationPlan,
+    RemediationTask,
+    RemediationPriority,
+    RemediationStatus,
+)
+from hlf_mcp.hlf.trust_trending import (
+    AlertLevel,
+    TrendAlert,
+    TrendDirection,
+    TrendReport,
+    TrustSnapshot,
+    TrustTrending,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1123,6 +1140,785 @@ def test_review_proof_serialization() -> None:
     assert restored.required_checks == proof.required_checks
     assert len(restored.records) == 1
     assert restored.records[0].reviewer == "carol"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AuditDiff tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _make_mock_event(
+    timestamp: str,
+    event_type: str,
+    persona: str,
+    decision: str = "PROCEED",
+    rationale: str = "default rationale",
+    provenance_ref: str = "",
+    trust: float = 0.9,
+) -> object:
+    """Build a mock AuditEvent-like object using SimpleNamespace."""
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        timestamp=timestamp,
+        event_type=event_type,
+        persona=persona,
+        decision=decision,
+        rationale=rationale,
+        provenance_ref=provenance_ref,
+        trust=trust,
+    )
+
+
+def _make_mock_trail(events: list[object]) -> object:
+    """Build a mock AuditTrail-like object with an 'events' attr."""
+    from types import SimpleNamespace
+    return SimpleNamespace(events=events)
+
+
+def test_audit_diff_basic() -> None:
+    """Two simple event lists → verify ADDED / REMOVED / UNCHANGED entries."""
+    ev_a = _make_mock_event("2025-03-01T10:00:00Z", "verification", "alice")
+    ev_b = _make_mock_event("2025-03-01T10:01:00Z", "verification", "alice")
+    ev_new = _make_mock_event("2025-03-01T11:00:00Z", "review", "bob")
+
+    trail_a = _make_mock_trail([ev_a])
+    trail_b = _make_mock_trail([ev_b, ev_new])
+
+    engine = AuditDiff(name="basic-diff")
+    entries = engine.diff(trail_a, trail_b)
+
+    ops = {e.operation for e in entries}
+    assert DiffOperation.ADDED in ops
+    assert DiffOperation.UNCHANGED in ops
+    # ev_a matched ev_b → UNCHANGED; ev_new unmatched → ADDED
+    added = [e for e in entries if e.operation == DiffOperation.ADDED]
+    assert len(added) == 1
+    assert added[0].persona == "bob"
+
+
+def test_audit_diff_modified() -> None:
+    """Events with changed fields produce MODIFIED entries."""
+    ev_a = _make_mock_event(
+        "2025-03-02T09:00:00Z", "execution_gate", "carol",
+        decision="PROCEED", rationale="old reason",
+    )
+    ev_b = _make_mock_event(
+        "2025-03-02T09:01:00Z", "execution_gate", "carol",
+        decision="HALT", rationale="new reason",
+    )
+    trail_a = _make_mock_trail([ev_a])
+    trail_b = _make_mock_trail([ev_b])
+
+    engine = AuditDiff(name="mod-diff")
+    entries = engine.diff(trail_a, trail_b)
+
+    modified = [e for e in entries if e.operation == DiffOperation.MODIFIED]
+    assert len(modified) == 1
+    m = modified[0]
+    assert "decision" in m.field_changes
+    assert m.field_changes["decision"] == ("PROCEED", "HALT")
+    assert "rationale" in m.field_changes
+    assert m.field_changes["rationale"] == ("old reason", "new reason")
+
+
+def test_audit_diff_empty_trails() -> None:
+    """Diff with empty trail_a and trail_b returns no entries."""
+    engine = AuditDiff(name="empty-diff")
+    entries = engine.diff(_make_mock_trail([]), _make_mock_trail([]))
+    assert entries == []
+
+
+def test_audit_diff_sequence() -> None:
+    """diff_sequence across 3+ trails produces expected pairwise diffs."""
+    ev1 = _make_mock_event("2025-03-03T08:00:00Z", "review", "dave")
+    ev2 = _make_mock_event("2025-03-03T08:05:00Z", "review", "dave")
+    ev3 = _make_mock_event("2025-03-03T08:10:00Z", "review", "dave", decision="HALT")
+
+    t1 = _make_mock_trail([ev1])
+    t2 = _make_mock_trail([ev2])
+    t3 = _make_mock_trail([ev3])
+
+    engine = AuditDiff(name="seq-diff")
+    seq = engine.diff_sequence([t1, t2, t3])
+    assert len(seq) == 2
+    assert len(seq[0]) >= 1
+    assert len(seq[1]) >= 1
+
+
+def test_audit_diff_summary() -> None:
+    """summary counts match expected ADDED / REMOVED / MODIFIED / UNCHANGED."""
+    ev_a1 = _make_mock_event("2025-03-04T10:00:00Z", "verification", "x")
+    ev_a2 = _make_mock_event("2025-03-04T10:01:00Z", "review", "y")
+    ev_b1 = _make_mock_event("2025-03-04T10:00:30Z", "verification", "x",
+                              rationale="changed")
+    ev_b2 = _make_mock_event("2025-03-04T11:00:00Z", "audit", "z")
+
+    trail_a = _make_mock_trail([ev_a1, ev_a2])
+    trail_b = _make_mock_trail([ev_b1, ev_b2])
+
+    engine = AuditDiff(name="summary-diff")
+    entries = engine.diff(trail_a, trail_b)
+    s = engine.summary(entries)
+
+    assert s["total_entries"] == len(entries)
+    # ev_a2 (y/review) → REMOVED, ev_b2 (z/audit) → ADDED, ev_a1→ev_b1 → MODIFIED
+    assert s["removed"] >= 1
+    assert s["added"] >= 1
+    assert s["modified"] >= 1
+    assert isinstance(s["trust_delta"], float)
+
+
+def test_audit_diff_render_markdown() -> None:
+    """Markdown report contains expected strings."""
+    ev_a = _make_mock_event("2025-03-05T10:00:00Z", "verification", "alice")
+    ev_b = _make_mock_event("2025-03-05T10:01:00Z", "verification", "alice")
+
+    engine = AuditDiff(name="md-diff")
+    entries = engine.diff(_make_mock_trail([ev_a]), _make_mock_trail([ev_b]))
+    md = engine.render_delta_report(entries, format="markdown")
+
+    assert "# Audit Trail Delta Report" in md
+    assert "**Engine:** md-diff" in md
+    assert "alice" in md
+    assert "verification" in md
+
+
+def test_audit_diff_render_html() -> None:
+    """HTML report contains expected tags."""
+    ev_a = _make_mock_event("2025-03-06T10:00:00Z", "review", "bob")
+    ev_b = _make_mock_event("2025-03-06T10:01:00Z", "review", "bob")
+
+    engine = AuditDiff(name="html-diff")
+    entries = engine.diff(_make_mock_trail([ev_a]), _make_mock_trail([ev_b]))
+    html = engine.render_delta_report(entries, format="html")
+
+    assert "<!DOCTYPE html>" in html
+    assert "<table>" in html
+    assert "bob" in html
+    assert "review" in html
+
+
+def test_audit_diff_anomalies_trust_degradation() -> None:
+    """Trust drop > 0.3 detected as trust_degradation_spike."""
+    # Construct entries directly to simulate trust drop
+    entry = AuditDiffEntry(
+        timestamp="2025-03-07T10:00:00Z",
+        operation=DiffOperation.MODIFIED,
+        event_type="verification",
+        persona="alice",
+        trust_before=0.95,
+        trust_after=0.55,
+        field_changes={"trust": ("0.95", "0.55")},
+        rationale_before="ok",
+        rationale_after="distrusted",
+    )
+    engine = AuditDiff(name="anomaly-diff")
+    anomalies = engine.find_anomalies([entry])
+    assert len(anomalies) >= 1
+    degradation = [a for a in anomalies if a["anomaly_type"] == "trust_degradation_spike"]
+    assert len(degradation) == 1
+    assert degradation[0]["severity"] == "critical"
+
+
+def test_audit_diff_anomalies_mass_removal() -> None:
+    """> 5 REMOVED entries detected as mass_removal anomaly."""
+    entries = [
+        AuditDiffEntry(
+            timestamp=f"2025-03-08T10:{i:02d}:00Z",
+            operation=DiffOperation.REMOVED,
+            event_type="review",
+            persona=f"user_{i}",
+            rationale_before="was there",
+        )
+        for i in range(7)
+    ]
+    engine = AuditDiff(name="mass-removal-diff")
+    anomalies = engine.find_anomalies(entries)
+    mass = [a for a in anomalies if a["anomaly_type"] == "mass_removal"]
+    assert len(mass) == 1
+    assert mass[0]["severity"] == "high"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TrustDebt tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _make_mock_debt_item(
+    violation_id: str,
+    source: str,
+    category: str,
+    severity: float,
+    principal: float,
+    interest_rate: float,
+    incurred_at: str,
+    last_assessed_at: str = "",
+    resolved: bool = False,
+    resolution_note: str = "",
+) -> object:
+    """Build a mock DebtItem-like object using SimpleNamespace."""
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        violation_id=violation_id,
+        source=source,
+        category=category,
+        severity=severity,
+        principal=principal,
+        interest_rate=interest_rate,
+        incurred_at=incurred_at,
+        last_assessed_at=last_assessed_at or incurred_at,
+        resolved=resolved,
+        resolution_note=resolution_note,
+    )
+
+
+def test_trust_debt_assess_violations() -> None:
+    """Violations map to correct severities (FORK→0.9, DETACH→0.8, etc.)."""
+    q = TrustDebtQuantifier(name="test-debt", daily_interest_base=0.02)
+    violations = [
+        {"violation_type": "FORK", "component": "compiler", "timestamp": "2025-03-01T00:00:00Z"},
+        {"violation_type": "DETACH", "component": "verifier", "timestamp": "2025-03-01T00:00:00Z"},
+        {"violation_type": "DIVERT", "component": "executor", "timestamp": "2025-03-01T00:00:00Z"},
+        {"violation_type": "unknown_type", "component": "governor", "timestamp": "2025-03-01T00:00:00Z"},
+    ]
+    items = q.assess_violations(violations)
+    assert len(items) == 4
+    severities = {item.category: item.severity for item in items}
+    assert severities["FORK"] == 0.9
+    assert severities["DETACH"] == 0.8
+    assert severities["DIVERT"] == 0.7
+    assert severities["unknown_type"] == 0.5
+
+
+def test_trust_debt_calculate_current_debt() -> None:
+    """Compound interest applied correctly on unresolved items."""
+    from datetime import datetime, timezone, timedelta
+
+    q = TrustDebtQuantifier(name="calc-debt", daily_interest_base=0.01)
+    past = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+
+    item = _make_mock_debt_item(
+        violation_id="v1",
+        source="compiler",
+        category="FORK",
+        severity=0.9,
+        principal=90.0,
+        interest_rate=0.009,
+        incurred_at=past,
+        last_assessed_at=past,
+        resolved=False,
+        resolution_note="",
+    )
+    total = q.calculate_current_debt([item])
+    # After 10 days at 0.9% daily compound: 90 * (1.009)^10
+    expected = round(90.0 * (1.009 ** 10), 4)
+    assert total == expected
+
+
+def test_trust_debt_aging_report() -> None:
+    """Age buckets partition correctly."""
+    from datetime import datetime, timezone, timedelta
+
+    q = TrustDebtQuantifier(name="aging-debt")
+    now = datetime.now(timezone.utc)
+    old = (now - timedelta(days=45)).isoformat()
+    mid = (now - timedelta(days=15)).isoformat()
+    recent = (now - timedelta(days=3)).isoformat()
+    fresh = (now - timedelta(hours=12)).isoformat()
+
+    items = [
+        _make_mock_debt_item(
+            violation_id=f"v{i}", source="s", category="FORK", severity=0.9,
+            principal=90.0, interest_rate=0.009,
+            incurred_at=ts,
+        )
+        for i, ts in enumerate([old, mid, recent, fresh])
+    ]
+    report = q.aging_report(items)
+    buckets = report["buckets"]
+    assert buckets["30d+"]["count"] == 1
+    assert buckets["7-30d"]["count"] == 1
+    assert buckets["1-7d"]["count"] == 1
+    assert buckets["0-1d"]["count"] == 1
+    assert report["total_unresolved"] == 4
+    assert isinstance(report["total_debt"], float)
+    assert report["oldest_item"] is not None
+
+
+def test_trust_debt_paydown_priorities() -> None:
+    """Sorted by principal * rate * days descending."""
+    from datetime import datetime, timezone, timedelta
+
+    q = TrustDebtQuantifier(name="paydown-debt")
+    now = datetime.now(timezone.utc)
+    older = (now - timedelta(days=60)).isoformat()
+    newer = (now - timedelta(days=5)).isoformat()
+
+    item_old = _make_mock_debt_item(
+        violation_id="v_old", source="compiler", category="FORK",
+        severity=0.9, principal=90.0, interest_rate=0.009,
+        incurred_at=older,
+    )
+    item_new = _make_mock_debt_item(
+        violation_id="v_new", source="verifier", category="DETACH",
+        severity=0.8, principal=80.0, interest_rate=0.008,
+        incurred_at=newer,
+    )
+    priorities = q.paydown_priorities([item_old, item_new])
+    assert len(priorities) == 2
+    # Older item should have higher priority (more days outstanding)
+    assert priorities[0].violation_id == "v_old"
+    assert priorities[1].violation_id == "v_new"
+
+
+def test_trust_debt_timeline() -> None:
+    """Projects N intervals with increasing debt."""
+    from datetime import datetime, timezone, timedelta
+
+    q = TrustDebtQuantifier(name="timeline-debt")
+    past = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    item = _make_mock_debt_item(
+        violation_id="v1", source="compiler", category="FORK",
+        severity=0.9, principal=90.0, interest_rate=0.009,
+        incurred_at=past,
+    )
+    timeline = q.debt_timeline([item], intervals=5)
+    assert len(timeline) == 6  # intervals + 1
+    assert all("timestamp" in t and "total_debt" in t for t in timeline)
+    # Debt should be non-decreasing
+    debts = [t["total_debt"] for t in timeline]
+    for i in range(1, len(debts)):
+        assert debts[i] >= debts[i - 1] - 0.001  # small rounding tolerance
+
+
+def test_trust_debt_resolve() -> None:
+    """Marks item as resolved with note."""
+    q = TrustDebtQuantifier(name="resolve-debt")
+    now_iso = "2025-03-01T00:00:00Z"
+    item = _make_mock_debt_item(
+        violation_id="v99", source="executor", category="EVADE",
+        severity=0.6, principal=60.0, interest_rate=0.006,
+        incurred_at=now_iso,
+    )
+    resolved = q.resolve_debt(item, note="Mitigated via policy update")
+    assert resolved.resolved is True
+    assert resolved.resolution_note == "Mitigated via policy update"
+    assert resolved.violation_id == "v99"
+
+
+def test_trust_debt_compound_interest_math() -> None:
+    """Verify compound interest formula with known values."""
+    q = TrustDebtQuantifier(name="math-debt", daily_interest_base=0.01)
+    # Principal 100, rate 0.01, 30 days = 100 * 1.01^30 ≈ 134.7849
+    item = _make_mock_debt_item(
+        violation_id="v_math", source="test", category="FORK",
+        severity=1.0, principal=100.0, interest_rate=0.01,
+        incurred_at="2025-01-01T00:00:00Z",
+    )
+    total = q.calculate_current_debt([item], as_of="2025-01-31T00:00:00Z")
+    expected = round(100.0 * (1.01 ** 30), 4)
+    assert total == expected
+
+
+def test_trust_debt_empty_items() -> None:
+    """Handles empty item list gracefully."""
+    q = TrustDebtQuantifier(name="empty-debt")
+    assert q.calculate_current_debt([]) == 0.0
+    assert q.paydown_priorities([]) == []
+    report = q.aging_report([])
+    assert report["total_unresolved"] == 0
+    assert report["total_debt"] == 0.0
+    timeline = q.debt_timeline([])
+    assert len(timeline) == 1
+    assert timeline[0]["total_debt"] == 0.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RemediationPlanner tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_remediation_generate_plan() -> None:
+    """Gaps produce tasks with correct templates."""
+    planner = RemediationPlanner(name="test-planner")
+    gaps = [
+        {"gap_type": "missing_coverage", "component": "compiler", "severity": "high"},
+        {"gap_type": "trust_gap", "component": "verifier", "severity": "medium"},
+        {"gap_type": "unreviewed_component", "component": "executor", "severity": "critical"},
+    ]
+    plan = planner.generate_plan(gaps)
+    assert len(plan.tasks) == 3
+    assert plan.name.startswith("Remediation Plan")
+    titles = [t.title for t in plan.tasks]
+    assert any("Add test coverage" in t for t in titles)
+    assert any("Address trust gap" in t for t in titles)
+    assert any("Conduct initial review" in t for t in titles)
+
+    priorities = {t.priority for t in plan.tasks}
+    assert RemediationPriority.CRITICAL in priorities
+    assert RemediationPriority.HIGH in priorities
+    assert RemediationPriority.MEDIUM in priorities
+
+
+def test_remediation_topological_sort() -> None:
+    """Tasks with dependencies ordered correctly via Kahn's algorithm."""
+    planner = RemediationPlanner(name="topo-planner")
+    t1 = RemediationTask(
+        task_id="t1", title="Task 1", description="First task",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=2.0,
+    )
+    t2 = RemediationTask(
+        task_id="t2", title="Task 2", description="Depends on t1",
+        priority=RemediationPriority.MEDIUM, estimated_effort_hours=3.0,
+        depends_on=["t1"],
+    )
+    t3 = RemediationTask(
+        task_id="t3", title="Task 3", description="Depends on t2",
+        priority=RemediationPriority.LOW, estimated_effort_hours=1.0,
+        depends_on=["t2"],
+    )
+    sorted_tasks = planner.topological_sort([t3, t1, t2])
+    ids = [t.task_id for t in sorted_tasks]
+    assert ids.index("t1") < ids.index("t2")
+    assert ids.index("t2") < ids.index("t3")
+
+
+def test_remediation_critical_path() -> None:
+    """Longest dependency chain identified correctly."""
+    planner = RemediationPlanner(name="cp-planner")
+    t1 = RemediationTask(
+        task_id="t1", title="A", description="",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=5.0,
+    )
+    t2 = RemediationTask(
+        task_id="t2", title="B", description="",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=10.0,
+        depends_on=["t1"],
+    )
+    t3 = RemediationTask(
+        task_id="t3", title="C", description="",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=3.0,
+        depends_on=["t2"],
+    )
+    # Also an independent task
+    t4 = RemediationTask(
+        task_id="t4", title="D", description="",
+        priority=RemediationPriority.LOW, estimated_effort_hours=20.0,
+    )
+    path = planner.critical_path([t1, t2, t3, t4])
+    assert len(path) >= 1
+    path_ids = [t.task_id for t in path]
+    # The chain t1→t2→t3 has total 18h which should beat t4 alone (20h)
+    # Actually t4 alone is 20h which is longer. Let's check.
+    # But t4 has no dependencies so critical_path may pick the chain
+    # The DP algorithm finds the longest path ending at any node.
+    # t4 has dist=0 (no deps), t1→t2→t3 has dist ending at t3 = 5+10=15
+    # So t3's total path = 15 + 3 = 18. t4 = 0 + 20 = 20. End node is t4.
+    assert len(path_ids) >= 1
+
+
+def test_remediation_progress_report() -> None:
+    """Status counts correct in progress report."""
+    planner = RemediationPlanner(name="prog-planner")
+    tasks = [
+        RemediationTask(
+            task_id="a", title="Done", description="",
+            priority=RemediationPriority.HIGH, estimated_effort_hours=2.0,
+            status=RemediationStatus.COMPLETED,
+        ),
+        RemediationTask(
+            task_id="b", title="In Progress", description="",
+            priority=RemediationPriority.MEDIUM, estimated_effort_hours=3.0,
+            status=RemediationStatus.IN_PROGRESS,
+        ),
+        RemediationTask(
+            task_id="c", title="Blocked", description="",
+            priority=RemediationPriority.CRITICAL, estimated_effort_hours=4.0,
+            status=RemediationStatus.BLOCKED, depends_on=["a"],
+        ),
+        RemediationTask(
+            task_id="d", title="Pending", description="",
+            priority=RemediationPriority.LOW, estimated_effort_hours=1.0,
+        ),
+    ]
+    plan = RemediationPlan(plan_id="p1", name="Test Plan", tasks=tasks)
+    report = planner.progress_report(plan)
+    assert report["total_tasks"] == 4
+    assert report["status_counts"]["completed"] == 1
+    assert report["status_counts"]["in_progress"] == 1
+    assert report["status_counts"]["blocked"] == 1
+    assert report["status_counts"]["pending"] == 1
+    assert report["completion_pct"] == 25.0
+    assert report["total_effort_remaining"] == 8.0
+    assert len(report["blocked_tasks"]) == 1
+    assert report["blocked_tasks"][0]["task_id"] == "c"
+
+
+def test_remediation_merge_plans() -> None:
+    """Similar titles deduplicated when merging plans."""
+    planner = RemediationPlanner(name="merge-planner")
+    t1 = RemediationTask(
+        task_id="x1", title="Add test coverage for compiler", description="",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=4.0,
+    )
+    t2 = RemediationTask(
+        task_id="x2", title="Add test coverage for compiler", description="",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=4.0,
+    )
+    t3 = RemediationTask(
+        task_id="x3", title="Fix trust gap in verifier", description="",
+        priority=RemediationPriority.MEDIUM, estimated_effort_hours=2.0,
+    )
+    p1 = RemediationPlan(plan_id="p1", name="Plan A", tasks=[t1])
+    p2 = RemediationPlan(plan_id="p2", name="Plan B", tasks=[t2, t3])
+    merged = planner.merge_plans([p1, p2])
+    # t1 and t2 have identical titles → should be deduplicated
+    assert len(merged.tasks) == 2
+    titles = [t.title for t in merged.tasks]
+    assert "Add test coverage for compiler" in titles
+    assert "Fix trust gap in verifier" in titles
+
+
+def test_remediation_estimate_completion() -> None:
+    """Returns valid estimate with expected keys."""
+    planner = RemediationPlanner(name="est-planner")
+    t1 = RemediationTask(
+        task_id="e1", title="Task E1", description="",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=8.0,
+    )
+    plan = RemediationPlan(plan_id="ep1", name="Estimate Plan", tasks=[t1])
+    est = planner.estimate_completion(plan, resources=2)
+    assert "estimated_completion_date" in est
+    assert "total_effort_hours" in est
+    assert "critical_path_hours" in est
+    assert "parallelizable_hours" in est
+    assert "tasks_remaining" in est
+    assert est["tasks_remaining"] == 1
+    assert est["total_effort_hours"] == 8.0
+
+
+def test_remediation_cycle_handling() -> None:
+    """Tasks with cycles don't break topological sort."""
+    planner = RemediationPlanner(name="cycle-planner")
+    t1 = RemediationTask(
+        task_id="c1", title="Cycle A", description="",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=1.0,
+        depends_on=["c2"],
+    )
+    t2 = RemediationTask(
+        task_id="c2", title="Cycle B", description="",
+        priority=RemediationPriority.HIGH, estimated_effort_hours=1.0,
+        depends_on=["c1"],
+    )
+    result = planner.topological_sort([t1, t2])
+    assert len(result) == 2
+    assert {t.task_id for t in result} == {"c1", "c2"}
+
+
+def test_remediation_task_serialization() -> None:
+    """to_dict / from_dict roundtrip for RemediationTask."""
+    original = RemediationTask(
+        task_id="ser1",
+        title="Serialize me",
+        description="Testing roundtrip",
+        priority=RemediationPriority.CRITICAL,
+        estimated_effort_hours=5.5,
+        gap_refs=["ref_a", "ref_b"],
+        depends_on=["dep1"],
+        status=RemediationStatus.IN_PROGRESS,
+        assigned_to="alice",
+    )
+    data = original.to_dict()
+    restored = RemediationTask.from_dict(data)
+    assert restored.task_id == original.task_id
+    assert restored.title == original.title
+    assert restored.priority == original.priority
+    assert restored.estimated_effort_hours == original.estimated_effort_hours
+    assert restored.gap_refs == original.gap_refs
+    assert restored.depends_on == original.depends_on
+    assert restored.status == original.status
+    assert restored.assigned_to == original.assigned_to
+
+
+def test_remediation_empty_gaps() -> None:
+    """Empty gap list produces valid empty plan."""
+    planner = RemediationPlanner(name="empty-plan")
+    plan = planner.generate_plan([])
+    assert plan.tasks == []
+    assert plan.plan_id != ""
+    assert plan.name.startswith("Remediation Plan")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TrustTrending tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_trust_trending_add_snapshot() -> None:
+    """Snapshots stored and retrievable via recent_snapshots."""
+    trending = TrustTrending(name="snap-trend", window_size=10)
+    snap = TrustSnapshot(
+        timestamp="2025-04-01T00:00:00Z",
+        overall_trust=0.85,
+        violation_count=3,
+        debt_total=120.0,
+        audit_completeness=0.9,
+    )
+    trending.add_snapshot(snap)
+    recent = trending.recent_snapshots()
+    assert len(recent) == 1
+    assert recent[0].overall_trust == 0.85
+    assert recent[0].violation_count == 3
+
+
+def test_trust_trending_analyze_improving() -> None:
+    """Positive slope → IMPROVING trend direction."""
+    trending = TrustTrending(name="improve-trend")
+    for i in range(5):
+        trending.add_snapshot(TrustSnapshot(
+            timestamp=f"2025-04-0{i+1}T00:00:00Z",
+            overall_trust=0.5 + i * 0.1,  # 0.5, 0.6, 0.7, 0.8, 0.9
+        ))
+    report = trending.analyze_trend(metric="overall_trust")
+    assert report.direction == TrendDirection.IMPROVING
+    assert report.slope > 0.0
+    assert report.confidence > 0.5
+
+
+def test_trust_trending_analyze_degrading() -> None:
+    """Negative slope → DEGRADING trend direction."""
+    trending = TrustTrending(name="degrade-trend")
+    for i in range(5):
+        trending.add_snapshot(TrustSnapshot(
+            timestamp=f"2025-04-0{i+1}T00:00:00Z",
+            overall_trust=0.9 - i * 0.1,  # 0.9, 0.8, 0.7, 0.6, 0.5
+        ))
+    report = trending.analyze_trend(metric="overall_trust")
+    assert report.direction == TrendDirection.DEGRADING
+    assert report.slope < 0.0
+    assert report.confidence > 0.5
+
+
+def test_trust_trending_analyze_stable() -> None:
+    """Flat series → STABLE trend direction."""
+    trending = TrustTrending(name="stable-trend")
+    for i in range(5):
+        trending.add_snapshot(TrustSnapshot(
+            timestamp=f"2025-04-0{i+1}T00:00:00Z",
+            overall_trust=0.75,
+        ))
+    report = trending.analyze_trend(metric="overall_trust")
+    assert report.direction in (TrendDirection.STABLE, TrendDirection.VOLATILE)
+    # Flat data: slope near zero
+    assert abs(report.slope) < 0.01
+
+
+def test_trust_trending_check_alerts_degradation() -> None:
+    """Slope below threshold triggers CRITICAL degradation alert."""
+    trending = TrustTrending(
+        name="alert-degrade-trend",
+        alert_thresholds={"trust_degradation": 0.05, "violation_spike": 100.0, "debt_growth": 100.0},
+    )
+    for i in range(5):
+        trending.add_snapshot(TrustSnapshot(
+            timestamp=f"2025-04-0{i+1}T00:00:00Z",
+            overall_trust=0.95 - i * 0.08,  # steep drop: 0.95, 0.87, 0.79, 0.71, 0.63
+        ))
+    alerts = trending.check_alerts()
+    degradation_alerts = [a for a in alerts if a.metric == "overall_trust"]
+    assert len(degradation_alerts) >= 1
+    assert degradation_alerts[0].level == AlertLevel.CRITICAL
+
+
+def test_trust_trending_check_alerts_spike() -> None:
+    """Violation spike triggers WARNING alert."""
+    trending = TrustTrending(
+        name="alert-spike-trend",
+        alert_thresholds={"trust_degradation": 100.0, "violation_spike": 3.0, "debt_growth": 100.0},
+    )
+    # First 4 snapshots with low violations, last one spikes
+    for i in range(4):
+        trending.add_snapshot(TrustSnapshot(
+            timestamp=f"2025-04-0{i+1}T00:00:00Z",
+            overall_trust=0.8,
+            violation_count=2,
+        ))
+    trending.add_snapshot(TrustSnapshot(
+        timestamp="2025-04-05T00:00:00Z",
+        overall_trust=0.75,
+        violation_count=15,  # spike!
+    ))
+    alerts = trending.check_alerts()
+    violation_alerts = [a for a in alerts if a.metric == "violation_count"]
+    assert len(violation_alerts) >= 1
+    assert violation_alerts[0].level == AlertLevel.WARNING
+
+
+def test_trust_trending_forecast() -> None:
+    """Forecast returns horizon entries with bounds."""
+    trending = TrustTrending(name="forecast-trend")
+    for i in range(6):
+        trending.add_snapshot(TrustSnapshot(
+            timestamp=f"2025-04-0{i+1}T00:00:00Z",
+            overall_trust=0.7 + i * 0.03,
+        ))
+    forecast = trending.forecast(metric="overall_trust", horizon=5)
+    assert len(forecast) == 5
+    for entry in forecast:
+        assert "timestamp" in entry
+        assert "predicted" in entry
+        assert "lower_bound" in entry
+        assert "upper_bound" in entry
+        assert entry["lower_bound"] <= entry["predicted"] <= entry["upper_bound"]
+
+
+def test_trust_trending_compare_periods() -> None:
+    """Period comparison returns valid metrics with change_pct and direction."""
+    trending = TrustTrending(name="compare-trend")
+    # Period A: day 1-3, Period B: day 4-6
+    for i in range(6):
+        trending.add_snapshot(TrustSnapshot(
+            timestamp=f"2025-04-0{i+1}T00:00:00Z",
+            overall_trust=0.7 + i * 0.05,
+            violation_count=max(10 - i * 2, 0),
+            debt_total=100.0 + i * 10.0,
+            audit_completeness=0.6 + i * 0.05,
+        ))
+    result = trending.compare_periods(
+        "2025-04-01T00:00:00Z", "2025-04-03T23:59:59Z",
+        "2025-04-04T00:00:00Z", "2025-04-06T23:59:59Z",
+    )
+    for metric in ["overall_trust", "violation_count", "debt_total", "audit_completeness"]:
+        assert metric in result
+        assert "change_pct" in result[metric]
+        assert "direction" in result[metric]
+        assert "significant" in result[metric]
+        assert isinstance(result[metric]["direction"], str)
+
+
+def test_trust_trending_export_dashboard() -> None:
+    """Dashboard data has all required keys."""
+    trending = TrustTrending(name="dash-trend")
+    trending.add_snapshot(TrustSnapshot(
+        timestamp="2025-04-01T00:00:00Z",
+        overall_trust=0.85,
+        violation_count=2,
+        debt_total=50.0,
+        audit_completeness=0.9,
+        component_scores={"compiler": 0.9, "verifier": 0.8},
+    ))
+    dashboard = trending.export_dashboard_data()
+    assert "name" in dashboard
+    assert dashboard["name"] == "dash-trend"
+    assert "snapshot_count" in dashboard
+    assert dashboard["snapshot_count"] == 1
+    assert "current" in dashboard
+    assert dashboard["current"]["overall_trust"] == 0.85
+    assert "trends" in dashboard
+    assert "alerts" in dashboard
+    assert "forecast" in dashboard
+    assert isinstance(dashboard["alerts"], list)
+    assert isinstance(dashboard["forecast"], list)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

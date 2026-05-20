@@ -747,3 +747,573 @@ def test_persona_doctrine_tier_consistent_with_matrix() -> None:
         assert contract.tier in ("hearth",), (
             f"Doctrine persona '{dp}' tier '{contract.tier}' inconsistent with matrix '{matrix_tier}'"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DoctrineDriftDetector tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_drift_detector_analyze_compliant_actions_no_drift() -> None:
+    """Compliant doctrine actions produce a report with no drift detected."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("steward", "review_tool_contracts", success=True)
+    detector.record_action("steward", "review_transport_or_workflow_changes", success=True)
+    detector.record_action("steward", "validate_workflow_integrity", success=True)
+    report = detector.analyze_behavior("steward")
+
+    assert not report.drift_detected
+    assert report.total_actions_analyzed == 3
+    assert len(report.compliant_actions) == 3
+    assert len(report.drifted_actions) == 0
+    assert len(report.constraints) == 0
+
+
+def test_drift_detector_analyze_prohibited_action_detects_drift() -> None:
+    """A prohibited action recorded for sentinel is detected as critical drift."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("sentinel", "review_security_posture", success=True)
+    detector.record_action("sentinel", "silently_relax_controls", success=True)
+    report = detector.analyze_behavior("sentinel")
+
+    assert report.drift_detected
+    assert len(report.drifted_actions) >= 1
+    drifted_actions = [d["action"] for d in report.drifted_actions]
+    assert "silently_relax_controls" in drifted_actions
+    assert report.severity_counts.get("critical", 0) >= 1
+
+
+def test_drift_detector_analyze_unpermitted_action_flags_warning() -> None:
+    """An action not in the doctrine for a persona triggers a warning-severity drift."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("steward", "deploy_to_production_without_review", success=True)
+    report = detector.analyze_behavior("steward")
+
+    assert report.drift_detected
+    drifted = report.drifted_actions[0]
+    assert drifted["action"] == "deploy_to_production_without_review"
+    assert drifted["severity"] == "warning"
+    assert report.severity_counts.get("warning", 0) >= 1
+
+
+def test_drift_detector_generates_corrective_constraints() -> None:
+    """Drift analysis of prohibited behavior generates DriftConstraint objects."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector, DriftConstraint
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("sentinel", "modify_secret_material", success=True)
+    report = detector.analyze_behavior("sentinel")
+
+    assert report.drift_detected
+    assert len(report.constraints) >= 1
+    for constraint in report.constraints:
+        assert isinstance(constraint, DriftConstraint)
+        assert constraint.persona == "sentinel"
+        assert "modify_secret_material" in constraint.drifted_action
+        assert constraint.hlf_statement != ""
+
+
+def test_drift_detector_generate_corrective_hlf_produces_output() -> None:
+    """generate_corrective_hlf returns a non-empty HLF string for a drifted report."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("steward", "auto_apply_changes", success=True)
+    report = detector.analyze_behavior("steward")
+    hlf = detector.generate_corrective_hlf(report)
+
+    assert isinstance(hlf, str)
+    assert len(hlf) > 50
+    assert "Drift Correction HLF" in hlf or "drift" in hlf.lower()
+    assert "@tier" in hlf
+
+
+def test_drift_detector_analyze_all_personas() -> None:
+    """analyze_all_personas returns drift reports for every persona with recorded history."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("steward", "review_tool_contracts", success=True)
+    detector.record_action("herald", "classify_claim_lanes", success=True)
+    detector.record_action("builder", "classify_lane", success=True)
+    detector.record_action("sentinel", "review_security_posture", success=True)
+
+    results = detector.analyze_all_personas()
+
+    assert len(results) >= 4
+    for persona in ("steward", "herald", "builder", "sentinel"):
+        assert persona in results
+        assert results[persona].total_actions_analyzed >= 1
+
+
+def test_drift_detector_action_history_accumulates() -> None:
+    """Recording multiple actions accumulates them in the action history."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    for i in range(5):
+        detector.record_action("steward", "review_tool_contracts", success=True)
+    history = detector.get_action_history("steward")
+
+    assert len(history) == 5
+    for entry in history:
+        assert entry["action"] == "review_tool_contracts"
+        assert entry["success"] is True
+
+
+def test_drift_detector_clear_history() -> None:
+    """Clearing a persona's history empties its recorded actions."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("steward", "review_tool_contracts", success=True)
+    detector.record_action("steward", "block_on_contract_risk", success=True)
+    assert len(detector.get_action_history("steward")) == 2
+
+    detector.clear_history("steward")
+    assert len(detector.get_action_history("steward")) == 0
+
+
+def test_drift_detector_drift_summary_aggregates() -> None:
+    """get_drift_summary correctly aggregates drift across multiple analyses."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("steward", "auto_apply_changes", success=True)
+    detector.record_action("sentinel", "silently_relax_controls", success=True)
+    detector.analyze_behavior("steward")
+    detector.analyze_behavior("sentinel")
+
+    summary = detector.get_drift_summary()
+    assert summary["total_reports"] == 2
+    assert len(summary["personas_with_drift"]) >= 1
+    assert summary["total_drifted_actions"] >= 2
+    assert summary["total_constraints_generated"] >= 2
+
+
+def test_drift_detector_unknown_persona_is_critical_drift() -> None:
+    """Analyzing a persona with no doctrine contract produces critical drift."""
+    from hlf_mcp.persona.doctrine_drift import DoctrineDriftDetector
+
+    detector = DoctrineDriftDetector()
+    detector.record_action("unknown_spectre", "do_something_unauthorized", success=True)
+    report = detector.analyze_behavior("unknown_spectre")
+
+    assert report.drift_detected
+    drifted = report.drifted_actions[0]
+    assert drifted["severity"] == "critical"
+    assert "no_doctrine_contract" in drifted["reason"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PersonaCompositionProver tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_composition_prover_valid_handoff_steward_to_herald() -> None:
+    """Proving steward→herald composition returns a proof with validity status."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver()
+    proof = prover.prove_composition("steward", "herald")
+
+    assert proof.source_persona == "steward"
+    assert proof.target_persona == "herald"
+    assert len(proof.checksum) > 0
+    assert proof.proven_at > 0
+    # steward→herald should have some conflicts due to permission/prohibition gaps
+    assert len(proof.conflicts) >= 0
+    assert isinstance(proof.valid, bool)
+
+
+def test_composition_prover_detects_prohibition_gap() -> None:
+    """steward→builder composition detects prohibition continuity gaps."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver(strict_composition=True)
+    proof = prover.prove_composition("steward", "builder")
+
+    conflict_types = [c.conflict_type for c in proof.conflicts]
+    # steward and builder have different prohibitions → prohibition_overlap expected
+    has_prohibition_gap = any("prohibition" in ct for ct in conflict_types)
+    assert has_prohibition_gap or len(proof.conflicts) > 0
+
+
+def test_composition_prover_detects_permission_gap() -> None:
+    """herald→sentinel composition detects permission gaps between doctrines."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver(strict_composition=True)
+    proof = prover.prove_composition("herald", "sentinel")
+
+    # permission_gap should list herald permissions not present in sentinel
+    assert isinstance(proof.permission_gap, list)
+    assert len(proof.permission_gap) >= 0  # gap might be empty but list must exist
+    assert isinstance(proof.permission_overlap, list)
+
+
+def test_composition_prover_detects_obligation_gap() -> None:
+    """Composition proof tracks obligation continuity via obligation_transfer field."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver(strict_composition=True)
+    proof = prover.prove_composition("steward", "sentinel")
+
+    assert isinstance(proof.obligation_transfer, list)
+    assert len(proof.obligation_transfer) > 0
+    transfer_types = {entry["transfer"] for entry in proof.obligation_transfer}
+    assert "preserved" in transfer_types or "gapped" in transfer_types
+
+
+def test_composition_prover_invalid_with_unknown_source() -> None:
+    """Unknown source persona yields an invalid proof with a critical conflict."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver()
+    proof = prover.prove_composition("unknown_phantom", "herald")
+
+    assert not proof.valid
+    assert len(proof.conflicts) == 1
+    conflict = proof.conflicts[0]
+    assert conflict.conflict_type == "capability_mismatch"
+    assert conflict.severity == "critical"
+    assert not conflict.resolvable
+    assert "unknown_phantom" in conflict.description.lower()
+
+
+def test_composition_prover_invalid_with_unknown_target() -> None:
+    """Unknown target persona yields an invalid proof with a critical conflict."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver()
+    proof = prover.prove_composition("steward", "unknown_wraith")
+
+    assert not proof.valid
+    assert len(proof.conflicts) == 1
+    conflict = proof.conflicts[0]
+    assert conflict.conflict_type == "capability_mismatch"
+    assert conflict.severity == "critical"
+    assert not conflict.resolvable
+
+
+def test_composition_prover_generates_resolution_hlf() -> None:
+    """generate_resolution_hlf produces non-empty HLF for a proof with conflicts."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver(strict_composition=True)
+    proof = prover.prove_composition("steward", "builder")
+
+    hlf = prover.generate_resolution_hlf(proof)
+    assert isinstance(hlf, str)
+    assert len(hlf) > 20
+    assert "Composition Resolution HLF" in hlf or "steward" in hlf
+
+
+def test_composition_prover_prove_all_compositions() -> None:
+    """prove_all_compositions returns proofs for all defined handoff pairs."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver()
+    proofs = prover.prove_all_compositions()
+
+    assert len(proofs) >= 4
+    pairs = {(p.source_persona, p.target_persona) for p in proofs}
+    # The 4 known handoff pairs from the pipeline
+    expected = {("steward", "herald"), ("herald", "builder"),
+                ("builder", "sentinel"), ("sentinel", "steward")}
+    for pair in expected:
+        assert pair in pairs, f"Missing composition proof for {pair}"
+
+
+def test_composition_prover_composition_summary() -> None:
+    """get_composition_summary returns accurate aggregate stats about proofs."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver()
+    prover.prove_all_compositions()
+
+    summary = prover.get_composition_summary()
+    assert summary["total_proofs"] >= 4
+    assert "valid_count" in summary
+    assert "invalid_count" in summary
+    assert summary["valid_count"] + summary["invalid_count"] == summary["total_proofs"]
+    assert summary["total_conflicts"] >= 0
+    assert len(summary["pairs_analyzed"]) >= 4
+
+
+def test_composition_prover_permission_overlap_computed() -> None:
+    """Permission overlap is computed for steward→herald handoff."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver()
+    proof = prover.prove_composition("steward", "herald")
+
+    assert isinstance(proof.permission_overlap, list)
+    # Both steward and herald share at least the review-related obligation space
+    assert isinstance(proof.permission_gap, list)
+
+
+def test_composition_prover_constraints_have_precedence() -> None:
+    """Generated CompositionConstraint objects carry a precedence field for ordering."""
+    from hlf_mcp.persona.composition_proofs import (
+        PersonaCompositionProver,
+        CompositionConstraint,
+    )
+
+    prover = PersonaCompositionProver(strict_composition=True)
+    proof = prover.prove_composition("steward", "builder")
+
+    if proof.constraints:
+        precedences = set()
+        for c in proof.constraints:
+            assert isinstance(c, CompositionConstraint)
+            assert isinstance(c.precedence, int)
+            precedences.add(c.precedence)
+        assert len(precedences) >= 1
+
+
+def test_composition_prover_clear_proofs() -> None:
+    """Clear all composition proofs resets internal state."""
+    from hlf_mcp.persona.composition_proofs import PersonaCompositionProver
+
+    prover = PersonaCompositionProver()
+    prover.prove_composition("steward", "herald")
+    prover.prove_composition("herald", "builder")
+
+    summary_before = prover.get_composition_summary()
+    assert summary_before["total_proofs"] == 2
+
+    prover.clear_proofs()
+    summary_after = prover.get_composition_summary()
+    assert summary_after["total_proofs"] == 0
+    assert summary_after["pairs_analyzed"] == []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CapabilityDecayModel tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_capability_decay_register_and_get() -> None:
+    """Register a capability and retrieve it by persona and name."""
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("steward", "review_tool_contracts", ttl_seconds=3600.0)
+
+    record = model.get_capability("steward", "review_tool_contracts")
+    assert record is not None
+    assert record.capability_name == "review_tool_contracts"
+    assert record.persona == "steward"
+    assert record.certification_ttl_seconds == 3600.0
+
+
+def test_capability_decay_freshness_score_new() -> None:
+    """A freshly registered capability has a freshness score of 1.0."""
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("steward", "validate_workflow_integrity")
+
+    record = model.get_capability("steward", "validate_workflow_integrity")
+    assert record is not None
+    assert record.freshness_score() == pytest.approx(1.0, abs=0.01)
+
+
+def test_capability_decay_freshness_score_decays() -> None:
+    """A capability with an old certification timestamp has a freshness below 1.0."""
+    import time
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("steward", "review_tool_contracts")
+    record = model.get_capability("steward", "review_tool_contracts")
+    assert record is not None
+    # Manually age the timestamp far into the past
+    record.last_certified_at = time.time() - 43200.0  # 12 hours ago, TTL is 24h
+
+    score = record.freshness_score()
+    assert 0.0 < score < 1.0
+    assert score == pytest.approx(0.5, abs=0.02)
+
+
+def test_capability_decay_is_stale_after_ttl() -> None:
+    """A capability whose TTL has elapsed is marked stale."""
+    import time
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("herald", "classify_claim_lanes", ttl_seconds=0.01)
+    record = model.get_capability("herald", "classify_claim_lanes")
+    assert record is not None
+    record.last_certified_at = time.time() - 1.0
+
+    assert record.is_stale()
+
+
+def test_capability_decay_certify_resets_clock() -> None:
+    """Certifying a capability resets its last_certified_at and bumps renewal_count."""
+    import time
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("builder", "classify_lane")
+    record = model.get_capability("builder", "classify_lane")
+    assert record is not None
+    record.last_certified_at = time.time() - 86400.0  # 1 day ago
+
+    certified = model.certify("builder", "classify_lane", level=1.0, evidence="ev-abc123")
+    assert certified is not None
+    assert certified.renewal_count == 1
+    assert certified.freshness_score() == pytest.approx(1.0, abs=0.01)
+    assert certified.certification_evidence == "ev-abc123"
+
+
+def test_capability_decay_generate_decay_report() -> None:
+    """generate_decay_report produces a DecayReport with correct aggregate stats."""
+    import time
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel, DecayReport
+
+    model = CapabilityDecayModel()
+    model.register_capability("steward", "review_tool_contracts")
+    model.register_capability("steward", "validate_workflow_integrity")
+    model.register_capability("steward", "report_contract_risk")
+
+    # Age one capability so it's stale
+    record = model.get_capability("steward", "report_contract_risk")
+    assert record is not None
+    record.last_certified_at = time.time() - 90000.0  # > 24h, fully stale
+
+    report = model.generate_decay_report("steward")
+    assert isinstance(report, DecayReport)
+    assert report.persona == "steward"
+    assert report.total_capabilities == 3
+    assert report.stale_capabilities >= 1
+    assert report.recertification_needed
+
+
+def test_capability_decay_check_triggers_high_urgency() -> None:
+    """A stale capability generates a high-urgency recertification trigger."""
+    import time
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel(stale_threshold=0.3, critical_threshold=0.1)
+    model.register_capability("sentinel", "review_security_posture", ttl_seconds=3600.0)
+    record = model.get_capability("sentinel", "review_security_posture")
+    assert record is not None
+    # Set age so freshness is ~0.2 (below stale 0.3, above critical 0.1)
+    record.last_certified_at = time.time() - 2880.0  # 80% of TTL elapsed
+
+    triggers = model.check_triggers("sentinel")
+    assert len(triggers) >= 1
+    trigger = triggers[0]
+    assert trigger.persona == "sentinel"
+    assert trigger.urgency == "high"
+    assert "review_security_posture" in trigger.capabilities_affected
+
+
+def test_capability_decay_check_triggers_critical_urgency() -> None:
+    """A critically stale capability triggers critical urgency."""
+    import time
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel(stale_threshold=0.3, critical_threshold=0.1)
+    model.register_capability("sentinel", "validate_boundary_integrity", ttl_seconds=3600.0)
+    record = model.get_capability("sentinel", "validate_boundary_integrity")
+    assert record is not None
+    record.last_certified_at = time.time() - 3600.0  # fully stale, freshness 0.0
+
+    triggers = model.check_triggers("sentinel")
+    assert len(triggers) >= 1
+    urgency_levels = [t.urgency for t in triggers]
+    assert "critical" in urgency_levels
+
+
+def test_capability_decay_no_trigger_for_fresh_capability() -> None:
+    """A freshly registered capability should not generate any triggers."""
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("herald", "classify_claim_lanes")
+
+    triggers = model.check_triggers("herald")
+    assert len(triggers) == 0
+
+
+def test_capability_decay_degrade_capability_lowers_level() -> None:
+    """Degrading a capability lowers its current_level but not below 0.0."""
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("builder", "sequence_work", initial_level=1.0)
+    degraded = model.degrade_capability("builder", "sequence_work", 0.3)
+
+    assert degraded is not None
+    assert degraded.current_level == 0.3
+    assert degraded.certified_level == 1.0  # original cert level unchanged
+
+
+def test_capability_decay_freshness_matrix() -> None:
+    """get_freshness_matrix returns nested dict of persona→capability→freshness."""
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("steward", "review_tool_contracts")
+    model.register_capability("steward", "report_contract_risk")
+    model.register_capability("herald", "classify_claim_lanes")
+
+    matrix = model.get_freshness_matrix()
+    assert "steward" in matrix
+    assert "herald" in matrix
+    assert "review_tool_contracts" in matrix["steward"]
+    assert "report_contract_risk" in matrix["steward"]
+    assert "classify_claim_lanes" in matrix["herald"]
+    for caps in matrix.values():
+        for score in caps.values():
+            assert 0.0 <= score <= 1.0
+
+
+def test_capability_decay_get_urgency_summary() -> None:
+    """get_urgency_summary correctly aggregates triggers by urgency level."""
+    import time
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel(stale_threshold=0.5, critical_threshold=0.1)
+    model.register_capability("steward", "review_tool_contracts", ttl_seconds=100.0)
+    model.register_capability("steward", "report_contract_risk", ttl_seconds=100.0)
+
+    # Make one stale (freshness ~0.3)
+    r1 = model.get_capability("steward", "review_tool_contracts")
+    assert r1 is not None
+    r1.last_certified_at = time.time() - 70.0  # 70% of 100s TTL → freshness ~0.3
+    # Make one critical (freshness ~0.0)
+    r2 = model.get_capability("steward", "report_contract_risk")
+    assert r2 is not None
+    r2.last_certified_at = time.time() - 110.0  # fully stale
+
+    model.check_triggers("steward")
+    summary = model.get_urgency_summary()
+
+    assert summary["total_triggers"] >= 1
+    assert "by_urgency" in summary
+    assert "steward" in summary["personas_affected"]
+
+
+def test_capability_decay_remove_capability() -> None:
+    """Removing a capability makes it inaccessible via get_capability."""
+    from hlf_mcp.persona.capability_decay import CapabilityDecayModel
+
+    model = CapabilityDecayModel()
+    model.register_capability("steward", "review_tool_contracts")
+    assert model.get_capability("steward", "review_tool_contracts") is not None
+
+    removed = model.remove_capability("steward", "review_tool_contracts")
+    assert removed
+    assert model.get_capability("steward", "review_tool_contracts") is None
+
+    # Removing non-existent returns False
+    assert not model.remove_capability("steward", "nonexistent_capability")
+

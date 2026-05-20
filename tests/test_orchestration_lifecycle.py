@@ -14,6 +14,8 @@ Covers:
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from hlf_mcp.instinct.classification import (
@@ -41,6 +43,29 @@ from hlf_mcp.instinct.execution import (
 from hlf_mcp.instinct.lifecycle import (
     InstinctLifecycle,
     SDDRealignmentEvent,
+)
+
+from hlf_mcp.hlf.orchestration_failure_recovery import (
+    CacheEntry,
+    CrashRecovery,
+    RecoveryResult,
+    SplitBrainDetector,
+    SplitBrainReport,
+    StalePlanCache,
+    SwarmLeaderElection,
+    VectorClock,
+)
+from hlf_mcp.hlf.plan_rebalancing import (
+    PlanRebalancer,
+    RebalanceResult,
+    TaskAffinityMap,
+)
+from hlf_mcp.hlf.swarm_handoff import (
+    CapabilityAttestation,
+    HandoffReceipt,
+    HandoffStatus,
+    SwarmHandoffContract,
+    SwarmHandoffManager,
 )
 
 
@@ -1526,3 +1551,663 @@ class TestOrchestrationLifecycleIntegration:
         assert chain_integrity["all_valid"] is True
         ck_integrity = ck_mgr.verify_all()
         assert ck_integrity["all_valid"] is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VectorClock tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestVectorClock:
+    """Validates VectorClock causal ordering primitives."""
+
+    def test_vector_clock_tick_increments_own_counter(self) -> None:
+        """Tick should increment the owning node's counter and update timestamp."""
+        vc = VectorClock(node_id="node-a")
+        old_ts = vc.timestamp
+        vc.tick()
+        assert vc.counters["node-a"] == 1
+        assert vc.timestamp >= old_ts
+
+    def test_vector_clock_merge_takes_elementwise_max(self) -> None:
+        """Merge should take the element-wise maximum of all counters."""
+        vc1 = VectorClock(node_id="node-a")
+        vc1.counters = {"node-a": 3, "node-b": 1, "node-c": 0}
+        vc2 = VectorClock(node_id="node-b")
+        vc2.counters = {"node-a": 2, "node-b": 5, "node-d": 7}
+        vc1.merge(vc2)
+        assert vc1.counters["node-a"] == 3
+        assert vc1.counters["node-b"] == 5
+        assert vc1.counters["node-c"] == 0
+        assert vc1.counters["node-d"] == 7
+
+    def test_vector_clock_happened_before_true(self) -> None:
+        """A clock with all counters <= and at least one < should be happened-before."""
+        vc1 = VectorClock(node_id="node-a")
+        vc1.counters = {"node-a": 1, "node-b": 2}
+        vc2 = VectorClock(node_id="node-b")
+        vc2.counters = {"node-a": 2, "node-b": 3}
+        assert vc1.happened_before(vc2) is True
+        assert vc2.happened_before(vc1) is False
+
+    def test_vector_clock_happened_before_false_when_concurrent(self) -> None:
+        """Neither clock should be happened-before when updates are interleaved."""
+        vc1 = VectorClock(node_id="node-a")
+        vc1.counters = {"node-a": 3, "node-b": 1}
+        vc2 = VectorClock(node_id="node-b")
+        vc2.counters = {"node-a": 1, "node-b": 4}
+        assert vc1.happened_before(vc2) is False
+        assert vc2.happened_before(vc1) is False
+
+    def test_vector_clock_is_concurrent(self) -> None:
+        """is_concurrent should return True when neither clock happened-before the other."""
+        vc1 = VectorClock(node_id="node-a")
+        vc1.counters = {"node-a": 5, "node-b": 0}
+        vc2 = VectorClock(node_id="node-b")
+        vc2.counters = {"node-a": 0, "node-b": 5}
+        assert vc1.is_concurrent(vc2) is True
+
+    def test_vector_clock_roundtrip_to_dict_and_back(self) -> None:
+        """VectorClock should survive a to_dict → from_dict round-trip."""
+        vc = VectorClock(node_id="node-x")
+        vc.counters = {"node-x": 42, "node-y": 7}
+        vc.timestamp = 1700000000.0
+        d = vc.to_dict()
+        restored = VectorClock.from_dict(d)
+        assert restored.node_id == "node-x"
+        assert restored.counters == {"node-x": 42, "node-y": 7}
+        assert restored.timestamp == 1700000000.0
+        assert restored.equals(vc)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SwarmLeaderElection tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSwarmLeaderElection:
+    """Validates bully-algorithm leader election with vector clocks."""
+
+    def test_leader_election_elects_highest_priority_node(self) -> None:
+        """The highest-priority active node should be elected leader."""
+        election = SwarmLeaderElection(swarm_id="swarm-1", quorum_size=2)
+        election.register_node("node-a", priority=1)
+        election.register_node("node-b", priority=10)
+        election.register_node("node-c", priority=5)
+        result = election.elect()
+        assert result.leader_id == "node-b"
+        assert result.quorum_reached is True
+        assert election.get_current_leader() == "node-b"
+
+    def test_leader_election_quorum_not_reached_with_few_nodes(self) -> None:
+        """Quorum should not be reached when fewer active nodes than quorum_size."""
+        election = SwarmLeaderElection(swarm_id="swarm-2", quorum_size=5)
+        election.register_node("node-a", priority=3)
+        election.register_node("node-b", priority=7)
+        result = election.elect()
+        assert result.quorum_reached is False
+        assert result.leader_id == "node-b"  # still elected, but no quorum
+        assert election.get_current_leader() is None  # leader not set without quorum
+
+    def test_leader_election_respects_inactive_nodes(self) -> None:
+        """Inactive nodes should be excluded from election."""
+        election = SwarmLeaderElection(swarm_id="swarm-3", quorum_size=1)
+        election.register_node("node-a", priority=100)
+        election.register_node("node-b", priority=50)
+        election.mark_node_unreachable("node-a")
+        result = election.elect()
+        assert result.leader_id == "node-b"
+        assert "node-a" not in result.participants
+
+    def test_leader_election_deregister_removes_node(self) -> None:
+        """Deregistering a node should remove it from the pool and clear leader if it was leader."""
+        election = SwarmLeaderElection(swarm_id="swarm-4", quorum_size=1)
+        election.register_node("node-a", priority=10)
+        election.register_node("node-b", priority=5)
+        election.elect()
+        assert election.get_current_leader() == "node-a"
+        election.deregister_node("node-a")
+        assert election.get_current_leader() is None
+        assert election.get_node_count() == 1
+
+    def test_leader_election_force_leader_overrides_election(self) -> None:
+        """force_leader should override the elected leader and increment the term."""
+        election = SwarmLeaderElection(swarm_id="swarm-5", quorum_size=1)
+        election.register_node("node-a", priority=10)
+        election.register_node("node-b", priority=1)
+        election.elect()
+        assert election.get_current_leader() == "node-a"
+        old_term = election.get_term()
+        election.force_leader("node-b")
+        assert election.get_current_leader() == "node-b"
+        assert election.get_term() == old_term + 1
+
+    def test_leader_election_term_increments(self) -> None:
+        """Each election should increment the term number."""
+        election = SwarmLeaderElection(swarm_id="swarm-6", quorum_size=1)
+        election.register_node("node-a", priority=5)
+        r1 = election.elect()
+        r2 = election.elect()
+        assert r2.term == r1.term + 1
+
+    def test_leader_election_tick_clock_advances_vector(self) -> None:
+        """tick_clock should advance the vector clock for a node."""
+        election = SwarmLeaderElection(swarm_id="swarm-7", quorum_size=1)
+        election.register_node("node-a", priority=5)
+        clock = election.tick_clock("node-a")
+        assert clock.counters["node-a"] == 1
+        clock = election.tick_clock("node-a")
+        assert clock.counters["node-a"] == 2
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SplitBrainDetector tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSplitBrainDetector:
+    """Validates split-brain detection using vector clock divergence."""
+
+    def test_split_brain_no_partition_with_single_node(self) -> None:
+        """A single active node should never trigger split-brain detection."""
+        election = SwarmLeaderElection(swarm_id="swarm-sb-1", quorum_size=1)
+        election.register_node("node-a", priority=5)
+        detector = SplitBrainDetector(election)
+        report = detector.detect()
+        assert report.detected is False
+        assert report.recommended_action == "insufficient_nodes_for_partition"
+
+    def test_split_brain_detects_divergent_clocks(self) -> None:
+        """Nodes with divergent vector clock hashes should be detected as partitions."""
+        election = SwarmLeaderElection(swarm_id="swarm-sb-2", quorum_size=1)
+        election.register_node("node-a", priority=5)
+        election.register_node("node-b", priority=3)
+        # Advance node-a's clock to create divergence
+        election.tick_clock("node-a")
+        election.tick_clock("node-a")
+        election.tick_clock("node-a")
+        detector = SplitBrainDetector(election, clock_divergence_threshold=1)
+        report = detector.detect()
+        assert report.detected is True
+        assert len(report.partitions) > 1
+
+    def test_split_brain_stale_leader_in_minority_partition(self) -> None:
+        """Leader in a minority partition should be flagged as stale."""
+        election = SwarmLeaderElection(swarm_id="swarm-sb-3", quorum_size=1)
+        election.register_node("node-a", priority=5)
+        election.register_node("node-b", priority=3)
+        election.register_node("node-c", priority=2)
+        election.elect()  # node-a becomes leader
+        # Simulate a partition: node-b and node-c share identical clock state
+        # (same causal history = same partition), while node-a is isolated
+        shared_counters = {"node-b": 5, "node-c": 5}
+        clock_b = VectorClock(node_id="node-b", counters=dict(shared_counters))
+        clock_c = VectorClock(node_id="node-c", counters=dict(shared_counters))
+        election._vector_clocks["node-b"] = clock_b
+        election._vector_clocks["node-c"] = clock_c
+        detector = SplitBrainDetector(election, clock_divergence_threshold=1)
+        report = detector.detect()
+        assert report.stale_leader is True
+        assert "re_elect" in report.recommended_action
+
+    def test_split_brain_heal_partition_merges_clocks(self) -> None:
+        """Healing a partition should merge all clocks and return True."""
+        election = SwarmLeaderElection(swarm_id="swarm-sb-4", quorum_size=1)
+        election.register_node("node-a", priority=5)
+        election.register_node("node-b", priority=3)
+        election.tick_clock("node-a")
+        election.tick_clock("node-a")
+        election.tick_clock("node-a")
+        detector = SplitBrainDetector(election, clock_divergence_threshold=1)
+        report = detector.detect()
+        assert report.detected is True
+        healed = detector.heal_partition(report)
+        assert healed is True
+        # After healing, both clocks should be merged (node-a's counters propagated)
+        clock_b = election.get_clock("node-b")
+        assert clock_b is not None
+        assert clock_b.counters.get("node-a", 0) >= 3
+
+    def test_split_brain_heartbeat_timeout_triggers_detection(self) -> None:
+        """A node with an expired heartbeat should trigger split-brain detection."""
+        election = SwarmLeaderElection(swarm_id="swarm-sb-5", quorum_size=1)
+        election.register_node("node-a", priority=5)
+        election.register_node("node-b", priority=3)
+        detector = SplitBrainDetector(election, heartbeat_timeout_seconds=0.0)
+        detector.record_heartbeat("node-a")
+        # node-b has no heartbeat → timed out immediately with timeout=0
+        report = detector.detect()
+        assert report.detected is True
+
+    def test_split_brain_record_heartbeat_updates_status(self) -> None:
+        """Recording a heartbeat should update the heartbeat status map."""
+        election = SwarmLeaderElection(swarm_id="swarm-sb-6", quorum_size=1)
+        election.register_node("node-a", priority=5)
+        detector = SplitBrainDetector(election)
+        detector.record_heartbeat("node-a")
+        status = detector.get_heartbeat_status()
+        assert "node-a" in status
+        assert status["node-a"]["timed_out"] is False
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# StalePlanCache tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestStalePlanCache:
+    """Validates version-stamped plan cache with TTL invalidation."""
+
+    def test_stale_plan_cache_put_and_get(self) -> None:
+        """Putting an entry and getting it back should return the same data."""
+        cache = StalePlanCache(default_ttl=9999.0)
+        cache.put("plan-1", {"tasks": ["a", "b"]}, version_stamp=5, node_id="node-a")
+        entry = cache.get("plan-1")
+        assert entry is not None
+        assert entry.plan_data == {"tasks": ["a", "b"]}
+        assert entry.version_stamp == 5
+        assert entry.node_id == "node-a"
+
+    def test_stale_plan_cache_get_returns_none_for_expired(self) -> None:
+        """A TTL-expired entry should return None on get()."""
+        cache = StalePlanCache(default_ttl=0.0)
+        entry = cache.put("plan-ep", {"x": 1}, version_stamp=1, node_id="node-x")
+        # Force the entry to appear expired by back-dating cached_at
+        entry.cached_at = 0.0
+        result = cache.get("plan-ep")
+        assert result is None
+
+    def test_stale_plan_cache_invalidate_stale_removes_old_versions(self) -> None:
+        """invalidate_stale should remove entries below the master version."""
+        cache = StalePlanCache()
+        cache.put("plan-a", {"v": 1}, version_stamp=1, node_id="n1")
+        cache.put("plan-b", {"v": 2}, version_stamp=3, node_id="n2")
+        cache.put("plan-c", {"v": 3}, version_stamp=5, node_id="n3")
+        removed = cache.invalidate_stale(4)
+        assert removed == 2  # plan-a (stamp 1) and plan-b (stamp 3) removed
+        assert cache.get("plan-a") is None
+        assert cache.get("plan-b") is None
+        assert cache.get("plan-c") is not None
+
+    def test_stale_plan_cache_invalidate_node_removes_node_entries(self) -> None:
+        """invalidate_node should remove all entries from a specific node."""
+        cache = StalePlanCache()
+        cache.put("plan-1", {"a": 1}, version_stamp=10, node_id="node-x")
+        cache.put("plan-2", {"b": 2}, version_stamp=10, node_id="node-y")
+        cache.put("plan-3", {"c": 3}, version_stamp=10, node_id="node-x")
+        removed = cache.invalidate_node("node-x")
+        assert removed == 2
+        assert cache.get("plan-1") is None
+        assert cache.get("plan-3") is None
+        assert cache.get("plan-2") is not None
+
+    def test_stale_plan_cache_expire_ttl_removes_expired(self) -> None:
+        """expire_ttl_entries should remove all TTL-expired entries."""
+        cache = StalePlanCache(default_ttl=0.0)
+        e1 = cache.put("plan-e1", {"d": 1}, version_stamp=10, node_id="n1")
+        e2 = cache.put("plan-e2", {"d": 2}, version_stamp=10, node_id="n2")
+        e3 = cache.put("plan-e3", {"d": 3}, version_stamp=10, node_id="n3",
+                       ttl_seconds=99999.0)
+        # Force e1 and e2 to appear expired by back-dating
+        e1.cached_at = 0.0
+        e2.cached_at = 0.0
+        removed = cache.expire_ttl_entries()
+        assert removed == 2
+        assert cache.get("plan-e3") is not None
+
+    def test_stale_plan_cache_stats_reflect_state(self) -> None:
+        """get_stats should accurately reflect cache state."""
+        cache = StalePlanCache()
+        cache.put("plan-s1", {"x": 1}, version_stamp=1, node_id="n1")
+        cache.put("plan-s2", {"x": 2}, version_stamp=3, node_id="n2")
+        cache.invalidate_stale(2)
+        stats = cache.get_stats()
+        assert stats["total_entries"] == 1
+        assert stats["total_invalidations"] == 1
+        assert stats["master_version"] == 3
+
+    def test_stale_plan_cache_master_version_tracks_highest_stamp(self) -> None:
+        """The cache should track the highest version_stamp seen as master version."""
+        cache = StalePlanCache()
+        cache.put("plan-m1", {"a": 1}, version_stamp=7, node_id="n1")
+        assert cache.get_master_version() == 7
+        cache.put("plan-m2", {"b": 2}, version_stamp=15, node_id="n2")
+        assert cache.get_master_version() == 15
+        cache.put("plan-m3", {"c": 3}, version_stamp=3, node_id="n3")
+        assert cache.get_master_version() == 15  # should not decrease
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CrashRecovery tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCrashRecovery:
+    """Validates crash recovery with plan replay from checkpoint."""
+
+    def test_crash_recovery_no_checkpoint_manager_returns_failure(self) -> None:
+        """Recovery without a checkpoint manager should return a failure result."""
+        recovery = CrashRecovery(checkpoint_manager=None)
+        result = recovery.recover_node("node-crash", swarm_id="swarm-1")
+        assert result.success is False
+        assert "No checkpoint manager" in result.errors[0]
+        assert result.node_id == "node-crash"
+
+    def test_crash_recovery_no_checkpoint_returns_failure(self) -> None:
+        """Recovery with a manager that has no checkpoint should fail."""
+        from unittest.mock import MagicMock
+        mock_mgr = MagicMock()
+        mock_mgr.get_last_checkpoint.return_value = None
+        recovery = CrashRecovery(checkpoint_manager=mock_mgr)
+        result = recovery.recover_node("node-crash", swarm_id="swarm-empty")
+        assert result.success is False
+        assert "No checkpoint found" in result.errors[0]
+
+    def test_crash_recovery_replays_from_checkpoint(self) -> None:
+        """A valid checkpoint should allow recovery to replay remaining steps."""
+        from unittest.mock import MagicMock
+        from hlf_mcp.hlf.checkpoint_executor import Checkpoint
+        ck = Checkpoint(
+            swarm_id="swarm-rp",
+            phase="execute",
+            plan_data=[
+                {"node_id": "step-1", "task_type": "create_file"},
+                {"node_id": "step-2", "task_type": "modify_file"},
+                {"node_id": "step-3", "task_type": "run_tests"},
+            ],
+            agent_states={
+                "agent-1": {"completed_steps": ["step-1"]},
+            },
+        )
+        mock_mgr = MagicMock()
+        mock_mgr.get_last_checkpoint.return_value = ck
+        recovery = CrashRecovery(checkpoint_manager=mock_mgr)
+        result = recovery.recover_node("node-a", swarm_id="swarm-rp")
+        assert result.success is True
+        assert result.checkpoint_id == ck.checkpoint_id
+        assert result.replayed_steps == 2  # step-2, step-3 still uncompleted
+
+    def test_crash_recovery_recover_swarm_handles_multiple_nodes(self) -> None:
+        """recover_swarm should attempt recovery for each crashed node."""
+        from unittest.mock import MagicMock
+        from hlf_mcp.hlf.checkpoint_executor import Checkpoint
+        ck = Checkpoint(
+            swarm_id="swarm-multi",
+            plan_data=[{"node_id": "step-1"}],
+            agent_states={},
+        )
+        mock_mgr = MagicMock()
+        mock_mgr.get_last_checkpoint.return_value = ck
+        recovery = CrashRecovery(checkpoint_manager=mock_mgr)
+        results = recovery.recover_swarm(
+            "swarm-multi", ["node-a", "node-b", "node-c"]
+        )
+        assert len(results) == 3
+        assert all(r.success for r in results.values())
+        assert results["node-a"].node_id == "node-a"
+
+    def test_crash_recovery_replay_plan_empty_returns_failure(self) -> None:
+        """Replaying an empty plan should return success=False."""
+        recovery = CrashRecovery()
+        result = recovery.replay_plan([])
+        assert result["success"] is False
+        assert result["replayed"] == 0
+        assert "Empty plan data" in result["error"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PlanRebalancer tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestPlanRebalancer:
+    """Validates plan rebalancing after node failure."""
+
+    def test_plan_rebalancer_reassigns_orphaned_tasks(self) -> None:
+        """Tasks assigned to a failed node should be reassigned to survivors."""
+        rebalancer = PlanRebalancer()
+        plan = [
+            {"node_id": "task-1", "assigned_node": "node-fail"},
+            {"node_id": "task-2", "assigned_node": "node-ok"},
+            {"node_id": "task-3", "assigned_node": "node-fail"},
+        ]
+        result = rebalancer.rebalance(
+            swarm_id="swarm-rb-1",
+            failed_node="node-fail",
+            plan_data=plan,
+            completed_tasks=set(),
+            surviving_nodes=["node-ok", "node-extra"],
+        )
+        assert len(result.tasks_reassigned) == 2
+        assert "task-1" in result.tasks_reassigned
+        assert "task-3" in result.tasks_reassigned
+        assert len(result.tasks_lost) == 0
+
+    def test_plan_rebalancer_preserves_completed_tasks(self) -> None:
+        """Already-completed tasks should not be reassigned."""
+        rebalancer = PlanRebalancer()
+        plan = [
+            {"node_id": "task-1", "assigned_node": "node-fail"},
+            {"node_id": "task-2", "assigned_node": "node-fail"},
+            {"node_id": "task-3", "assigned_node": "node-fail"},
+        ]
+        result = rebalancer.rebalance(
+            swarm_id="swarm-rb-2",
+            failed_node="node-fail",
+            plan_data=plan,
+            completed_tasks={"task-1", "task-3"},
+            surviving_nodes=["node-survivor"],
+        )
+        assert "task-2" in result.tasks_reassigned
+        # Completed tasks appear in preserved (both from initial list and from
+        # the orphan loop, which can double-count if the task was on failed node)
+        assert "task-1" in result.tasks_preserved
+        assert "task-3" in result.tasks_preserved
+        assert len(result.tasks_lost) == 0
+
+    def test_plan_rebalancer_tasks_lost_when_no_survivors(self) -> None:
+        """Tasks should be lost when there are no surviving nodes available."""
+        rebalancer = PlanRebalancer()
+        plan = [
+            {"node_id": "task-1", "assigned_node": "node-fail"},
+            {"node_id": "task-2", "assigned_node": "node-fail"},
+        ]
+        result = rebalancer.rebalance(
+            swarm_id="swarm-rb-3",
+            failed_node="node-fail",
+            plan_data=plan,
+            completed_tasks=set(),
+            surviving_nodes=[],
+        )
+        assert len(result.tasks_lost) == 2
+        assert len(result.tasks_reassigned) == 0
+
+    def test_plan_rebalancer_affinity_map_prefers_best_node(self) -> None:
+        """When an affinity map exists, the best node should be chosen."""
+        affinity = TaskAffinityMap(
+            task_id="task-1",
+            preferred_nodes=["node-specialized", "node-general"],
+            capability_match_scores={"node-specialized": 0.95, "node-general": 0.4},
+        )
+        rebalancer = PlanRebalancer()
+        rebalancer.register_affinity(affinity)
+        plan = [{"node_id": "task-1", "assigned_node": "node-fail"}]
+        result = rebalancer.rebalance(
+            swarm_id="swarm-rb-4",
+            failed_node="node-fail",
+            plan_data=plan,
+            completed_tasks=set(),
+            surviving_nodes=["node-general", "node-specialized"],
+        )
+        assert result.new_node_assignments.get("task-1") == "node-specialized"
+
+    def test_plan_rebalancer_build_rebalanced_plan_updates_assignments(self) -> None:
+        """build_rebalanced_plan should update node assignments in plan data."""
+        rebalancer = PlanRebalancer()
+        plan = [
+            {"node_id": "task-a", "assigned_node": "node-old"},
+            {"node_id": "task-b", "assigned_node": "node-ok"},
+        ]
+        rebalanced = rebalancer.build_rebalanced_plan(
+            plan, {"task-a": "node-new"}
+        )
+        assert rebalanced[0]["assigned_node"] == "node-new"
+        assert rebalanced[0]["rebalanced"] is True
+        assert rebalanced[1]["assigned_node"] == "node-ok"
+        assert "rebalanced" not in rebalanced[1]
+
+    def test_plan_rebalancer_validate_integrity_checksum_matches(self) -> None:
+        """A freshly created RebalanceResult should validate with matching checksum."""
+        rebalancer = PlanRebalancer()
+        plan = [{"node_id": "task-1", "assigned_node": "node-fail"}]
+        result = rebalancer.rebalance(
+            swarm_id="swarm-rb-6",
+            failed_node="node-fail",
+            plan_data=plan,
+            completed_tasks=set(),
+            surviving_nodes=["node-survivor"],
+        )
+        assert rebalancer.validate_rebalance_integrity(result) is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SwarmHandoff tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSwarmHandoff:
+    """Validates swarm-to-swarm handoff lifecycle."""
+
+    def test_swarm_handoff_negotiate_creates_contract(self) -> None:
+        """Negotiating a handoff should create a valid contract in NEGOTIATING state."""
+        manager = SwarmHandoffManager()
+        contract = manager.negotiate(
+            source_swarm="swarm-alpha",
+            target_swarm="swarm-beta",
+            required_capabilities=["code_generation", "test_execution"],
+        )
+        assert contract.source_swarm == "swarm-alpha"
+        assert contract.target_swarm == "swarm-beta"
+        assert contract.required_gates == ["cove_review"]
+        status = manager.get_status(contract.contract_id)
+        assert status["status"] == HandoffStatus.NEGOTIATING.value
+
+    def test_swarm_handoff_provide_attestation_satisfies_requirements(self) -> None:
+        """A valid attestation that meets requirements should be accepted."""
+        manager = SwarmHandoffManager()
+        contract = manager.negotiate(
+            source_swarm="swarm-a",
+            target_swarm="swarm-b",
+            required_capabilities=["code_gen", "testing"],
+        )
+        attestation = CapabilityAttestation(
+            swarm_id="swarm-b",
+            capabilities={"code_gen": 0.9, "testing": 0.8, "deploy": 0.3},
+            attested_by="cove-gate",
+        )
+        result = manager.provide_attestation(contract.contract_id, attestation)
+        assert result is True
+        status = manager.get_status(contract.contract_id)
+        assert status["attestation_provided"] is True
+
+    def test_swarm_handoff_complete_handoff_issues_receipt(self) -> None:
+        """Completing an accepted handoff should issue a HandoffReceipt."""
+        manager = SwarmHandoffManager()
+        contract = manager.negotiate(
+            source_swarm="swarm-src",
+            target_swarm="swarm-tgt",
+            required_capabilities=["build"],
+        )
+        attestation = CapabilityAttestation(
+            swarm_id="swarm-tgt",
+            capabilities={"build": 0.7},
+            attested_by="gateway",
+        )
+        manager.provide_attestation(contract.contract_id, attestation)
+        manager.validate_gate(contract.contract_id, "cove_review", True)
+        receipt = manager.complete_handoff(
+            contract.contract_id,
+            payload={"tasks": ["migrate_db", "update_config"]},
+            issuer="operator",
+        )
+        assert receipt is not None
+        assert receipt.status == HandoffStatus.COMPLETED.value
+        assert receipt.source_swarm == "swarm-src"
+        assert receipt.target_swarm == "swarm-tgt"
+        assert receipt.issuer == "operator"
+        assert receipt.payload_hash != ""
+
+    def test_swarm_handoff_abort_handoff_issues_abort_receipt(self) -> None:
+        """Aborting a handoff should issue a receipt with ABORTED status."""
+        manager = SwarmHandoffManager()
+        contract = manager.negotiate(
+            source_swarm="swarm-x",
+            target_swarm="swarm-y",
+            required_capabilities=["analyze"],
+        )
+        receipt = manager.abort_handoff(
+            contract.contract_id,
+            reason="target_swarm_unreachable",
+            issuer="scheduler",
+        )
+        assert receipt is not None
+        assert receipt.status == HandoffStatus.ABORTED.value
+        assert receipt.issuer == "scheduler"
+        assert len(receipt.gate_results) == 1
+        assert receipt.gate_results[0]["gate"] == "abort"
+
+    def test_swarm_handoff_receipt_verify_signature(self) -> None:
+        """A HandoffReceipt should self-verify its signature."""
+        receipt = HandoffReceipt(
+            contract_id="contract-verify",
+            source_swarm="swarm-1",
+            target_swarm="swarm-2",
+            status=HandoffStatus.COMPLETED.value,
+            payload_hash="abc123",
+            attestation_hash="def456",
+            gate_results=[{"gate": "cove_review", "passed": True, "detail": "ok"}],
+            issuer="gateway",
+        )
+        assert receipt.verify() is True
+
+    def test_swarm_handoff_check_timeouts_expires_overdue(self) -> None:
+        """Overdue handoffs should be detected and timed out."""
+        manager = SwarmHandoffManager(default_timeout=0.0)
+        contract = manager.negotiate(
+            source_swarm="swarm-p",
+            target_swarm="swarm-q",
+            required_capabilities=["scan"],
+            timeout_seconds=0.0,
+        )
+        # Force the contract to appear expired by back-dating created_at
+        contract.created_at = 0.0
+        timed_out = manager.check_timeouts()
+        assert contract.contract_id in timed_out
+        status = manager.get_status(contract.contract_id)
+        assert status["status"] == HandoffStatus.TIMED_OUT.value
+
+    def test_swarm_handoff_capability_attestation_is_valid(self) -> None:
+        """A CapabilityAttestation within its validity window should be valid."""
+        now = time.time()
+        attestation = CapabilityAttestation(
+            swarm_id="swarm-v",
+            capabilities={"code_gen": 0.95, "review": 0.88},
+            attested_by="cove",
+            valid_from=now - 100,
+            valid_until=now + 86400,
+        )
+        assert attestation.is_valid(now) is True
+        assert attestation.is_valid(now - 200) is False  # before valid_from
+        assert attestation.verify_integrity() is True
+
+    def test_swarm_handoff_status_enum_values(self) -> None:
+        """HandoffStatus enum should contain all expected lifecycle values."""
+        assert HandoffStatus.PENDING.value == "pending"
+        assert HandoffStatus.NEGOTIATING.value == "negotiating"
+        assert HandoffStatus.ATTESTING.value == "attesting"
+        assert HandoffStatus.ACCEPTED.value == "accepted"
+        assert HandoffStatus.REJECTED.value == "rejected"
+        assert HandoffStatus.TIMED_OUT.value == "timed_out"
+        assert HandoffStatus.ABORTED.value == "aborted"
+        assert HandoffStatus.COMPLETED.value == "completed"
+

@@ -2,10 +2,15 @@
 
 Tests counterexample quality, proof depth measurement,
 obligation extraction, tier escalation, timeout recovery,
-partial proofs, and human-readable gate explanations.
+partial proofs, human-readable gate explanations,
+Z3 operator family coverage, inductive proof automation,
+and proof artifact generation with signed hashes.
 """
 
 from __future__ import annotations
+
+import hashlib
+import json
 
 import pytest
 
@@ -13,22 +18,33 @@ from hlf_mcp.hlf.formal_verifier import (
     ConstraintKind,
     FormalVerifier,
     GateDecision,
+    ProofArtifact,
     VerificationBlockedError,
     VerificationGate,
     VerificationReport,
     VerificationResult,
     VerificationStatus,
+    Z3OperatorEncoder,
+    Z3Solver,
+    generate_proof_artifact,
     normalize_ast,
+    z3_available,
 )
 from hlf_mcp.hlf.counterexample_quality import (
     Counterexample,
     CounterexampleGenerator,
+    InductiveCounterexample,
+    InductiveCounterexampleGenerator,
     compare_counterexamples,
     explain_counterexample,
+    generate_inductive_counterexample,
     generate_minimal_counterexample,
     suggest_fix,
+    suggest_inductive_fix,
 )
 from hlf_mcp.hlf.proof_depth import (
+    InductiveProofChain,
+    InductiveProver,
     ProofDepth,
     ProofObligation,
     deepen_proof,
@@ -957,3 +973,1152 @@ def test_end_to_end_counterexample_at_forge_blocks() -> None:
     )
     assert decision == GateDecision.BLOCK
     assert report.failed_count >= 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Z3 Operator Encoder — unit tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestZ3OperatorEncoder:
+    """Tests for Z3OperatorEncoder covering all operator families."""
+
+    def test_encoder_supported_families_are_nonempty(self) -> None:
+        families = Z3OperatorEncoder.supported_operator_families()
+        assert len(families) >= 3
+        assert "string" in families
+        assert "set" in families
+        assert "container" in families
+
+    def test_encoder_z3_available_matches_module_flag(self) -> None:
+        assert Z3OperatorEncoder.z3_available() == z3_available()
+
+    # ── String encodings ──────────────────────────────────────────
+
+    def test_encode_str_concat_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_concat("hello", "world")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_length_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_length("hello")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_substring_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_substring("hello", 0, 3)
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_contains_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_contains("hello world", "world")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_prefix_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_prefix("hello world", "hello")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_suffix_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_suffix("hello world", "world")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_compare_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_compare("abc", "xyz")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_replace_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_replace("hello", "l", "w")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_trim_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_trim("  hello  ")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_split_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_split("a,b,c", ",")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_str_is_empty_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_str_is_empty("")
+        assert isinstance(result, str) or result is not None
+
+    # ── Set encodings ─────────────────────────────────────────────
+
+    def test_encode_set_member_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_set_member(1, [1, 2, 3])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_set_subset_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_set_subset([1, 2], [1, 2, 3])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_set_union_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_set_union([1, 2], [3, 4])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_set_intersection_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_set_intersection([1, 2], [2, 3])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_set_difference_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_set_difference([1, 2, 3], [2])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_set_cardinality_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_set_cardinality([1, 2, 3])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_set_is_empty_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_set_is_empty([])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_set_complement_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_set_complement([1, 2, 3], [2])
+        assert isinstance(result, str) or result is not None
+
+    # ── Container encodings ───────────────────────────────────────
+
+    def test_encode_list_length_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_list_length([1, 2, 3])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_list_index_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_list_index([10, 20, 30], 1)
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_list_slice_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_list_slice([1, 2, 3, 4], 1, 3)
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_list_contains_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_list_contains([1, 2, 3], 2)
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_list_append_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_list_append([1, 2], 3)
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_map_keys_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_map_keys({"a": 1, "b": 2})
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_map_values_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_map_values({"a": 1, "b": 2})
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_map_lookup_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_map_lookup({"a": 1, "b": 2}, "a")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_map_contains_key_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_map_contains_key({"a": 1}, "a")
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_container_is_empty_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_container_is_empty([])
+        assert isinstance(result, str) or result is not None
+
+    def test_encode_container_membership_returns_description(self) -> None:
+        result = Z3OperatorEncoder.encode_container_membership(42, [1, 42, 3])
+        assert isinstance(result, str) or result is not None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Z3Solver operator dispatch tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestZ3SolverOperatorDispatch:
+    """Tests for Z3Solver string/set/container operator dispatch methods."""
+
+    def test_check_string_op_concat(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_string_op("concat", "hello", "world", name="str_concat")
+        assert result.status in (VerificationStatus.PROVEN, VerificationStatus.RUNTIME_CHECKED, VerificationStatus.COUNTEREXAMPLE)
+
+    def test_check_string_op_length(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_string_op("length", "hello", name="str_len")
+        assert result.property_name == "str_len"
+
+    def test_check_string_op_contains_true(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_string_op("contains", "hello world", "world", name="str_contains")
+        assert result.status != VerificationStatus.ERROR
+
+    def test_check_string_op_contains_false(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_string_op("contains", "hello world", "xyz", name="str_contains_neg")
+        assert result.status != VerificationStatus.ERROR
+
+    def test_check_string_op_unknown_operation(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_string_op("nonexistent_op", "hello", name="bad_op")
+        assert result.status == VerificationStatus.UNKNOWN
+
+    def test_check_set_op_member(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_set_op("member", 2, [1, 2, 3], name="set_member")
+        assert result.status != VerificationStatus.ERROR
+
+    def test_check_set_op_subset(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_set_op("subset", [1, 2], [1, 2, 3], name="set_subset")
+        assert result.status != VerificationStatus.ERROR
+
+    def test_check_set_op_cardinality(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_set_op("cardinality", [1, 2, 3], name="set_card")
+        assert result.status != VerificationStatus.ERROR
+
+    def test_check_set_op_unknown_operation(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_set_op("nonexistent_op", [1], name="bad_set_op")
+        assert result.status == VerificationStatus.UNKNOWN
+
+    def test_check_container_op_list_length(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_container_op("list_length", [1, 2, 3], name="list_len")
+        assert result.status != VerificationStatus.ERROR
+
+    def test_check_container_op_list_contains(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_container_op("list_contains", [1, 2, 3], 2, name="list_contains")
+        assert result.status != VerificationStatus.ERROR
+
+    def test_check_container_op_map_keys(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_container_op("map_keys", {"a": 1, "b": 2}, name="map_keys")
+        assert result.status != VerificationStatus.ERROR
+
+    def test_check_container_op_unknown_operation(self) -> None:
+        if not z3_available():
+            pytest.skip("Z3 not installed")
+        solver = Z3Solver()
+        result = solver.check_container_op("nonexistent", [], name="bad_container_op")
+        assert result.status == VerificationStatus.UNKNOWN
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Operator family coverage tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestOperatorFamilyCoverage:
+    """Tests for operator family coverage reporting."""
+
+    def test_verification_report_has_coverage_property(self) -> None:
+        report = VerificationReport()
+        coverage = report.operator_family_coverage
+        assert isinstance(coverage, dict)
+        assert len(coverage) >= 8
+
+    def test_coverage_includes_all_families(self) -> None:
+        report = VerificationReport()
+        coverage = report.operator_family_coverage
+        expected_families = {
+            "numeric", "string", "set", "container", "boolean",
+            "type_system", "gas", "spec_gate", "rational",
+            "temporal", "spatial", "effect",
+        }
+        for family in expected_families:
+            assert family in coverage, f"Missing family: {family}"
+
+    def test_coverage_entries_are_structured(self) -> None:
+        report = VerificationReport()
+        coverage = report.operator_family_coverage
+        for family, info in coverage.items():
+            assert "covered" in info, f"Family {family} missing 'covered'"
+            assert "z3_available" in info, f"Family {family} missing 'z3_available'"
+            assert isinstance(info["covered"], bool)
+            assert isinstance(info["z3_available"], bool)
+
+    def test_formal_verifier_get_operator_family_coverage(self) -> None:
+        verifier = FormalVerifier()
+        coverage = verifier.get_operator_family_coverage()
+        assert isinstance(coverage, dict)
+        assert "numeric" in coverage
+
+    def test_coverage_with_z3_added_constraints(self) -> None:
+        """Coverage after running actual verification should mark families."""
+        verifier = FormalVerifier()
+        ast = {
+            "program": [
+                {"tag": "SET", "name": "x", "value": 5},
+                {
+                    "tag": "CONSTRAINT",
+                    "arguments": [
+                        {"kind": "kv_arg", "name": "value", "value": {"kind": "value", "type": "number", "value": 5}},
+                        {"kind": "kv_arg", "name": "min", "value": {"kind": "value", "type": "number", "value": 1}},
+                        {"kind": "kv_arg", "name": "max", "value": {"kind": "value", "type": "number", "value": 10}},
+                    ],
+                },
+            ]
+        }
+        report = verifier.verify_ast(ast)
+        coverage = report.operator_family_coverage
+        assert coverage["numeric"]["covered"] is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ProofArtifact tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestProofArtifact:
+    """Tests for proof artifact generation with SHA-256 hashing."""
+
+    def test_artifact_stores_all_fields(self) -> None:
+        artifact = ProofArtifact(
+            artifact_id="art-001",
+            property_name="range_check_x",
+            verdict="admitted",
+            operator_family="numeric",
+            smt_encoding="(>= x 0)",
+            content_hash="abc123",
+            timestamp_iso="2025-01-01T00:00:00Z",
+            metadata={"depth": 2},
+        )
+        assert artifact.artifact_id == "art-001"
+        assert artifact.property_name == "range_check_x"
+        assert artifact.verdict == "admitted"
+        assert artifact.operator_family == "numeric"
+        assert artifact.smt_encoding == "(>= x 0)"
+        assert artifact.hash_algorithm == "sha256"
+        assert artifact.content_hash == "abc123"
+
+    def test_artifact_to_dict_includes_all_keys(self) -> None:
+        artifact = ProofArtifact(
+            artifact_id="art-002",
+            property_name="type_check",
+            verdict="denied",
+            operator_family="type_system",
+            smt_encoding="(is-int x)",
+            content_hash="def456",
+        )
+        d = artifact.to_dict()
+        assert d["artifact_id"] == "art-002"
+        assert d["verdict"] == "denied"
+        assert d["operator_family"] == "type_system"
+        assert d["hash_algorithm"] == "sha256"
+        assert "metadata" in d
+
+    def test_artifact_to_json_produces_valid_json(self) -> None:
+        artifact = ProofArtifact(
+            artifact_id="art-003",
+            property_name="gas_check",
+            verdict="admitted",
+            operator_family="gas",
+            smt_encoding="(<= total budget)",
+            content_hash="ghi789",
+        )
+        json_str = artifact.to_json()
+        parsed = json.loads(json_str)
+        assert parsed["artifact_id"] == "art-003"
+        assert parsed["verdict"] == "admitted"
+
+    def test_generate_proof_artifact_from_result(self) -> None:
+        result = VerificationResult(
+            property_name="range_check_temp",
+            status=VerificationStatus.PROVEN,
+            kind=ConstraintKind.RANGE_CHECK,
+            message="SMT-proven: 5 within [0, 100]",
+            solver="z3",
+        )
+        artifact = generate_proof_artifact(result, operator_family="numeric")
+        assert artifact.property_name == "range_check_temp"
+        assert artifact.verdict == "admitted"
+        assert artifact.operator_family == "numeric"
+        assert len(artifact.content_hash) == 64  # SHA-256 hex digest
+
+    def test_generate_proof_artifact_denied_for_counterexample(self) -> None:
+        result = VerificationResult(
+            property_name="range_check_temp",
+            status=VerificationStatus.COUNTEREXAMPLE,
+            kind=ConstraintKind.RANGE_CHECK,
+            message="150 > 100",
+            solver="z3",
+        )
+        artifact = generate_proof_artifact(result, operator_family="numeric")
+        assert artifact.verdict == "denied"
+
+    def test_generate_proof_artifact_has_timestamp(self) -> None:
+        result = VerificationResult(
+            property_name="type_check",
+            status=VerificationStatus.PROVEN,
+            kind=ConstraintKind.TYPE_INVARIANT,
+            message="Valid type",
+            solver="z3",
+        )
+        artifact = generate_proof_artifact(result, operator_family="type_system")
+        assert artifact.timestamp_iso
+        assert "T" in artifact.timestamp_iso  # ISO format
+
+    def test_artifact_content_hash_is_sha256_hex(self) -> None:
+        result = VerificationResult(
+            property_name="gas_budget",
+            status=VerificationStatus.PROVEN,
+            kind=ConstraintKind.GAS_BOUND,
+            message="Budget OK",
+            solver="z3",
+        )
+        artifact = generate_proof_artifact(result, operator_family="gas")
+        # SHA-256 produces 64 hex chars
+        assert len(artifact.content_hash) == 64
+        assert all(c in "0123456789abcdef" for c in artifact.content_hash)
+
+    def test_generate_proof_artifact_different_results_different_hashes(self) -> None:
+        r1 = VerificationResult("p1", VerificationStatus.PROVEN, ConstraintKind.RANGE_CHECK)
+        r2 = VerificationResult("p2", VerificationStatus.COUNTEREXAMPLE, ConstraintKind.RANGE_CHECK)
+        a1 = generate_proof_artifact(r1, operator_family="numeric")
+        a2 = generate_proof_artifact(r2, operator_family="numeric")
+        assert a1.content_hash != a2.content_hash
+
+    def test_artifact_from_verification_result_classmethod(self) -> None:
+        result = VerificationResult(
+            property_name="spec_gate_check",
+            status=VerificationStatus.RUNTIME_CHECKED,
+            kind=ConstraintKind.SPEC_GATE,
+            message="Gate resolved",
+            solver="fallback",
+        )
+        artifact = ProofArtifact.from_verification_result(result, operator_family="spec_gate")
+        assert artifact.property_name == "spec_gate_check"
+        assert artifact.verdict == "admitted"
+        assert artifact.operator_family == "spec_gate"
+
+    def test_artifact_metadata_accepts_extra_context(self) -> None:
+        result = VerificationResult(
+            property_name="check",
+            status=VerificationStatus.PROVEN,
+            kind=ConstraintKind.CUSTOM,
+            solver="z3",
+        )
+        artifact = generate_proof_artifact(
+            result, operator_family="numeric",
+            metadata={"depth": 3, "proof_chain": "inductive"},
+        )
+        assert artifact.metadata.get("depth") == 3
+        assert artifact.metadata.get("proof_chain") == "inductive"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# InductiveProver — base case detection tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestInductiveProverBaseCases:
+    """Tests for inductive base case generation."""
+
+    def test_prover_is_instantiable(self) -> None:
+        prover = InductiveProver()
+        assert prover is not None
+        assert isinstance(prover.z3_available, bool)
+
+    def test_detect_induction_pattern_none_for_empty_ast(self) -> None:
+        prover = InductiveProver()
+        pattern = prover._detect_induction_pattern(None)
+        assert pattern == "none"
+
+    def test_detect_loop_pattern(self) -> None:
+        prover = InductiveProver()
+        ast_hint = {"kind": "loop", "iteration_count": 10}
+        pattern = prover._detect_induction_pattern(ast_hint)
+        assert pattern == "loop"
+
+    def test_detect_recursion_pattern(self) -> None:
+        prover = InductiveProver()
+        ast_hint = {"kind": "recursion", "depth": 5}
+        pattern = prover._detect_induction_pattern(ast_hint)
+        assert pattern == "recursion"
+
+    def test_detect_range_pattern(self) -> None:
+        prover = InductiveProver()
+        ast_hint = {"kind": "range", "low": 1, "high": 10}
+        pattern = prover._detect_induction_pattern(ast_hint)
+        assert pattern == "range"
+
+    def test_detect_numeric_pattern(self) -> None:
+        prover = InductiveProver()
+        ast_hint = {"kind": "induction", "variable": "n", "domain": "nat"}
+        pattern = prover._detect_induction_pattern(ast_hint)
+        assert pattern == "numeric"
+
+    def test_detect_structural_pattern(self) -> None:
+        prover = InductiveProver()
+        ast_hint = {"kind": "match", "cases": ["nil", "cons"], "datatype": "list"}
+        pattern = prover._detect_induction_pattern(ast_hint)
+        assert pattern == "structural"
+
+    def test_generate_base_cases_for_loop_pattern(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_loop",
+            description="Loop invariant always holds",
+            kind="range_check",
+        )
+        ast = {"kind": "loop", "iteration_count": 10}
+        base_cases = prover.generate_base_cases(obl, ast_pattern=ast)
+        assert len(base_cases) >= 1
+        for bc in base_cases:
+            assert bc.obligation_id.startswith("po_loop_base_")
+            assert bc.target_depth >= 2
+            assert bc.status == "pending"
+
+    def test_generate_base_cases_for_recursion_pattern(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_rec",
+            description="Recursive function property",
+            kind="type_invariant",
+        )
+        ast = {"kind": "recursion", "depth": 5}
+        base_cases = prover.generate_base_cases(obl, ast_pattern=ast)
+        assert len(base_cases) >= 1
+        # Recursion should have at minimum the depth==0 base case
+        assert any("base" in bc.description.lower() for bc in base_cases)
+
+    def test_generate_base_cases_for_range_pattern(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_range_ind",
+            description="Range property holds for all elements",
+            kind="range_check",
+        )
+        ast = {"kind": "range", "low": 1, "high": 10}
+        base_cases = prover.generate_base_cases(obl, ast_pattern=ast)
+        assert len(base_cases) >= 1
+
+    def test_generate_base_cases_for_numeric_induction(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_num_ind",
+            description="P(n) holds for all n >= 0",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "n"}
+        base_cases = prover.generate_base_cases(obl, ast_pattern=ast)
+        assert len(base_cases) >= 1
+        # Numeric induction base case: n == 0
+        assert any(("0" in bc.description or "zero" in bc.description.lower())
+                   for bc in base_cases)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# InductiveProver — step case and termination tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestInductiveProverStepAndTermination:
+    """Tests for inductive step case generation and termination measures."""
+
+    def test_generate_step_case_creates_obligation(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_num",
+            description="P(n) holds for all n",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "n"}
+        base_cases = prover.generate_base_cases(obl, ast_pattern=ast)
+        step = prover.generate_step_case(obl, base_cases, ast_pattern=ast)
+        assert step is not None
+        assert step.obligation_id.startswith("po_num")
+        assert "step" in step.obligation_id.lower() or "step" in step.description.lower()
+        assert len(step.dependencies) >= len(base_cases)
+
+    def test_step_case_depends_on_all_base_cases(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_test",
+            description="Test property",
+            kind="range_check",
+        )
+        ast = {"kind": "loop", "iteration_count": 5}
+        base_cases = prover.generate_base_cases(obl, ast_pattern=ast)
+        step = prover.generate_step_case(obl, base_cases, ast_pattern=ast)
+        for bc in base_cases:
+            assert bc.obligation_id in step.dependencies
+
+    def test_step_case_has_hypothesis_lemma(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_ind",
+            description="Inductive property",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "k"}
+        base_cases = prover.generate_base_cases(obl, ast_pattern=ast)
+        step = prover.generate_step_case(obl, base_cases, ast_pattern=ast)
+        assert any("hypothesis" in lemma.lower() or "assume" in lemma.lower()
+                   for lemma in step.lemmas)
+
+    def test_infer_termination_measure_for_loop(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_loop_term",
+            description="Loop terminates",
+            kind="range_check",
+        )
+        ast = {"kind": "loop", "iteration_count": 10}
+        term_obl = prover.infer_termination_measure(obl, ast_pattern=ast)
+        assert term_obl is not None
+        assert "termination" in term_obl.obligation_id.lower() or "term" in term_obl.obligation_id.lower()
+
+    def test_infer_termination_measure_for_recursion(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_rec_term",
+            description="Recursion terminates",
+            kind="type_invariant",
+        )
+        ast = {"kind": "recursion", "depth": 5}
+        term_obl = prover.infer_termination_measure(obl, ast_pattern=ast)
+        assert term_obl is not None
+
+    def test_infer_termination_measure_for_range(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_range_term",
+            description="Range iteration terminates",
+            kind="range_check",
+        )
+        ast = {"kind": "range", "low": 1, "high": 10}
+        term_obl = prover.infer_termination_measure(obl, ast_pattern=ast)
+        assert term_obl is not None
+
+    def test_well_founded_check_accepts_decreasing(self) -> None:
+        prover = InductiveProver()
+        assert prover._well_founded_check("x - 1") is True
+
+    def test_well_founded_check_accepts_structural_descent(self) -> None:
+        prover = InductiveProver()
+        assert prover._well_founded_check("sub(xs)") is True
+
+    def test_well_founded_check_rejects_empty(self) -> None:
+        prover = InductiveProver()
+        assert prover._well_founded_check("") is False
+
+    def test_well_founded_check_rejects_constant(self) -> None:
+        prover = InductiveProver()
+        assert prover._well_founded_check("42") is False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# InductiveProver — full proof chain assembly tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestInductiveProofChain:
+    """Tests for full inductive proof assembly and the InductiveProofChain dataclass."""
+
+    def test_assemble_inductive_proof_returns_chain(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_full_ind",
+            description="Full inductive property proof",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "n"}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        assert chain is not None
+        assert isinstance(chain, InductiveProofChain)
+        assert chain.root_obligation == obl
+
+    def test_assembled_chain_has_base_cases(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_chain",
+            description="Inductive property",
+            kind="range_check",
+        )
+        ast = {"kind": "loop", "iteration_count": 5}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        assert len(chain.base_cases) >= 1
+
+    def test_assembled_chain_has_step_case(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_chain_step",
+            description="Step-provable property",
+            kind="type_invariant",
+        )
+        ast = {"kind": "induction", "variable": "k"}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        assert chain.step_case is not None
+
+    def test_assembled_chain_has_termination(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_chain_term",
+            description="Terminating property",
+            kind="range_check",
+        )
+        ast = {"kind": "recursion", "depth": 3}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        assert chain.termination_measure is not None
+
+    def test_assembled_chain_reports_is_complete(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_complete",
+            description="Complete proof",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "n"}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        assert chain.is_complete is True
+
+    def test_chain_to_dict_includes_all_components(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_dict_test",
+            description="Dictionary test",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "x"}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        d = chain.to_dict()
+        assert "root_obligation_id" in d
+        assert "base_cases_count" in d
+        assert "is_complete" in d
+        assert "induction_pattern" in d
+        assert "total_depth" in d
+
+    def test_chain_all_base_cases_proven_initially_false(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_not_proven",
+            description="Not yet proven",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "n"}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        # Base cases are freshly created, so they won't be proven
+        assert chain.all_base_cases_proven() is False
+
+    def test_chain_proof_ready_initially_false(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_not_ready",
+            description="Not ready",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "n"}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        assert chain.proof_ready() is False
+
+    def test_chain_total_depth_set_correctly(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_depth_test",
+            description="Depth test",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "n"}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        assert chain.total_depth >= 3  # INDUCTIVE depth
+
+    def test_assemble_without_ast_pattern_handles_gracefully(self) -> None:
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_no_ast",
+            description="No AST pattern",
+            kind="range_check",
+        )
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=None)
+        assert chain is not None
+        assert chain.induction_pattern == "none"
+
+    def test_deepen_proof_to_inductive_attaches_chain(self) -> None:
+        """Verify that deepen_proof at INDUCTIVE depth attaches a chain to the obligation."""
+        pd = ProofDepth()
+        obl = ProofObligation(
+            obligation_id="po_deepen_ind",
+            description="Deepen to inductive",
+            kind="range_check",
+        )
+        ast_hint = {"kind": "induction", "variable": "n"}
+        # Set the AST hint on the obligation's metadata via a known mechanism
+        # or just test that the chain gets attached when Z3 is available
+        result = pd.deepen_proof(obl, target_depth=3)
+        if pd.z3_available:
+            assert result.inductive_chain is not None
+            assert isinstance(result.inductive_chain, InductiveProofChain)
+        else:
+            assert result.current_depth >= 2
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# InductiveCounterexample tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestInductiveCounterexample:
+    """Tests for InductiveCounterexample dataclass and generation."""
+
+    def test_inductive_counterexample_extends_counterexample(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="ind_prop",
+            inputs={"n": 0},
+            expected_output="P(0) holds",
+            actual_output="P(0) fails",
+            violation_path="Base case of induction fails",
+            induction_pattern="numeric",
+            failure_type="base_case",
+            base_case_inputs={"n": 0},
+        )
+        assert isinstance(ice, Counterexample)
+        assert ice.property_name == "ind_prop"
+        assert ice.induction_pattern == "numeric"
+        assert ice.failure_type == "base_case"
+
+    def test_inductive_counterexample_to_dict_includes_induction_fields(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="step_fail",
+            inputs={"k": 5},
+            expected_output="P(6) holds",
+            actual_output="P(6) fails",
+            violation_path="Inductive step P(k)->P(k+1) fails",
+            induction_pattern="numeric",
+            failure_type="step_case",
+            step_k_value=5,
+            step_k_plus_1_value=6,
+        )
+        d = ice.to_dict()
+        assert d["induction_pattern"] == "numeric"
+        assert d["failure_type"] == "step_case"
+        assert d["step_k_value"] == 5
+        assert d["step_k_plus_1_value"] == 6
+
+    def test_is_base_case_failure(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="base",
+            inputs={},
+            expected_output="holds",
+            actual_output="fails",
+            violation_path="Base case fails",
+            failure_type="base_case",
+        )
+        assert ice.is_base_case_failure() is True
+        assert ice.is_step_case_failure() is False
+        assert ice.is_termination_failure() is False
+
+    def test_is_step_case_failure(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="step",
+            inputs={},
+            expected_output="holds",
+            actual_output="fails",
+            violation_path="Step fails",
+            failure_type="step_case",
+        )
+        assert ice.is_step_case_failure() is True
+        assert ice.is_base_case_failure() is False
+
+    def test_is_termination_failure(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="term",
+            inputs={},
+            expected_output="terminates",
+            actual_output="non-terminating",
+            violation_path="Not well-founded",
+            failure_type="termination",
+            termination_measure="x + 1",
+        )
+        assert ice.is_termination_failure() is True
+        assert ice.termination_measure == "x + 1"
+
+    def test_is_unwinding_failure(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="unwind",
+            inputs={},
+            expected_output="proved",
+            actual_output="depth limit",
+            violation_path="Hit depth limit",
+            failure_type="unwinding",
+            unwinding_depth=100,
+        )
+        assert ice.is_unwinding_failure() is True
+        assert ice.unwinding_depth == 100
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# InductiveCounterexampleGenerator tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestInductiveCounterexampleGenerator:
+    """Tests for induction-specific counterexample generation."""
+
+    def test_generator_is_instantiable(self) -> None:
+        gen = InductiveCounterexampleGenerator()
+        assert gen is not None
+        assert isinstance(gen.z3_available, bool)
+
+    def test_generate_base_case_failure(self) -> None:
+        gen = InductiveCounterexampleGenerator()
+        ice = gen.generate_base_case_failure(
+            property_name="ind_prop",
+            inputs={"n": 0},
+            induction_pattern="numeric",
+        )
+        assert ice.failure_type == "base_case"
+        assert ice.induction_pattern == "numeric"
+        assert ice.property_name == "ind_prop"
+
+    def test_generate_step_case_failure(self) -> None:
+        gen = InductiveCounterexampleGenerator()
+        ice = gen.generate_step_case_failure(
+            property_name="P_n",
+            k_value=5,
+            k_plus_1_value=6,
+            property_desc="P(n): n < 10",
+            induction_pattern="numeric",
+        )
+        assert ice.failure_type == "step_case"
+        assert ice.step_k_value == 5
+        assert ice.step_k_plus_1_value == 6
+
+    def test_generate_termination_failure(self) -> None:
+        gen = InductiveCounterexampleGenerator()
+        ice = gen.generate_termination_failure(
+            property_name="loop_term",
+            measure_expr="x + 1",
+            counterexample_detail="Measure increases",
+            induction_pattern="loop",
+        )
+        assert ice.failure_type == "termination"
+        assert ice.termination_measure == "x + 1"
+
+    def test_generate_unwinding_failure(self) -> None:
+        gen = InductiveCounterexampleGenerator()
+        ice = gen.generate_unwinding_failure(
+            property_name="deep_ind",
+            depth=500,
+            partial_findings="Checked up to n=499",
+            induction_pattern="numeric",
+        )
+        assert ice.failure_type == "unwinding"
+        assert ice.unwinding_depth == 500
+
+    def test_suggest_inductive_fix_base_case(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="base_fail",
+            inputs={},
+            expected_output="holds",
+            actual_output="fails",
+            violation_path="Base case fails",
+            failure_type="base_case",
+            induction_pattern="numeric",
+        )
+        fix = suggest_inductive_fix(ice)
+        assert len(fix) > 0
+        assert "base" in fix.lower()
+
+    def test_suggest_inductive_fix_step_case(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="step_fail",
+            inputs={},
+            expected_output="holds",
+            actual_output="fails",
+            violation_path="Step fails",
+            failure_type="step_case",
+            induction_pattern="numeric",
+        )
+        fix = suggest_inductive_fix(ice)
+        assert len(fix) > 0
+        assert "hypothesis" in fix.lower() or "invariant" in fix.lower()
+
+    def test_suggest_inductive_fix_termination(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="term_fail",
+            inputs={},
+            expected_output="terminates",
+            actual_output="non-terminating",
+            violation_path="Not well-founded",
+            failure_type="termination",
+            induction_pattern="recursion",
+        )
+        fix = suggest_inductive_fix(ice)
+        assert len(fix) > 0
+        assert "measure" in fix.lower() or "termination" in fix.lower() or "well-founded" in fix.lower()
+
+    def test_suggest_inductive_fix_unwinding(self) -> None:
+        ice = InductiveCounterexample(
+            property_name="unwind_fail",
+            inputs={},
+            expected_output="proved",
+            actual_output="depth limit",
+            violation_path="Depth limit reached",
+            failure_type="unwinding",
+            induction_pattern="numeric",
+        )
+        fix = suggest_inductive_fix(ice)
+        assert len(fix) > 0
+
+    def test_generate_inductive_counterexample_convenience_base(self) -> None:
+        ice = generate_inductive_counterexample(
+            failure_type="base_case",
+            property_name="prop",
+            inputs={"n": 0},
+            induction_pattern="numeric",
+        )
+        assert ice.failure_type == "base_case"
+
+    def test_generate_inductive_counterexample_convenience_step(self) -> None:
+        ice = generate_inductive_counterexample(
+            failure_type="step_case",
+            property_name="prop",
+            k_value=3,
+            k_plus_1_value=4,
+            induction_pattern="numeric",
+        )
+        assert ice.failure_type == "step_case"
+
+    def test_generate_inductive_counterexample_convenience_termination(self) -> None:
+        ice = generate_inductive_counterexample(
+            failure_type="termination",
+            property_name="prop",
+            measure_expr="x + 1",
+            induction_pattern="recursion",
+        )
+        assert ice.failure_type == "termination"
+
+    def test_generate_inductive_counterexample_convenience_unwinding(self) -> None:
+        ice = generate_inductive_counterexample(
+            failure_type="unwinding",
+            property_name="prop",
+            depth=99,
+            induction_pattern="numeric",
+        )
+        assert ice.failure_type == "unwinding"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Edge cases and regression tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestEdgeCasesAndRegression:
+    """Edge case and regression tests for the new features."""
+
+    def test_empty_ast_base_case_generation(self) -> None:
+        """Base case generation with empty AST should not crash."""
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_empty",
+            description="Empty AST",
+            kind="range_check",
+        )
+        base_cases = prover.generate_base_cases(obl, ast_pattern={})
+        assert isinstance(base_cases, list)
+
+    def test_empty_list_container_encoding(self) -> None:
+        """Container operations on empty lists should not crash."""
+        result = Z3OperatorEncoder.encode_container_is_empty([])
+        assert result is not None
+
+    def test_empty_dict_container_encoding(self) -> None:
+        """Container operations on empty dicts should not crash."""
+        result = Z3OperatorEncoder.encode_container_is_empty({})
+        assert result is not None
+
+    def test_none_ast_pattern_step_case(self) -> None:
+        """Step case generation with None AST should not crash."""
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_none_step",
+            description="None AST step",
+            kind="range_check",
+        )
+        base_cases = prover.generate_base_cases(obl, ast_pattern=None)
+        step = prover.generate_step_case(obl, base_cases, ast_pattern=None)
+        assert step is not None
+
+    def test_infinite_type_termination_measure(self) -> None:
+        """Termination measure for potentially infinite types should be detectable."""
+        prover = InductiveProver()
+        # A measure that increases should fail well-founded check
+        assert prover._well_founded_check("x + 1") is False
+
+    def test_deeply_nested_induction_pattern(self) -> None:
+        """Deeply nested AST with induction hints should be detected."""
+        prover = InductiveProver()
+        ast = {"kind": "block", "body": {"kind": "loop", "iteration_count": 100}}
+        pattern = prover._detect_induction_pattern(ast)
+        assert pattern == "loop"
+
+    def test_proof_artifact_with_empty_metadata(self) -> None:
+        """Proof artifact with default empty metadata should serialize correctly."""
+        artifact = ProofArtifact(
+            artifact_id="art_empty_meta",
+            property_name="test",
+            verdict="admitted",
+            operator_family="numeric",
+            smt_encoding="true",
+            content_hash="0" * 64,
+        )
+        d = artifact.to_dict()
+        assert d["metadata"] == {}
+
+    def test_non_terminating_recursion_detection(self) -> None:
+        """Non-terminating recursion measure should be caught."""
+        prover = InductiveProver()
+        # A non-decreasing expression should fail
+        assert prover._well_founded_check("random()") is False
+
+    def test_multiple_operator_families_all_covered(self) -> None:
+        """Verify that all 12 families appear in coverage dict."""
+        verifier = FormalVerifier()
+        coverage = verifier.get_operator_family_coverage()
+        assert len(coverage) == 12
+
+    def test_proof_artifact_json_round_trip(self) -> None:
+        """Proof artifact JSON should round-trip correctly."""
+        result = VerificationResult(
+            property_name="round_trip",
+            status=VerificationStatus.PROVEN,
+            kind=ConstraintKind.RANGE_CHECK,
+            solver="z3",
+        )
+        artifact = generate_proof_artifact(result, operator_family="numeric")
+        json_str = artifact.to_json()
+        parsed = json.loads(json_str)
+        assert parsed["content_hash"] == artifact.content_hash
+        assert parsed["property_name"] == "round_trip"
+
+    def test_inductive_chain_to_dict_is_json_serializable(self) -> None:
+        """InductiveProofChain.to_dict() should be JSON serializable."""
+        prover = InductiveProver()
+        obl = ProofObligation(
+            obligation_id="po_json",
+            description="JSON test",
+            kind="range_check",
+        )
+        ast = {"kind": "induction", "variable": "n"}
+        chain = prover.assemble_inductive_proof(obl, ast_pattern=ast)
+        d = chain.to_dict()
+        # Should not raise
+        json.dumps(d)

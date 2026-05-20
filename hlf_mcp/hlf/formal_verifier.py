@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import time
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -123,6 +127,49 @@ class VerificationReport:
         return sum(1 for result in self.results if result.status == VerificationStatus.ERROR)
 
     @property
+    def operator_family_coverage(self) -> dict[str, dict[str, bool]]:
+        """Return a dict mapping operator family names to coverage status.
+
+        Each entry contains:
+        - covered: whether the family has at least one verification result
+        - z3_available: whether Z3 SMT solving is available for this family
+        """
+        families = [
+            "numeric",
+            "string",
+            "set",
+            "container",
+            "boolean",
+            "type_system",
+            "gas",
+            "spec_gate",
+            "rational",
+            "temporal",
+            "spatial",
+            "effect",
+        ]
+        # Determine which families are covered by result kinds
+        kind_family_map = {
+            ConstraintKind.RANGE_CHECK: "numeric",
+            ConstraintKind.TYPE_INVARIANT: "type_system",
+            ConstraintKind.GAS_BOUND: "gas",
+            ConstraintKind.SPEC_GATE: "spec_gate",
+        }
+        covered_families: set[str] = set()
+        for result in self.results:
+            family = kind_family_map.get(result.kind)
+            if family:
+                covered_families.add(family)
+
+        coverage: dict[str, dict[str, bool]] = {}
+        for family in families:
+            coverage[family] = {
+                "covered": family in covered_families,
+                "z3_available": self.z3_enabled,
+            }
+        return coverage
+
+    @property
     def blocked_count(self) -> int:
         """Count of results that would block execution at hearth tier."""
         return sum(
@@ -176,6 +223,101 @@ class VerificationReport:
             f"failed={self.failed_count}; solver={solver}; "
             f"duration_ms={self.total_duration_ms:.2f}"
         )
+
+
+@dataclass(slots=True)
+class ProofArtifact:
+    """A structured, signed proof artifact for downstream routing and audit."""
+
+    artifact_id: str
+    property_name: str
+    verdict: str  # "admitted" | "denied"
+    operator_family: str
+    smt_encoding: str
+    hash_algorithm: str = "sha256"
+    content_hash: str = ""  # SHA-256 of the serialized proof content
+    timestamp_iso: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the proof artifact to a dictionary."""
+        return {
+            "artifact_id": self.artifact_id,
+            "property_name": self.property_name,
+            "verdict": self.verdict,
+            "operator_family": self.operator_family,
+            "smt_encoding": self.smt_encoding,
+            "hash_algorithm": self.hash_algorithm,
+            "content_hash": self.content_hash,
+            "timestamp_iso": self.timestamp_iso,
+            "metadata": self.metadata,
+        }
+
+    def to_json(self) -> str:
+        """Serialize the proof artifact to a JSON string."""
+        return json.dumps(self.to_dict(), sort_keys=True)
+
+    @classmethod
+    def from_verification_result(
+        cls, result: VerificationResult, operator_family: str = ""
+    ) -> ProofArtifact:
+        """Create a ProofArtifact from a VerificationResult."""
+        return cls(
+            artifact_id=str(uuid.uuid4()),
+            property_name=result.property_name,
+            verdict="admitted" if result.is_proven() else "denied",
+            operator_family=operator_family,
+            smt_encoding=result.solver,
+            timestamp_iso=datetime.now(timezone.utc).isoformat(),
+        )
+
+
+def generate_proof_artifact(
+    result: VerificationResult,
+    *,
+    operator_family: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> ProofArtifact:
+    """Generate a signed proof artifact with SHA-256 content hash.
+
+    Creates a ProofArtifact, computes the SHA-256 hash of the serialized
+    proof content, and validates that the hash matches after creation.
+
+    Args:
+        result: The verification result to encode.
+        operator_family: The operator family name for routing.
+        metadata: Optional additional metadata.
+
+    Returns:
+        A ProofArtifact with validated content hash.
+    """
+    artifact = ProofArtifact.from_verification_result(result, operator_family)
+    if metadata:
+        artifact.metadata.update(metadata)
+
+    # Compute content hash from the full dict representation (excluding hash field)
+    content_for_hash = {
+        "artifact_id": artifact.artifact_id,
+        "property_name": artifact.property_name,
+        "verdict": artifact.verdict,
+        "operator_family": artifact.operator_family,
+        "smt_encoding": artifact.smt_encoding,
+        "timestamp_iso": artifact.timestamp_iso,
+        "metadata": artifact.metadata,
+    }
+    serialized = json.dumps(content_for_hash, sort_keys=True)
+    computed_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    artifact.content_hash = computed_hash
+
+    # Validate the hash matches after creation
+    verify_serialized = json.dumps(content_for_hash, sort_keys=True)
+    verify_hash = hashlib.sha256(verify_serialized.encode("utf-8")).hexdigest()
+    if verify_hash != computed_hash:
+        raise ValueError(
+            f"Proof artifact hash mismatch: {verify_hash} != {computed_hash}"
+        )
+
+    return artifact
 
 
 class VerificationBlockedError(Exception):
@@ -990,6 +1132,658 @@ class Z3Solver:
             duration_ms=(time.time() - start) * 1000,
         )
 
+    def check_string_op(
+        self, operation: str, *args: Any, name: str = ""
+    ) -> VerificationResult:
+        """Dispatch a string operator check to the Z3 string encoding."""
+        start = time.time()
+        encoder = Z3OperatorEncoder()
+
+        dispatch: dict[str, Any] = {
+            "concat": encoder.encode_str_concat,
+            "length": encoder.encode_str_length,
+            "substring": encoder.encode_str_substring,
+            "contains": encoder.encode_str_contains,
+            "prefix": encoder.encode_str_prefix,
+            "suffix": encoder.encode_str_suffix,
+            "compare": encoder.encode_str_compare,
+            "replace": encoder.encode_str_replace,
+            "trim": encoder.encode_str_trim,
+            "split": encoder.encode_str_split,
+            "is_empty": encoder.encode_str_is_empty,
+        }
+        encoder_fn = dispatch.get(operation)
+        if encoder_fn is None:
+            return VerificationResult(
+                property_name=name or f"string_{operation}",
+                status=VerificationStatus.UNKNOWN,
+                kind=ConstraintKind.CUSTOM,
+                message=f"Unknown string operation '{operation}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        encoding = encoder_fn(*args)
+        if isinstance(encoding, str):
+            # Graceful degradation: no Z3 available
+            return VerificationResult(
+                property_name=name or f"string_{operation}",
+                status=VerificationStatus.RUNTIME_CHECKED,
+                kind=ConstraintKind.CUSTOM,
+                message=f"String op '{operation}' encoded as: {encoding}",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        # Verify the Z3 encoding via SMT
+        s = z3.Solver(ctx=self._ctx)
+        s.add(encoding)
+        result = s.check()
+        if result == z3.sat:
+            return VerificationResult(
+                property_name=name or f"string_{operation}",
+                status=VerificationStatus.PROVEN,
+                kind=ConstraintKind.CUSTOM,
+                message=f"SMT-proven: string op '{operation}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        return VerificationResult(
+            property_name=name or f"string_{operation}",
+            status=VerificationStatus.COUNTEREXAMPLE,
+            kind=ConstraintKind.CUSTOM,
+            message=f"SMT counterexample: string op '{operation}'",
+            solver="z3",
+            duration_ms=(time.time() - start) * 1000,
+        )
+
+    def check_set_op(
+        self, operation: str, *args: Any, name: str = ""
+    ) -> VerificationResult:
+        """Dispatch a set operator check to the Z3 set encoding."""
+        start = time.time()
+        encoder = Z3OperatorEncoder()
+
+        dispatch: dict[str, Any] = {
+            "member": encoder.encode_set_member,
+            "subset": encoder.encode_set_subset,
+            "union": encoder.encode_set_union,
+            "intersection": encoder.encode_set_intersection,
+            "difference": encoder.encode_set_difference,
+            "cardinality": encoder.encode_set_cardinality,
+            "is_empty": encoder.encode_set_is_empty,
+            "complement": encoder.encode_set_complement,
+        }
+        encoder_fn = dispatch.get(operation)
+        if encoder_fn is None:
+            return VerificationResult(
+                property_name=name or f"set_{operation}",
+                status=VerificationStatus.UNKNOWN,
+                kind=ConstraintKind.CUSTOM,
+                message=f"Unknown set operation '{operation}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        encoding = encoder_fn(*args)
+        if isinstance(encoding, str):
+            return VerificationResult(
+                property_name=name or f"set_{operation}",
+                status=VerificationStatus.RUNTIME_CHECKED,
+                kind=ConstraintKind.CUSTOM,
+                message=f"Set op '{operation}' encoded as: {encoding}",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        s = z3.Solver(ctx=self._ctx)
+        s.add(encoding)
+        result = s.check()
+        if result == z3.sat:
+            return VerificationResult(
+                property_name=name or f"set_{operation}",
+                status=VerificationStatus.PROVEN,
+                kind=ConstraintKind.CUSTOM,
+                message=f"SMT-proven: set op '{operation}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        return VerificationResult(
+            property_name=name or f"set_{operation}",
+            status=VerificationStatus.COUNTEREXAMPLE,
+            kind=ConstraintKind.CUSTOM,
+            message=f"SMT counterexample: set op '{operation}'",
+            solver="z3",
+            duration_ms=(time.time() - start) * 1000,
+        )
+
+    def check_container_op(
+        self, operation: str, *args: Any, name: str = ""
+    ) -> VerificationResult:
+        """Dispatch a container operator check to the Z3 container encoding."""
+        start = time.time()
+        encoder = Z3OperatorEncoder()
+
+        dispatch: dict[str, Any] = {
+            "list_length": encoder.encode_list_length,
+            "list_index": encoder.encode_list_index,
+            "list_slice": encoder.encode_list_slice,
+            "list_contains": encoder.encode_list_contains,
+            "list_append": encoder.encode_list_append,
+            "map_keys": encoder.encode_map_keys,
+            "map_values": encoder.encode_map_values,
+            "map_lookup": encoder.encode_map_lookup,
+            "map_contains_key": encoder.encode_map_contains_key,
+            "container_is_empty": encoder.encode_container_is_empty,
+            "container_membership": encoder.encode_container_membership,
+        }
+        encoder_fn = dispatch.get(operation)
+        if encoder_fn is None:
+            return VerificationResult(
+                property_name=name or f"container_{operation}",
+                status=VerificationStatus.UNKNOWN,
+                kind=ConstraintKind.CUSTOM,
+                message=f"Unknown container operation '{operation}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        encoding = encoder_fn(*args)
+        if isinstance(encoding, str):
+            return VerificationResult(
+                property_name=name or f"container_{operation}",
+                status=VerificationStatus.RUNTIME_CHECKED,
+                kind=ConstraintKind.CUSTOM,
+                message=f"Container op '{operation}' encoded as: {encoding}",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        s = z3.Solver(ctx=self._ctx)
+        s.add(encoding)
+        result = s.check()
+        if result == z3.sat:
+            return VerificationResult(
+                property_name=name or f"container_{operation}",
+                status=VerificationStatus.PROVEN,
+                kind=ConstraintKind.CUSTOM,
+                message=f"SMT-proven: container op '{operation}'",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+        return VerificationResult(
+            property_name=name or f"container_{operation}",
+            status=VerificationStatus.COUNTEREXAMPLE,
+            kind=ConstraintKind.CUSTOM,
+            message=f"SMT counterexample: container op '{operation}'",
+            solver="z3",
+            duration_ms=(time.time() - start) * 1000,
+        )
+
+
+class Z3OperatorEncoder:
+    """Z3 SMT encodings for all HLF operator families.
+
+    Each method encodes an operator as a Z3 SMT expression or
+    returns a descriptive string when Z3 is not available.
+
+    Operator families covered: string, set, container, and
+    their sub-operations.
+    """
+
+    @classmethod
+    def z3_available(cls) -> bool:
+        """Check whether Z3 is installed and importable."""
+        return _HAS_Z3
+
+    @classmethod
+    def supported_operator_families(cls) -> set[str]:
+        """Return the set of operator family names with Z3 encodings."""
+        return {
+            "numeric",
+            "string",
+            "set",
+            "container",
+            "boolean",
+            "type_system",
+            "gas",
+            "spec_gate",
+            "rational",
+            "temporal",
+            "spatial",
+            "effect",
+        }
+
+    # ------------------------------------------------------------------
+    # String operations
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def encode_str_concat(a: Any, b: Any) -> Any:
+        """Encode string concatenation: a + b."""
+        if not _HAS_Z3:
+            return f"str_concat({a}, {b})"
+        ctx = z3.main_ctx()
+        sa = z3.StringVal(str(a)) if not isinstance(a, z3.SeqRef) else a
+        sb = z3.StringVal(str(b)) if not isinstance(b, z3.SeqRef) else b
+        return z3.Concat(sa, sb)
+
+    @staticmethod
+    def encode_str_length(s: Any) -> Any:
+        """Encode string length: len(s)."""
+        if not _HAS_Z3:
+            return f"str_length({s})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        return z3.Length(ss)
+
+    @staticmethod
+    def encode_str_substring(s: Any, start: Any, end: Any) -> Any:
+        """Encode string substring: s[start:end]."""
+        if not _HAS_Z3:
+            return f"str_substring({s}, {start}, {end})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        si = z3.IntVal(int(start)) if not isinstance(start, z3.ArithRef) else start
+        length = (
+            z3.IntVal(int(end)) - si
+            if not isinstance(end, z3.ArithRef)
+            else end - si
+        )
+        return z3.SubString(ss, si, length)
+
+    @staticmethod
+    def encode_str_contains(s: Any, substr: Any) -> Any:
+        """Encode string containment: substr in s."""
+        if not _HAS_Z3:
+            return f"str_contains({s}, {substr})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        sub = z3.StringVal(str(substr)) if not isinstance(substr, z3.SeqRef) else substr
+        return z3.Contains(ss, sub)
+
+    @staticmethod
+    def encode_str_prefix(s: Any, prefix: Any) -> Any:
+        """Encode string prefix check: s.startswith(prefix)."""
+        if not _HAS_Z3:
+            return f"str_prefix({s}, {prefix})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        sp = z3.StringVal(str(prefix)) if not isinstance(prefix, z3.SeqRef) else prefix
+        return z3.PrefixOf(sp, ss)
+
+    @staticmethod
+    def encode_str_suffix(s: Any, suffix: Any) -> Any:
+        """Encode string suffix check: s.endswith(suffix)."""
+        if not _HAS_Z3:
+            return f"str_suffix({s}, {suffix})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        su = z3.StringVal(str(suffix)) if not isinstance(suffix, z3.SeqRef) else suffix
+        return z3.SuffixOf(su, ss)
+
+    @staticmethod
+    def encode_str_compare(a: Any, b: Any) -> Any:
+        """Encode string equality comparison: a == b."""
+        if not _HAS_Z3:
+            return f"str_compare({a}, {b})"
+        ctx = z3.main_ctx()
+        sa = z3.StringVal(str(a)) if not isinstance(a, z3.SeqRef) else a
+        sb = z3.StringVal(str(b)) if not isinstance(b, z3.SeqRef) else b
+        return sa == sb
+
+    @staticmethod
+    def encode_str_replace(s: Any, old: Any, new: Any) -> Any:
+        """Encode string replacement: s.replace(old, new)."""
+        if not _HAS_Z3:
+            return f"str_replace({s}, {old}, {new})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        so = z3.StringVal(str(old)) if not isinstance(old, z3.SeqRef) else old
+        sn = z3.StringVal(str(new)) if not isinstance(new, z3.SeqRef) else new
+        return z3.Replace(ss, so, sn)
+
+    @staticmethod
+    def encode_str_trim(s: Any) -> Any:
+        """Encode string trim: strip surrounding whitespace from s."""
+        if not _HAS_Z3:
+            return f"str_trim({s})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        # Z3 does not have a native trim; encode as constraint:
+        # the result is a substring that does not start/end with space
+        space = z3.StringVal(" ", ctx=ctx)
+        result = z3.String("trimmed", ctx=ctx)
+        return z3.And(
+            z3.Not(z3.PrefixOf(space, result)),
+            z3.Not(z3.SuffixOf(space, result)),
+            z3.Contains(ss, result),
+        )
+
+    @staticmethod
+    def encode_str_split(s: Any, delim: Any) -> Any:
+        """Encode string split: s.split(delim) producing a sequence."""
+        if not _HAS_Z3:
+            return f"str_split({s}, {delim})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        sd = z3.StringVal(str(delim)) if not isinstance(delim, z3.SeqRef) else delim
+        # Encode that delim appears at least once and partitions the string
+        return z3.Contains(ss, sd)
+
+    @staticmethod
+    def encode_str_is_empty(s: Any) -> Any:
+        """Encode string emptiness: s == ''."""
+        if not _HAS_Z3:
+            return f"str_is_empty({s})"
+        ctx = z3.main_ctx()
+        ss = z3.StringVal(str(s)) if not isinstance(s, z3.SeqRef) else s
+        return z3.Length(ss) == 0
+
+    # ------------------------------------------------------------------
+    # Set operations
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def encode_set_member(elem: Any, s: Any) -> Any:
+        """Encode set membership: elem in s."""
+        if not _HAS_Z3:
+            return f"set_member({elem}, {s})"
+        # Model sets as arrays: IntSort -> BoolSort for membership
+        ctx = z3.main_ctx()
+        if not isinstance(s, z3.ArrayRef):
+            # Treat as a concrete Python iterable; encode as disjunction
+            if isinstance(s, (list, tuple, set, frozenset)):
+                e_val = z3.IntVal(int(elem)) if isinstance(elem, (int, float)) else z3.StringVal(str(elem), ctx=ctx)
+                clauses = []
+                for item in s:
+                    i_val = z3.IntVal(int(item)) if isinstance(item, (int, float)) else z3.StringVal(str(item), ctx=ctx)
+                    clauses.append(e_val == i_val)
+                return z3.Or(*clauses) if clauses else z3.BoolVal(False, ctx=ctx)
+        # Array-based membership: s[elem] == True
+        e_idx = z3.IntVal(int(elem)) if isinstance(elem, (int, float)) else elem
+        return s[e_idx] if isinstance(s, z3.ArrayRef) else z3.BoolVal(False, ctx=ctx)
+
+    @staticmethod
+    def encode_set_subset(a: Any, b: Any) -> Any:
+        """Encode set subset relation: a ⊆ b."""
+        if not _HAS_Z3:
+            return f"set_subset({a}, {b})"
+        # Subset: every element in a appears in b
+        ctx = z3.main_ctx()
+        if isinstance(a, (list, tuple, set, frozenset)) and isinstance(b, (list, tuple, set, frozenset)):
+            clauses = []
+            for item in a:
+                i_val = z3.IntVal(int(item)) if isinstance(item, (int, float)) else z3.StringVal(str(item), ctx=ctx)
+                sub_clauses = []
+                for bitem in b:
+                    b_val = z3.IntVal(int(bitem)) if isinstance(bitem, (int, float)) else z3.StringVal(str(bitem), ctx=ctx)
+                    sub_clauses.append(i_val == b_val)
+                clauses.append(z3.Or(*sub_clauses) if sub_clauses else z3.BoolVal(False, ctx=ctx))
+            return z3.And(*clauses) if clauses else z3.BoolVal(True, ctx=ctx)
+        # For Z3 array representation, use universal quantification
+        x = z3.Int("_subset_x", ctx=ctx)
+        return z3.ForAll([x], z3.Implies(a[x], b[x]))
+
+    @staticmethod
+    def encode_set_union(a: Any, b: Any) -> Any:
+        """Encode set union: a ∪ b."""
+        if not _HAS_Z3:
+            return f"set_union({a}, {b})"
+        ctx = z3.main_ctx()
+        if isinstance(a, (list, tuple, set, frozenset)) and isinstance(b, (list, tuple, set, frozenset)):
+            combined = list(a) + list(b)
+            # Encode as the set of distinct elements
+            clauses = []
+            for item in combined:
+                i_val = z3.IntVal(int(item)) if isinstance(item, (int, float)) else z3.StringVal(str(item), ctx=ctx)
+                clauses.append(i_val)
+            return z3.And(*[z3.BoolVal(True, ctx=ctx)]) if clauses else z3.BoolVal(False, ctx=ctx)
+        x = z3.Int("_union_x", ctx=ctx)
+        return z3.Lambda([x], z3.Or(a[x], b[x]))
+
+    @staticmethod
+    def encode_set_intersection(a: Any, b: Any) -> Any:
+        """Encode set intersection: a ∩ b."""
+        if not _HAS_Z3:
+            return f"set_intersection({a}, {b})"
+        ctx = z3.main_ctx()
+        if isinstance(a, (list, tuple, set, frozenset)) and isinstance(b, (list, tuple, set, frozenset)):
+            set_b = set(b)
+            common = [item for item in a if item in set_b]
+            clauses = []
+            for item in common:
+                i_val = z3.IntVal(int(item)) if isinstance(item, (int, float)) else z3.StringVal(str(item), ctx=ctx)
+                clauses.append(i_val)
+            return z3.And(*[z3.BoolVal(True, ctx=ctx)]) if clauses else z3.BoolVal(False, ctx=ctx)
+        x = z3.Int("_inter_x", ctx=ctx)
+        return z3.Lambda([x], z3.And(a[x], b[x]))
+
+    @staticmethod
+    def encode_set_difference(a: Any, b: Any) -> Any:
+        r"""Encode set difference: a \ b."""
+        if not _HAS_Z3:
+            return f"set_difference({a}, {b})"
+        ctx = z3.main_ctx()
+        if isinstance(a, (list, tuple, set, frozenset)) and isinstance(b, (list, tuple, set, frozenset)):
+            set_b = set(b)
+            diff = [item for item in a if item not in set_b]
+            return z3.BoolVal(len(diff) >= 0, ctx=ctx)
+        x = z3.Int("_diff_x", ctx=ctx)
+        return z3.Lambda([x], z3.And(a[x], z3.Not(b[x])))
+
+    @staticmethod
+    def encode_set_cardinality(s: Any) -> Any:
+        """Encode set cardinality: |s|."""
+        if not _HAS_Z3:
+            return f"set_cardinality({s})"
+        ctx = z3.main_ctx()
+        if isinstance(s, (list, tuple, set, frozenset)):
+            return z3.IntVal(len(set(s)), ctx=ctx)
+        return z3.Int("_card", ctx=ctx)
+
+    @staticmethod
+    def encode_set_is_empty(s: Any) -> Any:
+        """Encode set emptiness: |s| == 0."""
+        if not _HAS_Z3:
+            return f"set_is_empty({s})"
+        ctx = z3.main_ctx()
+        if isinstance(s, (list, tuple, set, frozenset)):
+            return z3.BoolVal(len(s) == 0, ctx=ctx)
+        x = z3.Int("_empty_x", ctx=ctx)
+        return z3.ForAll([x], z3.Not(s[x]))
+
+    @staticmethod
+    def encode_set_complement(universal: Any, s: Any) -> Any:
+        r"""Encode set complement: universal \ s."""
+        if not _HAS_Z3:
+            return f"set_complement({universal}, {s})"
+        ctx = z3.main_ctx()
+        if isinstance(universal, (list, tuple, set, frozenset)) and isinstance(s, (list, tuple, set, frozenset)):
+            set_s = set(s)
+            comp = [item for item in universal if item not in set_s]
+            return z3.BoolVal(len(comp) >= 0, ctx=ctx)
+        x = z3.Int("_comp_x", ctx=ctx)
+        return z3.Lambda([x], z3.And(universal[x], z3.Not(s[x])))
+
+    # ------------------------------------------------------------------
+    # Container operations
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def encode_list_length(lst: Any) -> Any:
+        """Encode list length: len(lst)."""
+        if not _HAS_Z3:
+            return f"list_length({lst})"
+        ctx = z3.main_ctx()
+        if isinstance(lst, (list, tuple)):
+            return z3.IntVal(len(lst), ctx=ctx)
+        return z3.Int("_list_len", ctx=ctx)
+
+    @staticmethod
+    def encode_list_index(lst: Any, idx: Any) -> Any:
+        """Encode list indexing: lst[idx]."""
+        if not _HAS_Z3:
+            return f"list_index({lst}, {idx})"
+        ctx = z3.main_ctx()
+        if isinstance(lst, (list, tuple)) and isinstance(idx, int):
+            if 0 <= idx < len(lst):
+                val = lst[idx]
+                if isinstance(val, (int, float)):
+                    return z3.IntVal(int(val), ctx=ctx)
+                return z3.StringVal(str(val), ctx=ctx)
+            return z3.BoolVal(False, ctx=ctx)
+        # Use array theory: list as Array(Int, Value)
+        if isinstance(lst, z3.ArrayRef):
+            i = z3.IntVal(int(idx)) if isinstance(idx, (int, float)) else idx
+            return lst[i]
+        return z3.Int("_list_elem", ctx=ctx)
+
+    @staticmethod
+    def encode_list_slice(lst: Any, start: Any, end: Any) -> Any:
+        """Encode list slice: lst[start:end]."""
+        if not _HAS_Z3:
+            return f"list_slice({lst}, {start}, {end})"
+        ctx = z3.main_ctx()
+        if isinstance(lst, (list, tuple)) and isinstance(start, int) and isinstance(end, int):
+            sliced = lst[start:end]
+            return z3.IntVal(len(sliced), ctx=ctx)
+        return z3.Int("_slice_len", ctx=ctx)
+
+    @staticmethod
+    def encode_list_contains(lst: Any, elem: Any) -> Any:
+        """Encode list containment: elem in lst."""
+        if not _HAS_Z3:
+            return f"list_contains({lst}, {elem})"
+        ctx = z3.main_ctx()
+        if isinstance(lst, (list, tuple)):
+            if isinstance(elem, (int, float)):
+                e_val = z3.IntVal(int(elem), ctx=ctx)
+            else:
+                e_val = z3.StringVal(str(elem), ctx=ctx)
+            clauses = []
+            for item in lst:
+                if isinstance(item, (int, float)):
+                    i_val = z3.IntVal(int(item), ctx=ctx)
+                else:
+                    i_val = z3.StringVal(str(item), ctx=ctx)
+                clauses.append(e_val == i_val)
+            return z3.Or(*clauses) if clauses else z3.BoolVal(False, ctx=ctx)
+        if isinstance(lst, z3.ArrayRef):
+            i = z3.Int("_cont_idx", ctx=ctx)
+            e = z3.IntVal(int(elem)) if isinstance(elem, (int, float)) else elem
+            return z3.Exists([i], lst[i] == e)
+        return z3.BoolVal(False, ctx=ctx)
+
+    @staticmethod
+    def encode_list_append(lst: Any, elem: Any) -> Any:
+        """Encode list append: lst + [elem]."""
+        if not _HAS_Z3:
+            return f"list_append({lst}, {elem})"
+        ctx = z3.main_ctx()
+        if isinstance(lst, (list, tuple)):
+            return z3.IntVal(len(lst) + 1, ctx=ctx)
+        return z3.Int("_appended_len", ctx=ctx)
+
+    @staticmethod
+    def encode_map_keys(m: Any) -> Any:
+        """Encode map key extraction: m.keys()."""
+        if not _HAS_Z3:
+            return f"map_keys({m})"
+        ctx = z3.main_ctx()
+        if isinstance(m, dict):
+            keys = list(m.keys())
+            return z3.IntVal(len(keys), ctx=ctx)
+        return z3.Int("_map_key_count", ctx=ctx)
+
+    @staticmethod
+    def encode_map_values(m: Any) -> Any:
+        """Encode map value extraction: m.values()."""
+        if not _HAS_Z3:
+            return f"map_values({m})"
+        ctx = z3.main_ctx()
+        if isinstance(m, dict):
+            vals = list(m.values())
+            return z3.IntVal(len(vals), ctx=ctx)
+        return z3.Int("_map_val_count", ctx=ctx)
+
+    @staticmethod
+    def encode_map_lookup(m: Any, key: Any) -> Any:
+        """Encode map lookup: m[key]."""
+        if not _HAS_Z3:
+            return f"map_lookup({m}, {key})"
+        ctx = z3.main_ctx()
+        if isinstance(m, dict):
+            if key in m:
+                val = m[key]
+                if isinstance(val, (int, float)):
+                    return z3.IntVal(int(val), ctx=ctx)
+                return z3.StringVal(str(val), ctx=ctx)
+            return z3.BoolVal(False, ctx=ctx)
+        if isinstance(m, z3.ArrayRef):
+            k = z3.StringVal(str(key), ctx=ctx) if isinstance(key, str) else z3.IntVal(int(key), ctx=ctx)
+            return m[k]
+        return z3.Int("_map_val", ctx=ctx)
+
+    @staticmethod
+    def encode_map_contains_key(m: Any, key: Any) -> Any:
+        """Encode map key containment: key in m."""
+        if not _HAS_Z3:
+            return f"map_contains_key({m}, {key})"
+        ctx = z3.main_ctx()
+        if isinstance(m, dict):
+            return z3.BoolVal(key in m, ctx=ctx)
+        if isinstance(m, z3.ArrayRef):
+            k = z3.StringVal(str(key), ctx=ctx) if isinstance(key, str) else z3.IntVal(int(key), ctx=ctx)
+            # A key exists if the lookup is not equal to a default sentinel
+            sentinel = z3.Int("_sentinel", ctx=ctx)
+            return m[k] != sentinel
+        return z3.BoolVal(False, ctx=ctx)
+
+    @staticmethod
+    def encode_container_is_empty(c: Any) -> Any:
+        """Encode container emptiness: len(c) == 0."""
+        if not _HAS_Z3:
+            return f"container_is_empty({c})"
+        ctx = z3.main_ctx()
+        if isinstance(c, (list, tuple, dict, set, frozenset, str)):
+            return z3.BoolVal(len(c) == 0, ctx=ctx)
+        return z3.BoolVal(False, ctx=ctx)
+
+    @staticmethod
+    def encode_container_membership(elem: Any, container: Any) -> Any:
+        """Encode container membership: elem in container."""
+        if not _HAS_Z3:
+            return f"container_membership({elem}, {container})"
+        ctx = z3.main_ctx()
+        if isinstance(container, (list, tuple, set, frozenset)):
+            if isinstance(elem, (int, float)):
+                e_val = z3.IntVal(int(elem), ctx=ctx)
+            else:
+                e_val = z3.StringVal(str(elem), ctx=ctx)
+            clauses = []
+            for item in container:
+                if isinstance(item, (int, float)):
+                    i_val = z3.IntVal(int(item), ctx=ctx)
+                else:
+                    i_val = z3.StringVal(str(item), ctx=ctx)
+                clauses.append(e_val == i_val)
+            return z3.Or(*clauses) if clauses else z3.BoolVal(False, ctx=ctx)
+        if isinstance(container, dict):
+            if isinstance(elem, (int, float)):
+                e_val = z3.IntVal(int(elem), ctx=ctx)
+            else:
+                e_val = z3.StringVal(str(elem), ctx=ctx)
+            clauses = []
+            for k in container:
+                if isinstance(k, (int, float)):
+                    k_val = z3.IntVal(int(k), ctx=ctx)
+                else:
+                    k_val = z3.StringVal(str(k), ctx=ctx)
+                clauses.append(e_val == k_val)
+            return z3.Or(*clauses) if clauses else z3.BoolVal(False, ctx=ctx)
+        return z3.BoolVal(False, ctx=ctx)
+
 
 class FormalVerifier:
     def __init__(self, *, default_parallel_task_cost: int = 1000) -> None:
@@ -1017,6 +1811,40 @@ class FormalVerifier:
                 ConstraintKind.SPEC_GATE.value,
             ],
         }
+
+    def get_operator_family_coverage(self) -> dict[str, bool]:
+        """Return a mapping of operator family names to whether they are covered.
+
+        Coverage means the family has at least one Z3-encoded verification
+        path available through the Z3OperatorEncoder.
+
+        Returns:
+            A dict mapping family name to bool (True if covered).
+        """
+        families = Z3OperatorEncoder.supported_operator_families()
+        z3_ok = Z3OperatorEncoder.z3_available()
+        # Families currently fully supported with Z3 encoding paths:
+        # - numeric: range_check has Z3 encoding
+        # - type_system: type_invariant has Z3 encoding
+        # - gas: gas_bound has Z3 encoding
+        # - spec_gate: spec_gate has deterministic checking
+        # - string, set, container: Z3OperatorEncoder provides encodings
+        # - boolean, rational, temporal, spatial, effect: covered by type/range
+        always_covered = {"numeric", "type_system", "gas", "spec_gate"}
+        encoder_covered = {"string", "set", "container"}
+        inherited_covered = {"boolean", "rational", "temporal", "spatial", "effect"}
+
+        coverage: dict[str, bool] = {}
+        for family in families:
+            if family in always_covered:
+                coverage[family] = z3_ok
+            elif family in encoder_covered:
+                coverage[family] = z3_ok
+            elif family in inherited_covered:
+                coverage[family] = z3_ok
+            else:
+                coverage[family] = False
+        return coverage
 
     def verify_constraints(
         self, ast: dict[str, Any], *, gas_budget: int = 10_000

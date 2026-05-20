@@ -83,6 +83,78 @@ class Counterexample:
 
 
 # ─────────────────────────────────────────────────────────────────────
+# InductiveCounterexample dataclass
+# ─────────────────────────────────────────────────────────────────────
+
+
+@dataclass(slots=True)
+class InductiveCounterexample(Counterexample):
+    """Specialized counterexample for inductive proof failures.
+
+    Extends Counterexample with induction-specific failure modes:
+    - Base case failures (the smallest case doesn't hold)
+    - Step case failures (P(k) holds but P(k+1) doesn't)
+    - Termination failures (measure not well-founded)
+    - Unwinding failures (induction depth limit reached)
+    """
+
+    induction_pattern: str = "none"
+    """Detected induction pattern: 'loop', 'recursion', 'range', 'numeric', 'structural'."""
+
+    failure_type: str = ""
+    """Specific failure type: 'base_case', 'step_case', 'termination', 'unwinding'."""
+
+    base_case_inputs: dict[str, Any] = field(default_factory=dict)
+    """The inputs that cause the base case to fail."""
+
+    step_k_value: Any = None
+    """The k value where P(k) holds but P(k+1) fails."""
+
+    step_k_plus_1_value: Any = None
+    """The k+1 value where the property fails."""
+
+    termination_measure: str = ""
+    """The termination measure expression that was checked."""
+
+    unwinding_depth: int = 0
+    """How deep induction was unwound before failure."""
+
+    fix_strategy: str = ""
+    """Induction-specific fix strategy (strengthen invariant, add base case, etc.)."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Include induction-specific fields in serialization."""
+        base = Counterexample.to_dict(self)
+        base.update({
+            "induction_pattern": self.induction_pattern,
+            "failure_type": self.failure_type,
+            "base_case_inputs": self.base_case_inputs,
+            "step_k_value": self.step_k_value,
+            "step_k_plus_1_value": self.step_k_plus_1_value,
+            "termination_measure": self.termination_measure,
+            "unwinding_depth": self.unwinding_depth,
+            "fix_strategy": self.fix_strategy,
+        })
+        return base
+
+    def is_base_case_failure(self) -> bool:
+        """Whether this is specifically a base case failure."""
+        return self.failure_type == "base_case"
+
+    def is_step_case_failure(self) -> bool:
+        """Whether this is specifically a step case failure."""
+        return self.failure_type == "step_case"
+
+    def is_termination_failure(self) -> bool:
+        """Whether this is specifically a termination measure failure."""
+        return self.failure_type == "termination"
+
+    def is_unwinding_failure(self) -> bool:
+        """Whether this is specifically an unwinding/depth-limit failure."""
+        return self.failure_type == "unwinding"
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Violation patterns for fix suggestion heuristics
 # ─────────────────────────────────────────────────────────────────────
 
@@ -118,6 +190,22 @@ _VIOLATION_PATTERNS: dict[str, dict[str, str]] = {
     "bool_for_numeric": {
         "pattern": "A boolean was provided where a numeric type was expected",
         "suggestion": "Use a numeric value instead of a boolean",
+    },
+    "inductive_base_failed": {
+        "pattern": "Base case of induction fails to hold",
+        "suggestion": "Verify the smallest input case(s). Add explicit base case guards.",
+    },
+    "inductive_step_failed": {
+        "pattern": "Inductive step P(k) → P(k+1) does not hold",
+        "suggestion": "Strengthen the induction hypothesis or add auxiliary invariants that carry through the step.",
+    },
+    "inductive_termination_failed": {
+        "pattern": "Termination measure is not well-founded",
+        "suggestion": "Provide a decreasing integer measure or structural descent argument that provably terminates.",
+    },
+    "inductive_unwinding_limit": {
+        "pattern": "Induction unwinding reached depth limit without proof",
+        "suggestion": "Increase the unwinding bound or add a stronger inductive invariant to close the proof earlier.",
     },
 }
 
@@ -648,6 +736,234 @@ class CounterexampleGenerator:
 
 
 # ─────────────────────────────────────────────────────────────────────
+# InductiveCounterexampleGenerator
+# ─────────────────────────────────────────────────────────────────────
+
+
+class InductiveCounterexampleGenerator:
+    """Generates induction-specific counterexamples with fix strategies."""
+
+    def __init__(self) -> None:
+        self._z3_ctx = z3.Context() if _HAS_Z3 and z3 is not None else None
+
+    @property
+    def z3_available(self) -> bool:
+        """Whether Z3 is available for deeper induction analysis."""
+        return self._z3_ctx is not None
+
+    def generate_base_case_failure(
+        self,
+        property_name: str,
+        inputs: dict[str, Any],
+        induction_pattern: str = "numeric",
+    ) -> InductiveCounterexample:
+        """Generate a counterexample for a failed base case.
+
+        Args:
+            property_name: The property whose base case failed.
+            inputs: The inputs that cause the base case to fail.
+            induction_pattern: The detected induction pattern.
+
+        Returns:
+            An InductiveCounterexample describing the base case failure.
+        """
+        return InductiveCounterexample(
+            property_name=property_name,
+            inputs=inputs,
+            expected_output=f"P({list(inputs.values())[0] if inputs else 'base'}) should hold",
+            actual_output=f"Base case P({list(inputs.values())[0] if inputs else 'base'}) does not hold",
+            violation_path=(
+                f"The base case of induction on '{property_name}' fails for inputs "
+                f"{inputs}. The smallest case does not satisfy the property."
+            ),
+            severity="error",
+            kind="inductive_base_failed",
+            solver="z3" if self.z3_available else "fallback",
+            induction_pattern=induction_pattern,
+            failure_type="base_case",
+            base_case_inputs=inputs,
+            fix_strategy=(
+                "Add or correct the base case. "
+                "Verify P(0) or P(empty) holds."
+            ),
+        )
+
+    def generate_step_case_failure(
+        self,
+        property_name: str,
+        k_value: Any,
+        k_plus_1_value: Any,
+        property_desc: str = "",
+        induction_pattern: str = "numeric",
+    ) -> InductiveCounterexample:
+        """Generate a counterexample where P(k) holds but P(k+1) fails.
+
+        Args:
+            property_name: The property whose step case failed.
+            k_value: The k where P(k) holds.
+            k_plus_1_value: The k+1 where the property fails.
+            property_desc: Optional description of the property.
+            induction_pattern: The detected induction pattern.
+
+        Returns:
+            An InductiveCounterexample describing the step case failure.
+        """
+        desc = f" ({property_desc})" if property_desc else ""
+        return InductiveCounterexample(
+            property_name=property_name,
+            inputs={"k": k_value, "k+1": k_plus_1_value},
+            expected_output=f"P(k+1) should hold given P(k){desc}",
+            actual_output=(
+                f"P({k_value}) holds, but P({k_plus_1_value}) does not hold"
+            ),
+            violation_path=(
+                f"The inductive step fails: P({k_value}) is true but the step to "
+                f"P({k_plus_1_value}) does not preserve the property{desc}. "
+                f"The induction hypothesis is too weak to carry through."
+            ),
+            severity="error",
+            kind="inductive_step_failed",
+            solver="z3" if self.z3_available else "fallback",
+            induction_pattern=induction_pattern,
+            failure_type="step_case",
+            step_k_value=k_value,
+            step_k_plus_1_value=k_plus_1_value,
+            fix_strategy=(
+                "Strengthen the induction hypothesis. "
+                "The invariant may be too weak to carry through the step."
+            ),
+        )
+
+    def generate_termination_failure(
+        self,
+        property_name: str,
+        measure_expr: str,
+        counterexample_detail: str = "",
+        induction_pattern: str = "recursion",
+    ) -> InductiveCounterexample:
+        """Generate a counterexample for a non-well-founded termination measure.
+
+        Args:
+            property_name: The property whose termination measure failed.
+            measure_expr: The termination measure expression that was checked.
+            counterexample_detail: Additional detail about the failure.
+            induction_pattern: The detected induction pattern.
+
+        Returns:
+            An InductiveCounterexample describing the termination failure.
+        """
+        detail = f": {counterexample_detail}" if counterexample_detail else ""
+        return InductiveCounterexample(
+            property_name=property_name,
+            inputs={"measure": measure_expr},
+            expected_output=(
+                f"Termination measure '{measure_expr}' should be well-founded "
+                f"(strictly decreasing)"
+            ),
+            actual_output=(
+                f"Termination measure '{measure_expr}' is not well-founded{detail}"
+            ),
+            violation_path=(
+                f"The termination measure '{measure_expr}' for induction on "
+                f"'{property_name}' is not well-founded{detail}. "
+                f"It must strictly decrease on each recursive call or loop iteration."
+            ),
+            severity="error",
+            kind="inductive_termination_failed",
+            solver="z3" if self.z3_available else "fallback",
+            induction_pattern=induction_pattern,
+            failure_type="termination",
+            termination_measure=measure_expr,
+            fix_strategy=(
+                "Add a well-founded termination measure "
+                "(decreasing integer, structural descent)."
+            ),
+        )
+
+    def generate_unwinding_failure(
+        self,
+        property_name: str,
+        depth: int,
+        partial_findings: str = "",
+        induction_pattern: str = "numeric",
+    ) -> InductiveCounterexample:
+        """Generate a counterexample when induction unwinding hits a depth limit.
+
+        Args:
+            property_name: The property where unwinding hit the limit.
+            depth: How deep induction was unwound.
+            partial_findings: Optional partial findings before the limit.
+            induction_pattern: The detected induction pattern.
+
+        Returns:
+            An InductiveCounterexample describing the unwinding failure.
+        """
+        findings = f" Partial findings: {partial_findings}" if partial_findings else ""
+        return InductiveCounterexample(
+            property_name=property_name,
+            inputs={"unwinding_depth": depth},
+            expected_output=(
+                f"Induction on '{property_name}' should complete within {depth} steps"
+            ),
+            actual_output=(
+                f"Induction unwinding reached depth {depth} without completing the proof"
+            ),
+            violation_path=(
+                f"Induction on '{property_name}' was unwound to depth {depth} "
+                f"without reaching a proof.{findings} "
+                f"Consider increasing the bound or adding a stronger invariant."
+            ),
+            severity="error",
+            kind="inductive_unwinding_limit",
+            solver="z3" if self.z3_available else "fallback",
+            induction_pattern=induction_pattern,
+            failure_type="unwinding",
+            unwinding_depth=depth,
+            fix_strategy=(
+                "Increase the induction depth limit or add a more aggressive "
+                "termination measure."
+            ),
+        )
+
+    def suggest_inductive_fix(self, ce: InductiveCounterexample) -> str:
+        """Suggest a fix strategy based on the induction failure type.
+
+        Args:
+            ce: The InductiveCounterexample to analyze.
+
+        Returns:
+            A plain-English fix suggestion for the induction failure.
+        """
+        if ce.is_base_case_failure():
+            return (
+                "Add or correct the base case. "
+                "Verify P(0) or P(empty) holds."
+            )
+        if ce.is_step_case_failure():
+            return (
+                "Strengthen the induction hypothesis. "
+                "The invariant may be too weak to carry through the step."
+            )
+        if ce.is_termination_failure():
+            return (
+                "Add a well-founded termination measure "
+                "(decreasing integer, structural descent)."
+            )
+        if ce.is_unwinding_failure():
+            return (
+                "Increase the induction depth limit or add a more aggressive "
+                "termination measure."
+            )
+        # Fallback: return the pre-computed fix strategy if available
+        if ce.fix_strategy:
+            return ce.fix_strategy
+        return (
+            "Review the induction setup. Ensure base cases, step cases, "
+            "and termination measures are correctly specified."
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Top-level convenience functions
 # ─────────────────────────────────────────────────────────────────────
 
@@ -695,3 +1011,87 @@ def compare_counterexamples(a: Counterexample, b: Counterexample) -> str:
     Convenience function that delegates to CounterexampleGenerator.
     """
     return _get_generator().compare_counterexamples(a, b)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Top-level convenience functions – induction
+# ─────────────────────────────────────────────────────────────────────
+
+_inductive_generator: InductiveCounterexampleGenerator | None = None
+
+
+def _get_inductive_generator() -> InductiveCounterexampleGenerator:
+    """Lazy-init the singleton inductive generator."""
+    global _inductive_generator
+    if _inductive_generator is None:
+        _inductive_generator = InductiveCounterexampleGenerator()
+    return _inductive_generator
+
+
+def generate_inductive_counterexample(
+    failure_type: str,
+    property_name: str,
+    **kwargs: Any,
+) -> InductiveCounterexample:
+    """Generate an induction-specific counterexample.
+
+    Convenience function that delegates to InductiveCounterexampleGenerator.
+
+    Args:
+        failure_type: One of 'base_case', 'step_case', 'termination', 'unwinding'.
+        property_name: The name of the property that failed.
+        **kwargs: Additional arguments passed to the specific generator method.
+            For base_case: inputs (dict), induction_pattern (str).
+            For step_case: k_value, k_plus_1_value, property_desc, induction_pattern.
+            For termination: measure_expr, counterexample_detail, induction_pattern.
+            For unwinding: depth, partial_findings, induction_pattern.
+
+    Returns:
+        An InductiveCounterexample describing the failure.
+    """
+    gen = _get_inductive_generator()
+    if failure_type == "base_case":
+        return gen.generate_base_case_failure(
+            property_name,
+            kwargs.get("inputs", {}),
+            kwargs.get("induction_pattern", "numeric"),
+        )
+    elif failure_type == "step_case":
+        return gen.generate_step_case_failure(
+            property_name,
+            kwargs.get("k_value"),
+            kwargs.get("k_plus_1_value"),
+            kwargs.get("property_desc", ""),
+            kwargs.get("induction_pattern", "numeric"),
+        )
+    elif failure_type == "termination":
+        return gen.generate_termination_failure(
+            property_name,
+            kwargs.get("measure_expr", ""),
+            kwargs.get("counterexample_detail", ""),
+            kwargs.get("induction_pattern", "recursion"),
+        )
+    elif failure_type == "unwinding":
+        return gen.generate_unwinding_failure(
+            property_name,
+            kwargs.get("depth", 0),
+            kwargs.get("partial_findings", ""),
+            kwargs.get("induction_pattern", "numeric"),
+        )
+    else:
+        return InductiveCounterexample(
+            property_name=property_name,
+            inputs={},
+            expected_output="induction proof",
+            actual_output="unknown failure",
+            violation_path="Unknown induction failure",
+            failure_type=failure_type,
+        )
+
+
+def suggest_inductive_fix(counterexample: InductiveCounterexample) -> str:
+    """Suggest a fix strategy for an inductive proof failure.
+
+    Convenience function that delegates to InductiveCounterexampleGenerator.
+    """
+    return _get_inductive_generator().suggest_inductive_fix(counterexample)

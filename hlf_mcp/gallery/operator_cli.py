@@ -45,12 +45,17 @@ except ImportError:
 from hlf_mcp.gallery.telemetry import (
     TelemetryCollector,
     TelemetrySnapshot,
+    FeedbackCollector,
+    FeedbackStatistics,
     create_default_collector,
+    create_default_feedback_collector,
 )
 from hlf_mcp.gallery.operator_dashboard import (
     build_dashboard_data,
     display_dashboard,
     generate_dashboard_json,
+    compute_feedback_metrics,
+    display_fatigue_gauge,
 )
 
 
@@ -446,6 +451,194 @@ def _cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── Feedback Subcommand Handlers ─────────────────────────────────────────────────
+
+# Module-level feedback collector singleton for CLI usage
+_feedback_collector: FeedbackCollector | None = None
+
+
+def _get_feedback_collector() -> FeedbackCollector:
+    """Get or create the module-level FeedbackCollector singleton."""
+    global _feedback_collector
+    if _feedback_collector is None:
+        _feedback_collector = create_default_feedback_collector()
+    return _feedback_collector
+
+
+def _cmd_feedback_ack(args: argparse.Namespace) -> int:
+    """Handle 'feedback ack': acknowledge an alert."""
+    fb = _get_feedback_collector()
+    # Ensure alert is recorded if not already
+    if args.alert_id not in fb._alert_fires:
+        fb.record_alert(args.alert_id, alert_type="cli", severity=args.severity)
+    event = fb.acknowledge(args.alert_id, args.operator, details=args.details)
+
+    if _RICH:
+        console = Console()
+        console.print(Panel(
+            f"Alert [cyan]{args.alert_id}[/cyan] acknowledged by [bold]{args.operator}[/bold]\n"
+            f"Feedback ID: [dim]{event.feedback_id}[/dim]\n"
+            f"Time: [dim]{event.timestamp}[/dim]",
+            title="Feedback: ACK",
+            border_style="green",
+        ))
+    else:
+        print(f"ACK: alert={args.alert_id} operator={args.operator} feedback_id={event.feedback_id}")
+    return 0
+
+
+def _cmd_feedback_resolve(args: argparse.Namespace) -> int:
+    """Handle 'feedback resolve': resolve an alert."""
+    fb = _get_feedback_collector()
+    if args.alert_id not in fb._alert_fires:
+        fb.record_alert(args.alert_id, alert_type="cli", severity=args.severity)
+    event = fb.resolve(args.alert_id, args.operator, details=args.details,
+                       resolution_note=args.note or "")
+
+    if _RICH:
+        console = Console()
+        console.print(Panel(
+            f"Alert [cyan]{args.alert_id}[/cyan] resolved by [bold]{args.operator}[/bold]\n"
+            f"Feedback ID: [dim]{event.feedback_id}[/dim]\n"
+            f"Time: [dim]{event.timestamp}[/dim]",
+            title="Feedback: RESOLVE",
+            border_style="green",
+        ))
+    else:
+        print(f"RESOLVE: alert={args.alert_id} operator={args.operator} feedback_id={event.feedback_id}")
+    return 0
+
+
+def _cmd_feedback_dismiss(args: argparse.Namespace) -> int:
+    """Handle 'feedback dismiss': dismiss an alert as false positive."""
+    fb = _get_feedback_collector()
+    if args.alert_id not in fb._alert_fires:
+        fb.record_alert(args.alert_id, alert_type="cli", severity=args.severity)
+    event = fb.dismiss(args.alert_id, args.operator, reason=args.reason or "")
+
+    if _RICH:
+        console = Console()
+        console.print(Panel(
+            f"Alert [cyan]{args.alert_id}[/cyan] dismissed by [bold]{args.operator}[/bold]\n"
+            f"Reason: [yellow]{args.reason or 'N/A'}[/yellow]\n"
+            f"Feedback ID: [dim]{event.feedback_id}[/dim]",
+            title="Feedback: DISMISS",
+            border_style="yellow",
+        ))
+    else:
+        print(f"DISMISS: alert={args.alert_id} operator={args.operator} reason={args.reason}")
+    return 0
+
+
+def _cmd_feedback_escalate(args: argparse.Namespace) -> int:
+    """Handle 'feedback escalate': escalate an alert to higher tier."""
+    fb = _get_feedback_collector()
+    if args.alert_id not in fb._alert_fires:
+        fb.record_alert(args.alert_id, alert_type="cli", severity=args.severity)
+    event = fb.escalate(args.alert_id, args.operator, target_tier=args.tier,
+                        details=args.details)
+
+    if _RICH:
+        console = Console()
+        console.print(Panel(
+            f"Alert [cyan]{args.alert_id}[/cyan] escalated by [bold]{args.operator}[/bold]\n"
+            f"Target Tier: [magenta]{args.tier}[/magenta]\n"
+            f"Feedback ID: [dim]{event.feedback_id}[/dim]",
+            title="Feedback: ESCALATE",
+            border_style="red",
+        ))
+    else:
+        print(f"ESCALATE: alert={args.alert_id} operator={args.operator} tier={args.tier}")
+    return 0
+
+
+def _cmd_feedback_snooze(args: argparse.Namespace) -> int:
+    """Handle 'feedback snooze': snooze an alert for a duration."""
+    fb = _get_feedback_collector()
+    if args.alert_id not in fb._alert_fires:
+        fb.record_alert(args.alert_id, alert_type="cli", severity=args.severity)
+    event = fb.snooze(args.alert_id, args.operator,
+                      duration_seconds=args.duration, details=args.details)
+
+    if _RICH:
+        console = Console()
+        console.print(Panel(
+            f"Alert [cyan]{args.alert_id}[/cyan] snoozed by [bold]{args.operator}[/bold]\n"
+            f"Duration: [dim]{args.duration}s[/dim]\n"
+            f"Feedback ID: [dim]{event.feedback_id}[/dim]",
+            title="Feedback: SNOOZE",
+            border_style="blue",
+        ))
+    else:
+        print(f"SNOOZE: alert={args.alert_id} operator={args.operator} duration={args.duration}s")
+    return 0
+
+
+def _cmd_feedback_stats(args: argparse.Namespace) -> int:
+    """Handle 'feedback stats': display operator feedback loop statistics."""
+    fb = _get_feedback_collector()
+    stats = fb.get_statistics()
+
+    if _RICH:
+        console = Console()
+        console.print()
+        console.rule("[bold cyan]Operator Feedback Loop Statistics[/bold cyan]")
+
+        # Summary panel
+        summary_table = Table(title="Feedback Overview", box=box.SIMPLE, expand=True)
+        summary_table.add_column("Metric", style="cyan")
+        summary_table.add_column("Value", style="white")
+
+        def _fmt_pct(v: float) -> str:
+            color = "green" if v >= 70 else "yellow" if v >= 40 else "red"
+            return f"[{color}]{v:.1f}%[/{color}]"
+
+        summary_table.add_row("Total Alerts", str(stats.total_alerts))
+        summary_table.add_row("Acknowledged", str(stats.acknowledged))
+        summary_table.add_row("Resolved", str(stats.resolved))
+        summary_table.add_row("Dismissed (FP)", str(stats.dismissed))
+        summary_table.add_row("Escalated", str(stats.escalated))
+        summary_table.add_row("Orphaned (no follow-up)", str(stats.orphaned))
+        summary_table.add_row("Resolution Rate (SLA)", _fmt_pct(stats.resolution_rate_pct))
+        summary_table.add_row("False Positive Rate", _fmt_pct(100 - stats.false_positive_rate_pct))
+        summary_table.add_row("Escalation Rate", _fmt_pct(100 - stats.escalation_rate_pct))
+        summary_table.add_row("Deduplication Rate", f"{stats.deduplication_rate_pct:.1f}%")
+        summary_table.add_row("Snooze Repeat Rate", f"{stats.snooze_repeat_rate_pct:.1f}%")
+        summary_table.add_row("Signal-to-Noise Ratio", f"{stats.signal_to_noise_ratio:.3f}")
+        summary_table.add_row("MTTR", f"{stats.mttr_seconds:.1f}s")
+        summary_table.add_row("MTTA", f"{stats.mtta_seconds:.1f}s")
+        summary_table.add_row("Volume Trend", f"{stats.alert_volume_trend_slope:+.3f} alerts/day")
+        console.print(summary_table)
+
+        # Saturation gauge
+        display_fatigue_gauge(
+            saturation_score=stats.operator_saturation_score,
+            signal_to_noise=stats.signal_to_noise_ratio,
+            mttr_seconds=stats.mttr_seconds,
+            false_positive_rate=stats.false_positive_rate_pct,
+            alert_volume_trend=stats.alert_volume_trend_slope,
+        )
+    else:
+        print(f"Operator Feedback Loop Statistics:")
+        print(f"  Total Alerts:          {stats.total_alerts}")
+        print(f"  Acknowledged:          {stats.acknowledged}")
+        print(f"  Resolved:              {stats.resolved}")
+        print(f"  Dismissed (FP):        {stats.dismissed}")
+        print(f"  Escalated:             {stats.escalated}")
+        print(f"  Orphaned:              {stats.orphaned}")
+        print(f"  Resolution Rate:       {stats.resolution_rate_pct:.1f}%")
+        print(f"  False Positive Rate:   {stats.false_positive_rate_pct:.1f}%")
+        print(f"  Escalation Rate:       {stats.escalation_rate_pct:.1f}%")
+        print(f"  Deduplication Rate:    {stats.deduplication_rate_pct:.1f}%")
+        print(f"  Signal-to-Noise:       {stats.signal_to_noise_ratio:.3f}")
+        print(f"  MTTR:                  {stats.mttr_seconds:.1f}s")
+        print(f"  MTTA:                  {stats.mtta_seconds:.1f}s")
+        print(f"  Volume Trend:          {stats.alert_volume_trend_slope:+.3f} alerts/day")
+        print(f"  Operator Saturation:   {stats.operator_saturation_score:.1f}/100")
+
+    return 0
+
+
 # ── Argument Parser ──────────────────────────────────────────────────────────────
 
 
@@ -502,6 +695,63 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("violations", help="Show constitutional violations")
     subparsers.add_parser("audit", help="Show manifest audit trail")
 
+    # Feedback subcommand group
+    feedback_parser = subparsers.add_parser("feedback", help="Operator feedback loop commands")
+    feedback_sub = feedback_parser.add_subparsers(dest="feedback_action", help="Feedback actions")
+
+    # feedback ack
+    ack_parser = feedback_sub.add_parser("ack", help="Acknowledge an alert")
+    ack_parser.add_argument("alert_id", help="Alert identifier")
+    ack_parser.add_argument("--operator", "-o", default="cli-operator",
+                            help="Operator identifier (default: cli-operator)")
+    ack_parser.add_argument("--details", "-d", default="", help="Acknowledgement notes")
+    ack_parser.add_argument("--severity", "-s", type=int, default=50,
+                            help="Alert severity 0-100 (default: 50)")
+
+    # feedback resolve
+    resolve_parser = feedback_sub.add_parser("resolve", help="Resolve an alert")
+    resolve_parser.add_argument("alert_id", help="Alert identifier")
+    resolve_parser.add_argument("--operator", "-o", default="cli-operator",
+                                help="Operator identifier (default: cli-operator)")
+    resolve_parser.add_argument("--details", "-d", default="", help="Resolution summary")
+    resolve_parser.add_argument("--note", "-n", default="", help="Additional resolution note")
+    resolve_parser.add_argument("--severity", "-s", type=int, default=50,
+                                help="Alert severity 0-100 (default: 50)")
+
+    # feedback dismiss
+    dismiss_parser = feedback_sub.add_parser("dismiss", help="Dismiss an alert as false positive")
+    dismiss_parser.add_argument("alert_id", help="Alert identifier")
+    dismiss_parser.add_argument("--operator", "-o", default="cli-operator",
+                                help="Operator identifier (default: cli-operator)")
+    dismiss_parser.add_argument("--reason", "-r", default="", help="Dismissal reason")
+    dismiss_parser.add_argument("--severity", "-s", type=int, default=50,
+                                help="Alert severity 0-100 (default: 50)")
+
+    # feedback escalate
+    escalate_parser = feedback_sub.add_parser("escalate", help="Escalate an alert to higher tier")
+    escalate_parser.add_argument("alert_id", help="Alert identifier")
+    escalate_parser.add_argument("--operator", "-o", default="cli-operator",
+                                 help="Operator identifier (default: cli-operator)")
+    escalate_parser.add_argument("--tier", "-t", default="sovereign",
+                                help="Target tier (default: sovereign)")
+    escalate_parser.add_argument("--details", "-d", default="", help="Escalation notes")
+    escalate_parser.add_argument("--severity", "-s", type=int, default=50,
+                                help="Alert severity 0-100 (default: 50)")
+
+    # feedback snooze
+    snooze_parser = feedback_sub.add_parser("snooze", help="Snooze an alert")
+    snooze_parser.add_argument("alert_id", help="Alert identifier")
+    snooze_parser.add_argument("--operator", "-o", default="cli-operator",
+                               help="Operator identifier (default: cli-operator)")
+    snooze_parser.add_argument("--duration", "-D", type=float, default=300.0,
+                               help="Snooze duration in seconds (default: 300)")
+    snooze_parser.add_argument("--details", "-d", default="", help="Snooze notes")
+    snooze_parser.add_argument("--severity", "-s", type=int, default=50,
+                               help="Alert severity 0-100 (default: 50)")
+
+    # feedback stats
+    feedback_sub.add_parser("stats", help="Show operator feedback loop statistics")
+
     return parser
 
 
@@ -535,6 +785,22 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_violations(args)
     elif args.subcommand == "audit":
         return _cmd_audit(args)
+    elif args.subcommand == "feedback":
+        if args.feedback_action == "ack":
+            return _cmd_feedback_ack(args)
+        elif args.feedback_action == "resolve":
+            return _cmd_feedback_resolve(args)
+        elif args.feedback_action == "dismiss":
+            return _cmd_feedback_dismiss(args)
+        elif args.feedback_action == "escalate":
+            return _cmd_feedback_escalate(args)
+        elif args.feedback_action == "snooze":
+            return _cmd_feedback_snooze(args)
+        elif args.feedback_action == "stats":
+            return _cmd_feedback_stats(args)
+        else:
+            # Print feedback help — argparse handles this via the subparser
+            return 0
     else:
         parser.print_help()
         return 0

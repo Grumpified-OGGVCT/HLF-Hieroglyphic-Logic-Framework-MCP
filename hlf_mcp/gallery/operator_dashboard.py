@@ -662,16 +662,289 @@ def display_dashboard_with_alerts(dashboard: dict[str, Any]) -> None:
         console.print()
 
 
+# ── Feedback Loop & Fatigue Gauge ──────────────────────────────────────────────
+
+
+def compute_feedback_metrics(
+    feedback_collector: Any | None = None,
+) -> dict[str, Any]:
+    """Compute operator feedback loop metrics from a FeedbackCollector.
+
+    If no collector is provided, returns a default/empty metrics dict suitable
+    for embedding in a dashboard.
+
+    Args:
+        feedback_collector: A FeedbackCollector instance, or None for defaults.
+
+    Returns:
+        Dictionary with feedback loop metrics (response time, MTTR, SNR, etc.).
+    """
+    if feedback_collector is None:
+        return {
+            "total_alerts": 0,
+            "acknowledged": 0,
+            "resolved": 0,
+            "dismissed": 0,
+            "escalated": 0,
+            "orphaned": 0,
+            "mttr_seconds": 0.0,
+            "mtta_seconds": 0.0,
+            "resolution_rate_pct": 0.0,
+            "false_positive_rate_pct": 0.0,
+            "escalation_rate_pct": 0.0,
+            "deduplication_rate_pct": 0.0,
+            "snooze_repeat_rate_pct": 0.0,
+            "signal_to_noise_ratio": 0.0,
+            "alert_volume_trend_slope": 0.0,
+            "operator_saturation_score": 0.0,
+            "sla_window_seconds": 0.0,
+        }
+
+    from hlf_mcp.gallery.telemetry import FeedbackStatistics
+    stats = feedback_collector.get_statistics()
+    return stats.to_dict()
+
+
+def render_fatigue_gauge(
+    saturation_score: float,
+    signal_to_noise: float,
+    mttr_seconds: float,
+    false_positive_rate: float,
+    alert_volume_trend: float,
+    title: str = "Operator Alert Fatigue Gauge",
+) -> str | None:
+    """Render an alert fatigue gauge panel using Rich.
+
+    Args:
+        saturation_score: Composite saturation 0-100.
+        signal_to_noise: Signal-to-noise ratio (0-1 scale).
+        mttr_seconds: Mean time to resolve in seconds.
+        false_positive_rate: False positive rate percentage.
+        alert_volume_trend: Daily alert volume trend slope.
+        title: Panel title.
+
+    Returns:
+        Rich-rendered panel string, or None if Rich is unavailable.
+    """
+    if not _RICH:
+        return None
+
+    # Saturation color: green < 30, yellow < 60, red >= 60
+    if saturation_score < 30:
+        sat_color = "green"
+        sat_icon = "🟢"
+        sat_label = "LOW SATURATION"
+    elif saturation_score < 60:
+        sat_color = "yellow"
+        sat_icon = "🟡"
+        sat_label = "MODERATE SATURATION"
+    else:
+        sat_color = "red"
+        sat_icon = "🔴"
+        sat_label = "HIGH SATURATION"
+
+    # SNR color
+    if signal_to_noise >= 0.7:
+        snr_color = "green"
+    elif signal_to_noise >= 0.4:
+        snr_color = "yellow"
+    else:
+        snr_color = "red"
+
+    # MTTR color
+    if mttr_seconds <= 120:
+        mttr_color = "green"
+    elif mttr_seconds <= 300:
+        mttr_color = "yellow"
+    else:
+        mttr_color = "red"
+
+    # FP rate color
+    if false_positive_rate <= 10:
+        fp_color = "green"
+    elif false_positive_rate <= 30:
+        fp_color = "yellow"
+    else:
+        fp_color = "red"
+
+    # Volume trend color
+    if alert_volume_trend <= 1:
+        vol_color = "green"
+    elif alert_volume_trend <= 3:
+        vol_color = "yellow"
+    else:
+        vol_color = "red"
+
+    # Build saturation bar
+    bar_filled = max(1, int(saturation_score / 10))
+    bar = f"[{sat_color}]{'█' * bar_filled}{'░' * (10 - bar_filled)}[/{sat_color}]"
+
+    gauge_table = Table(title=title, box=box.SIMPLE, expand=True)
+    gauge_table.add_column("Metric", style="cyan")
+    gauge_table.add_column("Value", style="white")
+    gauge_table.add_column("Status")
+
+    gauge_table.add_row(
+        "Saturation Score",
+        f"[bold {sat_color}]{sat_icon} {saturation_score:.1f}/100[/bold {sat_color}]",
+        f"[{sat_color}]{sat_label}[/{sat_color}]",
+    )
+    gauge_table.add_row("Saturation Bar", bar, "")
+    gauge_table.add_row(
+        "Signal-to-Noise",
+        f"{signal_to_noise:.3f}",
+        f"[{snr_color}]{'GOOD' if signal_to_noise >= 0.7 else 'FAIR' if signal_to_noise >= 0.4 else 'POOR'}[/{snr_color}]",
+    )
+    gauge_table.add_row(
+        "MTTR",
+        f"{mttr_seconds:.1f}s",
+        f"[{mttr_color}]{'FAST' if mttr_seconds <= 120 else 'OK' if mttr_seconds <= 300 else 'SLOW'}[/{mttr_color}]",
+    )
+    gauge_table.add_row(
+        "False Positive Rate",
+        f"{false_positive_rate:.1f}%",
+        f"[{fp_color}]{'LOW' if false_positive_rate <= 10 else 'MODERATE' if false_positive_rate <= 30 else 'HIGH'}[/{fp_color}]",
+    )
+    gauge_table.add_row(
+        "Volume Trend",
+        f"{alert_volume_trend:+.3f} alerts/day",
+        f"[{vol_color}]{'STABLE' if alert_volume_trend <= 1 else 'RISING' if alert_volume_trend <= 3 else 'SPIKING'}[/{vol_color}]",
+    )
+
+    return gauge_table
+
+
+def display_fatigue_gauge(
+    saturation_score: float,
+    signal_to_noise: float = 0.0,
+    mttr_seconds: float = 0.0,
+    false_positive_rate: float = 0.0,
+    alert_volume_trend: float = 0.0,
+) -> None:
+    """Display the alert fatigue gauge on the console.
+
+    Args:
+        saturation_score: Operator saturation score 0-100.
+        signal_to_noise: Signal-to-noise ratio.
+        mttr_seconds: Mean time to resolve.
+        false_positive_rate: False positive rate percentage.
+        alert_volume_trend: Daily alert volume slope.
+    """
+    if not _RICH:
+        print(f"Operator Saturation: {saturation_score:.1f}/100")
+        print(f"Signal-to-Noise: {signal_to_noise:.3f}")
+        print(f"MTTR: {mttr_seconds:.1f}s")
+        print(f"False Positives: {false_positive_rate:.1f}%")
+        return
+
+    gauge = render_fatigue_gauge(
+        saturation_score, signal_to_noise,
+        mttr_seconds, false_positive_rate, alert_volume_trend,
+    )
+    if gauge is not None:
+        console = Console()
+        console.print(gauge)
+        console.print()
+
+
+def build_dashboard_with_feedback(
+    swarm_observer: Any | None = None,
+    feedback_collector: Any | None = None,
+    record: bool = True,
+) -> dict[str, Any]:
+    """Build dashboard data including trend history, alert thresholds, and
+    operator feedback loop metrics.
+
+    Args:
+        swarm_observer: Optional live SwarmObserver instance.
+        feedback_collector: Optional FeedbackCollector for fatigue metrics.
+        record: If True, record this snapshot into the trend buffer.
+
+    Returns:
+        Dashboard dictionary with trend_history, components_with_alerts,
+        and feedback_metrics.
+    """
+    dashboard = build_dashboard_with_trend(swarm_observer, record=record)
+    feedback_metrics = compute_feedback_metrics(feedback_collector)
+    dashboard["feedback_metrics"] = feedback_metrics
+
+    # Update pillar score to reflect new feedback components
+    pillar = dashboard["pillar_score"]
+    fb = feedback_metrics
+
+    # Add feedback-specific component scores
+    components = dict(pillar.get("components", {}))
+    components["feedback_response_time"] = {
+        "status": "active",
+        "score_pct": max(0, 100 - min(100, fb.get("mttr_seconds", 0) / 3)),
+    }
+    components["feedback_signal_to_noise"] = {
+        "status": "active",
+        "score_pct": fb.get("signal_to_noise_ratio", 0) * 100,
+    }
+    components["feedback_saturation"] = {
+        "status": "active",
+        "score_pct": max(0, 100 - fb.get("operator_saturation_score", 0)),
+    }
+    components["feedback_false_positive"] = {
+        "status": "active",
+        "score_pct": max(0, 100 - fb.get("false_positive_rate_pct", 0)),
+    }
+    pillar["components"] = components
+
+    # Recompute overall pillar score with feedback components
+    all_scores = [info.get("score_pct", 0) for info in components.values()]
+    if all_scores:
+        new_overall = round(sum(all_scores) / len(all_scores), 1)
+        pillar["score_pct"] = new_overall
+        pillar["overall_alert"] = compute_alert_threshold(new_overall)
+        pillar["overall_alert_color"] = compute_alert_color(new_overall)
+
+    dashboard["pillar_score"] = pillar
+    return dashboard
+
+
 def demo() -> None:
     """Run the operator dashboard demonstration.
 
     Collects all dashboard metrics, displays them with rich formatting,
-    generates the dashboard JSON file, records trend snapshot, and
-    displays alert thresholds.
+    generates the dashboard JSON file, records trend snapshot, displays
+    alert thresholds, and shows the fatigue gauge.
     """
     dashboard = build_dashboard_with_trend(record=True)
     display_dashboard(dashboard)
     display_dashboard_with_alerts(dashboard)
+
+    # Display fatigue gauge with demo data
+    from hlf_mcp.gallery.telemetry import FeedbackCollector, create_default_feedback_collector
+    fb_collector = create_default_feedback_collector()
+    # Record some demo alerts with feedback
+    import random
+    for i in range(1, 9):
+        alert_id = f"alert-demo-{i:03d}"
+        fb_collector.record_alert(
+            alert_id,
+            alert_type=random.choice(["readiness", "violation", "manifest"]),
+            severity=random.randint(20, 90),
+        )
+        time.sleep(0.01)
+        fb_collector.acknowledge(alert_id, "demo-operator")
+        if i % 3 != 0:
+            time.sleep(0.01)
+            fb_collector.resolve(alert_id, "demo-operator", "resolved during demo")
+        if i == 7:
+            fb_collector.dismiss(alert_id, "demo-operator", "false alarm")
+        if i == 8:
+            fb_collector.escalate(alert_id, "demo-operator", "sovereign")
+
+    fb_metrics = compute_feedback_metrics(fb_collector)
+    display_fatigue_gauge(
+        saturation_score=fb_metrics["operator_saturation_score"],
+        signal_to_noise=fb_metrics["signal_to_noise_ratio"],
+        mttr_seconds=fb_metrics["mttr_seconds"],
+        false_positive_rate=fb_metrics["false_positive_rate_pct"],
+        alert_volume_trend=fb_metrics["alert_volume_trend_slope"],
+    )
 
     # Generate the JSON data file
     json_output = generate_dashboard_json()

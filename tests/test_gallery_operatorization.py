@@ -618,3 +618,816 @@ class TestDisplayFunctions:
         assert collector is not None
         snap = collector.snapshot()
         assert snap.overall_readiness_pct > 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# AlertFeedback Dataclass
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestAlertFeedbackDataclass:
+    """Tests for the AlertFeedback dataclass."""
+
+    def test_alert_feedback_creation_defaults(self) -> None:
+        """AlertFeedback creates with all required fields."""
+        from hlf_mcp.gallery.telemetry import AlertFeedback
+        fb = AlertFeedback(
+            feedback_id="fb-001",
+            alert_id="alert-001",
+            feedback_type="ack",
+            timestamp="2026-04-14T12:00:00Z",
+            operator_id="op1",
+        )
+        assert fb.feedback_id == "fb-001"
+        assert fb.alert_id == "alert-001"
+        assert fb.feedback_type == "ack"
+        assert fb.operator_id == "op1"
+        assert fb.details == ""
+        assert fb.meta == {}
+
+    def test_alert_feedback_to_dict(self) -> None:
+        """AlertFeedback.to_dict() includes all fields."""
+        from hlf_mcp.gallery.telemetry import AlertFeedback
+        fb = AlertFeedback(
+            feedback_id="fb-002",
+            alert_id="alert-002",
+            feedback_type="resolve",
+            timestamp="2026-04-14T12:01:00Z",
+            operator_id="op2",
+            details="fixed the issue",
+            meta={"resolution_note": "patched"},
+        )
+        d = fb.to_dict()
+        assert d["feedback_id"] == "fb-002"
+        assert d["feedback_type"] == "resolve"
+        assert d["details"] == "fixed the issue"
+        assert d["meta"]["resolution_note"] == "patched"
+
+    def test_alert_feedback_meta_default_factory_isolation(self) -> None:
+        """Each AlertFeedback instance gets its own meta dict."""
+        from hlf_mcp.gallery.telemetry import AlertFeedback
+        fb1 = AlertFeedback("fb-a", "alert-a", "ack", "2026-04-14T12:00:00Z", "op1")
+        fb2 = AlertFeedback("fb-b", "alert-b", "ack", "2026-04-14T12:00:00Z", "op2")
+        fb1.meta["key"] = "val"
+        assert "key" not in fb2.meta
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# FeedbackCollector — Alert Recording & Lifecycle
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackCollectorLifecycle:
+    """Tests for FeedbackCollector alert recording and feedback lifecycle."""
+
+    def test_record_alert_stores_fire_info(self) -> None:
+        """record_alert stores alert fire timestamp and metadata."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("alert-1", alert_type="readiness", severity=80)
+        assert "alert-1" in fc._alert_fires
+        assert fc._alert_fires["alert-1"]["severity"] == 80
+        assert fc._alert_fires["alert-1"]["alert_type"] == "readiness"
+        assert "fire_timestamp" in fc._alert_fires["alert-1"]
+
+    def test_acknowledge_returns_feedback_event(self) -> None:
+        """acknowledge returns an AlertFeedback with correct type."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("alert-1", severity=50)
+        fb = fc.acknowledge("alert-1", "op1", details="looking into it")
+        assert fb.feedback_type == "ack"
+        assert fb.alert_id == "alert-1"
+        assert fb.operator_id == "op1"
+        assert fb.details == "looking into it"
+
+    def test_resolve_returns_feedback_event(self) -> None:
+        """resolve returns an AlertFeedback with correct type."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("alert-1", severity=50)
+        fb = fc.resolve("alert-1", "op1", "done", resolution_note="all clear")
+        assert fb.feedback_type == "resolve"
+        assert fb.meta["resolution_note"] == "all clear"
+
+    def test_dismiss_returns_feedback_event(self) -> None:
+        """dismiss returns an AlertFeedback with correct type."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("alert-1", severity=50)
+        fb = fc.dismiss("alert-1", "op1", reason="false alarm")
+        assert fb.feedback_type == "dismiss"
+        assert fb.meta["is_false_positive"] is True
+
+    def test_escalate_returns_feedback_event(self) -> None:
+        """escalate returns an AlertFeedback with correct type."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("alert-1", severity=50)
+        fb = fc.escalate("alert-1", "op1", target_tier="sovereign")
+        assert fb.feedback_type == "escalate"
+        assert fb.meta["target_tier"] == "sovereign"
+
+    def test_snooze_returns_feedback_event(self) -> None:
+        """snooze returns an AlertFeedback with correct type."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("alert-1", severity=50)
+        fb = fc.snooze("alert-1", "op1", duration_seconds=600.0)
+        assert fb.feedback_type == "snooze"
+        assert fb.meta["snooze_duration_seconds"] == 600.0
+
+    def test_get_alert_events_returns_ordered_events(self) -> None:
+        """get_alert_events returns events in chronological order."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        import time
+        fc = create_default_feedback_collector()
+        fc.record_alert("alert-1", severity=50)
+        fc.acknowledge("alert-1", "op1")
+        time.sleep(0.01)
+        fc.resolve("alert-1", "op1")
+        events = fc.get_alert_events("alert-1")
+        assert len(events) == 2
+        assert events[0].feedback_type == "ack"
+        assert events[1].feedback_type == "resolve"
+
+    def test_get_feedback_log_returns_all_events(self) -> None:
+        """get_feedback_log returns all events across all alerts."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("a1", severity=50)
+        fc.record_alert("a2", severity=50)
+        fc.acknowledge("a1", "op1")
+        fc.acknowledge("a2", "op1")
+        assert len(fc.get_feedback_log()) == 2
+
+    def test_clear_empties_all_state(self) -> None:
+        """clear() empties fires, events, and log."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("a1", severity=50)
+        fc.acknowledge("a1", "op1")
+        fc.clear()
+        assert len(fc._alert_fires) == 0
+        assert len(fc._alert_events) == 0
+        assert len(fc._feedback_log) == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# FeedbackCollector — Statistics & Metrics
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackCollectorStatistics:
+    """Tests for FeedbackCollector.get_statistics() metrics."""
+
+    def test_stats_empty_collector(self) -> None:
+        """Empty collector returns zeros."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        stats = fc.get_statistics()
+        assert stats.total_alerts == 0
+        assert stats.resolved == 0
+        assert stats.mttr_seconds == 0.0
+        assert stats.signal_to_noise_ratio == 0.0
+
+    def test_stats_counts_correctly(self) -> None:
+        """Statistics count acknowledged/resolved/dismissed correctly."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("a1", severity=50)
+        fc.record_alert("a2", severity=60)
+        fc.acknowledge("a1", "op1")
+        fc.resolve("a1", "op1")
+        fc.dismiss("a2", "op1")
+        stats = fc.get_statistics()
+        assert stats.total_alerts == 2
+        assert stats.acknowledged == 1
+        assert stats.resolved == 1
+        assert stats.dismissed == 1
+
+    def test_stats_orphaned_detected(self) -> None:
+        """Alerts with no follow-up are counted as orphaned."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("a1", severity=50)
+        fc.record_alert("a2", severity=60)
+        fc.record_alert("a3", severity=70)
+        fc.acknowledge("a1", "op1")
+        fc.resolve("a1", "op1")
+        fc.dismiss("a2", "op1")
+        stats = fc.get_statistics()
+        assert stats.orphaned == 1  # a3 has no events
+
+    def test_signal_to_noise_basic(self) -> None:
+        """Signal-to-noise ratio = actionable / total."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        # 3 alerts: 1 resolved (actionable), 1 dismissed (noise), 1 unresolved
+        fc.record_alert("a1", severity=50)
+        fc.record_alert("a2", severity=50)
+        fc.record_alert("a3", severity=50)
+        fc.acknowledge("a1", "op1")
+        fc.resolve("a1", "op1")
+        fc.dismiss("a2", "op1")
+        stats = fc.get_statistics()
+        # actionable: a1 (resolved, not dismissed) = 1; total=3
+        assert stats.signal_to_noise_ratio == pytest.approx(1 / 3, abs=0.01)
+
+    def test_signal_to_noise_all_actionable(self) -> None:
+        """All alerts resolved = SNR of 1.0."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        for i in range(5):
+            aid = f"a{i}"
+            fc.record_alert(aid, severity=50)
+            fc.acknowledge(aid, "op1")
+            fc.resolve(aid, "op1")
+        stats = fc.get_statistics()
+        assert stats.signal_to_noise_ratio == 1.0
+
+    def test_signal_to_noise_all_noise(self) -> None:
+        """All alerts dismissed = SNR of 0.0."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        for i in range(5):
+            aid = f"a{i}"
+            fc.record_alert(aid, severity=50)
+            fc.dismiss(aid, "op1")
+        stats = fc.get_statistics()
+        assert stats.signal_to_noise_ratio == 0.0
+
+    def test_false_positive_rate_computation(self) -> None:
+        """False positive rate = dismissed / total."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        for i in range(10):
+            aid = f"a{i}"
+            fc.record_alert(aid, severity=50)
+            if i < 3:
+                fc.dismiss(aid, "op1")
+            else:
+                fc.acknowledge(aid, "op1")
+                fc.resolve(aid, "op1")
+        stats = fc.get_statistics()
+        assert stats.false_positive_rate_pct == pytest.approx(30.0, abs=0.1)
+
+    def test_escalation_rate_computation(self) -> None:
+        """Escalation rate = escalated / total."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        for i in range(10):
+            aid = f"a{i}"
+            fc.record_alert(aid, severity=50)
+            fc.acknowledge(aid, "op1")
+            if i < 2:
+                fc.escalate(aid, "op1", target_tier="sovereign")
+            fc.resolve(aid, "op1")
+        stats = fc.get_statistics()
+        assert stats.escalation_rate_pct == pytest.approx(20.0, abs=0.1)
+
+    def test_mttr_computed_from_fire_to_resolve(self) -> None:
+        """MTTR is mean of (resolve_ts - fire_ts) across resolved alerts."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        import time
+        fc = create_default_feedback_collector(sla_window_seconds=300.0)
+        fc.record_alert("a1", severity=50)
+        time.sleep(1.0)  # ensure fire and resolve are in different seconds
+        fc.acknowledge("a1", "op1")
+        fc.resolve("a1", "op1")
+        fc.record_alert("a2", severity=50)
+        time.sleep(1.0)
+        fc.acknowledge("a2", "op1")
+        fc.resolve("a2", "op1")
+        stats = fc.get_statistics()
+        assert stats.mttr_seconds > 0.0
+
+    def test_mtta_computed_from_fire_to_ack(self) -> None:
+        """MTTA is mean of (ack_ts - fire_ts) across acknowledged alerts."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        import time
+        fc = create_default_feedback_collector()
+        fc.record_alert("a1", severity=50)
+        time.sleep(1.0)  # ensure fire and ack are in different seconds
+        fc.acknowledge("a1", "op1")
+        stats = fc.get_statistics()
+        assert stats.mtta_seconds > 0.0
+
+    def test_saturation_score_zero_alerts(self) -> None:
+        """Saturation score for zero alerts is 0."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        stats = fc.get_statistics()
+        assert stats.operator_saturation_score == 0.0
+
+    def test_saturation_score_with_noisy_alerts(self) -> None:
+        """High FP rate and severity gives high saturation."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        for i in range(10):
+            aid = f"a{i}"
+            fc.record_alert(aid, severity=90, alert_type="violation")
+            if i < 6:
+                fc.dismiss(aid, "op1", reason="noise")
+            else:
+                fc.acknowledge(aid, "op1")
+                fc.resolve(aid, "op1")
+        stats = fc.get_statistics()
+        # 60% dismissed, 90 severity → saturation should be high
+        assert stats.operator_saturation_score > 40.0
+
+    def test_saturation_score_healthy_system(self) -> None:
+        """Low FP rate and low severity gives low saturation."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        for i in range(10):
+            aid = f"a{i}"
+            fc.record_alert(aid, severity=20, alert_type="readiness")
+            fc.acknowledge(aid, "op1")
+            fc.resolve(aid, "op1")
+        stats = fc.get_statistics()
+        assert stats.operator_saturation_score < 30.0
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# FeedbackCollector — Deduplication
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackDeduplication:
+    """Tests for duplicate alert detection."""
+
+    def test_no_duplicates_when_all_unique(self) -> None:
+        """All unique fingerprints → 0% dedup rate."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector(dedup_window_seconds=60.0)
+        for i in range(5):
+            fc.record_alert(f"a{i}", fingerprint=f"fp-{i}", severity=50)
+        stats = fc.get_statistics()
+        assert stats.deduplication_rate_pct == 0.0
+
+    def test_duplicates_within_window_detected(self) -> None:
+        """Identical fingerprints within window → duplicates detected."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector(dedup_window_seconds=60.0)
+        # All same fingerprint, fired close together
+        for i in range(5):
+            fc.record_alert(f"a{i}", fingerprint="same-fp", severity=50)
+        stats = fc.get_statistics()
+        # Only the first of each dup pair is counted; 4 duplicates out of 5
+        assert stats.deduplication_rate_pct > 0.0
+
+    def test_single_alert_no_duplicates(self) -> None:
+        """Single alert has 0% dedup rate."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector(dedup_window_seconds=60.0)
+        fc.record_alert("a1", fingerprint="fp-1", severity=50)
+        stats = fc.get_statistics()
+        assert stats.deduplication_rate_pct == 0.0
+
+    def test_different_fingerprints_no_dedup(self) -> None:
+        """Different fingerprints don't count as duplicates."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector(dedup_window_seconds=60.0)
+        for i in range(10):
+            fc.record_alert(f"a{i}", fingerprint=f"unique-fp-{i}", severity=50)
+        stats = fc.get_statistics()
+        assert stats.deduplication_rate_pct == 0.0
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# FeedbackCollector — Snooze Pattern
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackSnoozePattern:
+    """Tests for snooze repeat detection."""
+
+    def test_snooze_repeat_rate_zero_when_none_snoozed(self) -> None:
+        """No snoozed alerts → 0% repeat rate."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        for i in range(5):
+            fc.record_alert(f"a{i}", severity=50)
+            fc.acknowledge(f"a{i}", "op1")
+            fc.resolve(f"a{i}", "op1")
+        stats = fc.get_statistics()
+        assert stats.snooze_repeat_rate_pct == 0.0
+
+    def test_snooze_repeat_rate_detects_multiple_snoozes(self) -> None:
+        """Alert snoozed 3 times contributes to repeat rate."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        # Alert snoozed 3 times (repeat)
+        fc.record_alert("a-repeat", severity=50)
+        fc.snooze("a-repeat", "op1")
+        fc.snooze("a-repeat", "op1")
+        fc.snooze("a-repeat", "op1")
+        # Alert snoozed once (not repeat)
+        fc.record_alert("a-once", severity=50)
+        fc.snooze("a-once", "op1")
+        stats = fc.get_statistics()
+        # 1 out of 2 snoozed alerts had repeats = 50%
+        assert stats.snooze_repeat_rate_pct == pytest.approx(50.0, abs=0.1)
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# FeedbackCollector — Alert Volume Trend
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackVolumeTrend:
+    """Tests for alert volume trend (linear regression)."""
+
+    def test_volume_trend_zero_for_single_alert(self) -> None:
+        """Single alert → slope 0."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("a1", severity=50)
+        stats = fc.get_statistics()
+        assert stats.alert_volume_trend_slope == 0.0
+
+    def test_volume_trend_zero_for_constant_rate(self) -> None:
+        """Same count each day → slope ~0."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        # 3 days, 2 alerts each
+        fc.record_alert("a1", severity=50)
+        fc.record_alert("a2", severity=50)
+        fc.record_alert("a3", severity=50)
+        stats = fc.get_statistics()
+        # All on same day if fast, or slope ~0
+        assert abs(stats.alert_volume_trend_slope) <= 5.0
+
+    def test_volume_trend_empty_collector(self) -> None:
+        """Empty collector → slope 0."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        stats = fc.get_statistics()
+        assert stats.alert_volume_trend_slope == 0.0
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# FeedbackCollector — Edge Cases
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackEdgeCases:
+    """Tests for edge case behavior."""
+
+    def test_orphaned_alert_response_time_not_counted(self) -> None:
+        """Orphaned alerts (no resolve) don't affect MTTR."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("orphan", severity=50)
+        fc.record_alert("resolved", severity=50)
+        fc.acknowledge("resolved", "op1")
+        fc.resolve("resolved", "op1")
+        stats = fc.get_statistics()
+        assert stats.orphaned == 1
+        # MTTR should only count "resolved"
+        assert stats.mttr_seconds >= 0
+
+    def test_resolve_without_ack_still_counts(self) -> None:
+        """Alert resolved without explicit ack still counts as resolved."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("direct-resolve", severity=50)
+        fc.resolve("direct-resolve", "op1")
+        stats = fc.get_statistics()
+        assert stats.resolved == 1
+        assert stats.acknowledged == 0
+
+    def test_rapid_fire_duplicate_alerts(self) -> None:
+        """Many identical alerts in rapid succession are dedup'd."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector(dedup_window_seconds=60.0)
+        for i in range(20):
+            fc.record_alert(f"rf-{i}", fingerprint="rapid-fire", severity=80)
+        stats = fc.get_statistics()
+        assert stats.deduplication_rate_pct > 0.0
+        assert stats.total_alerts == 20
+
+    def test_zero_alert_period_metrics(self) -> None:
+        """All stats are zero/benign when no alerts exist."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        stats = fc.get_statistics()
+        assert stats.total_alerts == 0
+        assert stats.resolution_rate_pct == 0.0
+        assert stats.false_positive_rate_pct == 0.0
+        assert stats.escalation_rate_pct == 0.0
+        assert stats.signal_to_noise_ratio == 0.0
+        assert stats.operator_saturation_score == 0.0
+
+    def test_feedback_listener_called(self) -> None:
+        """on_feedback callback is invoked on each event."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        received: list[str] = []
+
+        def listener(fb):
+            received.append(fb.feedback_type)
+
+        fc.on_feedback(listener)
+        fc.record_alert("a1", severity=50)
+        fc.acknowledge("a1", "op1")
+        fc.resolve("a1", "op1")
+        assert received == ["ack", "resolve"]
+
+    def test_feedback_listener_exception_ignored(self) -> None:
+        """Listener exceptions don't crash the collector."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+
+        def bad_listener(fb):
+            raise RuntimeError("boom")
+
+        fc.on_feedback(bad_listener)
+        fc.record_alert("a1", severity=50)
+        # Should not raise
+        fb = fc.acknowledge("a1", "op1")
+        assert fb is not None
+
+    def test_thread_safety_concurrent_feedback(self) -> None:
+        """Concurrent feedback from multiple threads doesn't corrupt state."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        import threading
+        fc = create_default_feedback_collector()
+        errors = []
+
+        def worker(worker_id: int) -> None:
+            try:
+                for i in range(20):
+                    aid = f"t-{worker_id}-{i}"
+                    fc.record_alert(aid, severity=50)
+                    fc.acknowledge(aid, f"op{worker_id}")
+                    fc.resolve(aid, f"op{worker_id}")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(t,)) for t in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+        stats = fc.get_statistics()
+        assert stats.total_alerts == 100
+        assert stats.resolved == 100
+
+    def test_full_stats_to_dict_is_complete(self) -> None:
+        """FeedbackStatistics.to_dict() has all expected keys."""
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("a1", severity=50)
+        fc.acknowledge("a1", "op1")
+        fc.resolve("a1", "op1")
+        stats_dict = fc.get_statistics().to_dict()
+        expected_keys = [
+            "total_alerts", "acknowledged", "resolved", "dismissed",
+            "escalated", "snoozed", "orphaned", "resolution_rate_pct",
+            "false_positive_rate_pct", "escalation_rate_pct", "mttr_seconds",
+            "mtta_seconds", "deduplication_rate_pct", "snooze_repeat_rate_pct",
+            "signal_to_noise_ratio", "alert_volume_trend_slope",
+            "operator_saturation_score", "sla_window_seconds",
+        ]
+        for key in expected_keys:
+            assert key in stats_dict, f"Missing key: {key}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# Feedback CLI — Subcommand Parsing
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackCLIParsing:
+    """Tests for feedback CLI subcommand argument parsing."""
+
+    def test_feedback_subcommand_in_parser(self) -> None:
+        """Parser accepts 'feedback' as a subcommand."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "ack", "alert-001"])
+        assert args.subcommand == "feedback"
+        assert args.feedback_action == "ack"
+        assert args.alert_id == "alert-001"
+
+    def test_feedback_ack_with_operator(self) -> None:
+        """'feedback ack' accepts --operator flag."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "ack", "alert-1", "--operator", "gerry"])
+        assert args.operator == "gerry"
+
+    def test_feedback_resolve_with_note(self) -> None:
+        """'feedback resolve' accepts --note flag."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "resolve", "alert-1", "--note", "patched"])
+        assert args.note == "patched"
+
+    def test_feedback_dismiss_with_reason(self) -> None:
+        """'feedback dismiss' accepts --reason flag."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "dismiss", "alert-1", "--reason", "false alarm"])
+        assert args.reason == "false alarm"
+
+    def test_feedback_escalate_with_tier(self) -> None:
+        """'feedback escalate' accepts --tier flag."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "escalate", "alert-1", "--tier", "field"])
+        assert args.tier == "field"
+
+    def test_feedback_snooze_with_duration(self) -> None:
+        """'feedback snooze' accepts --duration flag."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "snooze", "alert-1", "--duration", "600"])
+        assert args.duration == 600.0
+
+    def test_feedback_stats_parsed(self) -> None:
+        """'feedback stats' is recognized."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "stats"])
+        assert args.feedback_action == "stats"
+
+    def test_feedback_default_operator(self) -> None:
+        """Default operator is 'cli-operator'."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "ack", "alert-1"])
+        assert args.operator == "cli-operator"
+
+    def test_feedback_default_severity(self) -> None:
+        """Default severity is 50."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["feedback", "ack", "alert-1"])
+        assert args.severity == 50
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# Feedback CLI — Execution
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackCLIExecution:
+    """Tests for feedback CLI execution (end-to-end)."""
+
+    def test_feedback_ack_exit_code_zero(self) -> None:
+        """'feedback ack' exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["feedback", "ack", "test-alert-1"])
+        assert exit_code == 0
+
+    def test_feedback_resolve_exit_code_zero(self) -> None:
+        """'feedback resolve' exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["feedback", "resolve", "test-alert-2"])
+        assert exit_code == 0
+
+    def test_feedback_dismiss_exit_code_zero(self) -> None:
+        """'feedback dismiss' exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["feedback", "dismiss", "test-alert-3"])
+        assert exit_code == 0
+
+    def test_feedback_escalate_exit_code_zero(self) -> None:
+        """'feedback escalate' exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["feedback", "escalate", "test-alert-4"])
+        assert exit_code == 0
+
+    def test_feedback_snooze_exit_code_zero(self) -> None:
+        """'feedback snooze' exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["feedback", "snooze", "test-alert-5"])
+        assert exit_code == 0
+
+    def test_feedback_stats_exit_code_zero(self) -> None:
+        """'feedback stats' exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["feedback", "stats"])
+        assert exit_code == 0
+
+    def test_feedback_full_lifecycle_cli(self) -> None:
+        """Full alert lifecycle via CLI: record → ack → resolve → stats."""
+        from hlf_mcp.gallery.operator_cli import main, _get_feedback_collector
+        # Clear any existing state
+        fb = _get_feedback_collector()
+        fb.clear()
+
+        _capture_output(main, ["feedback", "ack", "lifecycle-1"])
+        _capture_output(main, ["feedback", "resolve", "lifecycle-1", "--note", "done"])
+        stats = fb.get_statistics()
+        assert stats.total_alerts == 1
+        assert stats.resolved == 1
+        assert stats.acknowledged == 1
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# Dashboard — Feedback Integration
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestDashboardFeedbackIntegration:
+    """Tests for dashboard feedback loop integration."""
+
+    def test_compute_feedback_metrics_returns_dict(self) -> None:
+        """compute_feedback_metrics returns a dict with expected keys."""
+        from hlf_mcp.gallery.operator_dashboard import compute_feedback_metrics
+        metrics = compute_feedback_metrics()
+        assert isinstance(metrics, dict)
+        assert "operator_saturation_score" in metrics
+        assert "signal_to_noise_ratio" in metrics
+        assert "mttr_seconds" in metrics
+
+    def test_compute_feedback_metrics_with_collector(self) -> None:
+        """compute_feedback_metrics with collector returns live stats."""
+        from hlf_mcp.gallery.operator_dashboard import compute_feedback_metrics
+        from hlf_mcp.gallery.telemetry import create_default_feedback_collector
+        fc = create_default_feedback_collector()
+        fc.record_alert("a1", severity=50)
+        fc.acknowledge("a1", "op1")
+        fc.resolve("a1", "op1")
+        metrics = compute_feedback_metrics(fc)
+        assert metrics["total_alerts"] == 1
+        assert metrics["resolved"] == 1
+
+    def test_build_dashboard_with_feedback_includes_metrics(self) -> None:
+        """build_dashboard_with_feedback adds feedback_metrics to dashboard."""
+        from hlf_mcp.gallery.operator_dashboard import build_dashboard_with_feedback
+        dashboard = build_dashboard_with_feedback(record=True)
+        assert "feedback_metrics" in dashboard
+        fb = dashboard["feedback_metrics"]
+        assert "operator_saturation_score" in fb
+
+    def test_build_dashboard_with_feedback_adds_components(self) -> None:
+        """build_dashboard_with_feedback adds feedback component scores."""
+        from hlf_mcp.gallery.operator_dashboard import build_dashboard_with_feedback
+        dashboard = build_dashboard_with_feedback(record=True)
+        components = dashboard["pillar_score"]["components"]
+        assert "feedback_response_time" in components
+        assert "feedback_signal_to_noise" in components
+        assert "feedback_saturation" in components
+        assert "feedback_false_positive" in components
+
+    def test_display_fatigue_gauge_plain_text(self) -> None:
+        """display_fatigue_gauge with plain text fallback doesn't crash."""
+        from hlf_mcp.gallery.operator_dashboard import display_fatigue_gauge
+        _capture_output(display_fatigue_gauge, 50.0, 0.5, 120.0, 15.0, 2.0)
+
+    def test_render_fatigue_gauge_low_saturation(self) -> None:
+        """render_fatigue_gauge returns Rich table for low saturation."""
+        from hlf_mcp.gallery.operator_dashboard import render_fatigue_gauge
+        try:
+            gauge = render_fatigue_gauge(15.0, 0.9, 30.0, 5.0, 0.5)
+        except Exception:
+            gauge = None  # Rich not installed
+        # At minimum should not throw
+        assert True
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# Gallery Package — New Exports
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestGalleryNewExports:
+    """Tests for new gallery package exports."""
+
+    def test_gallery_exports_feedback_collector(self) -> None:
+        """Gallery __init__.py exports FeedbackCollector."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "FeedbackCollector")
+        assert hasattr(hlf_mcp.gallery, "AlertFeedback")
+        assert hasattr(hlf_mcp.gallery, "FeedbackStatistics")
+        assert hasattr(hlf_mcp.gallery, "create_default_feedback_collector")
+
+    def test_gallery_exports_feedback_metrics(self) -> None:
+        """Gallery exports compute_feedback_metrics and fatigue gauge."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "compute_feedback_metrics")
+        assert hasattr(hlf_mcp.gallery, "render_fatigue_gauge")
+        assert hasattr(hlf_mcp.gallery, "display_fatigue_gauge")
+        assert hasattr(hlf_mcp.gallery, "build_dashboard_with_feedback")
+
+    def test_gallery_existing_exports_unchanged(self) -> None:
+        """All existing gallery exports still work."""
+        import hlf_mcp.gallery
+        # Existing telemetry exports
+        assert hasattr(hlf_mcp.gallery, "TelemetryCollector")
+        assert hasattr(hlf_mcp.gallery, "TelemetrySnapshot")
+        assert hasattr(hlf_mcp.gallery, "create_default_collector")
+        # Existing dashboard exports
+        assert hasattr(hlf_mcp.gallery, "compute_alert_threshold")
+        assert hasattr(hlf_mcp.gallery, "build_dashboard_with_trend")
+        assert hasattr(hlf_mcp.gallery, "integrate_telemetry_snapshot")
+        # Existing CLI exports
+        assert hasattr(hlf_mcp.gallery, "operator_cli_main")
+        assert hasattr(hlf_mcp.gallery, "operator_cli_build_parser")

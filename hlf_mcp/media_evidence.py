@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import string
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,6 +34,7 @@ class MediaEvidenceRecord:
     operator_summary: str = ""
     collected_at: str = ""
     trust_tier: str = "normalized"
+    sanitization_report: dict[str, Any] | None = field(default=None)
 
     def __post_init__(self) -> None:
         self.media_type = str(self.media_type or "").strip()
@@ -93,25 +94,94 @@ class MediaEvidenceRecord:
         }
 
 
-def normalize_media_evidence(items: list[dict[str, Any]] | None) -> list[MediaEvidenceRecord]:
+def normalize_media_evidence(
+    items: list[dict[str, Any]] | None,
+    raw_data: dict[str, bytes] | None = None,
+    safety_config: Any | None = None,
+) -> list[MediaEvidenceRecord]:
+    """Normalize a list of media-evidence dicts into :class:`MediaEvidenceRecord` objects.
+
+    Parameters
+    ----------
+    items:
+        List of raw media-evidence dicts.
+    raw_data:
+        Optional mapping of ``sha256`` → raw file bytes.  When provided, each
+        item whose ``sha256`` key appears in this map will be run through the
+        :func:`~hlf_mcp.media_safety.MediaSafetyScanner.scan_media` pipeline
+        before the record is constructed.  Items missing from the map are
+        passed through without safety scanning.
+    safety_config:
+        Optional :class:`~hlf_mcp.media_safety.MediaSafetyConfig` forwarded to
+        the scanner.
+    """
     normalized: list[MediaEvidenceRecord] = []
+    raw_data = raw_data or {}
+
     for item in items or []:
+        sha256 = str(item.get("sha256", "")).strip().lower()
+        media_type = str(item.get("media_type", ""))
+        derived_text = str(item.get("derived_text", ""))
+        provenance = dict(item.get("provenance") or {})
+        sanitization_notes = str(item.get("sanitization_notes", ""))
+        safety_status = str(item.get("safety_status", ""))
+        sanitization_report: dict[str, Any] | None = item.get("sanitization_report")
+
+        # ---- Run safety scan when raw bytes are available -----------------
+        if sha256 and sha256 in raw_data:
+            from hlf_mcp.media_safety import MediaSafetyScanner
+
+            try:
+                result = MediaSafetyScanner.scan_media(
+                    data=raw_data[sha256],
+                    media_type=media_type,
+                    derived_text=derived_text,
+                    config=safety_config,
+                )
+            except Exception:
+                # If scanning blows up we treat the media as rejected
+                sanitization_report = {
+                    "original_sha256": sha256,
+                    "sanitized_sha256": sha256,
+                    "passed": False,
+                    "stripped_exif_fields": [],
+                    "injection_hits": [],
+                    "file_type_verified": False,
+                    "size_within_limits": False,
+                    "sanitization_notes": "safety scan raised an exception",
+                }
+            else:
+                sanitization_report = result.to_dict()
+
+                if not result.passed:
+                    safety_status = "rejected"
+                    if result.sanitization_notes:
+                        reject_note = f"REJECTED: {result.sanitization_notes}"
+                        sanitization_notes = (
+                            f"{sanitization_notes}; {reject_note}"
+                            if sanitization_notes
+                            else reject_note
+                        )
+                elif safety_status == "":
+                    safety_status = "cleared"
+
         normalized.append(
             MediaEvidenceRecord(
-                media_type=str(item.get("media_type", "")),
-                sha256=str(item.get("sha256", "")),
+                media_type=media_type,
+                sha256=sha256,
                 extraction_mode=str(item.get("extraction_mode", "")),
-                safety_status=str(item.get("safety_status", "")),
-                provenance=dict(item.get("provenance") or {}),
-                derived_text=str(item.get("derived_text", "")),
+                safety_status=safety_status,
+                provenance=provenance,
+                derived_text=derived_text,
                 structured_extraction_ref=str(item.get("structured_extraction_ref", "")),
-                sanitization_notes=str(item.get("sanitization_notes", "")),
+                sanitization_notes=sanitization_notes,
                 confidence=float(item.get("confidence", 1.0)),
                 source_path=str(item.get("source_path", "")),
                 artifact_id=str(item.get("artifact_id", "")),
                 operator_summary=str(item.get("operator_summary", "")),
                 collected_at=str(item.get("collected_at", "")),
                 trust_tier=str(item.get("trust_tier", "normalized")),
+                sanitization_report=sanitization_report,
             )
         )
     return normalized

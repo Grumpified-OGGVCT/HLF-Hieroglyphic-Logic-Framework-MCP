@@ -43,6 +43,22 @@
         "jitter_ms": 100,
         "strategy": "exponential"
       },
+      "typed_contract": {
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "path", "hlf_type": "S"}
+          },
+          "required": ["path"]
+        },
+        "output_schema": {
+          "type": "string",
+          "hlf_type": "S"
+        },
+        "effect_class": "read",
+        "structured_failure_type": "io_error",
+        "audit_requirement": "standard"
+      },
       "sandbox_profile": {
         "network": "deny",
         "filesystem": "read_only",
@@ -100,6 +116,23 @@
         "backoff_ms": 1000,
         "jitter_ms": 200,
         "strategy": "linear"
+      },
+      "typed_contract": {
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "path", "hlf_type": "S"},
+            "data": {"type": "string", "hlf_type": "S"}
+          },
+          "required": ["path", "data"]
+        },
+        "output_schema": {
+          "type": "boolean",
+          "hlf_type": "B"
+        },
+        "effect_class": "write",
+        "structured_failure_type": "io_error",
+        "audit_requirement": "full"
       },
       "sandbox_profile": {
         "network": "deny",
@@ -362,6 +395,22 @@
         "backoff_ms": 2000,
         "jitter_ms": 500,
         "strategy": "exponential"
+      },
+      "typed_contract": {
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string", "hlf_type": "S"}
+          },
+          "required": ["query"]
+        },
+        "output_schema": {
+          "type": "string",
+          "hlf_type": "S"
+        },
+        "effect_class": "network",
+        "structured_failure_type": "network_error",
+        "audit_requirement": "sensitive_hash"
       },
       "sandbox_profile": {
         "network": "outbound_only",
@@ -749,6 +798,23 @@
         "jitter_ms": 200,
         "strategy": "exponential"
       },
+      "typed_contract": {
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "key": {"type": "string", "hlf_type": "S"},
+            "value": {"type": "any", "hlf_type": "A"}
+          },
+          "required": ["key", "value"]
+        },
+        "output_schema": {
+          "type": "boolean",
+          "hlf_type": "B"
+        },
+        "effect_class": "write",
+        "structured_failure_type": "memory_error",
+        "audit_requirement": "full"
+      },
       "sandbox_profile": {
         "network": "deny",
         "filesystem": "read_write",
@@ -1131,6 +1197,22 @@
         "backoff_ms": 2000,
         "jitter_ms": 500,
         "strategy": "exponential"
+      },
+      "typed_contract": {
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "text": {"type": "string", "hlf_type": "S"}
+          },
+          "required": ["text"]
+        },
+        "output_schema": {
+          "type": "string",
+          "hlf_type": "S"
+        },
+        "effect_class": "compute",
+        "structured_failure_type": "inference_error",
+        "audit_requirement": "standard"
       },
       "sandbox_profile": {
         "network": "outbound_only",

@@ -1269,6 +1269,22 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             "elapsed_seconds": round(report.elapsed_seconds, 3),
         }
 
+    @mcp.tool()
+    def hlf_memory_dedup_check(content: str = "") -> dict[str, Any]:
+        """Check if content is already in memory (pre-embedding SHA-256 dedup).
+
+        Returns the existing fact id if content is a known duplicate, or
+        {found: false} if the content is new.  Use this BEFORE generating
+        expensive embeddings to avoid redundant computation.
+        """
+        if not content:
+            return {"found": False, "error": "empty_content"}
+        store = ctx.memory_store
+        existing = store.check_dedup(content) if store else None
+        if existing is not None:
+            return {"found": True, "id": existing, "reason": "sha256_exact_match"}
+        return {"found": False}
+
     return {
         "hlf_memory_store": hlf_memory_store,
         "hlf_memory_query": hlf_memory_query,
@@ -1295,4 +1311,5 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_knowledge_ingest": hlf_knowledge_ingest,
         "hlf_knowledge_ingest_directory": hlf_knowledge_ingest_directory,
         "hlf_knowledge_ingest_url": hlf_knowledge_ingest_url,
+        "hlf_memory_dedup_check": hlf_memory_dedup_check,
     }

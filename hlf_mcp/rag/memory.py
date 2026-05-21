@@ -31,6 +31,43 @@ from hlf_mcp.hlf.memory_node import build_pointer_ref, parse_pointer_ref, verify
 
 logger = logging.getLogger(__name__)
 
+# ── Pre-embedding SHA-256 Dedup Cache ────────────────────────────────────────
+# Fast in-memory check that avoids computing expensive embeddings for
+# content already in the fact store.  Synchronised with the SQLite WAL
+# at startup and after each store.
+
+
+class DedupCache:
+    """Thread-safe SHA-256 → fact-id index for zero-cost pre-embedding dedup."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._hashes: dict[str, int] = {}  # sha256 → fact_store id
+
+    def load(self, conn: sqlite3.Connection) -> int:
+        """Hydrate cache from the fact_store table.  Returns count loaded."""
+        rows = conn.execute("SELECT id, sha256 FROM fact_store WHERE sha256 != ''").fetchall()
+        with self._lock:
+            self._hashes = {row["sha256"]: row["id"] for row in rows}
+            return len(self._hashes)
+
+    def check(self, content: str) -> int | None:
+        """Return existing fact id if content is a known duplicate, else None."""
+        sha = hashlib.sha256(content.encode()).hexdigest()
+        with self._lock:
+            return self._hashes.get(sha)
+
+    def add(self, sha256: str, fact_id: int) -> None:
+        """Register a new fact after successful store."""
+        if sha256:
+            with self._lock:
+                self._hashes[sha256] = fact_id
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._hashes)
+
+
 # ── Simple vector embedding (bag-of-words TF-IDF approximation) ───────────────
 # Used when a proper ML embedding model is unavailable.
 
@@ -1470,6 +1507,9 @@ class RAGMemory:
         self._conn: sqlite3.Connection = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._init_db()
+        # Pre-embedding SHA-256 dedup cache — populated from existing data
+        self._dedup = DedupCache()
+        self._dedup.load(self._conn)
 
     def _init_db(self) -> None:
         self._conn.executescript(_SCHEMA)
@@ -2574,6 +2614,14 @@ class RAGMemory:
 
     # ── Store ─────────────────────────────────────────────────────────────────
 
+    def check_dedup(self, content: str) -> int | None:
+        """Pre-embedding SHA-256 dedup check.
+
+        Returns the existing fact id if content is a known duplicate, or None.
+        Callers can skip expensive embedding computation when this returns a value.
+        """
+        return self._dedup.check(content)
+
     def store(
         self,
         content: str,
@@ -2630,6 +2678,45 @@ class RAGMemory:
                 }
         normalized_domain = self._normalize_domain(domain)
         sha256 = hashlib.sha256(content.encode()).hexdigest()
+
+        # ── Pre-embedding dedup: check in-memory cache BEFORE computing
+        #     expensive embeddings (bag-of-words + optional dense vector).
+        existing_id = self._dedup.check(content)
+        if existing_id is not None:
+            # Fetch the full record for the canonical response
+            with self._lock:
+                row = self._conn.execute(
+                    "SELECT * FROM fact_store WHERE id = ?", (existing_id,)
+                ).fetchone()
+            if row:
+                existing_meta = json.loads(row["metadata_json"] or "{}")
+                existing_ge = existing_meta.get("governed_evidence") or {}
+                return {
+                    "id": row["id"],
+                    "sha256": sha256,
+                    "stored": False,
+                    "duplicate_reason": "sha256_exact_match (pre-embedding cache)",
+                    "entry_kind": row["entry_kind"] or entry_kind or "",
+                    "domain": row["domain"] or normalized_domain,
+                    "solution_kind": row["solution_kind"] or solution_kind or "",
+                    "supersedes_sha256": row["supersedes_sha256"] or "",
+                    "metadata": existing_meta,
+                    "source_capture": dict(existing_meta.get("source_capture") or {}),
+                    "artifact_contract": dict(existing_meta.get("artifact_contract") or {}),
+                    "memory_stratum": row["memory_stratum"] or existing_meta.get("memory_stratum") or "working",
+                    "storage_tier": row["storage_tier"] or existing_meta.get("storage_tier") or "warm",
+                    "evaluation": existing_meta.get("evaluation") or {},
+                    "evidence": {
+                        "sha256": sha256,
+                        "entry_kind": row["entry_kind"] or entry_kind or "",
+                        "topic": row["topic"] or topic,
+                        "domain": row["domain"] or normalized_domain,
+                        "source_class": existing_ge.get("source_class") or row["entry_kind"] or "",
+                        "source_type": existing_ge.get("source_type") or "",
+                        "provenance_grade": row["provenance_grade"] or "basic",
+                    },
+                }
+
         tags_json = json.dumps(tags or [])
         vec = _bow_vector(content)
         vec_json = json.dumps(vec)
@@ -2810,6 +2897,9 @@ class RAGMemory:
                 ),
             )
             row_id = cursor.lastrowid
+
+            # Register in pre-embedding dedup cache
+            self._dedup.add(sha256, int(row_id))
 
             # Update Merkle chain
             self._append_merkle(conn, topic, sha256)

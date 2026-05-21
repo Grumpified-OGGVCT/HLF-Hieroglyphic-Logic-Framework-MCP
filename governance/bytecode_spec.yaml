@@ -35,6 +35,7 @@ opcodes:
   - name: AND          code: 0x30  operand: false  gas: 1   desc: "Logical AND"
   - name: OR           code: 0x31  operand: false  gas: 1   desc: "Logical OR"
   - name: NOT          code: 0x32  operand: false  gas: 1   desc: "Logical NOT"
+  - name: POP          code: 0x33  operand: false  gas: 1   desc: "Pop top of stack"
   # Control flow
   - name: JMP          code: 0x40  operand: true   gas: 1   desc: "Unconditional jump (absolute address)"
   - name: JZ           code: 0x41  operand: true   gas: 2   desc: "Jump if zero/false"

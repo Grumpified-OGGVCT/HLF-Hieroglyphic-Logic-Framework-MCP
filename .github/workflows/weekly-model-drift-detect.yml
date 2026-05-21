@@ -244,10 +244,10 @@ jobs:
         run: |
           WEEK=$(date -u +"%Y-W%V")
           if [ "${{ steps.drift.outputs.drift_status }}" = "ALERT" ]; then
-            TITLE="🚨 [Model Drift] ALERT — ${WEEK} (score=${{ steps.drift.outputs.drift_score }})"
+            TITLE="🚨 [Model Drift] ALERT — Current (${WEEK} score=${{ steps.drift.outputs.drift_score }})"
             LABELS="model-drift,automated,priority-high"
           else
-            TITLE="⚠️ [Model Drift] Warning — ${WEEK} (score=${{ steps.drift.outputs.drift_score }})"
+            TITLE="⚠️ [Model Drift] Warning — Current (${WEEK} score=${{ steps.drift.outputs.drift_score }})"
             LABELS="model-drift,automated"
           fi
           python .github/scripts/create_github_issue.py \

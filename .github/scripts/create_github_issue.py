@@ -53,6 +53,22 @@ def find_existing_issue(title: str, label: str) -> int | None:
     return None
 
 
+def find_existing_issue_by_label_and_substring(
+    labels: list[str],
+    title_substrings: list[str],
+) -> int | None:
+    """Return the first open issue matching any of the given labels and title substrings."""
+    label_query = urllib.parse.quote(",".join(labels))
+    result = _gh_api("GET", f"issues?state=open&labels={label_query}&per_page=100")
+    if isinstance(result, list):
+        lower_substrings = [s.lower() for s in title_substrings if s]
+        for issue in result:
+            issue_title = (issue.get("title") or "").lower()
+            if any(sub in issue_title for sub in lower_substrings):
+                return issue["number"]
+    return None
+
+
 def list_open_pull_requests() -> list[dict[str, Any]]:
     result = _gh_api("GET", "pulls?state=open&per_page=100")
     return result if isinstance(result, list) else []
@@ -108,7 +124,15 @@ def create_or_update_issue(
     conflict_labels: list[str] | None = None,
     conflict_title_substrings: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Create a new issue, or update the body of an existing open issue."""
+    """Create a new issue, or update the body of an existing open issue.
+
+    Deduplication order:
+    1. Check for conflicting open PRs (any match → skip issue creation)
+    2. Check for exact title + label match (update existing)
+    3. Check for label + title substring match (update existing)
+    4. Create new issue if no match found
+    """
+    # ── PR conflict check ──────────────────────────────────────────────────
     conflict = find_conflicting_pull_request(
         head_branches=conflict_head_branches,
         base_branches=conflict_base_branches,
@@ -129,20 +153,30 @@ def create_or_update_issue(
             "conflicting_pr_title": conflict.get("title"),
         }
 
+    # ── Exact title + first label deduplication ────────────────────────────
     label = labels[0] if labels else ""
     existing = find_existing_issue(title, label)
     if existing:
-        print(f"[create_github_issue] Updating existing issue #{existing}", file=sys.stderr)
+        print(f"[create_github_issue] Updating existing issue #{existing} (exact title match)", file=sys.stderr)
         return _gh_api("PATCH", f"issues/{existing}", {"body": body, "labels": labels})
-    else:
-        payload: dict[str, Any] = {"title": title, "body": body, "labels": labels}
-        if assignees:
-            payload["assignees"] = assignees
-        result = _gh_api("POST", "issues", payload)
-        print(
-            f"[create_github_issue] Created issue #{result.get('number')}: {title}", file=sys.stderr
-        )
-        return result
+
+    # ── Label + title substring deduplication ──────────────────────────────
+    if labels and conflict_title_substrings:
+        existing = find_existing_issue_by_label_and_substring(labels, conflict_title_substrings)
+        if existing:
+            print(f"[create_github_issue] Updating existing issue #{existing} (substring match)", file=sys.stderr)
+            # Also update the title so it reflects the latest state
+            return _gh_api("PATCH", f"issues/{existing}", {"title": title, "body": body, "labels": labels})
+
+    # ── Create new ─────────────────────────────────────────────────────────
+    payload: dict[str, Any] = {"title": title, "body": body, "labels": labels}
+    if assignees:
+        payload["assignees"] = assignees
+    result = _gh_api("POST", "issues", payload)
+    print(
+        f"[create_github_issue] Created issue #{result.get('number')}: {title}", file=sys.stderr
+    )
+    return result
 
 
 def main() -> None:

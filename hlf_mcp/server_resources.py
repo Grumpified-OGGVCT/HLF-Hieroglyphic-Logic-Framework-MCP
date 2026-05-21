@@ -6647,49 +6647,271 @@ def _explain_verifier_finding(
         return f"Note ({cat_phrase}): {message}"
 
 
-def _render_route_evidence_status(ctx: object | None) -> str:
+def _render_route_evidence_status(ctx: object | None, agent_id: str | None = None) -> str:
     if ctx is None:
-        return json.dumps({"status": "error", "message": "No context available"})
-    return json.dumps({"status": "ok", "routes": 0, "agent_id": getattr(ctx, "agent_id", None)})
+        return json.dumps({"status": "error", "error": "context_unavailable"})
+    try:
+        route = getattr(ctx, "get_governed_route", None)
+        if route is None:
+            return json.dumps({"status": "not_found"})
+        result = route(agent_id=agent_id) if agent_id else route()
+        if result is None:
+            return json.dumps({"status": "not_found"})
+        verdict = result.get("route_decision", {})
+        return json.dumps({
+            "status": "ok",
+            "verdict": {
+                "allowed": verdict.get("allowed", False),
+                "decision": verdict.get("decision", "unknown"),
+                "governance_mode": verdict.get("governance_mode", ""),
+                "review_required": verdict.get("review_required", True),
+                "selected_lane": verdict.get("selected_lane", ""),
+                "primary_model": verdict.get("primary_model", ""),
+                "rationale": verdict.get("rationale", []),
+            },
+            "agent_id": result.get("agent_id", agent_id),
+            "operator_summary": result.get("operator_summary", ""),
+            "escalation_depth": result.get("escalation_depth", 0),
+            "latency_s": result.get("latency_s", 0.0),
+            "advisory_mode": result.get("advisory_mode", False),
+            "governance_warning": result.get("governance_warning", ""),
+        })
+    except Exception:
+        return json.dumps({"status": "error", "error": "unexpected error fetching route evidence"})
 
 
 def _render_route_evidence_markdown(ctx: object | None) -> str:
     if ctx is None:
-        return "No context available for route evidence."
-    return "Route evidence report not available."
+        return "⚠️ **Context unavailable** — route evidence requires a valid server context."
+    try:
+        route = getattr(ctx, "get_governed_route", None)
+        if route is None:
+            return "_No governed route available._"
+        result = route()
+        if result is None:
+            return "_No governed route available._"
+        verdict = result.get("route_decision", {})
+        lines = [
+            "# Route Evidence Report",
+            "",
+            f"| Field | Value |",
+            f"|-------|-------|",
+            f"| Decision | `{verdict.get('decision', 'unknown')}` |",
+            f"| Selected Lane | `{verdict.get('selected_lane', '')}` |",
+            f"| Primary Model | `{verdict.get('primary_model', '')}` |",
+            f"| Governance Mode | `{verdict.get('governance_mode', '')}` |",
+            f"| Review Required | `{verdict.get('review_required', True)}` |",
+            "",
+        ]
+        rationale = verdict.get("rationale", [])
+        if rationale:
+            lines.append("## Rationale")
+            for r in rationale:
+                lines.append(f"- {r}")
+            lines.append("")
+        if result.get("advisory_mode"):
+            lines.append(f"⚠️ **Advisory mode** — {result.get('governance_warning', 'Proceeding without governance.')}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"_Error rendering route evidence: {e}_"
 
 
 def _render_verifier_explainer_status(ctx: object | None) -> str:
     if ctx is None:
-        return json.dumps({"status": "error", "message": "No context available"})
-    return json.dumps({"status": "ok", "findings": []})
+        return json.dumps({"status": "error", "error": "context_unavailable"})
+    try:
+        admission = getattr(ctx, "get_execution_admission", None)
+        if admission is None:
+            return json.dumps({"status": "error", "error": "admission not available"})
+        result = admission()
+        if result is None:
+            return json.dumps({"status": "not_found"})
+        verification = result.get("verification", {})
+        findings = verification.get("findings", [])
+        errors = sum(1 for f in findings if f.get("severity") == "error")
+        warnings = sum(1 for f in findings if f.get("severity") == "warning")
+        enriched_findings = []
+        for f in findings:
+            enriched = dict(f)
+            enriched["plain_english"] = _explain_verifier_finding(
+                f.get("severity", "info"),
+                f.get("category", "unknown"),
+                f.get("message", ""),
+            )
+            enriched_findings.append(enriched)
+        return json.dumps({
+            "status": "ok",
+            "passed": verification.get("passed", False),
+            "total_findings": len(findings),
+            "error_count": errors,
+            "warning_count": warnings,
+            "findings": enriched_findings,
+            "summary": verification.get("summary", {}),
+        })
+    except Exception:
+        return json.dumps({"status": "error", "error": "unexpected error fetching verifier explainer"})
 
 
 def _render_verifier_explainer_markdown(ctx: object | None) -> str:
     if ctx is None:
-        return "No context available for verifier explainer."
-    return "Verifier explainer report not available."
+        return "⚠️ **Context unavailable** — verifier explainer requires a valid server context."
+    try:
+        admission = getattr(ctx, "get_execution_admission", None)
+        if admission is None:
+            return "_No execution admission available._"
+        result = admission()
+        if result is None:
+            return "_No execution admission available._"
+        verification = result.get("verification", {})
+        findings = verification.get("findings", [])
+        passed = verification.get("passed", False)
+        lines = ["# Formal Verifier", ""]
+        if passed and not findings:
+            lines.append("✅ **All checks passed** — no findings to report.")
+            return "\n".join(lines)
+        for f in findings:
+            severity = f.get("severity", "info")
+            icon = "🔴" if severity == "error" else "🟡" if severity == "warning" else "ℹ️"
+            cat = f.get("category", "unknown")
+            msg = f.get("message", "")
+            lines.append(f"{icon} **{severity.upper()}** [{cat}] {msg}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"_Error rendering verifier explainer: {e}_"
 
 
 def _render_promotion_rationale_status(ctx: object | None) -> str:
     if ctx is None:
-        return json.dumps({"status": "error", "message": "No context available"})
-    return json.dumps({"status": "ok", "candidates": []})
+        return json.dumps({"status": "error", "error": "context_unavailable"})
+    try:
+        store = getattr(ctx, "memory_store", None)
+        if store is None:
+            return json.dumps({"status": "error", "error": "memory_store not available"})
+        facts = store.query_facts() if callable(store.query_facts) else []
+        candidates = []
+        for f in facts:
+            confidence = f.get("confidence", 0.0)
+            candidates.append({
+                "topic": f.get("topic", ""),
+                "domain": f.get("domain", ""),
+                "confidence": confidence,
+                "provenance": f.get("provenance", ""),
+                "summary": f.get("summary", ""),
+                "test_count": len(f.get("tests", [])),
+                "promotion_eligible": confidence >= 0.8,
+            })
+        return json.dumps({
+            "status": "ok",
+            "total": len(facts),
+            "promotion_candidates": candidates,
+        })
+    except Exception:
+        return json.dumps({"status": "error", "error": "unexpected error fetching promotion rationale"})
 
 
 def _render_promotion_rationale_markdown(ctx: object | None) -> str:
     if ctx is None:
-        return "No context available for promotion rationale."
-    return "Promotion rationale report not available."
+        return "⚠️ **Context unavailable** — promotion rationale requires a valid server context."
+    try:
+        store = getattr(ctx, "memory_store", None)
+        if store is None:
+            return "_No memory store available._"
+        facts = store.query_facts() if callable(store.query_facts) else []
+        lines = ["# HKS Promotion Rationale", ""]
+        if not facts:
+            lines.append("_No HKS exemplars available for promotion analysis._")
+            return "\n".join(lines)
+        for f in facts:
+            confidence = f.get("confidence", 0.0)
+            eligible = confidence >= 0.8
+            icon = "✅" if eligible else "❌"
+            topic = f.get("topic", "unknown")
+            domain = f.get("domain", "")
+            provenance = f.get("provenance", "")
+            summary = f.get("summary", "")
+            tests = f.get("tests", [])
+            lines.append(f"{icon} **{topic}** ({domain}) — {confidence:.2f}")
+            if provenance:
+                lines.append(f"  Provenance: `{provenance}`")
+            if summary:
+                lines.append(f"  {summary}")
+            if tests:
+                lines.append(f"  Tests: {', '.join(t.get('name', '') for t in tests)}")
+            lines.append("")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"_Error rendering promotion rationale: {e}_"
 
 
 def _render_memory_provenance_status(ctx: object | None) -> str:
     if ctx is None:
-        return json.dumps({"status": "error", "message": "No context available"})
-    return json.dumps({"status": "ok", "traces": []})
+        return json.dumps({"status": "error", "error": "context_unavailable"})
+    try:
+        store = getattr(ctx, "memory_store", None)
+        if store is None:
+            return json.dumps({"status": "error", "error": "memory_store not available"})
+        facts = store.query_facts() if callable(store.query_facts) else []
+        traces = []
+        for f in facts:
+            sha = f.get("sha256", "")
+            traces.append({
+                "topic": f.get("topic", ""),
+                "sha256": sha,
+                "sha256_short": sha[:12] + "…" if len(sha) > 12 else sha,
+                "provenance": f.get("provenance", ""),
+                "source_authority_label": f.get("source_authority_label", ""),
+                "confidence": f.get("confidence", 0.0),
+                "fresh_until": f.get("fresh_until", ""),
+                "superseded": bool(f.get("superseded_by")),
+                "superseded_by": f.get("superseded_by", ""),
+            })
+        return json.dumps({
+            "status": "ok",
+            "total_traced": len(facts),
+            "provenance_traces": traces,
+        })
+    except Exception:
+        return json.dumps({"status": "error", "error": "unexpected error fetching memory provenance"})
 
 
 def _render_memory_provenance_markdown(ctx: object | None) -> str:
     if ctx is None:
-        return "No context available for memory provenance."
-    return "Memory provenance report not available."
+        return "⚠️ **Context unavailable** — memory provenance requires a valid server context."
+    try:
+        store = getattr(ctx, "memory_store", None)
+        if store is None:
+            return "_No memory store available._"
+        facts = store.query_facts() if callable(store.query_facts) else []
+        if not facts:
+            return "No provenance-bearing facts found in memory store."
+        total = len(facts)
+        try:
+            stats = store.stats()
+            total = stats.get("total_facts", len(facts))
+        except Exception:
+            pass
+        lines = ["# Memory Provenance", "", f"**{total}** facts in provenance chain.", ""]
+        for f in facts:
+            sha = f.get("sha256", "")
+            sha_short = sha[:12] + "…" if len(sha) > 12 else sha
+            topic = f.get("topic", "")
+            provenance = f.get("provenance", "")
+            authority = f.get("source_authority_label", "")
+            confidence = f.get("confidence", 0.0)
+            superseded_by = f.get("superseded_by", "")
+            fresh_until = f.get("fresh_until", "")
+            lines.append(f"### {topic}")
+            lines.append(f"- **Hash:** `{sha_short}`")
+            if provenance:
+                lines.append(f"- **Provenance:** {provenance}")
+            if authority:
+                lines.append(f"- **Authority:** `{authority}`")
+            lines.append(f"- **Confidence:** {confidence:.2f}")
+            if fresh_until:
+                lines.append(f"- **Fresh until:** {fresh_until}")
+            if superseded_by:
+                lines.append(f"- ⚠️ **Superseded** by `{superseded_by}`")
+            lines.append("")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"_Error rendering memory provenance: {e}_"

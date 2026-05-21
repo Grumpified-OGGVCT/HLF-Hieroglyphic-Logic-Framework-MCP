@@ -923,7 +923,7 @@ Every instruction is exactly **3 bytes**:
 [opcode: 1 byte] [operand: 2 bytes little-endian]
 ```
 
-### Opcode Table (37 opcodes)
+### Opcode Table (38 opcodes)
 
 ```mermaid
 graph LR
@@ -1413,7 +1413,7 @@ HLF exposes MCP `prompts` for agent onboarding and coordination. These are calla
 | URI | Contents |
 | --- | --- |
 | `hlf://grammar` | Full LALR(1) Lark grammar text |
-| `hlf://opcodes` | Bytecode opcode table (37 opcodes) |
+| `hlf://opcodes` | Bytecode opcode table (38 opcodes) |
 | `hlf://host_functions` | Available host function registry |
 | `hlf://examples/{name}` | Example: `hello_world`, `security_audit`, `delegation`, `routing`, `db_migration`, `log_analysis`, `stack_deployment` |
 | `hlf://governance/host_functions` | Raw `governance/host_functions.json` |
@@ -1793,7 +1793,7 @@ uv run ruff format hlf_mcp/
 
 - [x] LALR(1) grammar: 21 statement types, 7 glyphs, expression precedence
 - [x] 5-pass compiler pipeline with ALIGN Ledger validation
-- [x] Bytecode VM: 37 opcodes, gas metering, SHA-256 `.hlb` header
+- [x] Bytecode VM: 38 opcodes, gas metering, SHA-256 `.hlb` header
 - [x] Fixed opcode conflict (`OPENCLAW_TOOL` `0x65` → `0x53`)
 - [x] `governance/bytecode_spec.yaml` as single source of truth
 - [x] 32 host functions with tier/gas/backend enforcement

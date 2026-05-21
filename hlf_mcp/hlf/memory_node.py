@@ -773,6 +773,10 @@ class EvidenceContract:
 
         # ── Freshness ──────────────────────────────────────────────────────
         fresh_until = data.get("fresh_until") or None
+        # If freshness_status is "stale" and no fresh_until is set,
+        # synthesize a past fresh_until so is_stale() works correctly
+        if fresh_until is None and str(data.get("freshness_status", "")).strip().lower() == "stale":
+            fresh_until = "1970-01-01T00:00:00+00:00"
 
         # ── Supersession ────────────────────────────────────────────────────
         supersedes_sha256 = str(

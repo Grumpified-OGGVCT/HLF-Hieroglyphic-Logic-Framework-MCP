@@ -394,9 +394,8 @@ class TestEvidenceContractNormalizedLifecycle:
         assert not contract.tombstoned
 
     def test_normalize_handles_stale_freshness_status(self) -> None:
-        """freshness_status='stale' in raw dict — normalize preserves it as-is;
-        staleness is detected via EvidenceContract.is_stale() which uses fresh_until.
-        raw freshness_status='stale' without a fresh_until does not make the contract stale."""
+        """freshness_status='stale' without fresh_until → normalize synthesizes
+        epoch-0 fresh_until so is_stale() returns True."""
         raw: dict[str, Any] = {
             "sha256": _epoch_sha("stale-norm"),
             "freshness_status": "stale",
@@ -404,11 +403,8 @@ class TestEvidenceContractNormalizedLifecycle:
             "tombstoned": False,
         }
         contract = EvidenceContract.normalize(raw)
-        # normalize doesn't synthesize fresh_until from freshness_status
-        # but the contract fields are still valid
-        assert contract.sha256 == _epoch_sha("stale-norm")
-        assert not contract.revoked
-        assert not contract.tombstoned
+        assert contract.fresh_until is not None
+        assert contract.is_stale() is True
 
     def test_normalize_round_trips_superseded_then_check(self) -> None:
         """Normalize a superseded dict, then verify it's rejected."""

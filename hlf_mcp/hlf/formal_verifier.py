@@ -3052,3 +3052,648 @@ def _fallback_check_property(value: Any, property_spec: dict[str, Any]) -> bool:
         return lo <= value <= hi
 
     return True  # Unknown op → conservatively admit
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase P1: Proof Artifact Format Standardization + Z3 Coverage + INDUCTIVE
+# Added as module-level extensions (no rewrite of existing code)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+# ── Coverage Map ───────────────────────────────────────────────────────────
+
+COVERAGE_MAP: dict[str, list[str]] = {
+    "arithmetic": [
+        "(assert (= (+ x y) (+ y x)))",
+        "(assert (= (* x y) (* y x)))",
+        "(assert (= (- x x) 0))",
+        "(assert (= (+ x 0) x))",
+        "(assert (= (* x 1) x))",
+        "(assert (distinct (+ x 1) x))",
+    ],
+    "comparison": [
+        "(assert (=> (and (< x y) (< y z)) (< x z)))",
+        "(assert (=> (< x y) (<= x y)))",
+        "(assert (= (<= x y) (or (< x y) (= x y))))",
+        "(assert (>= x x))",
+        "(assert (not (and (< x y) (> x y))))",
+        "(assert (=> (and (<= x y) (<= y x)) (= x y)))",
+    ],
+    "boolean": [
+        "(assert (= (and p q) (and q p)))",
+        "(assert (= (or p q) (or q p)))",
+        "(assert (not (and p (not p))))",
+        "(assert (=> (and (=> p q) (=> q r)) (=> p r)))",
+        "(assert (or p (not p)))",
+        "(assert (= (not (and p q)) (or (not p) (not q))))",
+    ],
+    "set": [
+        "(assert (subset (intersection A B) A))",
+        "(assert (= (union A B) (union B A)))",
+        "(assert (= (intersection A A) A))",
+        "(assert (subset empty A))",
+        "(assert (disjoint A (difference B A)))",
+        "(assert (=> (subset A B) (subset (union A C) (union B C))))",
+    ],
+    "control_flow": [
+        "(assert (= (ite c x y) (ite (not c) y x)))",
+        "(assert (= (ite true x y) x))",
+        "(assert (=> c (= (ite c x y) x)))",
+        "(assert (=> (not c) (= (ite c x y) y)))",
+        "(assert (= (and c (or (not c) x)) (and c x)))",
+    ],
+    "type_coercion": [
+        "(assert (= (to_real (to_int x)) x))",
+        "(assert (>= (to_int x) 0))",
+        "(assert (=> (is_int x) (= (to_int (to_real x)) x)))",
+        "(assert (distinct (len (to_set l)) (len l)))",
+        "(assert (<= (len (to_set l)) (len l)))",
+    ],
+}
+
+
+# ── Operator class verification ────────────────────────────────────────────
+
+def verify_operator_class(
+    operator_class: str,
+    formulae: list[str],
+) -> list:
+    """Verify a batch of Z3 formulae for a given operator class.
+
+    Wraps Z3 verification calls and returns a list of ProofArtifacts
+    (from proof_artifacts module) with proper status assignment.
+
+    Args:
+        operator_class: The operator class name.
+        formulae: List of SMT-LIB formula strings to verify.
+
+    Returns:
+        List of ProofArtifact instances from the proof_artifacts module.
+    """
+    from hlf_mcp.hlf.proof_artifacts import (
+        ProofArtifact,
+        ProofStatus,
+        admit_proof,
+        create_proof_artifact,
+        deny_proof,
+    )
+
+    import time as _time
+
+    artifacts: list[ProofArtifact] = []
+
+    for formula in formulae:
+        start = _time.time()
+
+        if not _HAS_Z3:
+            artifact = create_proof_artifact(
+                operator_class=operator_class,
+                theorem=f"Z3 verification of: {formula[:80]}...",
+                formula=formula,
+                result="unknown",
+                time_ms=(_time.time() - start) * 1000.0,
+                evidence={"fallback": True, "reason": "z3_not_available"},
+            )
+            artifact.status = ProofStatus.UNVERIFIED
+            artifacts.append(artifact)
+            continue
+
+        try:
+            s = z3.Solver()
+            s.from_string(formula)
+            z3_result = s.check()
+
+            elapsed = (_time.time() - start) * 1000.0
+            result_str = str(z3_result)
+
+            if result_str == "sat":
+                try:
+                    model_dict = {
+                        str(d.name()): str(s.model()[d])
+                        if s.model()[d] is not None
+                        else "None"
+                        for d in s.model().decls()
+                    }
+                except Exception:
+                    model_dict = None
+
+                artifact = create_proof_artifact(
+                    operator_class=operator_class,
+                    theorem=f"Z3 verification of: {formula[:80]}...",
+                    formula=formula,
+                    result=result_str,
+                    model=model_dict,
+                    time_ms=elapsed,
+                )
+                deny_proof(artifact, f"Counterexample found: {model_dict}")
+            elif result_str == "unsat":
+                try:
+                    proof_trace = str(s.proof()) if s.proof() else None
+                except Exception:
+                    proof_trace = None
+
+                artifact = create_proof_artifact(
+                    operator_class=operator_class,
+                    theorem=f"Z3 verification of: {formula[:80]}...",
+                    formula=formula,
+                    result=result_str,
+                    proof_trace=proof_trace,
+                    time_ms=elapsed,
+                )
+                admit_proof(artifact, admitted_by="z3")
+            else:
+                artifact = create_proof_artifact(
+                    operator_class=operator_class,
+                    theorem=f"Z3 verification of: {formula[:80]}...",
+                    formula=formula,
+                    result=result_str,
+                    time_ms=elapsed,
+                )
+                artifact.status = ProofStatus.UNVERIFIED
+
+        except Exception as exc:
+            elapsed = (_time.time() - start) * 1000.0
+            artifact = create_proof_artifact(
+                operator_class=operator_class,
+                theorem=f"Z3 verification error: {formula[:60]}...",
+                formula=formula,
+                result=str(exc),
+                time_ms=elapsed,
+                evidence={"error": str(exc)},
+            )
+            artifact.status = ProofStatus.ERROR
+
+        artifacts.append(artifact)
+
+    return artifacts
+
+
+def run_regression_suite() -> tuple[list, dict[str, int]]:
+    """Run all operator classes against stored regression test formulae.
+
+    Uses COVERAGE_MAP to test each operator class with its canonical
+    formula patterns.
+
+    Returns:
+        Tuple of (list of ProofArtifacts, summary dict with counts).
+    """
+    from hlf_mcp.hlf.proof_artifacts import ProofStatus, format_proof_report
+
+    all_artifacts: list = []
+    for operator_class, formulae in COVERAGE_MAP.items():
+        class_artifacts = verify_operator_class(operator_class, formulae)
+        all_artifacts.extend(class_artifacts)
+
+    report = format_proof_report(all_artifacts)
+    summary: dict[str, int] = {
+        "total": report["total"],
+        "admitted": report["admitted"],
+        "denied": report["denied"],
+        "unverified": report["unverified"],
+        "timeout": report["timeout"],
+        "error": report["error"],
+    }
+
+    return all_artifacts, summary
+
+
+def export_proof_artifacts(artifacts: list, format: str = "json") -> str:
+    """Export proof artifacts in the specified format.
+
+    Args:
+        artifacts: List of ProofArtifact instances.
+        format: Output format ("json" or "markdown").
+
+    Returns:
+        A string in the requested format.
+    """
+    if format == "json":
+        import json as _json
+
+        return _json.dumps(
+            [a.to_dict() for a in artifacts],
+            indent=2,
+            sort_keys=True,
+        )
+
+    if format == "markdown":
+        lines: list[str] = [
+            "# Proof Artifacts Export",
+            "",
+            f"**Total artifacts:** {len(artifacts)}",
+            "",
+            "| Artifact ID | Operator Class | Theorem | Status | Result | Time (ms) |",
+            "|-------------|---------------|---------|--------|--------|-----------|",
+        ]
+        for a in artifacts:
+            lines.append(
+                f"| {a.artifact_id[:8]}... | {a.operator_class} "
+                f"| {a.theorem[:50]} | {a.status.value} "
+                f"| {a.result or 'N/A'} | {a.time_ms:.1f} |"
+            )
+        return "\n".join(lines)
+
+    raise ValueError(f"Unknown export format: {format}")
+
+
+# ── Coverage computation ──────────────────────────────────────────────────
+
+
+def compute_coverage(artifacts: list) -> dict[str, float]:
+    """Compute per-class coverage percentage.
+
+    Coverage = admitted / (admitted + denied + unverified).
+
+    Args:
+        artifacts: List of ProofArtifact instances.
+
+    Returns:
+        Dict mapping operator_class → coverage percentage (0.0–100.0).
+    """
+    from hlf_mcp.hlf.proof_artifacts import ProofStatus
+
+    class_results: dict[str, dict[str, int]] = {}
+    for a in artifacts:
+        cls_name = a.operator_class
+        if cls_name not in class_results:
+            class_results[cls_name] = {"admitted": 0, "denied": 0, "unverified": 0}
+        if a.status == ProofStatus.ADMITTED:
+            class_results[cls_name]["admitted"] += 1
+        elif a.status == ProofStatus.DENIED:
+            class_results[cls_name]["denied"] += 1
+        elif a.status == ProofStatus.UNVERIFIED:
+            class_results[cls_name]["unverified"] += 1
+
+    coverage: dict[str, float] = {}
+    for cls_name, counts in class_results.items():
+        total = counts["admitted"] + counts["denied"] + counts["unverified"]
+        coverage[cls_name] = (counts["admitted"] / total * 100.0) if total > 0 else 0.0
+
+    # Include classes with zero artifacts
+    for cls_name in COVERAGE_MAP:
+        if cls_name not in coverage:
+            coverage[cls_name] = 0.0
+
+    return coverage
+
+
+def detect_missing_coverage() -> list[str]:
+    """Return operator classes with 0% coverage.
+
+    Returns:
+        List of operator class names that have no admitted proofs.
+    """
+    coverage = compute_coverage([])
+    return [cls_name for cls_name, pct in coverage.items() if pct == 0.0]
+
+
+# ── Z3 verification functions for new operator classes ────────────────────
+
+
+def verify_set_operations() -> list:
+    """Verify set theory operations using Z3.
+
+    Covers: union, intersection, difference, subset, superset, disjoint.
+
+    Returns:
+        List of ProofArtifact instances.
+    """
+    from hlf_mcp.hlf.proof_artifacts import ProofArtifact, ProofStatus, admit_proof, create_proof_artifact, deny_proof
+
+    import time as _time
+
+    set_formulae = [
+        # Union commutativity: A ∪ B = B ∪ A
+        "(declare-const A (Set Int))\n(declare-const B (Set Int))\n(assert (not (= (set.union A B) (set.union B A))))",
+        # Intersection idempotence: A ∩ A = A
+        "(declare-const A (Set Int))\n(assert (not (= (set.inter A A) A)))",
+        # Difference property: A \ A = ∅
+        "(declare-const A (Set Int))\n(assert (not (= (set.minus A A) (as set.empty (Set Int)))))",
+        # Subset reflexivity: A ⊆ A
+        "(declare-const A (Set Int))\n(assert (not (set.subset A A)))",
+        # Superset: A ⊆ B and B ⊆ A → A = B
+        "(declare-const A (Set Int))\n(declare-const B (Set Int))\n(assert (set.subset A B))\n(assert (set.subset B A))\n(assert (not (= A B)))",
+        # Disjoint property: A ∩ B = ∅ means disjoint
+        "(declare-const A (Set Int))\n(declare-const B (Set Int))\n(assert (= (set.inter A B) (as set.empty (Set Int))))\n(assert (set.subset (set.inter A B) A))",
+    ]
+
+    theorem_names = [
+        "Union commutativity: A ∪ B = B ∪ A",
+        "Intersection idempotence: A ∩ A = A",
+        "Difference property: A \\ A = ∅",
+        "Subset reflexivity: A ⊆ A",
+        "Anti-symmetry: A ⊆ B ∧ B ⊆ A → A = B",
+        "Disjoint sets: A ∩ B = ∅ ∧ A ∩ B ⊆ A",
+    ]
+
+    artifacts: list = []
+    for formula, theorem in zip(set_formulae, theorem_names):
+        start = _time.time()
+
+        if not _HAS_Z3:
+            artifact = create_proof_artifact(
+                operator_class="set",
+                theorem=theorem,
+                formula=formula,
+                result="unknown",
+                time_ms=(_time.time() - start) * 1000.0,
+                evidence={"fallback": True, "reason": "z3_not_available"},
+            )
+            artifact.status = ProofStatus.UNVERIFIED
+            artifacts.append(artifact)
+            continue
+
+        try:
+            s = z3.Solver()
+            s.from_string(formula)
+            z3_result = s.check()
+
+            elapsed = (_time.time() - start) * 1000.0
+            result_str = str(z3_result)
+
+            # For these formulae, we assert the negation of the property,
+            # so "unsat" means the property is valid
+            if result_str == "unsat":
+                artifact = create_proof_artifact(
+                    operator_class="set",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    time_ms=elapsed,
+                )
+                admit_proof(artifact, admitted_by="z3")
+            elif result_str == "sat":
+                try:
+                    model_dict = {
+                        str(d.name()): str(s.model()[d])
+                        if s.model()[d] is not None
+                        else "None"
+                        for d in s.model().decls()
+                    }
+                except Exception:
+                    model_dict = None
+
+                artifact = create_proof_artifact(
+                    operator_class="set",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    model=model_dict,
+                    time_ms=elapsed,
+                )
+                deny_proof(artifact, f"Counterexample: {model_dict}")
+            else:
+                artifact = create_proof_artifact(
+                    operator_class="set",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    time_ms=elapsed,
+                )
+                artifact.status = ProofStatus.UNVERIFIED
+
+        except Exception as exc:
+            elapsed = (_time.time() - start) * 1000.0
+            artifact = create_proof_artifact(
+                operator_class="set",
+                theorem=theorem,
+                formula=formula,
+                result=str(exc),
+                time_ms=elapsed,
+                evidence={"error": str(exc)},
+            )
+            artifact.status = ProofStatus.ERROR
+
+        artifacts.append(artifact)
+
+    return artifacts
+
+
+def verify_type_coercions() -> list:
+    """Verify type coercion properties using Z3.
+
+    Covers: int→float, float→int, str→int, list→set, set→list.
+
+    Returns:
+        List of ProofArtifact instances.
+    """
+    from hlf_mcp.hlf.proof_artifacts import ProofArtifact, ProofStatus, admit_proof, create_proof_artifact, deny_proof
+
+    import time as _time
+
+    coercion_formulae = [
+        # int→float: to_real preserves value
+        "(declare-const x Int)\n(assert (not (= (to_real x) (to_real x))))",
+        # float→int: to_int is monotonic for positive values
+        "(declare-const x Real)\n(declare-const y Real)\n(assert (>= x 0))\n(assert (>= y 0))\n(assert (<= x y))\n(assert (not (<= (to_int x) (to_int y))))",
+        # list→set: set cardinality ≤ list length
+        "(declare-const l (List Int))\n(assert (> (set.card (to_set l)) (list.len l)))",
+        # set→list: converting back gives equal or fewer elements
+        "(declare-const s (Set Int))\n(assert (> (set.card s) (list.len (to_list s))))",
+        # Coercion roundtrip: int → real → int for positive values
+        "(declare-const x Int)\n(assert (>= x 0))\n(assert (not (= (to_int (to_real x)) x)))",
+    ]
+
+    theorem_names = [
+        "int→float: to_real preserves value identity",
+        "float→int: to_int is monotonic for non-negative reals",
+        "list→set: set cardinality ≤ list length",
+        "set→list: cardinality preserved under roundtrip bound",
+        "Coercion roundtrip: int → real → int identity",
+    ]
+
+    artifacts: list = []
+    for formula, theorem in zip(coercion_formulae, theorem_names):
+        start = _time.time()
+
+        if not _HAS_Z3:
+            artifact = create_proof_artifact(
+                operator_class="type_coercion",
+                theorem=theorem,
+                formula=formula,
+                result="unknown",
+                time_ms=(_time.time() - start) * 1000.0,
+                evidence={"fallback": True, "reason": "z3_not_available"},
+            )
+            artifact.status = ProofStatus.UNVERIFIED
+            artifacts.append(artifact)
+            continue
+
+        try:
+            s = z3.Solver()
+            s.from_string(formula)
+            z3_result = s.check()
+
+            elapsed = (_time.time() - start) * 1000.0
+            result_str = str(z3_result)
+
+            if result_str == "unsat":
+                artifact = create_proof_artifact(
+                    operator_class="type_coercion",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    time_ms=elapsed,
+                )
+                admit_proof(artifact, admitted_by="z3")
+            elif result_str == "sat":
+                try:
+                    model_dict = {
+                        str(d.name()): str(s.model()[d])
+                        if s.model()[d] is not None
+                        else "None"
+                        for d in s.model().decls()
+                    }
+                except Exception:
+                    model_dict = None
+
+                artifact = create_proof_artifact(
+                    operator_class="type_coercion",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    model=model_dict,
+                    time_ms=elapsed,
+                )
+                deny_proof(artifact, f"Counterexample: {model_dict}")
+            else:
+                artifact = create_proof_artifact(
+                    operator_class="type_coercion",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    time_ms=elapsed,
+                )
+                artifact.status = ProofStatus.UNVERIFIED
+
+        except Exception as exc:
+            elapsed = (_time.time() - start) * 1000.0
+            artifact = create_proof_artifact(
+                operator_class="type_coercion",
+                theorem=theorem,
+                formula=formula,
+                result=str(exc),
+                time_ms=elapsed,
+                evidence={"error": str(exc)},
+            )
+            artifact.status = ProofStatus.ERROR
+
+        artifacts.append(artifact)
+
+    return artifacts
+
+
+def verify_control_flow_equivalences() -> list:
+    """Verify control flow equivalence properties using Z3.
+
+    Covers: if-then-else, switch, guard clauses, short-circuit eval.
+
+    Returns:
+        List of ProofArtifact instances.
+    """
+    from hlf_mcp.hlf.proof_artifacts import ProofArtifact, ProofStatus, admit_proof, create_proof_artifact, deny_proof
+
+    import time as _time
+
+    cf_formulae = [
+        # if-then-else commutativity of branches: ite(c, x, y) = ite(¬c, y, x)
+        "(declare-const c Bool)\n(declare-const x Int)\n(declare-const y Int)\n(assert (not (= (ite c x y) (ite (not c) y x))))",
+        # ite with true condition: ite(true, x, y) = x
+        "(declare-const x Int)\n(declare-const y Int)\n(assert (not (= (ite true x y) x)))",
+        # Guard clause implication: c ⇒ ite(c, x, y) = x
+        "(declare-const c Bool)\n(declare-const x Int)\n(declare-const y Int)\n(assert c)\n(assert (not (= (ite c x y) x)))",
+        # Short-circuit AND: c ∧ (¬c ∨ x) ≡ c ∧ x
+        "(declare-const c Bool)\n(declare-const x Bool)\n(assert (not (= (and c (or (not c) x)) (and c x))))",
+        # Short-circuit OR: c ∨ (¬c ∧ x) ≡ c ∨ x
+        "(declare-const c Bool)\n(declare-const x Bool)\n(assert (not (= (or c (and (not c) x)) (or c x))))",
+    ]
+
+    theorem_names = [
+        "ite commutativity: ite(c, x, y) = ite(¬c, y, x)",
+        "ite true branch: ite(true, x, y) = x",
+        "Guard clause: c ⇒ ite(c, x, y) = x",
+        "Short-circuit AND: c ∧ (¬c ∨ x) ≡ c ∧ x",
+        "Short-circuit OR: c ∨ (¬c ∧ x) ≡ c ∨ x",
+    ]
+
+    artifacts: list = []
+    for formula, theorem in zip(cf_formulae, theorem_names):
+        start = _time.time()
+
+        if not _HAS_Z3:
+            artifact = create_proof_artifact(
+                operator_class="control_flow",
+                theorem=theorem,
+                formula=formula,
+                result="unknown",
+                time_ms=(_time.time() - start) * 1000.0,
+                evidence={"fallback": True, "reason": "z3_not_available"},
+            )
+            artifact.status = ProofStatus.UNVERIFIED
+            artifacts.append(artifact)
+            continue
+
+        try:
+            s = z3.Solver()
+            s.from_string(formula)
+            z3_result = s.check()
+
+            elapsed = (_time.time() - start) * 1000.0
+            result_str = str(z3_result)
+
+            # These formulae assert the negation of the equivalence,
+            # so "unsat" = equivalence is valid
+            if result_str == "unsat":
+                artifact = create_proof_artifact(
+                    operator_class="control_flow",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    time_ms=elapsed,
+                )
+                admit_proof(artifact, admitted_by="z3")
+            elif result_str == "sat":
+                try:
+                    model_dict = {
+                        str(d.name()): str(s.model()[d])
+                        if s.model()[d] is not None
+                        else "None"
+                        for d in s.model().decls()
+                    }
+                except Exception:
+                    model_dict = None
+
+                artifact = create_proof_artifact(
+                    operator_class="control_flow",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    model=model_dict,
+                    time_ms=elapsed,
+                )
+                deny_proof(artifact, f"Counterexample: {model_dict}")
+            else:
+                artifact = create_proof_artifact(
+                    operator_class="control_flow",
+                    theorem=theorem,
+                    formula=formula,
+                    result=result_str,
+                    time_ms=elapsed,
+                )
+                artifact.status = ProofStatus.UNVERIFIED
+
+        except Exception as exc:
+            elapsed = (_time.time() - start) * 1000.0
+            artifact = create_proof_artifact(
+                operator_class="control_flow",
+                theorem=theorem,
+                formula=formula,
+                result=str(exc),
+                time_ms=elapsed,
+                evidence={"error": str(exc)},
+            )
+            artifact.status = ProofStatus.ERROR
+
+        artifacts.append(artifact)
+
+    return artifacts

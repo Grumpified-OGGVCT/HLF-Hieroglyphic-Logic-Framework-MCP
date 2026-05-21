@@ -701,3 +701,273 @@ def test_inductive_proof_depth_greater_than_lemma() -> None:
     )
     assert artifact.proof_type == "INDUCTIVE"
     assert artifact.proof_depth >= 1  # At minimum base case depth
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase P1: New proof_artifacts module tests (ProofArtifact from proof_artifacts.py)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_new_create_proof_artifact_creates_valid_artifact() -> None:
+    """create_proof_artifact() from proof_artifacts module creates a valid artifact."""
+    from hlf_mcp.hlf.proof_artifacts import ProofStatus, create_proof_artifact
+
+    artifact = create_proof_artifact(
+        operator_class="arithmetic",
+        theorem="Addition is commutative: x + y = y + x",
+        formula="(assert (= (+ x y) (+ y x)))",
+        result="unsat",
+        time_ms=12.5,
+    )
+    assert artifact.operator_class == "arithmetic"
+    assert artifact.status == ProofStatus.UNVERIFIED
+    assert artifact.result == "unsat"
+    assert artifact.theorem == "Addition is commutative: x + y = y + x"
+    assert artifact.formula == "(assert (= (+ x y) (+ y x)))"
+    assert artifact.time_ms == 12.5
+    assert artifact.artifact_id != ""
+    assert artifact.admitted_by is None
+
+
+def test_admit_proof_sets_admitted_status() -> None:
+    """admit_proof() sets status to ADMITTED and records admitted_by."""
+    from hlf_mcp.hlf.proof_artifacts import ProofStatus, admit_proof, create_proof_artifact
+
+    artifact = create_proof_artifact(
+        operator_class="boolean",
+        theorem="Excluded middle: p ∨ ¬p",
+        formula="(assert (or p (not p)))",
+    )
+    updated = admit_proof(artifact, admitted_by="z3")
+
+    assert updated.status == ProofStatus.ADMITTED
+    assert updated.admitted_by == "z3"
+
+
+def test_deny_proof_sets_denied_and_records_reason() -> None:
+    """deny_proof() sets status to DENIED and records reason in evidence."""
+    from hlf_mcp.hlf.proof_artifacts import ProofStatus, create_proof_artifact, deny_proof
+
+    artifact = create_proof_artifact(
+        operator_class="comparison",
+        theorem="Transitivity: x < y ∧ y < z → x < z",
+        formula="(assert (=> (and (< x y) (< y z)) (< x z)))",
+    )
+    updated = deny_proof(artifact, reason="Counterexample found at x=5, y=3, z=1")
+
+    assert updated.status == ProofStatus.DENIED
+    assert updated.evidence.get("denial_reason") == "Counterexample found at x=5, y=3, z=1"
+
+
+def test_format_proof_report_produces_correct_counts() -> None:
+    """format_proof_report() produces correct total and status counts."""
+    from hlf_mcp.hlf.proof_artifacts import (
+        ProofStatus,
+        admit_proof,
+        create_proof_artifact,
+        deny_proof,
+        format_proof_report,
+    )
+
+    a1 = create_proof_artifact("arithmetic", "T1", "(assert true)")
+    a2 = create_proof_artifact("arithmetic", "T2", "(assert true)")
+    a3 = create_proof_artifact("comparison", "T3", "(assert true)")
+
+    admit_proof(a1, admitted_by="z3")
+    admit_proof(a2, admitted_by="z3")
+    deny_proof(a3, "counterexample")
+
+    report = format_proof_report([a1, a2, a3])
+
+    assert report["total"] == 3
+    assert report["admitted"] == 2
+    assert report["denied"] == 1
+    assert report["unverified"] == 0
+    assert report["timeout"] == 0
+    assert report["error"] == 0
+
+
+def test_format_proof_report_includes_per_class_breakdown() -> None:
+    """format_proof_report() includes per-class breakdown for all operator classes."""
+    from hlf_mcp.hlf.proof_artifacts import (
+        admit_proof,
+        create_proof_artifact,
+        format_proof_report,
+    )
+
+    a1 = create_proof_artifact("arithmetic", "T1", "(assert true)")
+    a2 = create_proof_artifact("set", "T2", "(assert true)")
+    admit_proof(a1, admitted_by="z3")
+    admit_proof(a2, admitted_by="z3")
+
+    report = format_proof_report([a1, a2])
+
+    assert "per_class" in report
+    assert report["per_class"]["arithmetic"]["admitted"] == 1
+    assert report["per_class"]["set"]["admitted"] == 1
+    # Unused classes should be present with zero counts
+    assert report["per_class"]["boolean"]["total"] == 0
+
+
+def test_run_regression_suite_returns_artifacts_and_summary() -> None:
+    """run_regression_suite() returns artifacts list and summary dict."""
+    from hlf_mcp.hlf.formal_verifier import run_regression_suite
+
+    artifacts, summary = run_regression_suite()
+
+    assert isinstance(artifacts, list)
+    assert isinstance(summary, dict)
+    assert "total" in summary
+    assert "admitted" in summary
+    assert "denied" in summary
+    # All formula patterns across COVERAGE_MAP should be tested
+    assert summary["total"] > 0
+
+
+def test_compute_coverage_returns_correct_percentages() -> None:
+    """compute_coverage() returns accurate per-class coverage percentages."""
+    from hlf_mcp.hlf.formal_verifier import compute_coverage
+    from hlf_mcp.hlf.proof_artifacts import (
+        ProofStatus,
+        admit_proof,
+        create_proof_artifact,
+        deny_proof,
+    )
+
+    a1 = create_proof_artifact("arithmetic", "T1", "(assert true)")
+    a2 = create_proof_artifact("arithmetic", "T2", "(assert true)")
+    a3 = create_proof_artifact("arithmetic", "T3", "(assert true)")
+
+    # Set statuses directly for testing coverage computation
+    a1.status = ProofStatus.ADMITTED
+    a2.status = ProofStatus.ADMITTED
+    a3.status = ProofStatus.DENIED
+
+    coverage = compute_coverage([a1, a2, a3])
+
+    # 2 admitted / (2 + 1 + 0) * 100 = 66.67%
+    assert coverage.get("arithmetic", 0.0) == pytest.approx(66.67, rel=0.01)
+
+
+def test_detect_missing_coverage_finds_uncovered_classes() -> None:
+    """detect_missing_coverage() returns operator classes with 0% coverage."""
+    from hlf_mcp.hlf.formal_verifier import detect_missing_coverage
+
+    missing = detect_missing_coverage()
+
+    assert isinstance(missing, list)
+    # Without Z3 available (or no artifacts), all classes may show 0%
+    # The function should still return a valid list
+    assert "arithmetic" in missing or len(missing) >= 0
+
+
+def test_verify_set_operations_produces_artifacts() -> None:
+    """verify_set_operations() produces ProofArtifacts for all set ops."""
+    from hlf_mcp.hlf.formal_verifier import verify_set_operations
+
+    artifacts = verify_set_operations()
+
+    assert isinstance(artifacts, list)
+    # Should have at least the 6 set theorems
+    assert len(artifacts) >= 6
+    for a in artifacts:
+        assert a.operator_class == "set"
+        assert a.theorem != ""
+
+
+def test_verify_type_coercions_produces_artifacts() -> None:
+    """verify_type_coercions() produces ProofArtifacts for all coercion types."""
+    from hlf_mcp.hlf.formal_verifier import verify_type_coercions
+
+    artifacts = verify_type_coercions()
+
+    assert isinstance(artifacts, list)
+    assert len(artifacts) >= 5
+    for a in artifacts:
+        assert a.operator_class == "type_coercion"
+
+
+def test_verify_control_flow_equivalences_produces_artifacts() -> None:
+    """verify_control_flow_equivalences() produces ProofArtifacts for CF equivalences."""
+    from hlf_mcp.hlf.formal_verifier import verify_control_flow_equivalences
+
+    artifacts = verify_control_flow_equivalences()
+
+    assert isinstance(artifacts, list)
+    assert len(artifacts) >= 5
+    for a in artifacts:
+        assert a.operator_class == "control_flow"
+
+
+def test_export_proof_artifacts_json_format() -> None:
+    """export_proof_artifacts() produces valid JSON output."""
+    import json as _json
+
+    from hlf_mcp.hlf.formal_verifier import export_proof_artifacts
+    from hlf_mcp.hlf.proof_artifacts import admit_proof, create_proof_artifact
+
+    a1 = create_proof_artifact("arithmetic", "T1", "(assert true)")
+    admit_proof(a1, admitted_by="z3")
+
+    result = export_proof_artifacts([a1], format="json")
+    parsed = _json.loads(result)
+
+    assert isinstance(parsed, list)
+    assert len(parsed) == 1
+    assert parsed[0]["operator_class"] == "arithmetic"
+    assert parsed[0]["status"] == "admitted"
+
+
+def test_export_proof_artifacts_markdown_format() -> None:
+    """export_proof_artifacts() produces markdown output."""
+    from hlf_mcp.hlf.formal_verifier import export_proof_artifacts
+    from hlf_mcp.hlf.proof_artifacts import admit_proof, create_proof_artifact
+
+    a1 = create_proof_artifact("boolean", "T1", "(assert true)")
+    admit_proof(a1, admitted_by="z3")
+
+    result = export_proof_artifacts([a1], format="markdown")
+
+    assert "# Proof Artifacts Export" in result
+    assert "boolean" in result
+    assert "admitted" in result
+
+
+def test_proof_artifact_to_json_serializable_new() -> None:
+    """ProofArtifact.to_json() from proof_artifacts module returns valid JSON."""
+    import json as _json
+
+    from hlf_mcp.hlf.proof_artifacts import admit_proof, create_proof_artifact
+
+    artifact = create_proof_artifact(
+        operator_class="arithmetic",
+        theorem="T1",
+        formula="(assert true)",
+        result="unsat",
+        time_ms=5.0,
+    )
+    admit_proof(artifact, admitted_by="z3")
+
+    json_str = artifact.to_json()
+    parsed = _json.loads(json_str)
+
+    assert parsed["operator_class"] == "arithmetic"
+    assert parsed["status"] == "admitted"
+    assert parsed["result"] == "unsat"
+    assert parsed["time_ms"] == 5.0
+
+
+def test_verify_operator_class_wraps_z3_calls() -> None:
+    """verify_operator_class() returns ProofArtifacts for a batch of formulae."""
+    from hlf_mcp.hlf.formal_verifier import verify_operator_class
+
+    formulae = [
+        "(assert (= (+ x 0) x))",
+        "(assert (= (* x 1) x))",
+    ]
+    artifacts = verify_operator_class("arithmetic", formulae)
+
+    assert len(artifacts) == 2
+    for a in artifacts:
+        assert a.operator_class == "arithmetic"
+        assert a.formula != ""

@@ -7,7 +7,7 @@ TypeContract) and a CapabilityManifest declaring effects. This translator:
   - Maps HLF type algebra → JSON Schema (Draft 2020-12 compatible)
   - Generates full OpenAPI 3.0 / 3.1 specs from CapabilityManifests
   - Validates JSON payloads against HLF contracts with detailed error reporting
-  - Generates client SDK snippets in Python, TypeScript, and Go
+  - Generates client SDK snippets in Python, TypeScript, Go, Java, and Rust
 
 Schema mapping covers the full HLF type lattice:
   INT → {"type": "integer"}      FLOAT → {"type": "number"}
@@ -735,7 +735,8 @@ class SchemaTranslator:
 
         Args:
             contract: An InputContract or OutputContract instance.
-            language: Target language — "python", "typescript", or "go".
+            language: Target language — "python", "typescript", "go",
+                      "java", or "rust".
 
         Returns:
             A string containing the generated SDK code.
@@ -759,6 +760,10 @@ class SchemaTranslator:
             return self._generate_typescript_input(contract, class_name)
         elif language == "go":
             return self._generate_go_input(contract, class_name)
+        elif language == "java":
+            return self._generate_java_input(contract, class_name)
+        elif language == "rust":
+            return self._generate_rust_input(contract, class_name)
         else:
             raise ValueError(f"Unsupported language: {language}")
 
@@ -896,6 +901,10 @@ class SchemaTranslator:
                 f"\tResult {go_type} `json:\"result\"`\n"
                 f"}}\n"
             )
+        elif language == "java":
+            return self._generate_java_output(contract, class_name)
+        elif language == "rust":
+            return self._generate_rust_output(contract, class_name)
         else:
             raise ValueError(f"Unsupported language: {language}")
 
@@ -945,6 +954,273 @@ class SchemaTranslator:
             return mapping.get(hlf_type.value, "interface{}")
         type_name = str(getattr(hlf_type, "value", hlf_type)).lower()
         return mapping.get(type_name, "interface{}")
+
+    @staticmethod
+    def _hlf_type_to_java_type(hlf_type: Any) -> str:
+        """Map HLF type to a Java type string for Jackson-annotated classes.
+
+        Mapping:
+            string → String, number → double, integer → int,
+            real → double, rational → double, boolean → boolean,
+            json → JsonNode, any → Object,
+            list → List<T>, set → Set<T>, map → Map<String, T>
+        """
+        from hlf_mcp.hlf.typed_contracts import HlfType, ParametricType
+        if isinstance(hlf_type, ParametricType):
+            if hlf_type.base == HlfType.LIST:
+                inner = SchemaTranslator._hlf_type_to_java_type(
+                    hlf_type.params[0] if hlf_type.params else HlfType.ANY
+                )
+                return f"List<{inner}>"
+            if hlf_type.base == HlfType.SET:
+                inner = SchemaTranslator._hlf_type_to_java_type(
+                    hlf_type.params[0] if hlf_type.params else HlfType.ANY
+                )
+                return f"Set<{inner}>"
+            if hlf_type.base == HlfType.MAP:
+                val_type = SchemaTranslator._hlf_type_to_java_type(
+                    hlf_type.params[1] if len(hlf_type.params) >= 2
+                    else (hlf_type.params[0] if hlf_type.params else HlfType.ANY)
+                )
+                return f"Map<String, {val_type}>"
+            return "Object"
+        mapping: dict[str, str] = {
+            "string": "String", "number": "double", "integer": "int",
+            "real": "double", "rational": "double", "boolean": "boolean",
+            "json": "JsonNode", "any": "Object",
+            "list": "List<Object>", "set": "Set<Object>", "map": "Map<String, Object>",
+        }
+        if isinstance(hlf_type, HlfType):
+            return mapping.get(hlf_type.value, "Object")
+        type_name = str(getattr(hlf_type, "value", hlf_type)).lower()
+        return mapping.get(type_name, "Object")
+
+    @staticmethod
+    def _hlf_type_to_rust_type(hlf_type: Any) -> str:
+        """Map HLF type to a Rust type string for serde-derive structs.
+
+        Mapping:
+            string → String, number → f64, integer → i64,
+            real → f64, rational → f64, boolean → bool,
+            json → serde_json::Value, any → serde_json::Value,
+            list → Vec<T>, set → HashSet<T>, map → HashMap<String, T>
+        """
+        from hlf_mcp.hlf.typed_contracts import HlfType, ParametricType
+        if isinstance(hlf_type, ParametricType):
+            if hlf_type.base == HlfType.LIST:
+                inner = SchemaTranslator._hlf_type_to_rust_type(
+                    hlf_type.params[0] if hlf_type.params else HlfType.ANY
+                )
+                return f"Vec<{inner}>"
+            if hlf_type.base == HlfType.SET:
+                inner = SchemaTranslator._hlf_type_to_rust_type(
+                    hlf_type.params[0] if hlf_type.params else HlfType.ANY
+                )
+                return f"std::collections::HashSet<{inner}>"
+            if hlf_type.base == HlfType.MAP:
+                val_type = SchemaTranslator._hlf_type_to_rust_type(
+                    hlf_type.params[1] if len(hlf_type.params) >= 2
+                    else (hlf_type.params[0] if hlf_type.params else HlfType.ANY)
+                )
+                return f"std::collections::HashMap<String, {val_type}>"
+            return "serde_json::Value"
+        mapping: dict[str, str] = {
+            "string": "String", "number": "f64", "integer": "i64",
+            "real": "f64", "rational": "f64", "boolean": "bool",
+            "json": "serde_json::Value", "any": "serde_json::Value",
+            "list": "Vec<serde_json::Value>", "set": "std::collections::HashSet<serde_json::Value>",
+            "map": "std::collections::HashMap<String, serde_json::Value>",
+        }
+        if isinstance(hlf_type, HlfType):
+            return mapping.get(hlf_type.value, "serde_json::Value")
+        type_name = str(getattr(hlf_type, "value", hlf_type)).lower()
+        return mapping.get(type_name, "serde_json::Value")
+
+    # ── Java SDK generation ────────────────────────────────────────────────────
+
+    def _generate_java_input(self, contract: Any, class_name: str) -> str:
+        """Generate a Java record with Jackson annotations for an InputContract.
+
+        Produces a Java record (Java 16+) with @JsonProperty annotations on
+        each compact constructor parameter, plus a @JsonCreator factory method
+        for deserialization.  Uses standard Jackson imports.
+        """
+        from hlf_mcp.hlf.typed_contracts import TypeContract
+
+        param_names: list[str] = []
+        param_types: list[str] = []
+
+        for param in contract.parameters:
+            if not isinstance(param, TypeContract) or not param.name:
+                continue
+            java_type = self._hlf_type_to_java_type(param.hlf_type)
+            param_names.append(param.name)
+            param_types.append(java_type)
+
+        lines: list[str] = [
+            "// Auto-generated by SchemaTranslator — HLF Input Contract: "
+            + contract.function_name,
+            "import com.fasterxml.jackson.annotation.JsonCreator;",
+            "import com.fasterxml.jackson.annotation.JsonProperty;",
+            "",
+        ]
+
+        # Add collection imports if needed
+        needs_list = any("List<" in t for t in param_types)
+        needs_set = any("Set<" in t for t in param_types)
+        needs_map = any("Map<" in t for t in param_types)
+        if needs_list:
+            lines.append("import java.util.List;")
+        if needs_set:
+            lines.append("import java.util.Set;")
+        if needs_map:
+            lines.append("import java.util.Map;")
+        if needs_list or needs_set or needs_map:
+            lines.append("")
+
+        # Record declaration
+        param_decls = ", ".join(
+            f"{t} {n}" for n, t in zip(param_names, param_types)
+        )
+        lines.append(f"public record {class_name}(")
+        lines.append(f"    {param_decls}")
+        lines.append(") {")
+
+        if not param_names:
+            lines.append("}")
+            return "\n".join(lines)
+
+        # @JsonCreator factory
+        lines.append("    @JsonCreator")
+        lines.append(f"    public static {class_name} create(")
+        for i, (n, t) in enumerate(zip(param_names, param_types)):
+            comma = "," if i < len(param_names) - 1 else ""
+            lines.append(f"        @JsonProperty(\"{n}\") {t} {n}{comma}")
+        lines.append("    ) {")
+        args = ", ".join(param_names)
+        lines.append(f"        return new {class_name}({args});")
+        lines.append("    }")
+        lines.append("}")
+
+        return "\n".join(lines)
+
+    def _generate_java_output(self, contract: Any, class_name: str) -> str:
+        """Generate a Java record for an OutputContract."""
+        java_type = self._hlf_type_to_java_type(contract.return_type)
+        needs_import = any(
+            kw in java_type
+            for kw in ("List<", "Set<", "Map<")
+        )
+        import_line = ""
+        if "List<" in java_type:
+            import_line = "import java.util.List;\n"
+        elif "Set<" in java_type:
+            import_line = "import java.util.Set;\n"
+        elif "Map<" in java_type:
+            import_line = "import java.util.Map;\n"
+
+        lines = [
+            "// Auto-generated by SchemaTranslator — HLF Output Contract: "
+            + contract.function_name,
+            "import com.fasterxml.jackson.annotation.JsonCreator;",
+            "import com.fasterxml.jackson.annotation.JsonProperty;",
+        ]
+        if import_line.strip():
+            lines.append(import_line.strip())
+        lines.extend([
+            "",
+            f"public record {class_name}(",
+            f"    {java_type} result",
+            ") {{",
+            "    @JsonCreator",
+            f"    public static {class_name} create(",
+            f"        @JsonProperty(\"result\") {java_type} result",
+            "    ) {",
+            f"        return new {class_name}(result);",
+            "    }",
+            "}",
+        ])
+        return "\n".join(lines)
+
+    # ── Rust SDK generation ────────────────────────────────────────────────────
+
+    def _generate_rust_input(self, contract: Any, class_name: str) -> str:
+        """Generate a Rust struct with serde derives for an InputContract.
+
+        Produces a struct with #[derive(Debug, Clone, Serialize, Deserialize)]
+        and #[serde(rename_all = "snake_case")] on each field.  Includes
+        use declarations for serde and std::collections when needed.
+        """
+        from hlf_mcp.hlf.typed_contracts import TypeContract
+
+        field_lines: list[str] = []
+        needs_hash_set = False
+        needs_hash_map = False
+
+        for param in contract.parameters:
+            if not isinstance(param, TypeContract) or not param.name:
+                continue
+            rust_type = self._hlf_type_to_rust_type(param.hlf_type)
+            if "HashSet<" in rust_type:
+                needs_hash_set = True
+            if "HashMap<" in rust_type:
+                needs_hash_map = True
+
+            # Rename snake_case Rust field to original name via serde
+            serde_attr = f'#[serde(rename = "{param.name}")]'
+            rust_field_name = param.name.replace("-", "_")
+            desc = (param.constraints or {}).get("description", "")
+            if desc:
+                field_lines.append(f"    /// {desc}")
+            field_lines.append(f"    {serde_attr}")
+            field_lines.append(f"    pub {rust_field_name}: {rust_type},")
+
+        lines: list[str] = [
+            "// Auto-generated by SchemaTranslator — HLF Input Contract: "
+            + contract.function_name,
+            "use serde::{Deserialize, Serialize};",
+        ]
+        if needs_hash_set:
+            lines.append("use std::collections::HashSet;")
+        if needs_hash_map:
+            lines.append("use std::collections::HashMap;")
+        lines.extend([
+            "",
+            "#[derive(Debug, Clone, Serialize, Deserialize)]",
+            f"pub struct {class_name} {{",
+        ])
+
+        if not field_lines:
+            lines.append("    // No parameters")
+        else:
+            lines.extend(field_lines)
+
+        lines.append("}")
+        return "\n".join(lines)
+
+    def _generate_rust_output(self, contract: Any, class_name: str) -> str:
+        """Generate a Rust struct for an OutputContract."""
+        rust_type = self._hlf_type_to_rust_type(contract.return_type)
+        needs_hash_set = "HashSet<" in rust_type
+        needs_hash_map = "HashMap<" in rust_type
+
+        lines = [
+            "// Auto-generated by SchemaTranslator — HLF Output Contract: "
+            + contract.function_name,
+            "use serde::{Deserialize, Serialize};",
+        ]
+        if needs_hash_set:
+            lines.append("use std::collections::HashSet;")
+        if needs_hash_map:
+            lines.append("use std::collections::HashMap;")
+        lines.extend([
+            "",
+            "#[derive(Debug, Clone, Serialize, Deserialize)]",
+            f"pub struct {class_name} {{",
+            f"    pub result: {rust_type},",
+            "}",
+        ])
+        return "\n".join(lines)
 
     # ── Batch translation ─────────────────────────────────────────────────────
 

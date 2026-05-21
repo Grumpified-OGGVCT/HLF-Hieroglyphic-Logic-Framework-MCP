@@ -102,6 +102,21 @@ from hlf_mcp.ecosystem.bridge_health import (
     BridgeHealthAggregator,
 )
 
+# ── Compatibility matrix exports ───────────────────────────────────────────────
+
+from hlf_mcp.ecosystem.compatibility_matrix import (
+    CompatibilityMatrixEntry,
+    CompatibilityMatrix,
+)
+
+# ── Watch workflow export ──────────────────────────────────────────────────────
+
+from hlf_mcp.ecosystem.watch_workflow import (
+    run_once as watch_workflow_run_once,
+    run_watch as watch_workflow_run_watch,
+    main as watch_workflow_main,
+)
+
 __all__ = [
     # Bridges
     "MCPBridge",
@@ -148,4 +163,11 @@ __all__ = [
     "BridgeHealth",
     "HealthAggregation",
     "BridgeHealthAggregator",
+    # Compatibility matrix
+    "CompatibilityMatrixEntry",
+    "CompatibilityMatrix",
+    # Watch workflow
+    "watch_workflow_run_once",
+    "watch_workflow_run_watch",
+    "watch_workflow_main",
 ]

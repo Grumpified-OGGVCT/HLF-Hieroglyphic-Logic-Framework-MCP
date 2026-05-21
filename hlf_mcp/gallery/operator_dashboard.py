@@ -1607,14 +1607,8 @@ def compute_typed_effect_pillar_score() -> dict[str, Any]:
             total_pairs = total_types * total_operators
             covered_pairs = 0
             for t in cov._types:
-                type_name = t.name
-                row = matrix.get(type_name, {})
                 for op_name in cov._operator_names:
-                    cell = row.get(op_name, {})
-                    if isinstance(cell, dict):
-                        if cell.get("covered", False):
-                            covered_pairs += 1
-                    elif cell:
+                    if matrix.cell(t, op_name) == "covered":
                         covered_pairs += 1
             if total_pairs > 0:
                 coercion_score = round((covered_pairs / total_pairs) * 100, 1)
@@ -1647,15 +1641,43 @@ def compute_typed_effect_pillar_score() -> dict[str, Any]:
         from hlf_mcp.hlf.typed_contracts import HlfType, TypedEffectDeclaration
 
         # Build sample effect declarations for composition testing
-        sample_effects: list[dict[str, Any]] = []
+        sample_effects: list[Any] = []
         try:
+            from hlf_mcp.hlf.typed_contracts import (
+                InputContract, OutputContract, TypeContract,
+            )
+            # Use effect classes via the effect_class string values
             sample_effects = [
-                {"name": "file_read", "effect_class": "FILE_READ", "type_annotation": "STRING"},
-                {"name": "web_search", "effect_class": "WEB_SEARCH", "type_annotation": "JSON"},
-                {"name": "memory_write", "effect_class": "MEMORY_WRITE", "type_annotation": "ANY"},
-                {"name": "model_inference", "effect_class": "MODEL_INFERENCE", "type_annotation": "JSON"},
-                {"name": "exec", "effect_class": "PROCESS_SPAWN", "type_annotation": "ANY"},
-                {"name": "delegate", "effect_class": "AGENT_DELEGATION", "type_annotation": "ANY"},
+                TypedEffectDeclaration(
+                    function_name="file_read",
+                    input_contract=InputContract(function_name="file_read", parameters=[TypeContract("path", HlfType.STRING)]),
+                    output_contract=OutputContract(function_name="file_read", return_type=HlfType.STRING),
+                ),
+                TypedEffectDeclaration(
+                    function_name="web_search",
+                    input_contract=InputContract(function_name="web_search", parameters=[TypeContract("query", HlfType.STRING)]),
+                    output_contract=OutputContract(function_name="web_search", return_type=HlfType.JSON),
+                ),
+                TypedEffectDeclaration(
+                    function_name="memory_write",
+                    input_contract=InputContract(function_name="memory_write", parameters=[TypeContract("content", HlfType.ANY)]),
+                    output_contract=OutputContract(function_name="memory_write", return_type=HlfType.BOOLEAN),
+                ),
+                TypedEffectDeclaration(
+                    function_name="model_inference",
+                    input_contract=InputContract(function_name="model_inference", parameters=[TypeContract("prompt", HlfType.STRING)]),
+                    output_contract=OutputContract(function_name="model_inference", return_type=HlfType.JSON),
+                ),
+                TypedEffectDeclaration(
+                    function_name="exec",
+                    input_contract=InputContract(function_name="exec", parameters=[TypeContract("cmd", HlfType.STRING)]),
+                    output_contract=OutputContract(function_name="exec", return_type=HlfType.ANY),
+                ),
+                TypedEffectDeclaration(
+                    function_name="delegate",
+                    input_contract=InputContract(function_name="delegate", parameters=[TypeContract("task", HlfType.STRING)]),
+                    output_contract=OutputContract(function_name="delegate", return_type=HlfType.JSON),
+                ),
             ]
             seq_result = prove_sequential_composition(sample_effects)
             par_result = prove_parallel_composition(sample_effects)
@@ -1670,7 +1692,7 @@ def compute_typed_effect_pillar_score() -> dict[str, Any]:
                         passed += 1
                 elif isinstance(r, EffectCompositionProof):
                     total += 1
-                    if r.is_sound:
+                    if r.well_typed and r.effect_safe and r.trust_tier_preserved:
                         passed += 1
                 elif isinstance(r, bool):
                     total += 1
@@ -1683,9 +1705,9 @@ def compute_typed_effect_pillar_score() -> dict[str, Any]:
             else:
                 composition_score = 40.0
                 composition_detail = "Composition proofs returned non-standard results; using conservative estimate (40%)"
-        except Exception:
+        except Exception as _ce:
             composition_score = 50.0
-            composition_detail = "Composition proof execution failed; using fallback estimate (50%)"
+            composition_detail = f"Composition proof execution failed: {_ce}; using fallback estimate (50%)"
 
     except ImportError:
         composition_score = 55.0
@@ -1721,15 +1743,9 @@ def compute_typed_effect_pillar_score() -> dict[str, Any]:
                 ))
             ]
             for t in container_types:
-                type_name = t.name
-                row = matrix2.get(type_name, {})
                 for op_name in container_ops:
                     total_container_pairs += 1
-                    cell = row.get(op_name, {})
-                    if isinstance(cell, dict):
-                        if cell.get("covered", False):
-                            covered_container_pairs += 1
-                    elif cell:
+                    if matrix2.cell(t, op_name) == "covered":
                         covered_container_pairs += 1
 
             if total_container_pairs > 0:
@@ -2097,9 +2113,11 @@ def compute_gallery_operator_pillar_score(
             matrix = cov.build_matrix()
             type_rows_with_content = 0
             for t in cov._types:
-                type_name = t.name
-                row = matrix.get(type_name, {})
-                if row and any(v for v in row.values()):
+                has_coverage = any(
+                    matrix.cell(t, op) == "covered"
+                    for op in cov._operator_names
+                )
+                if has_coverage:
                     type_rows_with_content += 1
             coverage_ratio = type_rows_with_content / total_types if total_types > 0 else 0.0
             type_explorer_score = round(coverage_ratio * 100, 1)

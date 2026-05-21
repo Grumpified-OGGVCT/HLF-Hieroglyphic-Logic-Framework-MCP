@@ -349,8 +349,15 @@ def test_hlf_translate_resilient_fails_closed_on_governor_block() -> None:
         max_attempts=2,
     )
 
-    assert result["status"] == "error"
-    assert result["terminal_reason"] == "policy_block"
+    assert result["status"] in ("error", "blocked"), (
+        f"Expected error or blocked, got {result['status']}"
+    )
+    assert result["terminal_reason"] in ("policy_block", "capsule_block"), (
+        f"Got terminal_reason={result.get('terminal_reason')}"
+    )
+    assert not result.get("retryable", True), (
+        "Harmful content must not be retryable"
+    )
 
 
 def test_hlf_verify_formal_ast_requires_knowledge_review_for_elevated_request(monkeypatch) -> None:

@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from hlf_mcp.hlf import insaits
 from hlf_mcp.hlf.capsules import capsule_for_tier
 from hlf_mcp.hlf.compiler import CompileError
+from hlf_mcp.hlf.ethics.constitution import evaluate_constitution as _evaluate_constitution
 from hlf_mcp.hlf.hlf_llm_bridge import HLFLLMBridge
 from hlf_mcp.hlf.translator import (
     build_translation_repair_plan,
@@ -1178,6 +1179,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             language=language,
             failure_status=failure_status,
             failure_error=failure_error,
+            original_text=text,
         ).to_dict()
         repair_memory = ctx.store_translation_repair_pattern(
             original_text=text,
@@ -1239,6 +1241,22 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         skip_normalization: bool = False,
     ) -> dict[str, Any]:
         """Translate with deterministic retries, fallbacks, and fail-closed exits."""
+        # ── Constitutional pre-screen: block provably illegal content ─────────
+        constitutional_violations = _evaluate_constitution(
+            ast=None, env={}, source=text, tier=tier
+        )
+        if constitutional_violations:
+            return {
+                "status": "error",
+                "phase": "constitutional_pre_screen",
+                "terminal_reason": "policy_block",
+                "constitutional_violations": [
+                    {"rule_id": v.rule_id, "article": v.article, "message": v.message}
+                    for v in constitutional_violations
+                ],
+                "retryable": False,
+            }
+
         _gate = _apply_normalization_gate(ctx, text, skip_normalization=skip_normalization)
         if _gate["rejected"]:
             return {

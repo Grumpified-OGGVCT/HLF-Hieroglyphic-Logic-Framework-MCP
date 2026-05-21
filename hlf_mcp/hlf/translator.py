@@ -783,6 +783,7 @@ def build_translation_repair_plan(
     preferred_language: str | None = None,
     failure_status: str = "",
     failure_error: str = "",
+    original_text: str | None = None,
 ) -> TranslationRepairPlan:
     """Build a deterministic machine-readable retry plan for failed HLF translation flows."""
     resolved_language = resolve_language(language, text=text, preferred_language=preferred_language)
@@ -801,8 +802,11 @@ def build_translation_repair_plan(
         retryable = True
         resolved_language = "en"
 
+    # Use original_text for repair mechanics when provided (before normalization
+    # may have mangled semantics), falling back to normalized text.
+    repair_input = original_text if original_text else text
     repaired_text = canonicalize_translation_text(
-        text,
+        repair_input,
         language=resolved_language,
         preferred_language=preferred_language,
     )
@@ -812,7 +816,9 @@ def build_translation_repair_plan(
         preferred_language=preferred_language,
     )
     semantic_check = _build_repair_semantic_check(
-        original_signature=_semantic_signature_from_text(text, language=resolved_language),
+        original_signature=_semantic_signature_from_text(
+            repair_input, language=resolved_language
+        ),
         repaired_signature=_semantic_signature_from_hlf(repaired_source),
     )
     if retryable and not semantic_check["preserved"]:

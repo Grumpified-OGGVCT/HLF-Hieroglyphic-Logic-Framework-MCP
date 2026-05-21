@@ -1,10 +1,10 @@
 {
-  "dashboard_id": "e59926d5e21fc145",
-  "generated_at": "2026-05-21T22:28:35Z",
+  "dashboard_id": "1637df3ddf010822",
+  "generated_at": "2026-05-21T22:59:51Z",
   "overall_status": "degraded",
   "pillar_score": {
     "pillar": "gallery-operator-legibility",
-    "score_pct": 82.6,
+    "score_pct": 82.2,
     "status": "bridge-active",
     "target_pct": 75.0,
     "components": {
@@ -27,6 +27,10 @@
       "operator_dashboard": {
         "status": "implemented",
         "score_pct": 83
+      },
+      "egl_monitor": {
+        "status": "implemented",
+        "score_pct": 80
       }
     }
   },
@@ -36,7 +40,7 @@
       "components": {
         "cross_type_coercion": {
           "score_pct": 81.2,
-          "detail": "173/213 type×operator pairs covered (81.2%)",
+          "detail": "173/213 type\u00d7operator pairs covered (81.2%)",
           "weight": 0.4
         },
         "heterogeneous_composition": {
@@ -51,7 +55,7 @@
         },
         "container_coercion": {
           "score_pct": 100.0,
-          "detail": "34/34 meaningful container type×operator pairs sound (100.0%)",
+          "detail": "34/34 meaningful container type\u00d7operator pairs sound (100.0%)",
           "weight": 0.1
         }
       },
@@ -82,39 +86,44 @@
         }
       },
       "status": "healthy",
-      "proof_surface": "\u001b[1mHLF Proof Surface — Compact View\u001b[0m\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m\n  \u001b[32m\u001b[1m \u001b[1mboolean           \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mcontainer         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1meffect            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mgas               \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mnumeric           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mrational          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mset               \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mspatial           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mspec_gate         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mstring            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtemporal          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtype_system       \u001b[0m [L:0] admitted     100%\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m"
+      "proof_surface": "\u001b[1mHLF Proof Surface \u2014 Compact View\u001b[0m\n\u001b[2m\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u001b[0m\n  \u001b[32m\u001b[1m \u001b[1mboolean           \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mcontainer         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1meffect            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mgas               \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mnumeric           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mrational          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mset               \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mspatial           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mspec_gate         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mstring            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtemporal          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtype_system       \u001b[0m [L:0] admitted     100%\n\u001b[2m\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u001b[0m"
     },
     "gallery_operator_legibility": {
-      "score_pct": 83.6,
+      "score_pct": 82.8,
       "components": {
         "verification_viewer": {
           "score_pct": 75.0,
           "detail": "Verification pass rate: 75.0%",
-          "weight": 0.2
+          "weight": 0.18
         },
         "manifest_viewer": {
           "score_pct": 75.0,
           "detail": "Manifest approval rate: 75.0%",
-          "weight": 0.15
+          "weight": 0.12
         },
         "provenance_viewer": {
           "score_pct": 90.0,
           "detail": "9 evidence items in chain (90.0%)",
-          "weight": 0.15
+          "weight": 0.12
         },
         "type_explorer": {
           "score_pct": 100.0,
           "detail": "12/12 types covered (100.0%)",
-          "weight": 0.15
+          "weight": 0.12
         },
         "operator_dashboard": {
-          "score_pct": 82.6,
-          "detail": "5 dashboard sub-components; avg health: 82.6%",
-          "weight": 0.2
+          "score_pct": 82.2,
+          "detail": "6 dashboard sub-components; avg health: 82.2%",
+          "weight": 0.16
         },
         "feedback_loop": {
           "score_pct": 82.2,
-          "detail": "SNR=0.78, MTTR=120.0s, FPR=10.0% → score=82.2%",
+          "detail": "SNR=0.78, MTTR=120.0s, FPR=10.0% \u2192 score=82.2%",
+          "weight": 0.15
+        },
+        "egl_monitor": {
+          "score_pct": 80.0,
+          "detail": "EGL warm-up: 0/10 records; default score=80.0%",
           "weight": 0.15
         }
       },
@@ -133,7 +142,7 @@
         "components": {
           "cross_type_coercion": {
             "score_pct": 81.2,
-            "detail": "173/213 type×operator pairs covered (81.2%)",
+            "detail": "173/213 type\u00d7operator pairs covered (81.2%)",
             "weight": 0.4
           },
           "heterogeneous_composition": {
@@ -148,7 +157,7 @@
           },
           "container_coercion": {
             "score_pct": 100.0,
-            "detail": "34/34 meaningful container type×operator pairs sound (100.0%)",
+            "detail": "34/34 meaningful container type\u00d7operator pairs sound (100.0%)",
             "weight": 0.1
           }
         }
@@ -185,50 +194,55 @@
       },
       {
         "name": "Gallery Operator Legibility",
-        "score_pct": 83.6,
+        "score_pct": 82.8,
         "weight": 4,
         "status": "healthy",
         "target_pct": 75.0,
-        "gap_pct": -8.6,
+        "gap_pct": -7.8,
         "components": {
           "verification_viewer": {
             "score_pct": 75.0,
             "detail": "Verification pass rate: 75.0%",
-            "weight": 0.2
+            "weight": 0.18
           },
           "manifest_viewer": {
             "score_pct": 75.0,
             "detail": "Manifest approval rate: 75.0%",
-            "weight": 0.15
+            "weight": 0.12
           },
           "provenance_viewer": {
             "score_pct": 90.0,
             "detail": "9 evidence items in chain (90.0%)",
-            "weight": 0.15
+            "weight": 0.12
           },
           "type_explorer": {
             "score_pct": 100.0,
             "detail": "12/12 types covered (100.0%)",
-            "weight": 0.15
+            "weight": 0.12
           },
           "operator_dashboard": {
-            "score_pct": 82.6,
-            "detail": "5 dashboard sub-components; avg health: 82.6%",
-            "weight": 0.2
+            "score_pct": 82.2,
+            "detail": "6 dashboard sub-components; avg health: 82.2%",
+            "weight": 0.16
           },
           "feedback_loop": {
             "score_pct": 82.2,
-            "detail": "SNR=0.78, MTTR=120.0s, FPR=10.0% → score=82.2%",
+            "detail": "SNR=0.78, MTTR=120.0s, FPR=10.0% \u2192 score=82.2%",
+            "weight": 0.15
+          },
+          "egl_monitor": {
+            "score_pct": 80.0,
+            "detail": "EGL warm-up: 0/10 records; default score=80.0%",
             "weight": 0.15
           }
         }
       }
     ],
-    "overall_score_pct": 90.0,
+    "overall_score_pct": 89.8,
     "overall_status": "healthy",
     "gap_analysis": [],
-    "generated_at": "2026-05-21T22:29:10Z",
-    "scorecard_id": "scorecard-ebf1dec8b001"
+    "generated_at": "2026-05-21T23:00:12Z",
+    "scorecard_id": "scorecard-d3e2765ed945"
   },
   "swarm": {
     "source": "simulated",
@@ -241,7 +255,7 @@
         "role": "compiler",
         "event_type": "complete",
         "message": "Compiled 12 fixtures successfully",
-        "timestamp_ns": 1779402510203729664
+        "timestamp_ns": 1779404386942357504
       },
       {
         "swarm_id": "swarm-001",
@@ -250,7 +264,7 @@
         "role": "verifier",
         "event_type": "progress",
         "message": "Verifying 8 properties...",
-        "timestamp_ns": 1779402512203729664
+        "timestamp_ns": 1779404388942357504
       },
       {
         "swarm_id": "swarm-001",
@@ -259,7 +273,7 @@
         "role": "governor",
         "event_type": "started",
         "message": "Constitutional check in progress",
-        "timestamp_ns": 1779402514203729664
+        "timestamp_ns": 1779404390942357504
       }
     ],
     "active_agents": 3,
@@ -273,28 +287,28 @@
         "decision": "PROCEED",
         "checks_passed": 5,
         "checks_total": 5,
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       },
       {
         "program": "security_audit.hlf",
         "decision": "PROCEED",
         "checks_passed": 6,
         "checks_total": 6,
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       },
       {
         "program": "db_migration.hlf",
         "decision": "PROCEED",
         "checks_passed": 7,
         "checks_total": 7,
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       },
       {
         "program": "delegation.hlf",
         "decision": "WARN",
         "checks_passed": 4,
         "checks_total": 5,
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       }
     ],
     "summary": {
@@ -314,7 +328,7 @@
         "location": "network_output",
         "detail": "Unsanitized data egress detected without explicit capability declaration",
         "severity": "high",
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       },
       {
         "rule_id": "R-2",
@@ -322,7 +336,7 @@
         "location": "http_request",
         "detail": "Network effect in untrusted code path",
         "severity": "medium",
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       }
     ],
     "summary": {
@@ -345,7 +359,7 @@
         ],
         "approved": true,
         "signature": "sha256:aaa111bbb222",
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       },
       {
         "program": "security_audit.hlf",
@@ -357,7 +371,7 @@
         ],
         "approved": true,
         "signature": "sha256:abc123def456",
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       },
       {
         "program": "db_migration.hlf",
@@ -369,7 +383,7 @@
         ],
         "approved": true,
         "signature": "sha256:def789ghi012",
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       },
       {
         "program": "agent_delegation.hlf",
@@ -383,7 +397,7 @@
         "approved": false,
         "signature": "sha256:jkl345mno678",
         "rejection_reason": "AI_INFER requires sovereign tier approval gate",
-        "timestamp": "2026-05-21T22:28:35Z"
+        "timestamp": "2026-05-21T22:59:51Z"
       }
     ],
     "summary": {

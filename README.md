@@ -1842,9 +1842,9 @@ Reviewer note:
 - [ ] **WASM target**: compile HLF programs to WebAssembly for browser/edge execution
 - [ ] **OCI registry push**: complete `OCIClient.push()` for module publishing
 - [x] **Z3 formal verification**: `z3_verify` host function — 12/12 operator families covered (94.2%)
-- [ ] **EGL Monitor**: MAP-Elites quality-diversity grid tracking agent specialization drift
+- [x] **EGL Monitor**: MAP-Elites quality-diversity grid tracking agent specialization drift
 - [ ] **Tool HITL gate UI**: web dashboard for approving `pending_hitl` tools
-- [ ] **SpindleDAG executor**: task DAG with Saga compensating transactions
+- [x] **SpindleDAG executor**: task DAG with Saga compensating transactions
 
 ### Phase 4 — Ecosystem Integration 🔗 (planned)
 

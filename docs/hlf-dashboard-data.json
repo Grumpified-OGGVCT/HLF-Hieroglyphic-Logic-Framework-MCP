@@ -1,10 +1,10 @@
 {
-  "dashboard_id": "f0659407272bff84",
-  "generated_at": "2026-05-21T14:41:21Z",
+  "dashboard_id": "c750ffe6a93edef4",
+  "generated_at": "2026-05-21T14:59:37Z",
   "overall_status": "degraded",
   "pillar_score": {
     "pillar": "gallery-operator-legibility",
-    "score_pct": 39.5,
+    "score_pct": 70.0,
     "status": "bridge-active",
     "target_pct": 75.0,
     "components": {
@@ -41,7 +41,7 @@
         "role": "compiler",
         "event_type": "complete",
         "message": "Compiled 12 fixtures successfully",
-        "timestamp_ns": 1779374476576964096
+        "timestamp_ns": 1779375572252156416
       },
       {
         "swarm_id": "swarm-001",
@@ -50,7 +50,7 @@
         "role": "verifier",
         "event_type": "progress",
         "message": "Verifying 8 properties...",
-        "timestamp_ns": 1779374478576964096
+        "timestamp_ns": 1779375574252156416
       },
       {
         "swarm_id": "swarm-001",
@@ -59,7 +59,7 @@
         "role": "governor",
         "event_type": "started",
         "message": "Constitutional check in progress",
-        "timestamp_ns": 1779374480576964096
+        "timestamp_ns": 1779375576252156416
       }
     ],
     "active_agents": 3,
@@ -73,28 +73,28 @@
         "decision": "PROCEED",
         "checks_passed": 5,
         "checks_total": 5,
-        "timestamp": "2026-05-21T14:41:21Z"
+        "timestamp": "2026-05-21T14:59:37Z"
       },
       {
         "program": "security_audit.hlf",
         "decision": "WARN",
         "checks_passed": 4,
         "checks_total": 6,
-        "timestamp": "2026-05-21T14:41:21Z"
+        "timestamp": "2026-05-21T14:59:37Z"
       },
       {
         "program": "db_migration.hlf",
         "decision": "PROCEED",
         "checks_passed": 7,
         "checks_total": 7,
-        "timestamp": "2026-05-21T14:41:21Z"
+        "timestamp": "2026-05-21T14:59:37Z"
       },
       {
         "program": "delegation.hlf",
         "decision": "BLOCK",
         "checks_passed": 2,
         "checks_total": 5,
-        "timestamp": "2026-05-21T14:41:21Z"
+        "timestamp": "2026-05-21T14:59:37Z"
       }
     ],
     "summary": {
@@ -114,7 +114,7 @@
         "location": "network_output",
         "detail": "Unsanitized data egress detected without explicit capability declaration",
         "severity": "high",
-        "timestamp": "2026-05-21T14:41:21Z"
+        "timestamp": "2026-05-21T14:59:37Z"
       },
       {
         "rule_id": "R-2",
@@ -122,7 +122,7 @@
         "location": "http_request",
         "detail": "Network effect in untrusted code path",
         "severity": "medium",
-        "timestamp": "2026-05-21T14:41:21Z"
+        "timestamp": "2026-05-21T14:59:37Z"
       }
     ],
     "summary": {

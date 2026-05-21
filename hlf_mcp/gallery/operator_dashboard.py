@@ -446,22 +446,26 @@ def build_dashboard_data(
     else:
         overall_status = "critical"
 
+    # ── Compute pillar score from component scores ─────────────────────────────
+    components = {
+        "type_explorer": {"status": "implemented", "score_pct": 80},
+        "verification_viewer": {"status": "implemented", "score_pct": 75},
+        "manifest_viewer": {"status": "implemented", "score_pct": 70},
+        "provenance_viewer": {"status": "implemented", "score_pct": 65},
+        "operator_dashboard": {"status": "implemented", "score_pct": 60},
+    }
+    pillar_score_pct = round(sum(c["score_pct"] for c in components.values()) / len(components), 1)
+
     return {
         "dashboard_id": dashboard_id,
         "generated_at": now,
         "overall_status": overall_status,
         "pillar_score": {
             "pillar": "gallery-operator-legibility",
-            "score_pct": 39.5,
+            "score_pct": pillar_score_pct,
             "status": "bridge-active",
             "target_pct": 75.0,
-            "components": {
-                "type_explorer": {"status": "implemented", "score_pct": 80},
-                "verification_viewer": {"status": "implemented", "score_pct": 75},
-                "manifest_viewer": {"status": "implemented", "score_pct": 70},
-                "provenance_viewer": {"status": "implemented", "score_pct": 65},
-                "operator_dashboard": {"status": "implemented", "score_pct": 60},
-            },
+            "components": components,
         },
         "swarm": swarm,
         "verification": verification,

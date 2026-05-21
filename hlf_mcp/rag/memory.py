@@ -77,6 +77,29 @@ class DedupCache:
 # Approximate characters-per-token for conservative estimation.
 _TOKEN_CHARS_ESTIMATE = 4
 
+# ── sqlite-vec vector embeddings (optional C extension) ──────────────────
+
+try:
+    import sqlite_vec  # noqa: F811
+
+    _HAS_SQLITE_VEC = True
+except ImportError:
+    _HAS_SQLITE_VEC = False
+
+
+def _load_vec_extension(conn: sqlite3.Connection) -> bool:
+    """Load sqlite-vec into a connection if available. Returns True on success."""
+    if not _HAS_SQLITE_VEC:
+        return False
+    try:
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+        return True
+    except Exception:
+        conn.enable_load_extension(False)
+        return False
+
 
 class FractalSummarizer:
     """Recursive map-reduce summariser for memory context compression.
@@ -1626,6 +1649,7 @@ class RAGMemory:
         # and to avoid WAL conflicts between competing connections.
         self._conn: sqlite3.Connection = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        self._vec_ready: bool = False  # sqlite-vec index — set True by _init_vec_index
         self._init_db()
         # Pre-embedding SHA-256 dedup cache — populated from existing data
         self._dedup = DedupCache()
@@ -1650,6 +1674,7 @@ class RAGMemory:
         self._ensure_column("fact_store", "source_type", "TEXT NOT NULL DEFAULT ''")
         self._ensure_column("fact_store", "embedding_blob", "TEXT NOT NULL DEFAULT ''")
         self._backfill_evidence_columns()
+        self._init_vec_index()
 
     def _ensure_column(self, table: str, column: str, ddl: str) -> None:
         existing = {
@@ -1657,6 +1682,99 @@ class RAGMemory:
         }
         if column not in existing:
             self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+    def _init_vec_index(self) -> None:
+        """Create the sqlite-vec vector index if the extension is available."""
+        if not _HAS_SQLITE_VEC:
+            return
+        try:
+            self._conn.enable_load_extension(True)
+            sqlite_vec.load(self._conn)
+            self._conn.enable_load_extension(False)
+            # Determine embedding dimension from embed_fn or default to 384
+            dim = 384
+            if self._embed_fn is not None:
+                try:
+                    probe = self._embed_fn("dimension probe")
+                    if probe:
+                        dim = len(probe)
+                except Exception:
+                    pass
+            self._conn.execute(
+                f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_facts USING vec0(embedding FLOAT[{dim}])"
+            )
+            self._vec_ready = True
+            logger.info("sqlite-vec index ready (dim=%d)", dim)
+        except Exception as exc:
+            logger.warning("sqlite-vec init failed (will use sparse cos-sim fallback): %s", exc)
+            try:
+                self._conn.enable_load_extension(False)
+            except Exception:
+                pass
+            self._vec_ready = False
+
+    def _index_vector(self, fact_id: int, embedding: list[float]) -> None:
+        """Insert or replace a vector into the sqlite-vec index."""
+        if not self._vec_ready or not embedding:
+            return
+        try:
+            buf = sqlite_vec.serialize_float32(embedding)
+            self._conn.execute(
+                "INSERT OR REPLACE INTO vec_facts(rowid, embedding) VALUES (?, ?)",
+                (fact_id, buf),
+            )
+        except Exception as exc:
+            logger.debug("vec index insert failed for fact %d: %s", fact_id, exc)
+
+    def _vector_search(
+        self, query_dense: list[float], top_k: int
+    ) -> list[tuple[int, float]]:
+        """KNN search via sqlite-vec. Returns list of (fact_id, distance)."""
+        if not self._vec_ready or not query_dense:
+            return []
+        try:
+            buf = sqlite_vec.serialize_float32(query_dense)
+            rows = self._conn.execute(
+                """SELECT rowid, distance FROM vec_facts
+                   WHERE embedding MATCH ?
+                   ORDER BY distance LIMIT ?""",
+                (buf, top_k),
+            ).fetchall()
+            return [(r["rowid"], r["distance"]) for r in rows]
+        except Exception as exc:
+            logger.debug("vec search failed: %s", exc)
+            return []
+
+    def index_embeddings(self, *, batch_size: int = 500) -> dict[str, int]:
+        """Populate the sqlite-vec index from existing ``embedding_blob`` data.
+
+        Scans all fact_store rows that have non-empty ``embedding_blob``
+        and inserts them into the ``vec_facts`` virtual table.  Safe to
+        call on every startup — existing rowids are replaced via
+        ``INSERT OR REPLACE``.
+        """
+        if not self._vec_ready:
+            return {"indexed": 0, "skipped": 0, "reason": "vec_not_available"}
+        indexed = 0
+        skipped = 0
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, embedding_blob FROM fact_store WHERE embedding_blob != '' AND embedding_blob != '[]'"
+            ).fetchall()
+            for row in rows:
+                try:
+                    emb = json.loads(row["embedding_blob"])
+                    if emb and isinstance(emb, list) and len(emb) > 0:
+                        self._index_vector(int(row["id"]), emb)
+                        indexed += 1
+                    else:
+                        skipped += 1
+                except (json.JSONDecodeError, TypeError):
+                    skipped += 1
+                if indexed % batch_size == 0 and indexed > 0:
+                    conn.commit()
+            conn.commit()
+        return {"indexed": indexed, "skipped": skipped}
 
     def _backfill_evidence_columns(self) -> None:
         """One-time backfill: derive evidence columns from metadata_json for pre-existing rows."""
@@ -3021,6 +3139,10 @@ class RAGMemory:
             # Register in pre-embedding dedup cache
             self._dedup.add(sha256, int(row_id))
 
+            # Index in sqlite-vec vector index (when dense embedding available)
+            if dense_vec:
+                self._index_vector(int(row_id), dense_vec)
+
             # Update Merkle chain
             self._append_merkle(conn, topic, sha256)
 
@@ -3746,13 +3868,34 @@ class RAGMemory:
         # Score by cosine similarity
         scored: list[dict[str, Any]] = []
         rejected_count = 0
+
+        # ── sqlite-vec fast path: KNN via MATCH when dense embeddings are available ──
+        vec_distances: dict[int, float] = {}
+        if query_dense and self._vec_ready:
+            vec_results = self._vector_search(query_dense, top_k * 3)  # oversample for filtering
+            vec_distances = {fid: 1.0 - dist for fid, dist in vec_results}
+            if vec_distances:
+                # Reorder rows: vec-matched rows first, then fall through to sparse scoring
+                row_ids_in = {r["id"]: r for r in rows}
+                vec_ordered: list[Any] = []
+                for fid in vec_distances:
+                    row = row_ids_in.pop(fid, None)
+                    if row is not None:
+                        vec_ordered.append(row)
+                # Remaining rows (not in vec results) go after
+                vec_ordered.extend(row_ids_in.values())
+                rows = vec_ordered
+
         for row in rows:
             if not entry_kind and str(row["entry_kind"] or "") == _GRAPH_NODE_ENTRY_KIND:
                 continue
             vec = json.loads(row["vector_json"] or "{}")
             sim = _cosine(query_vec, vec)
-            # Dense scoring: blend dense cosine with sparse when available
-            if query_dense and row["embedding_blob"]:
+            # Dense scoring: use vec0 distance when available, otherwise compute cosine
+            if row["id"] in vec_distances:
+                dense_sim = vec_distances[row["id"]]
+                sim = dense_sim if dense_sim > 0 else sim
+            elif query_dense and row["embedding_blob"]:
                 try:
                     existing_dense = json.loads(row["embedding_blob"])
                     if existing_dense:

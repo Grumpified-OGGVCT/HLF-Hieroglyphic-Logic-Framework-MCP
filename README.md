@@ -1812,7 +1812,7 @@ uv run ruff format hlf_mcp/
 - [x] **Ollama Cloud client**: streaming, thinking, structured outputs, tool calling, web search, 4-tier fallback chain with circuit breaker (`.github/scripts/ollama_client.py`)
 - [x] **Weekly automation baseline**: 7 scheduled GitHub workflows — code quality, spec sentinel, model drift detection, ethics review, doc/security review, test health, and evolution planner — now being normalized onto a shared weekly artifact schema
 - [x] **Model drift monitoring**: 7 weighted semantic probes with structured output scoring (`scripts/monitor_model_drift.py`)
-- [ ] **Vector embeddings**: `sqlite-vec` C extension for real cosine search (replacing bag-of-words)
+- [x] **Vector embeddings**: `sqlite-vec` C extension integrated — `vec_facts` virtual table with KNN MATCH search, `index_embeddings()` for bulk population from existing data
 - [x] **SHA-256 dedup cache**: pre-embedding content deduplication layer with in-memory O(1) lookup
 - [x] **Fractal summarisation**: map-reduce context compression with `FractalSummarizer` class + `summarize_topic()` wired into RAGMemory via `rolling_context` cache
 - [x] **Hot/Warm/Cold tiering**: cold archive stratum with `archive_cold()`, `export_cold()`, and `import_cold()` methods in RAGMemory; entries marked `storage_tier='cold'` / `memory_stratum='archive'` are excluded from default queries

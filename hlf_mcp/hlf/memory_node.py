@@ -532,11 +532,11 @@ class MemoryStore:
                 row["superseded_by_sha256"] = superseded_by_map[node.content_hash]
             rows.append(row)
         chain_result = resolve_supersession_chain(sha256, rows)
-        found = chain_result["length"] > 0
+        found = chain_result["chain_length"] > 0
         latest = chain_result["chain"][-1] if chain_result["chain"] else None
         return {
             "found": found,
-            "chain_length": chain_result["length"],
+            "chain_length": chain_result["chain_length"],
             "latest_sha256": latest or "",
             "chain": chain_result["chain"],
             "cycle_detected": chain_result.get("cycle_detected", False),

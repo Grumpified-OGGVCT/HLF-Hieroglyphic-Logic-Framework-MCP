@@ -1285,6 +1285,19 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             return {"found": True, "id": existing, "reason": "sha256_exact_match"}
         return {"found": False}
 
+    @mcp.tool()
+    def hlf_memory_index_embeddings(batch_size: int = 500) -> dict[str, Any]:
+        """Populate the sqlite-vec vector index from existing embeddings.
+
+        Scans all stored facts with embedding data and indexes them into
+        the vec_facts virtual table for fast KNN cosine-similarity search.
+        Safe to run on every startup — existing entries are replaced.
+        """
+        store = ctx.memory_store
+        if store is None:
+            return {"indexed": 0, "error": "no_memory_store"}
+        return store.index_embeddings(batch_size=batch_size)
+
     return {
         "hlf_memory_store": hlf_memory_store,
         "hlf_memory_query": hlf_memory_query,
@@ -1312,4 +1325,5 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_knowledge_ingest_directory": hlf_knowledge_ingest_directory,
         "hlf_knowledge_ingest_url": hlf_knowledge_ingest_url,
         "hlf_memory_dedup_check": hlf_memory_dedup_check,
+        "hlf_memory_index_embeddings": hlf_memory_index_embeddings,
     }

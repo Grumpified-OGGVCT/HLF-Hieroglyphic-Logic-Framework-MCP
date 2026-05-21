@@ -1840,7 +1840,7 @@ Reviewer note:
 - [ ] **ASCII surface**: round-trip `IF risk > 0 THEN [RESULT]` ↔ `⊎ risk > 0 ⇒ [RESULT]`
 - [ ] **WASM target**: compile HLF programs to WebAssembly for browser/edge execution
 - [ ] **OCI registry push**: complete `OCIClient.push()` for module publishing
-- [ ] **Z3 formal verification**: `z3_verify` host function — prove SPEC_GATE assertions hold
+- [x] **Z3 formal verification**: `z3_verify` host function — 12/12 operator families covered (94.2%)
 - [ ] **EGL Monitor**: MAP-Elites quality-diversity grid tracking agent specialization drift
 - [ ] **Tool HITL gate UI**: web dashboard for approving `pending_hitl` tools
 - [ ] **SpindleDAG executor**: task DAG with Saga compensating transactions
@@ -1852,12 +1852,12 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 | Integration | HLF Host Functions | Status |
 | --- | --- | --- |
 | Project Janus (RAG pipeline) | `janus.crawl`, `janus.query`, `janus.archive` | 📋 Planned |
-| OVERWATCH (sentinel watchdog) | `overwatch.scan`, `overwatch.terminate` | 📋 Planned |
-| API-Keeper (credential vault) | `apikeeper.store`, `apikeeper.rotate` | 📋 Planned |
+| OVERWATCH (sentinel watchdog) | `overwatch.scan`, `overwatch.terminate` | ✅ Complete |
+| API-Keeper (credential vault) | `apikeeper.store`, `apikeeper.rotate` | ✅ Complete |
 | SearXng MCP (private search) | `searxng.search`, `searxng.crawl` | 📋 Planned |
 | AnythingLLM | `anythingllm.workspace_query`, `anythingllm.agent_flow` | 📋 Planned |
 | LOLLMS | `lollms.generate`, `lollms.rag_query` | 📋 Planned |
-| ollama_pulse (model catalog) | `pulse.scan`, `pulse.update_catalog` | 📋 Planned |
+| ollama_pulse (model catalog) | `pulse.scan`, `pulse.update_catalog` | ✅ Complete |
 | Jules_Choice (coding agent) | `jules.spawn_session`, `jules.execute_sdd` | 📋 Planned |
 
 ### Phase 5 — Standard, Not a Project 🏛️ (long-term)

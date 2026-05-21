@@ -1,226 +1,6 @@
-# 📜 HLF — Deterministic Agent Runtime
+# 📜 HLF — Hieroglyphic Logic Framework · MCP Server
 
-**Run AI agent tools with cryptographically-governed execution, provable audit trails, and zero ambiguous natural language.**
-
-> HLF compiles strict, typed intent into bytecode, runs it in a gas-metered VM, and exposes it as an MCP server — so your agents can't "misunderstand" a prompt and delete a database.
-
----
-
-## ⚡ 30-Second Try
-
-```bash
-# Run the MCP server locally (stdio transport)
-uv run hlf-mcp
-
-# Or via HTTP with Docker
-docker run -i -e HLF_TRANSPORT=stdio ghcr.io/grumpified-oggvct/hlf-mcp:latest
-
-# Compile an HLF source file to bytecode
-uv run hlfc fixtures/security_audit.hlf
-
-# Run the full test suite
-uv run pytest tests/ -q
-```
-
-**[2137 tests passing](https://github.com/grumpified-oggvct/HLF-Hieroglyphic-Logic-Framework-MCP/actions) · [MIT License](LICENSE) · [Python 3.12+](https://python.org) · [Live Dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)**
-
----
-
-## 💡 Why This Exists
-
-Natural language between agents is lossy. HLF replaces prose with a strictly-typed hieroglyphic AST: zero ambiguity, compressed tokens, and deterministic execution bounded by cryptographic governance.
-
-```hlf
-[HLF-v3]
-Δ analyze /security/seccomp.json
-  Ж [CONSTRAINT] mode="ro"
-  Ж [EXPECT] vulnerability_shorthand
-  ⨝ [VOTE] consensus="strict"
-Ω
-```
-
-That HLF program compiles to bytecode, passes a 5-rule security ledger, runs inside a tiered execution capsule, and leaves a Merkle-chain audit trail.
-
----
-
-## ✅ What's Real Now
-
-| Component | Status |
-|---|---|
-| Compiler + bytecode VM + gas metering | ✅ Complete |
-| FastMCP server (69 tools / 31 resources) | ✅ Complete |
-| Governance: ALIGN ledger, ethical governor, intent capsules | ✅ Complete |
-| Memory: SQLite RAG with cryptographic provenance | ✅ Complete |
-| Transports: stdio, SSE, streamable-HTTP | ✅ Complete |
-| Docker packaging | ✅ Complete |
-| Swarm coordination with formal verification gating | ✅ Complete |
-| Stdlib: 8 modules including AES-256-GCM crypto | ✅ Complete |
-
-See [VISION.md](HLF_VISION_DOCTRINE.md) for the full architecture, [GOVERNANCE.md](HLF_ETHICAL_GOVERNOR_ARCHITECTURE.md) for how we track completeness, and the [build dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/) for live pillar scores.
-
----
-
-## 🚀 Getting Started
-
-See [QUICKSTART.md](QUICKSTART.md) for the fastest path to a working local setup, or jump to [§2 Quick Start](#2-quick-start) below for detailed instructions including Docker deployment and MCP client configuration.
-
----
-
-## 📖 About This Document
-
-This README is organized in two parts:
-1. **Front door (above):** What HLF is, why it exists, and how to try it in 30 seconds.
-2. **Reference (below):** The complete technical reference — vision, architecture, language spec, governance, and roadmap — preserved in full.
-
-The original preamble and three-lane doctrine are preserved below as [§Start Here](#start-here). See [HLF_CLAIM_LANES.md](docs/HLF_CLAIM_LANES.md) for the formal claim-lane discipline.
-
----
-
-
-## Table of Contents
-
-1. What is HLF?
-    - Ethos - People First, Transparent Governance
-2. Quick Start
-3. Architecture Overview
-4. Grammar and Language Reference
-5. Compiler Pipeline (5 Passes)
-6. Bytecode VM
-7. Intent Capsule Tier Model
-8. Host Function Registry
-9. Stdlib - 8 Complete Modules
-10. HLF Knowledge Substrate (HKS)
-11. Instinct SDD Lifecycle
-12. [MCP Server & Transports](#12-mcp-server--transports)
-13. [MCP Tools Reference](#13-mcp-tools-reference)
-14. [Docker Deployment](#14-docker-deployment)
-
-
-## Operator Evidence Review
-
-The packaged CLI includes `hlf-evidence` for reviewing governed weekly artifacts.
-
-Useful commands:
-
-```bash
-uv run hlf-evidence list --status promoted
-uv run hlf-evidence show weekly_demo
-uv run hlf-evidence show weekly_demo --json
-uv run hlf-operator witness-status --json
-uv run hlf-operator governed-route --json
-uv run hlf-operator instinct-status --json
-uv run hlf-operator formal-verifier --json
-uv run hlf-operator entropy-anchor --json
-uv run hlf-operator approval-review --json
-```
-
-Operator-facing `show` output is intentionally different from raw JSON. When a governed review is attached, the plain-text view exposes the persona handoff contract directly, including change class, owner persona, review personas, required gates, escalation target, operator summary, and the handoff template reference.
-
-The named `hlf-operator` review commands now give the routing, witness, lifecycle, proof, drift, and approval surfaces first-class shell entrypoints, so the repo's trust and orchestration lanes are inspectable without falling back to raw resource URIs.
-
-The Instinct/operator bridge is also stronger than a raw mission dump now: the packaged lifecycle surface exposes proof-state summaries, execution coverage, verification posture, blockers, CoVE gate state, and seal evidence so orchestration progress is reviewable as an operator proof contract rather than only a stored mission blob.
-
-See `docs/cli-tools.md` for the command reference.
-15. [Benchmark Results](#15-benchmark-results)
-16. [Governance & Security](#16-governance--security)
-17. [Development](#17-development)
-18. [Roadmap](#18-roadmap)
-
----
-
-
-## 1. What is HLF?
-
-HLF is not just another DSL, and it is not just the current MCP server.
-
-HLF is an attempt to build a governed meaning layer between human intent and machine action: a language that lets agents coordinate, tools execute, memory persist, policy constrain, and humans inspect what is happening in plain terms.
-
-The current MCP server matters because it is the easiest adoption path today.
-But the larger target is a real language and runtime for governed agent work.
-
-```hlf
-[HLF-v3]
-Δ analyze /security/seccomp.json
-  Ж [CONSTRAINT] mode="ro"
-  Ж [EXPECT] vulnerability_shorthand
-  ⨝ [VOTE] consensus="strict"
-Ω
-```
-
-In other words:
-the front door is present-tense product truth, while the fuller HLF system remains the larger architectural target.
-
-### Core Properties
-
-| Property | Mechanism |
-| --- | --- |
-| **Deterministic Intent** | LALR(1) parsing — 100% reproducible execution paths, zero ambiguity |
-| **Token Compression** | 12–30% vs NLP prose; up to 83% vs verbose JSON (tiktoken cl100k_base) |
-| **Cryptographic Governance** | SHA-256 / Merkle-chain audit trail on every intent and memory write |
-| **Gas Metering** | Hard execution budget — every opcode deducts gas, preventing runaway loops |
-| **Cross-Model Alignment** | Any LLM (local or cloud) can read and emit valid HLF without special training |
-| **Zero-Trust Execution** | Intent Capsules bound what each agent tier can read, write, and call |
-
-### The 5-Surface Language
-
-HLF programs exist in five interchangeable, round-trippable representations:
-
-```text
-Glyph Source  ──compile──▶  JSON AST  ──codegen──▶  .hlb Bytecode
-     ▲                          │                         │
-     │ hlffmt                   │ insaits                 │ disassemble
-     │                          ▼                         ▼
-ASCII Source            English Audit             Assembly Listing
-```
-
-### Ethos — People First, Transparent Governance
-
-- People and their work are the priority; privacy is default, and HLF enforces hard laws rather than paternalistic filters.
-- AI is the tool — humans author the constraints, which stay transparent and auditable in-repo.
-- Ethical Governor enforces hard laws at compile time: fails closed before harm, supports declared red-hat research paths, and cryptographically documents every decision.
-- Transparency over surveillance: governance files (ALIGN rules, ethics docs) stay human-readable so constraints can be inspected and debated.
-- Use HLF freely; when boundaries apply, they are explicit, scoped to protect people, and never to suppress legitimate research or creativity.
-
-**Security Responsibility:** While HLF and the MCP enforce strong, auditable boundaries, not all security risks can be mitigated at the protocol or software level. Users are responsible for their own operational security, including (but not limited to) using a trusted VPN, maintaining a reputable local security suite (e.g., Bitdefender or equivalent), and following best practices for endpoint protection. The project ethos is to empower, not to guarantee; ultimate safety is a shared responsibility between the system and its operators.
-
-See `docs/ETHICAL_GOVERNOR_HANDOFF.md` for the handoff brief guiding the downstream ethics module implementation.
-
-### The Arrival Analogy — Why Symbols Beat Sentences
-
-If you've seen the film *Arrival*, you know the premise: alien visitors communicate through circular logograms where a single symbol encodes an entire proposition — subject, verb, object, tense, causality, and intent — all at once. A human sentence like *"We offer a weapon"* takes four tokens; a heptapod logogram captures the full meaning, its negation, its conditions, and its consequences in one non-linear glyph. The linguist doesn't learn a language — she learns a **new way of thinking about meaning**, where time and intent are not sequential but simultaneous.
-
-HLF is that idea, made real, for AI agents.
-
-When a human writes `"Audit /security/seccomp.json, read-only, and report vulnerabilities"`, that is a **linear, ambiguous, high-entropy** sentence. Different LLMs will parse it differently. Context is lost between tokens. There is no formal guarantee of what "read-only" means or whether "report" implies file-write permission.
-
-When HLF compresses that into:
-
-```hlf
-[HLF-v3]
-Δ [INTENT] goal="audit_seccomp"
-  Ж [CONSTRAINT] mode="ro"
-  Ж [EXPECT] vulnerability_shorthand
-  ⨝ [VOTE] consensus="strict"
-Ω
-```
-
-...every ambiguity is resolved **mathematically**. `Ж [CONSTRAINT] mode="ro"` is not a suggestion — it is a hard, compiler-enforced, gas-metered boundary. The `⨝ [VOTE]` node requires consensus before the result is accepted. The `Ω` terminator seals the intent for Merkle-chain audit. Every symbol has a precise semantic role, a defined gas cost, and a cryptographic hash.
-
-Like heptapod logograms, HLF glyphs are **non-linear propositions**: a single symbol encodes the what (intent), the how (constraints), the who (tier), the how-much (gas), and the proof (audit trail) — all simultaneously. The mathematics underneath — Shannon entropy for compression, KL divergence for disambiguation, confidence thresholds for quality gating — are what make this reliable instead of clever.
-
-The front door is English. The engine is math. The glyphs are the bridge.
-
-For the full architectural vision including the 13-layer Three-Brain model, Rosetta Engine (Deterministic Compilation Equivalence), EnCompass (Probabilistic Angelic Nondeterminism), ROMA orchestration, and Darwin Gödel Machine evolution, see the [Sovereign Agentic OS README](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF#readme) — particularly the upgrade suggestions in the final sections covering layered profiles, formal effect systems, 5-surface round-tripping, and the 90-day roadmap from "interesting system" to "planet-class language."
-
----
-
----
-
-## 🏛️ Project Governance & Doctrine
-
-The following sections are preserved from the original README preamble. They describe the three-lane framework (vision / current-truth / bridge) that governs how this repository is read and maintained.
-
-See [HLF_CLAIM_LANES.md](docs/HLF_CLAIM_LANES.md) for the formal specification of claim-lane discipline, and [HLF_VISION_DOCTRINE.md](HLF_VISION_DOCTRINE.md) for the full vision statement.
+> **HLF is meant to become a governed language for turning intent into auditable machine action.** The packaged MCP server is the fastest way to try it today, but the real target is bigger than a server: language, governance, runtime, memory, coordination, explanation, and real-code output.
 
 ---
 
@@ -236,7 +16,6 @@ See [HLF_CLAIM_LANES.md](docs/HLF_CLAIM_LANES.md) for the formal specification o
 - **Local MCP wiring**: Workspace-local VS Code MCP config now targets the packaged `uv run hlf-mcp` entrypoint.
 
 ---
-
 
 ## 🐕 Dogfooding / Recursive Build-Assist
 
@@ -260,14 +39,12 @@ See `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_OPERATOR_BUILD_NOTES_2026
 
 ---
 
-
 ## TL;DR for developers
 
 - HLF gives you a real compiler, formatter, linter, bytecode runtime, and FastMCP server for governed agent work.
 - The fastest current entry lane is the packaged `hlf_mcp/` surface: start with `stdio` locally, then move to `sse` or `streamable-http` when you need HTTP transports.
 - Fast first run: sync dependencies, compile `fixtures/hello_world.hlf`, run it locally, then launch the packaged MCP server with `HLF_TRANSPORT=stdio uv run hlf-mcp`.
 - This README keeps vision, current truth, and bridge context visible on purpose; use `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_CLAIM_LANES.md` when you need the strict boundary.
-
 
 ## Start Here
 
@@ -354,7 +131,6 @@ Bridge execution note:
 - `docs/HLF_MESSAGING_LADDER.md` is the audience-specific phrasing guide derived from that canonical explanation.
 - the first credible recursive build story is local and bounded: packaged HLF assisting packaged HLF through `stdio`, `hlf_do`, `hlf_test_suite_summary`, and build-observation surfaces; remote `streamable-http` self-hosting stays gated until MCP initialize succeeds end to end.
 
-
 ## Why This Repo Stands Out
 
 HLF is not only aiming to be useful after the system is finished.
@@ -372,7 +148,6 @@ The current honest milestone is local and bounded build assistance first.
 That is why this repo's build story is part of its product evidence, not just background process.
 
 For the full version of that claim, read `docs/HLF_RECURSIVE_BUILD_STORY.md`. For audience phrasing rules, read `docs/HLF_MESSAGING_LADDER.md`.
-
 
 ## For Agents And Builders
 
@@ -520,6 +295,140 @@ Reading rule:
 - the ladder does not mean the repo is basic; it means stronger claims are earned in sequence
 - the top rung remains gated until remote MCP initialization and the intended smoke path are proven repeatably in the packaged workflow
 
+## Table of Contents
+
+1. What is HLF?
+    - Ethos - People First, Transparent Governance
+2. Quick Start
+3. Architecture Overview
+4. Grammar and Language Reference
+5. Compiler Pipeline (5 Passes)
+6. Bytecode VM
+7. Intent Capsule Tier Model
+8. Host Function Registry
+9. Stdlib - 8 Complete Modules
+10. HLF Knowledge Substrate (HKS)
+11. Instinct SDD Lifecycle
+12. [MCP Server & Transports](#12-mcp-server--transports)
+13. [MCP Tools Reference](#13-mcp-tools-reference)
+14. [Docker Deployment](#14-docker-deployment)
+
+## Operator Evidence Review
+
+The packaged CLI includes `hlf-evidence` for reviewing governed weekly artifacts.
+
+Useful commands:
+
+```bash
+uv run hlf-evidence list --status promoted
+uv run hlf-evidence show weekly_demo
+uv run hlf-evidence show weekly_demo --json
+uv run hlf-operator witness-status --json
+uv run hlf-operator governed-route --json
+uv run hlf-operator instinct-status --json
+uv run hlf-operator formal-verifier --json
+uv run hlf-operator entropy-anchor --json
+uv run hlf-operator approval-review --json
+```
+
+Operator-facing `show` output is intentionally different from raw JSON. When a governed review is attached, the plain-text view exposes the persona handoff contract directly, including change class, owner persona, review personas, required gates, escalation target, operator summary, and the handoff template reference.
+
+The named `hlf-operator` review commands now give the routing, witness, lifecycle, proof, drift, and approval surfaces first-class shell entrypoints, so the repo's trust and orchestration lanes are inspectable without falling back to raw resource URIs.
+
+The Instinct/operator bridge is also stronger than a raw mission dump now: the packaged lifecycle surface exposes proof-state summaries, execution coverage, verification posture, blockers, CoVE gate state, and seal evidence so orchestration progress is reviewable as an operator proof contract rather than only a stored mission blob.
+
+See `docs/cli-tools.md` for the command reference.
+15. [Benchmark Results](#15-benchmark-results)
+16. [Governance & Security](#16-governance--security)
+17. [Development](#17-development)
+18. [Roadmap](#18-roadmap)
+
+---
+
+## 1. What is HLF?
+
+HLF is not just another DSL, and it is not just the current MCP server.
+
+HLF is an attempt to build a governed meaning layer between human intent and machine action: a language that lets agents coordinate, tools execute, memory persist, policy constrain, and humans inspect what is happening in plain terms.
+
+The current MCP server matters because it is the easiest adoption path today.
+But the larger target is a real language and runtime for governed agent work.
+
+```hlf
+[HLF-v3]
+Δ analyze /security/seccomp.json
+  Ж [CONSTRAINT] mode="ro"
+  Ж [EXPECT] vulnerability_shorthand
+  ⨝ [VOTE] consensus="strict"
+Ω
+```
+
+In other words:
+the front door is present-tense product truth, while the fuller HLF system remains the larger architectural target.
+
+### Core Properties
+
+| Property | Mechanism |
+| --- | --- |
+| **Deterministic Intent** | LALR(1) parsing — 100% reproducible execution paths, zero ambiguity |
+| **Token Compression** | 12–30% vs NLP prose; up to 83% vs verbose JSON (tiktoken cl100k_base) |
+| **Cryptographic Governance** | SHA-256 / Merkle-chain audit trail on every intent and memory write |
+| **Gas Metering** | Hard execution budget — every opcode deducts gas, preventing runaway loops |
+| **Cross-Model Alignment** | Any LLM (local or cloud) can read and emit valid HLF without special training |
+| **Zero-Trust Execution** | Intent Capsules bound what each agent tier can read, write, and call |
+
+### The 5-Surface Language
+
+HLF programs exist in five interchangeable, round-trippable representations:
+
+```text
+Glyph Source  ──compile──▶  JSON AST  ──codegen──▶  .hlb Bytecode
+     ▲                          │                         │
+     │ hlffmt                   │ insaits                 │ disassemble
+     │                          ▼                         ▼
+ASCII Source            English Audit             Assembly Listing
+```
+
+### Ethos — People First, Transparent Governance
+
+- People and their work are the priority; privacy is default, and HLF enforces hard laws rather than paternalistic filters.
+- AI is the tool — humans author the constraints, which stay transparent and auditable in-repo.
+- Ethical Governor enforces hard laws at compile time: fails closed before harm, supports declared red-hat research paths, and cryptographically documents every decision.
+- Transparency over surveillance: governance files (ALIGN rules, ethics docs) stay human-readable so constraints can be inspected and debated.
+- Use HLF freely; when boundaries apply, they are explicit, scoped to protect people, and never to suppress legitimate research or creativity.
+
+**Security Responsibility:** While HLF and the MCP enforce strong, auditable boundaries, not all security risks can be mitigated at the protocol or software level. Users are responsible for their own operational security, including (but not limited to) using a trusted VPN, maintaining a reputable local security suite (e.g., Bitdefender or equivalent), and following best practices for endpoint protection. The project ethos is to empower, not to guarantee; ultimate safety is a shared responsibility between the system and its operators.
+
+See `docs/ETHICAL_GOVERNOR_HANDOFF.md` for the handoff brief guiding the downstream ethics module implementation.
+
+### The Arrival Analogy — Why Symbols Beat Sentences
+
+If you've seen the film *Arrival*, you know the premise: alien visitors communicate through circular logograms where a single symbol encodes an entire proposition — subject, verb, object, tense, causality, and intent — all at once. A human sentence like *"We offer a weapon"* takes four tokens; a heptapod logogram captures the full meaning, its negation, its conditions, and its consequences in one non-linear glyph. The linguist doesn't learn a language — she learns a **new way of thinking about meaning**, where time and intent are not sequential but simultaneous.
+
+HLF is that idea, made real, for AI agents.
+
+When a human writes `"Audit /security/seccomp.json, read-only, and report vulnerabilities"`, that is a **linear, ambiguous, high-entropy** sentence. Different LLMs will parse it differently. Context is lost between tokens. There is no formal guarantee of what "read-only" means or whether "report" implies file-write permission.
+
+When HLF compresses that into:
+
+```hlf
+[HLF-v3]
+Δ [INTENT] goal="audit_seccomp"
+  Ж [CONSTRAINT] mode="ro"
+  Ж [EXPECT] vulnerability_shorthand
+  ⨝ [VOTE] consensus="strict"
+Ω
+```
+
+...every ambiguity is resolved **mathematically**. `Ж [CONSTRAINT] mode="ro"` is not a suggestion — it is a hard, compiler-enforced, gas-metered boundary. The `⨝ [VOTE]` node requires consensus before the result is accepted. The `Ω` terminator seals the intent for Merkle-chain audit. Every symbol has a precise semantic role, a defined gas cost, and a cryptographic hash.
+
+Like heptapod logograms, HLF glyphs are **non-linear propositions**: a single symbol encodes the what (intent), the how (constraints), the who (tier), the how-much (gas), and the proof (audit trail) — all simultaneously. The mathematics underneath — Shannon entropy for compression, KL divergence for disambiguation, confidence thresholds for quality gating — are what make this reliable instead of clever.
+
+The front door is English. The engine is math. The glyphs are the bridge.
+
+For the full architectural vision including the 13-layer Three-Brain model, Rosetta Engine (Deterministic Compilation Equivalence), EnCompass (Probabilistic Angelic Nondeterminism), ROMA orchestration, and Darwin Gödel Machine evolution, see the [Sovereign Agentic OS README](https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF#readme) — particularly the upgrade suggestions in the final sections covering layered profiles, formal effect systems, 5-surface round-tripping, and the 90-day roadmap from "interesting system" to "planet-class language."
+
+---
 
 ## 2. Quick Start
 
@@ -644,7 +553,6 @@ This works identically — every MCP client launches its own server subprocess o
 
 ---
 
-
 ## 3. Architecture Overview
 
 This architecture view shows the packaged transport and server surface.
@@ -716,7 +624,6 @@ flowchart TD
 ```
 
 ---
-
 
 ## 4. Grammar & Language Reference
 
@@ -844,7 +751,6 @@ _atom        : string · int · float · bool · $VAR · ${VAR} · ident · path
 
 ---
 
-
 ## 5. Compiler Pipeline (5 Passes)
 
 The diagram below summarizes the five named compiler passes. The current packaged compile path also includes the ethics governor hook, gas estimation, and AST caching around those named passes.
@@ -896,7 +802,6 @@ Pass 0 prevents **IDN homograph attacks** — where a visually identical Cyrilli
 Bridge note: the packaged compiler already enforces a real deterministic pipeline, but the bridge to fuller HLF completion requires stronger conformance surfaces, round-trip proof, and tighter spec-to-implementation canonicality than a pass diagram alone can show.
 
 ---
-
 
 ## 6. Bytecode VM
 
@@ -1005,7 +910,6 @@ Bridge note: the current bytecode/runtime contract is real and auditable now, bu
 
 ---
 
-
 ## 7. Intent Capsule Tier Model
 
 Intent Capsules bound what each agent tier can read, write, and call — enforced at both static (pre-flight AST check) and dynamic (runtime) levels.
@@ -1050,7 +954,6 @@ Bridge note: capsules already provide real bounded-admission behavior, but the l
 
 ---
 
-
 ## 8. Host Function Registry
 
 32 host functions are defined in `governance/host_functions.json`. Each has `tier`, `gas`, `backend`, and `sensitive` fields enforced at runtime. The table below is a representative subset of the current packaged registry surface:
@@ -1092,7 +995,6 @@ Bridge note: the registry is already a real capability contract, but fuller HLF 
 
 ---
 
-
 ## 9. Stdlib — 8 Complete Modules
 
 All eight stdlib modules listed here are implemented in the packaged runtime with no obvious placeholder stubs. “Complete” here means implemented now, not semantically finished relative to the larger HLF language target. They are importable in HLF via `IMPORT module_name` and callable as `module_name.FUNCTION(args)`.
@@ -1127,7 +1029,6 @@ root   = crypto.MERKLE_ROOT(["leaf1", "leaf2", "leaf3"])
 Bridge note: the packaged stdlib is already materially useful, but the long-range HLF language surface will need stronger typing, effect semantics, package/version discipline, and broader governed language capabilities than the current stdlib summary alone implies.
 
 ---
-
 
 ## 10. HLF Knowledge Substrate (HKS)
 
@@ -1221,7 +1122,6 @@ Bridge note: HKS is already more than a generic memory bucket in this checkout, 
 
 ---
 
-
 ## 11. Instinct SDD Lifecycle
 
 Every mission tracked through the packaged Instinct lifecycle follows the deterministic **Specify → Plan → Execute → Verify → Merge** path. Phase skips and backward transitions are blocked. The CoVE gate is mandatory on `VERIFY → MERGE`.
@@ -1263,7 +1163,6 @@ stateDiagram-v2
 Bridge note: the packaged lifecycle already enforces a real deterministic mission path, but the larger HLF coordination target still requires richer orchestration, verification evidence, and cross-agent governance than this lifecycle summary alone covers.
 
 ---
-
 
 ## 12. MCP Server & Transports
 
@@ -1322,7 +1221,6 @@ HLF_PORT=<explicit-port>    # required explicit port (SSE/HTTP only)
 
 ---
 
-
 ## 12.5 MCP Prompts Reference
 
 HLF exposes MCP `prompts` for agent onboarding and coordination. These are callable via `prompts/get` in the MCP protocol.
@@ -1334,7 +1232,6 @@ HLF exposes MCP `prompts` for agent onboarding and coordination. These are calla
 | `hlf_feedback_guide` | How to submit feedback, bug reports, and feature requests via GitHub issues | User feedback, community contributions |
 
 ---
-
 
 ## 13. MCP Tools Reference
 
@@ -1423,7 +1320,6 @@ HLF exposes MCP `prompts` for agent onboarding and coordination. These are calla
 
 ---
 
-
 ## 14. Docker Deployment
 
 ### Dockerfile
@@ -1494,7 +1390,6 @@ services:
 
 ---
 
-
 ## 15. Benchmark Results
 
 ### Swarm Coordination Benchmarks (Verified)
@@ -1530,7 +1425,6 @@ For single-agent tasks, HLF shows 12–30% token compression vs NLP prose (measu
 > **Note:** Full benchmark artifacts, methodology, and raw data are in `test-swarm-coord/MASTER_TRACKER.md`.
 
 ---
-
 
 ## 16. Governance & Security
 
@@ -1627,7 +1521,6 @@ The governor is wired into the compiler pipeline as a mandatory pre-flight gate.
 - **SHA-256 `.hlb` header** — bytecode integrity manifest
 
 ---
-
 
 ## 17. Development
 
@@ -1786,7 +1679,6 @@ uv run ruff format hlf_mcp/
 
 ---
 
-
 ## 18. Roadmap
 
 ### Phase 1 — Foundation ✅ (this PR)
@@ -1870,7 +1762,6 @@ Integrations with the Sovereign Agentic OS via HLF host functions:
 - [ ] **HLF self-programming**: the OS eventually writes its own HLF programs to orchestrate integrations
 
 ---
-
 
 ## 19. Swarm Coordination
 
@@ -1977,7 +1868,6 @@ uv run hlf-evidence list --status promoted
 See `hlf_mcp/hlf/swarm_orchestrator.py`, `hlf_mcp/hlf/two_channel_executor.py`, `hlf_mcp/hlf/capability_manifest.py`, and `hlf_mcp/server_swarm.py` for implementation details.
 
 ---
-
 
 ## Related Links
 

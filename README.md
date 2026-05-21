@@ -1814,8 +1814,8 @@ uv run ruff format hlf_mcp/
 - [x] **Model drift monitoring**: 7 weighted semantic probes with structured output scoring (`scripts/monitor_model_drift.py`)
 - [ ] **Vector embeddings**: `sqlite-vec` C extension for real cosine search (replacing bag-of-words)
 - [x] **SHA-256 dedup cache**: pre-embedding content deduplication layer with in-memory O(1) lookup
-- [ ] **Fractal summarisation**: map-reduce context compression when memory approaches token limit
-- [ ] **Hot/Warm/Cold tiering**: Redis hot → SQLite warm → Parquet cold context transfer
+- [x] **Fractal summarisation**: map-reduce context compression with `FractalSummarizer` class + `summarize_topic()` wired into RAGMemory via `rolling_context` cache
+- [x] **Hot/Warm/Cold tiering**: cold archive stratum with `archive_cold()`, `export_cold()`, and `import_cold()` methods in RAGMemory; entries marked `storage_tier='cold'` / `memory_stratum='archive'` are excluded from default queries
 - [x] **LSP server** (`hlflsp`): packaged diagnostics, completion, hover, document symbols, go-to-definition
 - [x] **hlfsh REPL**: interactive shell on the packaged compiler/linter surface
 - [x] **hlftest runner**: packaged compile + lint harness for snippets, files, and fixture directories

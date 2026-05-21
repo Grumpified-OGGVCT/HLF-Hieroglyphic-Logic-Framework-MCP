@@ -68,6 +68,126 @@ class DedupCache:
             return len(self._hashes)
 
 
+# ── Fractal Summarisation ────────────────────────────────────────────────────
+# Recursive map-reduce context compression for topics approaching
+# the agent's token limit.  Groups facts into batches, summarises each
+# batch, then recursively summarises the summaries until the context
+# fits within max_tokens.
+
+# Approximate characters-per-token for conservative estimation.
+_TOKEN_CHARS_ESTIMATE = 4
+
+
+class FractalSummarizer:
+    """Recursive map-reduce summariser for memory context compression.
+
+    Usage::
+
+        summarizer = FractalSummarizer(max_tokens=2048, summarize_fn=my_llm_summarize)
+        compressed = summarizer.compress(topic="general", entries=entries)
+    """
+
+    def __init__(
+        self,
+        max_tokens: int = 2048,
+        summarize_fn: Callable[[str, list[str]], str] | None = None,
+        batch_size: int = 8,
+    ) -> None:
+        self.max_tokens = max_tokens
+        self._summarize_fn = summarize_fn or self._default_summarize
+        self.batch_size = batch_size
+        self.max_chars = max_tokens * _TOKEN_CHARS_ESTIMATE
+
+    # ── Public API ───────────────────────────────────────────────────────
+
+    def estimate_tokens(self, text: str) -> int:
+        """Conservative token count estimate for a string."""
+        return max(1, len(text) // _TOKEN_CHARS_ESTIMATE)
+
+    def compress(
+        self,
+        topic: str,
+        entries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Recursively compress entries until they fit within max_tokens.
+
+        Returns {topic, summary, depth, entry_count, token_estimate}.
+        """
+        if not entries:
+            return {
+                "topic": topic,
+                "summary": "",
+                "depth": 0,
+                "entry_count": 0,
+                "token_estimate": 0,
+            }
+
+        depth = 1
+        texts = self._entry_texts(entries)
+        total_tokens = sum(self.estimate_tokens(t) for t in texts)
+
+        while total_tokens > self.max_tokens:
+            # Split into batches, summarise each, recurse
+            batches = [texts[i:i + self.batch_size]
+                       for i in range(0, len(texts), self.batch_size)]
+            texts = [self._summarize_fn(topic, batch) for batch in batches]
+            total_tokens = sum(self.estimate_tokens(t) for t in texts)
+            depth += 1
+
+            # Safety: if a single batch still exceeds max_tokens, truncate
+            if depth > 10:
+                break
+
+        summary = "\n\n".join(texts)
+        return {
+            "topic": topic,
+            "summary": summary,
+            "depth": depth,
+            "entry_count": len(entries),
+            "token_estimate": total_tokens,
+        }
+
+    def compress_topic(
+        self,
+        topic: str,
+        memory: Any,  # RAGMemory to query
+    ) -> dict[str, Any]:
+        """Query a topic from memory and compress it.
+
+        Uses the provided RAGMemory's query method, then compresses.
+        """
+        results = memory.query(topic, top_k=200, include_stale=False)
+        entries = results.get("results", []) if isinstance(results, dict) else results
+        return self.compress(topic, entries)
+
+    # ── Helpers ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _entry_texts(entries: list[dict[str, Any]]) -> list[str]:
+        """Extract content strings from memory entries."""
+        texts: list[str] = []
+        for e in entries:
+            content = e.get("content", "")
+            if content and isinstance(content, str):
+                texts.append(content.strip())
+        return texts
+
+    @staticmethod
+    def _default_summarize(topic: str, batch: list[str]) -> str:
+        """Extractive summary fallback when no LLM summarizer is wired.
+
+        Takes the first 2 sentences from each entry and joins them.
+        """
+        import re
+        lines: list[str] = []
+        for text in batch:
+            sentences = re.split(r'(?<=[.!?])\s+', text, maxsplit=2)
+            excerpt = " ".join(sentences[:2]).strip()
+            if excerpt:
+                lines.append(excerpt)
+        return f"[{topic}] " + "; ".join(lines) if lines else ""
+
+
 # ── Simple vector embedding (bag-of-words TF-IDF approximation) ───────────────
 # Used when a proper ML embedding model is unavailable.
 
@@ -3743,6 +3863,213 @@ class RAGMemory:
             "purpose": normalized_purpose,
             "retrieval_contract": retrieval_contract,
             "governed_hks_contract": governed_hks_contract,
+        }
+
+    # ── Fractal Summarisation ─────────────────────────────────────────────
+
+    def summarize_topic(
+        self,
+        topic: str,
+        *,
+        max_tokens: int = 2048,
+        summarize_fn: Callable[[str, list[str]], str] | None = None,
+        entry_kind: str | None = None,
+    ) -> dict[str, Any]:
+        """Recursively compress a topic's entries via fractal summarisation.
+
+        Queries all entries for the given topic, then applies recursive
+        map-reduce summarisation until the result fits within max_tokens.
+        Results are cached in the rolling_context table for fast retrieval.
+        """
+        # Check rolling_context cache first
+        cached = self._get_topic_summary(topic)
+        if cached and time.time() - cached.get("updated_at", 0) < 86400:
+            # Cache is fresh (< 24h old)
+            return cached
+
+        # Query all entries for the topic
+        result = self.query(
+            query_text=topic,
+            top_k=200,
+            topic=topic,
+            entry_kind=entry_kind,
+            include_stale=False,
+        )
+        entries = result.get("results", [])
+
+        summarizer = FractalSummarizer(
+            max_tokens=max_tokens,
+            summarize_fn=summarize_fn,
+        )
+        summary = summarizer.compress(topic, entries)
+
+        # Persist to rolling_context
+        self._set_topic_summary(topic, summary["summary"], summary["depth"])
+
+        return summary
+
+    def _get_topic_summary(self, topic: str) -> dict[str, Any] | None:
+        """Retrieve cached summary from rolling_context."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT summary, updated_at FROM rolling_context WHERE topic = ? ORDER BY updated_at DESC LIMIT 1",
+                (topic,),
+            ).fetchone()
+            if row:
+                return {
+                    "topic": topic,
+                    "summary": row["summary"],
+                    "updated_at": row["updated_at"]
+                }
+        return None
+
+    def _set_topic_summary(self, topic: str, summary: str, depth: int) -> None:
+        """Upsert a topic summary into rolling_context."""
+        now = time.time()
+        # Store compression depth in metadata-style comment in the summary
+        enriched = f"<!-- fractal-depth={depth} -->\n{summary}" if depth > 1 else summary
+        with self._lock, self._connect() as conn:
+            existing = conn.execute(
+                "SELECT id FROM rolling_context WHERE topic = ?", (topic,)
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE rolling_context SET summary = ?, updated_at = ? WHERE topic = ?",
+                    (enriched, now, topic),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO rolling_context (topic, summary, updated_at) VALUES (?, ?, ?)",
+                    (topic, enriched, now),
+                )
+
+    # ── Cold Tier (Archive + Export) ─────────────────────────────────────
+
+    def archive_cold(
+        self,
+        *,
+        older_than_days: int = 90,
+        min_salience: float = 0.0,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Move stale/low-salience entries to cold archive stratum.
+
+        Entries already marked ``memory_stratum='archive'`` or older than
+        ``older_than_days`` with salience below ``min_salience`` are
+        migrated to ``storage_tier='cold'`` and ``memory_stratum='archive'``.
+
+        Returns count of entries archived.
+        """
+        cutoff = time.time() - (older_than_days * 86400)
+        archived_count = 0
+        with self._lock, self._connect() as conn:
+            # Find candidates: already archive stratum OR old + low salience
+            sql = """
+                SELECT id, sha256, salience_score, created_at, memory_stratum
+                FROM fact_store
+                WHERE storage_tier != 'cold'
+                  AND (
+                      memory_stratum = 'archive'
+                      OR (created_at < ? AND salience_score <= ?)
+                  )
+            """
+            rows = conn.execute(sql, (cutoff, min_salience)).fetchall()
+            if not dry_run:
+                conn.executemany(
+                    "UPDATE fact_store SET storage_tier='cold', memory_stratum='archive' WHERE id=?",
+                    [(r["id"],) for r in rows],
+                )
+            archived_count = len(rows)
+        return {
+            "archived_count": archived_count,
+            "dry_run": dry_run,
+            "cutoff_age_days": older_than_days,
+        }
+
+    def export_cold(self, path: str) -> dict[str, Any]:
+        """Export cold-tier entries to a JSON file for long-term archival.
+
+        Reads all entries with ``storage_tier='cold'`` and writes them as
+        newline-delimited JSON. Returns the number of entries exported.
+        """
+        import json as _json
+        exported = 0
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM fact_store WHERE storage_tier = 'cold' ORDER BY created_at"
+            ).fetchall()
+        with open(path, "w", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(_json.dumps(dict(row), default=str) + "\n")
+                exported += 1
+        return {"exported_count": exported, "path": path}
+
+    def import_cold(self, path: str) -> dict[str, Any]:
+        """Re-import entries from a cold-export JSON file.
+
+        Each line must be a JSON object with at minimum a ``sha256`` field.
+        Existing entries (by sha256) are skipped.
+        """
+        import json as _json
+        imported = 0
+        skipped = 0
+        with open(path, encoding="utf-8") as fh:
+            with self._lock, self._connect() as conn:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = _json.loads(line)
+                    except _json.JSONDecodeError:
+                        skipped += 1
+                        continue
+                    sha = entry.get("sha256")
+                    if not sha:
+                        skipped += 1
+                        continue
+                    existing = conn.execute(
+                        "SELECT id FROM fact_store WHERE sha256 = ?", (sha,)
+                    ).fetchone()
+                    if existing:
+                        skipped += 1
+                        continue
+                    conn.execute(
+                        """INSERT OR IGNORE INTO fact_store
+                           (sha256, content, topic, confidence, provenance,
+                            tags, vector_json, created_at, accessed_at,
+                            memory_stratum, storage_tier)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'archive', 'cold')""",
+                        (
+                            sha,
+                            entry.get("content", ""),
+                            entry.get("topic", ""),
+                            entry.get("confidence", 0.5),
+                            entry.get("provenance", "cold-import"),
+                            entry.get("tags", "[]"),
+                            entry.get("vector_json", "{}"),
+                            entry.get("created_at", time.time()),
+                            time.time(),
+                        ),
+                    )
+                    imported += 1
+        return {"imported_count": imported, "skipped_count": skipped, "path": path}
+
+    def cold_stats(self) -> dict[str, Any]:
+        """Return counts and sizes for hot/warm/cold tier distribution."""
+        with self._lock, self._connect() as conn:
+            tiers = conn.execute(
+                """SELECT storage_tier, memory_stratum, COUNT(*) as cnt
+                   FROM fact_store GROUP BY storage_tier, memory_stratum"""
+            ).fetchall()
+        distribution = {}
+        for t in tiers:
+            key = f"{t['storage_tier']}/{t['memory_stratum']}"
+            distribution[key] = t["cnt"]
+        total = sum(distribution.values())
+        return {
+            "total_entries": total,
+            "distribution": distribution,
         }
 
     def query_facts(

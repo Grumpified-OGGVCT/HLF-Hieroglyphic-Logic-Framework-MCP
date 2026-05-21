@@ -12,8 +12,8 @@ def test_repo_mcp_json_points_to_packaged_hlf_stdio_server() -> None:
     hlf_server = config["mcpServers"]["hlf-mcp"]
 
     assert hlf_server["type"] == "stdio"
-    assert hlf_server["command"] == "python"
-    assert hlf_server["args"] == ["-m", "hlf_mcp.server"]
+    assert hlf_server["command"] == ".\\run.bat"
+    assert hlf_server["args"] == ["stdio"]
     assert hlf_server["env"]["HLF_TRANSPORT"] == "stdio"
 
 

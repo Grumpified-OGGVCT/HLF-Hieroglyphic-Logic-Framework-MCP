@@ -274,6 +274,19 @@ class InstinctLifecycle:
                     }
                 mission["cove_gate_passed"] = True
 
+                # Evidence freshness gate for verify→merge
+                freshness_result = _check_mission_evidence_freshness(mission)
+                if not freshness_result["all_fresh"] and not override:
+                    return {
+                        "mission_id": mission_id,
+                        "status": "blocked",
+                        "current_phase": current,
+                        "allowed_next": _ALLOWED_NEXT.get(current, []),
+                        "error": "Evidence freshness gate failed: stale, superseded, or revoked evidence detected in verification report.",
+                        "cove_gate": {"passed": True},
+                        "memory_freshness": freshness_result,
+                    }
+
             if phase == "verify" and mission.get("task_dag"):
                 if (
                     not execution_ready_for_verification(
@@ -1323,39 +1336,65 @@ def _run_cove_gate(mission: dict[str, Any], cove_result: dict[str, Any] | None) 
 
 
 def _check_mission_evidence_freshness(mission: dict[str, Any]) -> dict[str, Any]:
-    """Check evidence freshness across a mission's execution trace."""
+    """Check evidence freshness across all evidence sources in a mission.
+
+    Scans:
+      - Execution trace node evidence
+      - Verification report evidence (artifacts/verify)
+      - Orchestration contract evidence entries
+    """
+    evidence_entries: list[dict[str, Any]] = []
+    stale_entries: list[dict[str, Any]] = []
+    stale_count = 0
+    superseded_count = 0
+    revoked_count = 0
+    verdicts: list[dict[str, Any]] = []
+
+    # 1. Execution trace evidence
     trace = mission.get("execution_trace", [])
-    if not trace:
-        return {"status": "ok", "verdict": "fresh", "details": []}
-
-    details = []
-    all_fresh = True
     for entry in trace:
-        if not isinstance(entry, dict):
-            continue
-        evidence = entry.get("evidence")
-        if evidence is None:
-            details.append({"node_id": entry.get("node_id", "unknown"), "status": "no_evidence", "admissible": True})
-            continue
-        try:
-            contract = EvidenceContract.from_dict(evidence) if isinstance(evidence, dict) else evidence
-            verdict = check_evidence_freshness(
-                {"freshness_status": "stale" if contract.is_stale() else "fresh",
-                 "superseded_by_sha256": contract.supersedes_sha256,
-                 "revoked": contract.revoked,
-                 "tombstoned": contract.tombstoned},
-                purpose="execution_admission"
-            )
-            details.append({
-                "node_id": entry.get("node_id", "unknown"),
-                "status": verdict.freshness_status,
-                "admissible": verdict.admissible,
-                "reasons": verdict.reasons,
-            })
-            if not verdict.admissible:
-                all_fresh = False
-        except Exception:
-            details.append({"node_id": entry.get("node_id", "unknown"), "status": "bad_evidence", "admissible": False})
-            all_fresh = False
+        if isinstance(entry, dict) and "evidence" in entry:
+            evidence_entries.append(entry["evidence"])
 
-    return {"status": "ok", "verdict": "fresh" if all_fresh else "stale", "details": details}
+    # 2. Verification report evidence
+    verify_artifact = mission.get("artifacts", {}).get("verify", {})
+    verify_payload = verify_artifact.get("payload", {})
+    if "evidence" in verify_payload:
+        evidence_entries.append(verify_payload["evidence"])
+
+    # 3. Orchestration contract evidence
+    orch_contract = mission.get("orchestration_contract", {})
+    if isinstance(orch_contract, dict):
+        for ev in orch_contract.get("evidence", []):
+            if isinstance(ev, dict):
+                evidence_entries.append(ev)
+
+    for evidence in evidence_entries:
+        if not isinstance(evidence, dict):
+            continue
+        # Determine purpose from context
+        freshness_status = evidence.get("freshness_status", "fresh")
+        verdict = check_evidence_freshness(evidence, purpose="orchestration_plan")
+        verdicts.append({
+            "sha256": evidence.get("sha256", ""),
+            "freshness_status": freshness_status,
+            "admissible": verdict.admissible,
+            "reasons": verdict.reasons,
+        })
+        if not verdict.admissible:
+            stale_count += 1
+            stale_entries.append(evidence)
+            if freshness_status == "superseded" or evidence.get("superseded"):
+                superseded_count += 1
+            if evidence.get("revoked"):
+                revoked_count += 1
+
+    all_fresh = stale_count == 0 and superseded_count == 0 and revoked_count == 0
+    return {
+        "all_fresh": all_fresh,
+        "stale_count": stale_count,
+        "superseded_count": superseded_count,
+        "revoked_count": revoked_count,
+        "stale_entries": stale_entries,
+        "verdicts": verdicts,
+    }

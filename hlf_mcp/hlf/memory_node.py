@@ -942,98 +942,143 @@ def build_evidence_chain_hash(contract: EvidenceContract) -> str:
 
 
 def check_evidence_freshness(
-    evidence_row: dict[str, Any],
+    evidence: dict[str, Any],
     purpose: str = "default",
+    allow_stale: bool = False,
+    allow_revoked: bool = False,
+    allow_superseded: bool = False,
 ) -> FreshnessVerdict:
     """Check if a memory evidence row is fresh/admissible for the given purpose."""
-    freshness = evidence_row.get("freshness_status", "fresh")
-    superseded = evidence_row.get("superseded_by_sha256", "")
-    revoked = evidence_row.get("revoked", False)
-    tombstoned = evidence_row.get("tombstoned", False)
-    content_hash_valid = evidence_row.get("content_hash_valid", True)
+    freshness = evidence.get("freshness_status", "fresh")
+    superseded_by = evidence.get("superseded_by_sha256", "") or evidence.get("superseded_by", "")
+    revoked = evidence.get("revoked", False)
+    tombstoned = evidence.get("tombstoned", False)
+    superseded = evidence.get("superseded", False)
+    content_hash_valid = evidence.get("content_hash_valid", True)
+    chain_length = evidence.get("supersession_chain_length", 1)
 
-    # Mandatory purposes reject stale, revoked, tombstoned, superseded
-    mandatory_purposes = {"execution_admission", "governance_vote", "audit_entry"}
-    overridable_purposes = {"default", "memory_recall", "dream_cycle"}
-    unrestricted_purposes = {"benchmark", "dream_proposal", "media_synthesis"}
+    # Mandatory purposes ALWAYS reject stale/superseded — no override possible
+    mandatory_purposes = {
+        "execution_admission", "governance_vote", "audit_entry",
+        "routing_evidence", "verifier_evidence", "orchestration_plan", "audit_evidence",
+    }
+    # Overridable purposes: reject stale by default, admit when allow_stale=True
+    overridable_purposes = {
+        "operator_review", "translation_memory",
+        "repair_pattern_recall", "governance_policy_retrieval",
+        "memory_recall",
+    }
+    # Unrestricted purposes: always admit regardless of freshness (except content hash or hard security)
+    unrestricted_purposes = {
+        "benchmark", "dream_proposal", "media_synthesis",
+        "dream_cycle", "knowledge_ingestion", "default",
+    }
 
-    # Tampered content hash is always hard-rejected regardless of purpose
+    # Tampered content hash is always hard-rejected regardless of purpose or flags
     if content_hash_valid is False:
-        return FreshnessVerdict(False, "tampered", ["Content hash does not match — evidence may be tampered"])
+        return FreshnessVerdict(False, "tampered", ["Content_hash does not match — evidence may be tampered"])
+
+    # Revoked/tombstoned — admitted only when allow_revoked=True
+    if revoked and not allow_revoked:
+        return FreshnessVerdict(False, "revoked", ["Evidence has been revoked"])
+    if tombstoned and not allow_revoked:
+        return FreshnessVerdict(False, "tombstoned", ["Evidence has been tombstoned"])
+
+    is_superseded = bool(superseded_by) or superseded is True
 
     if purpose in unrestricted_purposes:
-        reasons = []
+        reasons: list[str] = []
+        if revoked:
+            reasons.append("Evidence was revoked but admitted under unrestricted purpose")
+        if tombstoned:
+            reasons.append("Evidence was tombstoned but admitted under unrestricted purpose")
         if freshness == "stale":
             reasons.append("Evidence is stale but admitted under unrestricted purpose")
-        if superseded:
-            reasons.append(f"Superseded by {superseded} but admitted under unrestricted purpose")
+        if is_superseded:
+            reasons.append(f"Superseded by {superseded_by} but admitted under unrestricted purpose")
         return FreshnessVerdict(
             admissible=True,
             freshness_status=freshness,
             reasons=reasons,
-            superseded_by_sha256=superseded,
+            superseded_by_sha256=superseded_by,
         )
-
-    if revoked:
-        return FreshnessVerdict(False, "revoked", ["Evidence has been revoked"])
-    if tombstoned:
-        return FreshnessVerdict(False, "tombstoned", ["Evidence has been tombstoned"])
 
     if purpose in mandatory_purposes:
         if freshness == "stale":
-            return FreshnessVerdict(False, "stale", ["Evidence is stale"], superseded_by_sha256=superseded)
-        if superseded:
-            return FreshnessVerdict(False, "superseded", [f"Superseded by {superseded}"], superseded_by_sha256=superseded, supersession_chain_length=1)
+            return FreshnessVerdict(False, "stale", ["Evidence is stale — mandatory purpose requires fresh evidence"], superseded_by_sha256=superseded_by)
+        if is_superseded and not allow_superseded:
+            return FreshnessVerdict(False, "superseded", [f"Superseded by {superseded_by}"], superseded_by_sha256=superseded_by, supersession_chain_length=chain_length)
         return FreshnessVerdict(True, freshness)
 
-    # Overridable: flag but don't reject
-    if freshness == "stale" or superseded:
-        return FreshnessVerdict(
-            True, freshness,
-            reasons=["Evidence is flagged but admitted (overridable purpose)"],
-            superseded_by_sha256=superseded,
-        )
+    # Overridable: flag but don't reject when allow_stale=True
+    if freshness == "stale" or is_superseded:
+        if allow_stale or allow_superseded:
+            return FreshnessVerdict(
+                True, freshness,
+                reasons=["Evidence is flagged but admitted (allow_stale or allow_superseded)"],
+                superseded_by_sha256=superseded_by,
+            )
+        else:
+            if is_superseded:
+                return FreshnessVerdict(
+                    False, "superseded",
+                    [f"Superseded by {superseded_by}"],
+                    superseded_by_sha256=superseded_by,
+                    supersession_chain_length=chain_length,
+                )
+            reason = "Evidence is stale"
+            return FreshnessVerdict(False, "stale", [reason], superseded_by_sha256=superseded_by)
     return FreshnessVerdict(True, freshness)
 
 
 def resolve_supersession_chain(
-    sha256: str,
-    rows: list[dict[str, Any]],
+    start_sha256: str,
+    fact_rows: list[dict[str, Any]],
     max_depth: int = 50,
 ) -> dict[str, Any]:
     """Walk the supersession chain from the given sha256 through the rows."""
     visited = set()
     chain = []
-    current = sha256
+    current = start_sha256
     depth = 0
 
     while current and depth < max_depth:
         if current in visited:
             return {
-                "head": sha256,
+                "found": True,
+                "latest_sha256": chain[-1] if chain else start_sha256,
                 "chain": chain,
-                "length": len(chain),
+                "chain_length": len(chain),
                 "cycle_detected": True,
                 "terminal": current,
             }
         visited.add(current)
         # Find row with matching sha256
         match = None
-        for row in rows:
+        for row in fact_rows:
             if row.get("sha256", row.get("content_hash", "")) == current:
                 match = row
                 break
         if not match:
             break
         chain.append(current)
-        next_hash = match.get("superseded_by_sha256", "") or match.get("supersedes_sha256", "")
+        # Walk forward: find the row that supersedes the current one
+        next_hash = ""
+        for row in fact_rows:
+            if row.get("supersedes_sha256", "") == current or row.get("superseded_by_sha256", "") == current:
+                next_hash = row.get("sha256", row.get("content_hash", ""))
+                break
         current = next_hash
         depth += 1
 
+    found = len(chain) > 0 or any(
+        r.get("sha256", r.get("content_hash", "")) == start_sha256 for r in fact_rows
+    )
     return {
-        "head": sha256,
+        "found": found,
+        "latest_sha256": chain[-1] if chain else start_sha256,
         "chain": chain,
-        "length": len(chain),
+        "chain_length": len(chain),
         "cycle_detected": False,
-        "terminal": chain[-1] if chain else (sha256 if sha256 else None),
+        "terminal": chain[-1] if chain else (start_sha256 if start_sha256 else None),
     }

@@ -105,6 +105,17 @@ class LanguageProfile:
     generic_execute_goal: str
     generic_fallback_prefix: str
     localized_human_readable_prefix: str
+    function_words: tuple[str, ...] = ()
+    return_words: tuple[str, ...] = ()
+    if_words: tuple[str, ...] = ()
+    for_words: tuple[str, ...] = ()
+    parallel_words: tuple[str, ...] = ()
+    set_words: tuple[str, ...] = ()
+    log_words: tuple[str, ...] = ()
+    summary_words: tuple[str, ...] = ()
+    source_words: tuple[str, ...] = ()
+    branch_words: tuple[str, ...] = ()
+    spec_words: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -200,6 +211,17 @@ _LANGUAGE_PROFILES: dict[str, LanguageProfile] = {
         memory_recall_words=("recall", "retrieve", "look up"),
         vote_words=("consensus", "vote", "agree"),
         assert_words=("assert", "enforce", "require", "must"),
+        function_words=("function", "define function", "procedure", "def", "method"),
+        return_words=("returns", "return"),
+        if_words=("if ", "when ", "conditional"),
+        for_words=("for ", "loop", "iterate", "each"),
+        parallel_words=("parallel", "concurrently", "simultaneously", "in parallel"),
+        set_words=("set ", "assign ", "let "),
+        log_words=("log ", "write to", "record to"),
+        summary_words=("summarize", "summary", "summarise"),
+        source_words=("source", "import", "load"),
+        branch_words=("branch", "fork", "split"),
+        spec_words=("spec", "specification", "lifecycle", "instinct"),
         analyze_goal="analyze",
         delegate_goal="execute",
         route_strategy="auto",
@@ -904,7 +926,80 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
         if not s:
             continue
         s_lower = s.casefold()
-        if any(w in s_lower for w in profile.analyze_words):
+        if any(w in s_lower for w in profile.function_words):
+            name = _extract_function_name(s) or "unnamed"
+            params = _extract_params(s)
+            if params:
+                actions.append(f"FUNCTION {name}({params}) {{")
+            else:
+                actions.append(f"FUNCTION {name}(_void) {{")
+            if any(w in s_lower for w in profile.return_words):
+                ret_val = _extract_return_value(s) or "result"
+                actions.append(f"  RETURN {ret_val}")
+            actions.append("}")
+        elif any(w in s_lower for w in profile.return_words):
+            ret_val = _extract_return_value(s) or "result"
+            actions.append(f"RETURN {ret_val}")
+        elif any(w in s_lower for w in profile.if_words):
+            condition = _extract_if_condition(s) or "condition"
+            has_then = " then " in s_lower or " then," in s_lower
+            has_else = " else " in s_lower
+            if has_then:
+                actions.append(f"IF {condition} {{")
+                actions.append(f"  Δ [ACTION]")
+                if has_else:
+                    actions.append("} ELSE {")
+                    actions.append(f"  Δ [ACTION]")
+                actions.append("}")
+            else:
+                actions.append(f"IF {condition}")
+        elif any(w in s_lower for w in profile.for_words):
+            target = _extract_for_target(s) or "items"
+            actions.append(f"FOR item IN {target} {{")
+            actions.append(f"  Δ [ACTION]")
+            actions.append("}")
+        elif any(w in s_lower for w in profile.parallel_words):
+            actions.append("PARALLEL {")
+            actions.append(f"  Δ [ACTION]")
+            actions.append("} {")
+            actions.append(f"  Δ [ACTION]")
+            actions.append("}")
+        elif any(w in s_lower for w in profile.set_words):
+            var_val = _extract_variable_assignment(s)
+            if var_val:
+                actions.append(f"SET {var_val}")
+            elif "=" in s:
+                parts = s.split("=", 1)
+                var = _extract_var_name(parts[0]) or "var"
+                val = parts[1].strip().rstrip(",")
+                actions.append(f"SET {var} = {val}")
+        elif any(w in s_lower for w in profile.log_words):
+            # Extract the message after the log keyword
+            log_words_list = [w for w in profile.log_words if w in s_lower]
+            if log_words_list:
+                kw = max(log_words_list, key=len)  # longest match
+                after_kw = s_lower.split(kw, 1)[-1].strip().rstrip(".")
+                target = '"' + after_kw.replace('"', "'") + '"'
+            else:
+                target = _extract_quoted(s) or '"console"'
+            actions.append(f"LOG {target}")
+        elif any(w in s_lower for w in profile.source_words):
+            path = _extract_path(s, language=language) or _extract_quoted(s) or "'data'"
+            actions.append(f"SOURCE path={path}")
+        elif any(w in s_lower for w in profile.summary_words):
+            actions.append("SUMMARY [SUMMARY]")
+        elif any(w in s_lower for w in profile.branch_words):
+            actions.append("⊎ [BRANCH]")
+        elif any(w in s_lower for w in profile.spec_words):
+            actions.append("SPEC_DEFINE")
+        elif any(w in s_lower for w in profile.memory_store_words):
+            key = _extract_memory_key(s) or profile.memory_label
+            val = _extract_memory_value(s) or s[:40].replace('"', "'")
+            actions.append(f'MEMORY [{key}] value="{val}"')
+        elif any(w in s_lower for w in profile.memory_recall_words):
+            key = _extract_memory_key(s) or profile.recall_label
+            actions.append(f"RECALL [{key}]")
+        elif any(w in s_lower for w in profile.analyze_words):
             path = _extract_path(s, language=language) or "."
             actions.append(f'Δ [INTENT] goal="{profile.analyze_goal}" target="{path}"')
             if any(w in s_lower for w in profile.read_only_words):
@@ -915,11 +1010,12 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
         elif any(w in s_lower for w in profile.route_words):
             actions.append(f'⌘ [ROUTE] strategy="{profile.route_strategy}" tier="$DEPLOYMENT_TIER"')
         elif any(w in s_lower for w in profile.memory_store_words):
-            actions.append(
-                f'MEMORY [{profile.memory_label}] value="' + s[:40].replace('"', "'") + '"'
-            )
+            key = _extract_memory_key(s) or profile.memory_label
+            val = _extract_memory_value(s) or s[:40].replace('"', "'")
+            actions.append(f'MEMORY [{key}] value="{val}"')
         elif any(w in s_lower for w in profile.memory_recall_words):
-            actions.append(f"RECALL [{profile.recall_label}]")
+            key = _extract_memory_key(s) or profile.recall_label
+            actions.append(f"RECALL [{key}]")
         elif any(w in s_lower for w in profile.vote_words):
             actions.append(f'⨝ [VOTE] consensus="{profile.vote_label}"')
         elif any(w in s_lower for w in profile.assert_words):
@@ -949,6 +1045,105 @@ def _first_significant_word(text: str) -> str | None:
     for word in re.findall(r"[a-zA-Z]{3,}", text):
         if word.casefold() not in noise:
             return word
+    return None
+
+
+def _extract_function_name(text: str) -> str | None:
+    """Extract function name from 'function foo' or 'define function bar(name)'."""
+    m = re.search(r"(?:function|def)\s+(\w+)", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _extract_params(text: str) -> str | None:
+    """Extract function parameters from '(name, age)' pattern."""
+    m = re.search(r"\(([^)]*)\)", text)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _extract_return_value(text: str) -> str | None:
+    """Extract return value from 'returns X' or 'return X'."""
+    m = re.search(r"returns?\s+(.+?)(?:[;.!]|$)", text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _extract_if_condition(text: str) -> str | None:
+    """Extract condition from 'if/when X then' pattern."""
+    m = re.search(r"if\s+(.+?)\s+then", text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    # Also try 'when X then' or 'when X' without then
+    m = re.search(r"when\s+(.+?)\s+then", text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"when\s+(.+?)(?:[;.!]|$)", text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _extract_then_action(text: str) -> str | None:
+    """Extract then-action from 'then X' pattern."""
+    m = re.search(r"then\s+(.+?)(?:[;.!]|$)", text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _extract_for_target(text: str) -> str | None:
+    """Extract loop target from 'for each X' or 'for X in' pattern."""
+    m = re.search(r"for\s+(?:each\s+)?(?:item\s+in\s+)?(?:the\s+)?(\w+)", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _extract_var_name(text: str) -> str | None:
+    """Extract variable name from 'set variable X' or 'assign X' pattern."""
+    # Strip the verb
+    cleaned = re.sub(r"(?:set|assign|let)\s+(?:variable\s+)?", "", text, count=1, flags=re.IGNORECASE)
+    return cleaned.strip().split("=")[0].strip().split()[0] if cleaned.strip() else None
+
+
+def _extract_variable_assignment(text: str) -> str | None:
+    """Extract 'var = val' from set/assign statements."""
+    m = re.search(r"(?:set|assign|let)\s+(?:variable\s+)?(\w+)\s*=\s*(.+)", text, re.IGNORECASE)
+    if m:
+        val = m.group(2).strip().rstrip(",")
+        return f"{m.group(1)} = {val}"
+    return None
+
+
+def _extract_memory_key(text: str) -> str | None:
+    """Extract key from 'key=fluency' or 'key fluency' or 'with key X'."""
+    m = re.search(r"key[=:\s]+(\w+)", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    # Try 'record with key X'
+    m = re.search(r"with\s+key\s+(\w+)", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    # Try quoted key
+    m = re.search(r"key\s*=\s*\"([^\"]+)\"", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _extract_memory_value(text: str) -> str | None:
+    """Extract memory value from 'value=verified' or 'value verified'."""
+    m = re.search(r"value[=:\s]+(\S+)", text, re.IGNORECASE)
+    if m:
+        return m.group(1).rstrip(",")
+    # Try quoted value
+    m = re.search(r"value\s*=\s*\"([^\"]+)\"", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
     return None
 
 

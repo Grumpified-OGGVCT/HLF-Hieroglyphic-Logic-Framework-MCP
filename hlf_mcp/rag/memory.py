@@ -1102,6 +1102,7 @@ def _build_governed_hks_contract(
             item.get("retrieval_contract") if isinstance(item.get("retrieval_contract"), dict) else {}
         )
         graph_context = item.get("graph_context") if isinstance(item.get("graph_context"), dict) else {}
+        item_metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
         pointer = build_pointer_ref(
             f"{item.get('topic') or 'general'}-{item.get('id') or 'entry'}",
             str(item.get("sha256") or ""),
@@ -1115,6 +1116,7 @@ def _build_governed_hks_contract(
                 "topic": item.get("topic"),
                 "domain": item.get("domain"),
                 "solution_kind": item.get("solution_kind"),
+                "metadata": item_metadata,
                 "rank_score": retrieval.get("rank_score"),
                 "graph_score": retrieval.get("graph_score"),
                 "primary_path": retrieval.get("primary_path"),
@@ -1426,6 +1428,7 @@ class HKSValidatedExemplar:
     graph_context: dict[str, Any] | None = None
     schema_version: str = "1.0"
     status: str = "validated"
+    agent_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.domain not in HKS_DOMAINS:

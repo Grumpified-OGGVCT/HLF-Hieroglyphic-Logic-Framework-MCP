@@ -541,6 +541,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         branch: str | None = None,
         commit_sha: str | None = None,
         artifact_path: str | None = None,
+        agent_id: str = "",
     ) -> dict[str, Any]:
         """Capture a validated HKS exemplar for future governed recall."""
         result = ctx.capture_validated_solution(
@@ -561,6 +562,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             branch=branch,
             commit_sha=commit_sha,
             artifact_path=artifact_path,
+            agent_id=agent_id or None,
         )
         result["audit"] = ctx.audit_chain.log(
             "hlf_hks_capture",

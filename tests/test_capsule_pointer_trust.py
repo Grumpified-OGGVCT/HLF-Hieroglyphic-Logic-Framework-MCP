@@ -375,6 +375,7 @@ def test_capsule_run_persists_execution_admission_into_governed_route() -> None:
         tests=[{"name": "pytest", "passed": True, "exit_code": 0, "counts": {"passed": 1}}],
         source="tests.test_capsule_pointer_trust",
         artifact_path="artifact:route-proof-join",
+        agent_id="execution-admission-agent",
     )
     server.hlf_record_benchmark_artifact(
         profile_name="agent_routing_context_english",

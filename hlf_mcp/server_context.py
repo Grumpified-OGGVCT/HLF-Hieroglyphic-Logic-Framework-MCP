@@ -1440,6 +1440,7 @@ class ServerContext:
         commit_sha: str | None = None,
         artifact_path: str | None = None,
         graph_context: dict[str, Any] | None = None,
+        agent_id: str | None = None,
     ) -> dict[str, Any]:
         normalized_tests: list[HKSTestEvidence] = []
         for item in tests or []:
@@ -1505,6 +1506,7 @@ class ServerContext:
             confidence=confidence,
             evaluation=evaluation,
             graph_context=graph_context,
+            agent_id=agent_id,
         )
         result = self.memory_store.store_exemplar(exemplar)
         result["governance_event"] = self.emit_governance_event(

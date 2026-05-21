@@ -1835,15 +1835,15 @@ Reviewer note:
 
 - use `docs/HLF_REVIEWER_HANDOFF_2026-03-20.md` for a PR-ready reviewer handoff distilled from the merge-readiness summary
 
-### Phase 3 — Universal Usability 🌐 (planned)
+### Phase 3 — Universal Usability 🌐 (complete)
 
 - [x] **ASCII surface**: round-trip `IF risk > 0 THEN [RESULT]` ↔ `⊎ risk > 0 ⇒ [RESULT]` (`hlf_mcp/hlf/ascii_surface.py`)
 - [x] **ASCII proof lattice**: terminal-renderable formal verification proof surface with operator family coverage, proof depth, regression status, and Z3 solver indicators (`hlf_mcp/hlf/ascii_proof_surface.py`)
-- [ ] **WASM target**: compile HLF programs to WebAssembly for browser/edge execution
+- [x] **WASM target**: compile HLF programs to WebAssembly for browser/edge execution
 - [x] **OCI registry push**: `OCIClient.push()` — HTTP push to live registries + OCI Image Layout offline fallback
 - [x] **Z3 formal verification**: `z3_verify` host function — 12/12 operator families covered (94.2%)
 - [x] **EGL Monitor**: MAP-Elites quality-diversity grid tracking agent specialization drift
-- [ ] **Tool HITL gate UI**: web dashboard for approving `pending_hitl` tools
+- [x] **Tool HITL gate UI**: web dashboard at `/hitl` for approving `pending_hitl` tools
 - [x] **SpindleDAG executor**: task DAG with Saga compensating transactions
 
 ### Phase 4 — Ecosystem Integration 🔗 (planned)

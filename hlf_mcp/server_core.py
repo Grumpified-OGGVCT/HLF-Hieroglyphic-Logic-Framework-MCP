@@ -514,6 +514,44 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         resolved_metrics_dir = Path(metrics_dir).expanduser() if metrics_dir else None
         return summarize_weekly_artifacts(resolved_metrics_dir)
 
+    @mcp.tool()
+    def hlf_compile_wasm(
+        source: str,
+        module_name: str = "hlf_module",
+    ) -> dict[str, Any]:
+        """Compile HLF source to WebAssembly Text Format (WAT).
+
+        Produces WAT output that can be compiled to .wasm via wat2wasm or
+        run directly in wasmtime. Maps HLF's stack-based bytecode to WASM's
+        stack machine with structured control flow.
+
+        Args:
+            source: HLF source code to compile.
+            module_name: Name for the WASM module (default: 'hlf_module').
+
+        Returns:
+            dict with 'wat', 'module_name', 'opcode_count', and 'status'.
+        """
+        from hlf_mcp.hlf.wasm_compiler import WasmCompiler
+
+        try:
+            compiler = WasmCompiler(module_name=module_name)
+            wat_text = compiler.compile_file_source(source)
+            opcode_count = wat_text.count("\n  ")  # rough count of instructions
+            return {
+                "status": "ok",
+                "module_name": module_name,
+                "opcode_count": opcode_count,
+                "wat": wat_text,
+            }
+        except Exception as exc:
+            return {
+                "status": "error",
+                "module_name": module_name,
+                "error": str(exc),
+                "wat": "",
+            }
+
     return {
         "hlf_compile": hlf_compile,
         "hlf_format": hlf_format,
@@ -531,4 +569,5 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_test_suite_summary": hlf_test_suite_summary,
         "hlf_capture_symbolic_surface": hlf_capture_symbolic_surface,
         "hlf_weekly_evidence_summary": hlf_weekly_evidence_summary,
+        "hlf_compile_wasm": hlf_compile_wasm,
     }

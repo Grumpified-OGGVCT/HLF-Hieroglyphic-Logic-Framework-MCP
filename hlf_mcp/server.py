@@ -230,6 +230,36 @@ async def health_endpoint(request: Any) -> Any:
     )
 
 
+# ── HITL Dashboard endpoints (HTTP transports only) ──────────────────────────
+
+
+@mcp.custom_route("/hitl", methods=["GET"], include_in_schema=False)
+async def hitl_dashboard_route(request: Any) -> Any:
+    """Serve the Tool HITL Gate dashboard for reviewing forged tools."""
+    from hlf_mcp.hlf.hitl_dashboard import dashboard_html
+
+    return dashboard_html(_ctx.tool_registry)
+
+
+@mcp.custom_route("/hitl/action", methods=["POST"], include_in_schema=False)
+async def hitl_action_route(request: Any) -> Any:
+    """Handle approve/reject actions from the HITL dashboard."""
+    from hlf_mcp.hlf.hitl_dashboard import handle_action
+
+    return await handle_action(_ctx.tool_registry, request)
+
+
+@mcp.custom_route("/hitl/status", methods=["GET"], include_in_schema=False)
+async def hitl_status_route(request: Any) -> Any:
+    """JSON API: list all pending HITL tools with their approval tokens."""
+    from starlette.responses import JSONResponse
+
+    pending = _ctx.tool_registry.get_pending_tools()
+    return JSONResponse({"pending_count": len(pending), "tools": pending})
+
+
+
+
 def _get_http_bind() -> tuple[str, int]:
     """Resolve the explicit host/port bind for HTTP transports."""
     host = os.environ.get("HLF_HOST", "0.0.0.0")

@@ -150,6 +150,56 @@ class ToolRegistry:
         )
         return True
 
+    def reject_forged_tool(
+        self, name: str, operator: str = "system", approval_token: str | None = None,
+        reason: str = ""
+    ) -> bool:
+        """Reject a pending HITL tool, moving it to DISABLED state.
+
+        Same token validation as approve_forged_tool. The *reason* is logged
+        for audit trail.
+        """
+        entry = self._registry.get(name)
+        if not entry:
+            raise ToolDispatchError(f"Unknown tool: {name}")
+        if entry.get("status") != ToolLifecycleState.PENDING:
+            raise ToolApprovalBypassError(
+                f"Tool {name!r} is not pending HITL approval",
+                tool_name=name,
+                operator=operator,
+                tool_status=str(entry.get("status") or ""),
+                step_id=int(entry.get("step_id") or 0),
+                reason_code="tool_not_pending_hitl",
+            )
+        if approval_token is not None and approval_token != entry.get("approval_token"):
+            raise ToolApprovalBypassError(
+                f"Invalid approval token for {name!r}: token mismatch",
+                tool_name=name,
+                operator=operator,
+                tool_status=str(entry.get("status") or ""),
+                step_id=int(entry.get("step_id") or 0),
+                reason_code="tool_approval_token_mismatch",
+            )
+        step = self._next_step()
+        entry["status"] = ToolLifecycleState.DISABLED
+        entry["rejected_by"] = operator
+        if reason:
+            entry["rejection_reason"] = reason
+        entry.pop("approval_token", None)
+        self._approval_log.append(
+            {"tool": name, "step": step, "operator": operator, "action": "rejected",
+             "reason": reason}
+        )
+        return True
+
+    def get_pending_tools(self) -> list[dict[str, Any]]:
+        """Return all tools currently in pending_hitl state."""
+        return [
+            {"name": n, **{k: v for k, v in e.items() if k != "install_path"}}
+            for n, e in self._registry.items()
+            if e.get("status") == ToolLifecycleState.PENDING
+        ]
+
     def dispatch(self, tool_name: str, args: dict[str, Any]) -> ToolDispatchResult:
         entry = self._registry.get(tool_name)
         if not entry:

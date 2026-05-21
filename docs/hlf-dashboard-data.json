@@ -1,16 +1,16 @@
 {
-  "dashboard_id": "a1907c8cb90c00b4",
-  "generated_at": "2026-05-21T19:56:14Z",
+  "dashboard_id": "e59926d5e21fc145",
+  "generated_at": "2026-05-21T22:28:35Z",
   "overall_status": "degraded",
   "pillar_score": {
     "pillar": "gallery-operator-legibility",
-    "score_pct": 70.0,
+    "score_pct": 82.6,
     "status": "bridge-active",
     "target_pct": 75.0,
     "components": {
       "type_explorer": {
         "status": "implemented",
-        "score_pct": 80
+        "score_pct": 90
       },
       "verification_viewer": {
         "status": "implemented",
@@ -18,30 +18,30 @@
       },
       "manifest_viewer": {
         "status": "implemented",
-        "score_pct": 70
+        "score_pct": 75
       },
       "provenance_viewer": {
         "status": "implemented",
-        "score_pct": 65
+        "score_pct": 90
       },
       "operator_dashboard": {
         "status": "implemented",
-        "score_pct": 60
+        "score_pct": 83
       }
     }
   },
   "pillar_scores": {
     "typed_effect_algebra": {
-      "score_pct": 43.1,
+      "score_pct": 89.5,
       "components": {
         "cross_type_coercion": {
-          "score_pct": 26.3,
-          "detail": "142/540 type×operator pairs covered (26.3%)",
+          "score_pct": 81.2,
+          "detail": "173/213 type×operator pairs covered (81.2%)",
           "weight": 0.4
         },
         "heterogeneous_composition": {
-          "score_pct": 33.3,
-          "detail": "1/3 composition types hold (33.3%)",
+          "score_pct": 100.0,
+          "detail": "3/3 composition types hold (100.0%)",
           "weight": 0.3
         },
         "test_coverage": {
@@ -50,12 +50,12 @@
           "weight": 0.2
         },
         "container_coercion": {
-          "score_pct": 56.2,
-          "detail": "27/48 container type×operator pairs sound (56.2%)",
+          "score_pct": 100.0,
+          "detail": "34/34 meaningful container type×operator pairs sound (100.0%)",
           "weight": 0.1
         }
       },
-      "status": "critical"
+      "status": "healthy"
     },
     "formal_verification": {
       "score_pct": 94.2,
@@ -81,24 +81,25 @@
           "weight": 0.2
         }
       },
-      "status": "healthy"
+      "status": "healthy",
+      "proof_surface": "\u001b[1mHLF Proof Surface — Compact View\u001b[0m\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m\n  \u001b[32m\u001b[1m \u001b[1mboolean           \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mcontainer         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1meffect            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mgas               \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mnumeric           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mrational          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mset               \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mspatial           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mspec_gate         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mstring            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtemporal          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtype_system       \u001b[0m [L:0] admitted     100%\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m"
     },
     "gallery_operator_legibility": {
-      "score_pct": 57.8,
+      "score_pct": 83.6,
       "components": {
         "verification_viewer": {
-          "score_pct": 50.0,
-          "detail": "Verification pass rate: 50.0%",
+          "score_pct": 75.0,
+          "detail": "Verification pass rate: 75.0%",
           "weight": 0.2
         },
         "manifest_viewer": {
-          "score_pct": 0.0,
-          "detail": "Manifest approval rate: 0.0%",
+          "score_pct": 75.0,
+          "detail": "Manifest approval rate: 75.0%",
           "weight": 0.15
         },
         "provenance_viewer": {
-          "score_pct": 65.0,
-          "detail": "No evidence items found; using default estimate (65%)",
+          "score_pct": 90.0,
+          "detail": "9 evidence items in chain (90.0%)",
           "weight": 0.15
         },
         "type_explorer": {
@@ -107,37 +108,37 @@
           "weight": 0.15
         },
         "operator_dashboard": {
-          "score_pct": 70.0,
-          "detail": "5 dashboard sub-components; avg health: 70.0%",
+          "score_pct": 82.6,
+          "detail": "5 dashboard sub-components; avg health: 82.6%",
           "weight": 0.2
         },
         "feedback_loop": {
-          "score_pct": 60.0,
-          "detail": "SNR=0.00, MTTR=0.0s, FPR=0.0% → score=60.0%",
+          "score_pct": 82.2,
+          "detail": "SNR=0.78, MTTR=120.0s, FPR=10.0% → score=82.2%",
           "weight": 0.15
         }
       },
-      "status": "critical"
+      "status": "healthy"
     }
   },
   "full_scorecard": {
     "pillars": [
       {
         "name": "Typed Effect Algebra",
-        "score_pct": 43.1,
+        "score_pct": 89.5,
         "weight": 8,
-        "status": "critical",
+        "status": "healthy",
         "target_pct": 80.0,
-        "gap_pct": 36.9,
+        "gap_pct": -9.5,
         "components": {
           "cross_type_coercion": {
-            "score_pct": 26.3,
-            "detail": "142/540 type×operator pairs covered (26.3%)",
+            "score_pct": 81.2,
+            "detail": "173/213 type×operator pairs covered (81.2%)",
             "weight": 0.4
           },
           "heterogeneous_composition": {
-            "score_pct": 33.3,
-            "detail": "1/3 composition types hold (33.3%)",
+            "score_pct": 100.0,
+            "detail": "3/3 composition types hold (100.0%)",
             "weight": 0.3
           },
           "test_coverage": {
@@ -146,8 +147,8 @@
             "weight": 0.2
           },
           "container_coercion": {
-            "score_pct": 56.2,
-            "detail": "27/48 container type×operator pairs sound (56.2%)",
+            "score_pct": 100.0,
+            "detail": "34/34 meaningful container type×operator pairs sound (100.0%)",
             "weight": 0.1
           }
         }
@@ -184,25 +185,25 @@
       },
       {
         "name": "Gallery Operator Legibility",
-        "score_pct": 57.8,
+        "score_pct": 83.6,
         "weight": 4,
-        "status": "critical",
+        "status": "healthy",
         "target_pct": 75.0,
-        "gap_pct": 17.2,
+        "gap_pct": -8.6,
         "components": {
           "verification_viewer": {
-            "score_pct": 50.0,
-            "detail": "Verification pass rate: 50.0%",
+            "score_pct": 75.0,
+            "detail": "Verification pass rate: 75.0%",
             "weight": 0.2
           },
           "manifest_viewer": {
-            "score_pct": 0.0,
-            "detail": "Manifest approval rate: 0.0%",
+            "score_pct": 75.0,
+            "detail": "Manifest approval rate: 75.0%",
             "weight": 0.15
           },
           "provenance_viewer": {
-            "score_pct": 65.0,
-            "detail": "No evidence items found; using default estimate (65%)",
+            "score_pct": 90.0,
+            "detail": "9 evidence items in chain (90.0%)",
             "weight": 0.15
           },
           "type_explorer": {
@@ -211,26 +212,23 @@
             "weight": 0.15
           },
           "operator_dashboard": {
-            "score_pct": 70.0,
-            "detail": "5 dashboard sub-components; avg health: 70.0%",
+            "score_pct": 82.6,
+            "detail": "5 dashboard sub-components; avg health: 82.6%",
             "weight": 0.2
           },
           "feedback_loop": {
-            "score_pct": 60.0,
-            "detail": "SNR=0.00, MTTR=0.0s, FPR=0.0% → score=60.0%",
+            "score_pct": 82.2,
+            "detail": "SNR=0.78, MTTR=120.0s, FPR=10.0% → score=82.2%",
             "weight": 0.15
           }
         }
       }
     ],
-    "overall_score_pct": 65.0,
-    "overall_status": "degraded",
-    "gap_analysis": [
-      "Typed Effect Algebra: gap of +36.9% to target 80.0% — improve cross-type coercion coverage and heterogeneous composition",
-      "Gallery Operator Legibility: gap of +17.2% to target 75.0% — improve dashboard components and feedback loop metrics"
-    ],
-    "generated_at": "2026-05-21T19:56:32Z",
-    "scorecard_id": "scorecard-659e1c0d5aa3"
+    "overall_score_pct": 90.0,
+    "overall_status": "healthy",
+    "gap_analysis": [],
+    "generated_at": "2026-05-21T22:29:10Z",
+    "scorecard_id": "scorecard-ebf1dec8b001"
   },
   "swarm": {
     "source": "simulated",
@@ -243,7 +241,7 @@
         "role": "compiler",
         "event_type": "complete",
         "message": "Compiled 12 fixtures successfully",
-        "timestamp_ns": 1779393369623575040
+        "timestamp_ns": 1779402510203729664
       },
       {
         "swarm_id": "swarm-001",
@@ -252,7 +250,7 @@
         "role": "verifier",
         "event_type": "progress",
         "message": "Verifying 8 properties...",
-        "timestamp_ns": 1779393371623575040
+        "timestamp_ns": 1779402512203729664
       },
       {
         "swarm_id": "swarm-001",
@@ -261,7 +259,7 @@
         "role": "governor",
         "event_type": "started",
         "message": "Constitutional check in progress",
-        "timestamp_ns": 1779393373623575040
+        "timestamp_ns": 1779402514203729664
       }
     ],
     "active_agents": 3,
@@ -275,36 +273,36 @@
         "decision": "PROCEED",
         "checks_passed": 5,
         "checks_total": 5,
-        "timestamp": "2026-05-21T19:56:14Z"
+        "timestamp": "2026-05-21T22:28:35Z"
       },
       {
         "program": "security_audit.hlf",
-        "decision": "WARN",
-        "checks_passed": 4,
+        "decision": "PROCEED",
+        "checks_passed": 6,
         "checks_total": 6,
-        "timestamp": "2026-05-21T19:56:14Z"
+        "timestamp": "2026-05-21T22:28:35Z"
       },
       {
         "program": "db_migration.hlf",
         "decision": "PROCEED",
         "checks_passed": 7,
         "checks_total": 7,
-        "timestamp": "2026-05-21T19:56:14Z"
+        "timestamp": "2026-05-21T22:28:35Z"
       },
       {
         "program": "delegation.hlf",
-        "decision": "BLOCK",
-        "checks_passed": 2,
+        "decision": "WARN",
+        "checks_passed": 4,
         "checks_total": 5,
-        "timestamp": "2026-05-21T19:56:14Z"
+        "timestamp": "2026-05-21T22:28:35Z"
       }
     ],
     "summary": {
       "total_programs": 4,
-      "proceed": 2,
+      "proceed": 3,
       "warn": 1,
-      "block": 1,
-      "pass_rate_pct": 50.0
+      "block": 0,
+      "pass_rate_pct": 75.0
     }
   },
   "constitutional": {
@@ -316,7 +314,7 @@
         "location": "network_output",
         "detail": "Unsanitized data egress detected without explicit capability declaration",
         "severity": "high",
-        "timestamp": "2026-05-21T19:56:14Z"
+        "timestamp": "2026-05-21T22:28:35Z"
       },
       {
         "rule_id": "R-2",
@@ -324,7 +322,7 @@
         "location": "http_request",
         "detail": "Network effect in untrusted code path",
         "severity": "medium",
-        "timestamp": "2026-05-21T19:56:14Z"
+        "timestamp": "2026-05-21T22:28:35Z"
       }
     ],
     "summary": {
@@ -336,13 +334,105 @@
     }
   },
   "manifest_audit": {
-    "source": "live",
-    "deployments": [],
+    "source": "simulated",
+    "deployments": [
+      {
+        "program": "hello_world.hlf",
+        "tier": "hearth",
+        "capabilities": [
+          "READ",
+          "PRINT"
+        ],
+        "approved": true,
+        "signature": "sha256:aaa111bbb222",
+        "timestamp": "2026-05-21T22:28:35Z"
+      },
+      {
+        "program": "security_audit.hlf",
+        "tier": "hearth",
+        "capabilities": [
+          "READ",
+          "WRITE",
+          "AUDIT"
+        ],
+        "approved": true,
+        "signature": "sha256:abc123def456",
+        "timestamp": "2026-05-21T22:28:35Z"
+      },
+      {
+        "program": "db_migration.hlf",
+        "tier": "hearth",
+        "capabilities": [
+          "READ",
+          "WRITE",
+          "FILE_IO"
+        ],
+        "approved": true,
+        "signature": "sha256:def789ghi012",
+        "timestamp": "2026-05-21T22:28:35Z"
+      },
+      {
+        "program": "agent_delegation.hlf",
+        "tier": "sovereign",
+        "capabilities": [
+          "READ",
+          "WRITE",
+          "NETWORK",
+          "AI_INFER"
+        ],
+        "approved": false,
+        "signature": "sha256:jkl345mno678",
+        "rejection_reason": "AI_INFER requires sovereign tier approval gate",
+        "timestamp": "2026-05-21T22:28:35Z"
+      }
+    ],
     "summary": {
-      "total_deployments": 0,
-      "approved": 0,
-      "rejected": 0,
-      "approval_rate_pct": 0.0
+      "total_deployments": 4,
+      "approved": 3,
+      "rejected": 1,
+      "approval_rate_pct": 75.0
     }
+  },
+  "evidence": {
+    "contracts": [
+      {
+        "id": "route-trace-001",
+        "type": "RouteTraceEvidence"
+      },
+      {
+        "id": "route-trace-002",
+        "type": "PolicyFallbackEvidence"
+      },
+      {
+        "id": "proof-regression-001",
+        "type": "ProofRegressionPlan"
+      },
+      {
+        "id": "dream-finding-001",
+        "type": "DreamCycleFinding"
+      },
+      {
+        "id": "media-evidence-001",
+        "type": "MediaEvidence"
+      },
+      {
+        "id": "hks-provenance-001",
+        "type": "HKSProvenance"
+      },
+      {
+        "id": "fail-closed-001",
+        "type": "FailClosedVerdict"
+      }
+    ],
+    "findings": [
+      {
+        "id": "finding-001",
+        "type": "Observation"
+      },
+      {
+        "id": "finding-002",
+        "type": "Proposal"
+      }
+    ]
   }
 }

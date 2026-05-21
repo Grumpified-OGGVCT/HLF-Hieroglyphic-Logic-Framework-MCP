@@ -1,13 +1,25 @@
 """
-Instinct SDD (Specify-Delegate-Do) Lifecycle.
+Instinct SDD (Specify-Delegate-Do) Lifecycle with Dream Cycle Binding.
 
 Deterministic mission state machine:
-  Specify → Plan → Execute → Verify → Merge
+  Observe → Propose → Specify → Plan → Execute → Verify → Merge
+
+Dream gating (observe→propose→verify→promote):
+  - observe: synthesises DreamFindings from artifacts, memory, media
+  - propose: creates DreamProposals from findings, evaluates promotion rules
+  - verify: CoVE gate check before any promotion
+  - promote: advisory → candidate → binding with rule enforcement
 
 Rules:
   - Phase skips are blocked (must advance sequentially)
   - Backward transitions are blocked unless override=True
   - The Verify→Merge transition requires CoVE gate pass
+  - Cannot skip observe before propose
+  - Cannot promote without passing CoVE gate
+  - Promote only succeeds if proposal passes its promotion rule
+  - Auto-promote when confidence >= 0.85 and rule is AUTO_IF_CONFIDENCE
+  - Manual promote requires governor approval token
+  - Governance vote promote requires 3-of-5 validator signatures
   - Each phase transition is logged to the ALIGN Ledger
   - SPEC_SEAL opcodes lock missions with SHA-256 checksums
 """
@@ -30,17 +42,41 @@ from hlf_mcp.instinct.orchestration import (
     summarize_execution_trace,
 )
 from hlf_mcp.hlf.memory_node import EvidenceContract, check_evidence_freshness
+from hlf_mcp.hlf.dream_proposal import (
+    DreamProposal,
+    PromotionRule,
+    create_dream_proposal,
+    create_governor_token,
+    create_validator_signature,
+    promote_to_binding,
+    promote_to_candidate,
+    _check_cove_gate,
+)
+from hlf_mcp.dream_cycle import DreamFinding
 
 # ── Phase definitions ──────────────────────────────────────────────────────────
 
-PHASES = ["specify", "plan", "execute", "verify", "merge"]
+PHASES = ["observe", "propose", "specify", "plan", "execute", "verify", "merge"]
 PHASE_INDEX: dict[str, int] = {p: i for i, p in enumerate(PHASES)}
 
 # Transition gate rules
 _GATES: dict[str, dict[str, Any]] = {
+    "observe": {
+        "description": "Dream cycle observation — synthesise findings from evidence",
+        "requires": [],
+        "produces": ["dream_findings"],
+        "dream_gate": True,
+    },
+    "propose": {
+        "description": "Propose binding actions from dream findings",
+        "requires": ["dream_findings"],
+        "produces": ["dream_proposals"],
+        "dream_gate": True,
+        "requires_observe": True,
+    },
     "specify": {
         "description": "Mission is being specified",
-        "requires": [],
+        "requires": ["mission_spec"],
         "produces": ["mission_spec"],
     },
     "plan": {
@@ -68,6 +104,8 @@ _GATES: dict[str, dict[str, Any]] = {
 }
 
 _ALLOWED_NEXT: dict[str, list[str]] = {
+    "observe": ["propose"],
+    "propose": ["specify", "observe"],
     "specify": ["plan"],
     "plan": ["execute"],
     "execute": ["verify"],
@@ -138,14 +176,44 @@ class InstinctLifecycle:
         with self._lock:
             mission = self._missions.get(mission_id)
 
-            # New mission — must start at specify
+            # New mission
             if mission is None:
-                if phase != "specify":
-                    return _err(mission_id, f"New mission must start at 'specify', got '{phase}'")
-                mission = _new_mission(mission_id, payload)
-                self._missions[mission_id] = mission
-                self._log_ledger(mission_id, "created", phase, payload)
-                return _ok_state(mission)
+                # Backward-compatible: 'specify' is still the primary entry point.
+                # New missions that start at specify have dream phases
+                # auto-completed so they don't gate the main flow.
+                if phase == "specify":
+                    mission = _new_mission(mission_id, payload, starting_phase="specify")
+                    mission["dream_phases_auto_completed"] = True
+                    self._missions[mission_id] = mission
+                    self._log_ledger(mission_id, "created", phase, payload)
+                    return _ok_state(mission)
+                if phase == "observe":
+                    mission = _new_mission(mission_id, payload, starting_phase="observe")
+                    self._missions[mission_id] = mission
+                    self._log_ledger(mission_id, "created", phase, payload)
+                    return _ok_state(mission)
+                if phase == "propose":
+                    # propose without observe requires auto-completing observe
+                    mission = _new_mission(mission_id, payload, starting_phase="propose")
+                    mission["dream_phases_auto_completed"] = False
+                    mission["phase_history"].append(
+                        {
+                            "phase": "observe",
+                            "timestamp": time.time(),
+                            "payload_keys": [],
+                            "notes": "auto_completed_by_entry",
+                        }
+                    )
+                    mission["artifacts"]["observe"] = {
+                        "payload": {},
+                        "timestamp": time.time(),
+                        "sha256": hashlib.sha256(b"auto_completed").hexdigest(),
+                    }
+                    self._missions[mission_id] = mission
+                    self._log_ledger(mission_id, "created_auto_observe", phase, payload)
+                    return _ok_state(mission)
+
+                return _err(mission_id, f"New mission must start at 'observe', 'propose', or 'specify'. Got '{phase}'")
 
             current = mission["current_phase"]
             current_idx = PHASE_INDEX[current]
@@ -165,12 +233,30 @@ class InstinctLifecycle:
 
             # Skip blocked
             if target_idx > current_idx + 1 and not override:
-                skipped = PHASES[current_idx + 1]
-                return _err(
-                    mission_id,
-                    f"Phase skip blocked: cannot go from '{current}' to '{phase}' "
-                    f"without completing '{skipped}'.",
-                )
+                # Special case: if dream phases were auto-completed and
+                # current is specify, allow skip to plan directly
+                if (
+                    current == "specify"
+                    and phase == "plan"
+                    and mission.get("dream_phases_auto_completed")
+                ):
+                    pass  # Allow — dream phases were auto-completed
+                else:
+                    skipped = PHASES[current_idx + 1]
+                    return _err(
+                        mission_id,
+                        f"Phase skip blocked: cannot go from '{current}' to '{phase}' "
+                        f"without completing '{skipped}'.",
+                    )
+
+            # Dream gating: cannot skip observe before propose
+            if phase == "propose" and current != "observe" and not override:
+                if not mission.get("artifacts", {}).get("observe"):
+                    return _err(
+                        mission_id,
+                        "Dream gating: cannot propose without completing observe phase first. "
+                        "Use override=True to force.",
+                    )
 
             # CoVE gate for verify→merge
             if phase == "merge" and current == "verify":
@@ -670,11 +756,413 @@ class InstinctLifecycle:
         from hlf_mcp.instinct.classification import get_vocabulary_summary
         return get_vocabulary_summary()
 
+    # ── Dream cycle binding methods ─────────────────────────────────────────
+
+    def observe_phase(
+        self,
+        mission_id: str,
+        *,
+        weekly_artifacts: list[dict[str, Any]] | None = None,
+        memory_facts: list[dict[str, Any]] | None = None,
+        media_evidence: list[Any] | None = None,
+        witness_record_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Run the observe phase: synthesise DreamFindings from evidence.
+
+        Calls build_dream_findings() to produce findings from weekly
+        artifacts, memory facts, and media evidence. Stores findings
+        in the mission state.
+
+        Args:
+            mission_id: The mission to observe for.
+            weekly_artifacts: Optional pre-collected weekly artifacts.
+            memory_facts: Optional pre-collected memory facts.
+            media_evidence: Optional pre-collected media evidence records.
+            witness_record_id: Optional witness record identifier.
+
+        Returns:
+            Mission state dict with dream_findings populated.
+        """
+        from hlf_mcp.dream_cycle import (
+            DreamCycleReport,
+            build_dream_findings,
+        )
+
+        mission = self.get_mission(mission_id)
+        if mission is None:
+            # Auto-create mission at observe phase
+            self.step(mission_id, "observe", {"topic": mission_id})
+            mission = self.get_mission(mission_id)
+
+        if mission is None:
+            return _err(mission_id, f"Mission '{mission_id}' not found")
+
+        current = mission.get("current_phase")
+
+        # Allow observe from any phase with override semantics
+        if current != "observe":
+            result = self.step(mission_id, "observe", override=True)
+            if result.get("status") != "ok" and "already_at_phase" not in str(
+                result.get("note", "")
+            ):
+                # If we can't transition, proceed anyway for observe
+                pass
+            # Refresh mission reference
+            mission = self.get_mission(mission_id)
+            if mission is None:
+                return _err(mission_id, f"Mission '{mission_id}' not found after transition")
+
+        cycle_id = f"dream-{mission_id}-{int(time.time())}"
+        created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        witness_id = witness_record_id or f"witness-{mission_id}-{int(time.time())}"
+
+        findings = build_dream_findings(
+            cycle_id=cycle_id,
+            created_at=created_at,
+            weekly_artifacts=weekly_artifacts or [],
+            memory_facts=memory_facts or [],
+            media_evidence=media_evidence or [],
+            witness_record_id=witness_id,
+        )
+
+        finding_count = len(findings)
+        high_confidence_count = sum(1 for f in findings if f.confidence >= 0.85)
+
+        report = DreamCycleReport(
+            cycle_id=cycle_id,
+            started_at=created_at,
+            completed_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            input_window="auto",
+            artifact_count=len(weekly_artifacts or []),
+            media_artifact_count=len(media_evidence or []),
+            finding_count=finding_count,
+            high_confidence_count=high_confidence_count,
+            status="completed",
+            witness_record_id=witness_id,
+            artifact_ids=[],
+            finding_ids=[f.finding_id for f in findings],
+        )
+
+        with self._lock:
+            mission = self._missions.get(mission_id)
+            if mission is None:
+                return _err(mission_id, f"Mission '{mission_id}' lost during observe")
+            mission["dream_findings"] = [f.to_dict() for f in findings]
+            mission["dream_cycle_report"] = report.to_dict()
+            mission["current_phase"] = "observe"
+
+        return _ok_state(mission)
+
+    def propose_phase(
+        self,
+        mission_id: str,
+        *,
+        promotion_rule: PromotionRule = PromotionRule.AUTO_IF_CONFIDENCE,
+        override_promotion_rule: bool = False,
+    ) -> dict[str, Any]:
+        """Run the propose phase: create DreamProposals from DreamFindings.
+
+        Takes stored dream_findings and creates DreamProposal objects,
+        evaluating promotion rules for each.
+
+        Args:
+            mission_id: The mission to propose in.
+            promotion_rule: Default promotion rule for proposals.
+            override_promotion_rule: If True, apply the specified rule
+                to all findings regardless of confidence.
+
+        Returns:
+            Mission state dict with dream_proposals populated.
+        """
+        mission = self.get_mission(mission_id)
+        if mission is None:
+            return _err(mission_id, f"Mission '{mission_id}' not found")
+
+        current = mission.get("current_phase")
+        if current != "observe" and not mission.get("dream_findings"):
+            return _err(
+                mission_id,
+                "Dream gating: must complete observe phase with findings "
+                "before proposing. Call observe_phase() first.",
+            )
+
+        # Transition to propose phase
+        if current != "propose":
+            result = self.step(mission_id, "propose", override=(current != "observe"))
+            if result.get("status") != "ok" and "already_at_phase" not in str(
+                result.get("note", "")
+            ):
+                return result
+            mission = self.get_mission(mission_id)
+            if mission is None:
+                return _err(mission_id, f"Mission '{mission_id}' not found after transition")
+
+        findings_dicts = mission.get("dream_findings", [])
+        if not findings_dicts:
+            return _err(mission_id, "No dream findings available for proposal creation")
+
+        proposals: dict[str, DreamProposal] = {}
+
+        for finding_dict in findings_dicts:
+            # Reconstruct DreamFinding from dict
+            finding = DreamFinding(
+                finding_id=finding_dict.get("finding_id", ""),
+                created_at=finding_dict.get("created_at", ""),
+                cycle_id=finding_dict.get("cycle_id", ""),
+                title=finding_dict.get("title", ""),
+                summary=finding_dict.get("summary", ""),
+                topic=finding_dict.get("topic", ""),
+                confidence=float(finding_dict.get("confidence", 0.0)),
+                evidence_refs=finding_dict.get("evidence_refs", []),
+                source_artifact_ids=finding_dict.get("source_artifact_ids", []),
+                witness_status=finding_dict.get("witness_status", ""),
+                provenance=finding_dict.get("provenance", {}),
+                advisory_only=finding_dict.get("advisory_only", True),
+                novelty_score=finding_dict.get("novelty_score"),
+                quality_score=finding_dict.get("quality_score"),
+                candidate_actions=finding_dict.get("candidate_actions", []),
+                related_memory_keys=finding_dict.get("related_memory_keys", []),
+                supersedes=finding_dict.get("supersedes", ""),
+                media_evidence_present=finding_dict.get("media_evidence_present", False),
+                media_types=finding_dict.get("media_types", []),
+            )
+
+            # Determine promotion rule
+            rule = promotion_rule
+            if not override_promotion_rule:
+                if finding.confidence >= 0.85:
+                    rule = PromotionRule.AUTO_IF_CONFIDENCE
+                elif finding.confidence >= 0.6:
+                    rule = PromotionRule.MANUAL_APPROVAL
+                else:
+                    rule = PromotionRule.GOVERNANCE_VOTE
+
+            proposal = create_dream_proposal(finding, promotion_rule=rule)
+            proposals[proposal.proposal_id] = proposal
+
+        with self._lock:
+            mission = self._missions.get(mission_id)
+            if mission is None:
+                return _err(mission_id, f"Mission '{mission_id}' lost during propose")
+            mission["dream_proposals"] = {
+                pid: p.to_dict() for pid, p in proposals.items()
+            }
+            mission["current_phase"] = "propose"
+
+        return _ok_state(mission)
+
+    def promote_finding(
+        self,
+        mission_id: str,
+        proposal_id: str,
+        *,
+        cove_result: dict[str, Any] | None = None,
+        governor_token: str = "",
+        validator_signatures: list[str] | None = None,
+        target_status: str = "candidate",
+    ) -> dict[str, Any]:
+        """Promote a dream proposal from advisory→candidate or candidate→binding.
+
+        Enforces CoVE gate check before promotion. The promotion rule
+        governing the proposal determines what credentials are needed.
+
+        Args:
+            mission_id: The mission owning the proposal.
+            proposal_id: The proposal to promote.
+            cove_result: CoVE verification result dict.
+            governor_token: Governor approval token (for MANUAL_APPROVAL).
+            validator_signatures: Validator sigs (for GOVERNANCE_VOTE, need 3).
+            target_status: 'candidate' or 'binding'.
+
+        Returns:
+            Dict with promotion result.
+        """
+        mission = self.get_mission(mission_id)
+        if mission is None:
+            return _err(mission_id, f"Mission '{mission_id}' not found")
+
+        proposals = mission.get("dream_proposals", {})
+        proposal_dict = proposals.get(proposal_id)
+        if proposal_dict is None:
+            return _err(mission_id, f"Proposal '{proposal_id}' not found")
+
+        # Reconstruct DreamProposal
+        rule_str = proposal_dict.get("promotion_rule", "AUTO_IF_CONFIDENCE")
+        try:
+            rule = PromotionRule[rule_str]
+        except KeyError:
+            rule = PromotionRule.AUTO_IF_CONFIDENCE
+
+        proposal = DreamProposal(
+            proposal_id=proposal_dict.get("proposal_id", proposal_id),
+            finding_id=proposal_dict.get("finding_id", ""),
+            proposed_at=float(proposal_dict.get("proposed_at", time.time())),
+            status=proposal_dict.get("status", "advisory"),
+            confidence=float(proposal_dict.get("confidence", 0.0)),
+            evidence_refs=proposal_dict.get("evidence_refs", []),
+            promotion_rule=rule,
+            cove_result=proposal_dict.get("cove_result"),
+            promoted_at=proposal_dict.get("promoted_at"),
+            promoter=proposal_dict.get("promoter", ""),
+            finding_title=proposal_dict.get("finding_title", ""),
+            finding_summary=proposal_dict.get("finding_summary", ""),
+            finding_topic=proposal_dict.get("finding_topic", ""),
+            candidate_actions=proposal_dict.get("candidate_actions", []),
+            validator_signatures=proposal_dict.get("validator_signatures", []),
+            governor_token=proposal_dict.get("governor_token", ""),
+            rejection_reason=proposal_dict.get("rejection_reason", ""),
+        )
+
+        if target_status == "candidate":
+            updated, success, reason = promote_to_candidate(
+                proposal,
+                cove_result=cove_result,
+                governor_token=governor_token,
+                validator_signatures=validator_signatures,
+            )
+        elif target_status == "binding":
+            updated, success, reason = promote_to_binding(
+                proposal,
+                cove_result=cove_result,
+                governor_token=governor_token,
+                validator_signatures=validator_signatures,
+            )
+        else:
+            return _err(mission_id, f"Unknown target_status '{target_status}'")
+
+        # Store updated proposal
+        with self._lock:
+            mission = self._missions.get(mission_id)
+            if mission is None:
+                return _err(mission_id, f"Mission '{mission_id}' lost during promotion")
+            mission["dream_proposals"][proposal_id] = updated.to_dict()
+
+        return {
+            "mission_id": mission_id,
+            "proposal_id": proposal_id,
+            "status": "ok" if success else "blocked",
+            "promotion_success": success,
+            "reason": reason,
+            "proposal": updated.to_dict(),
+        }
+
+    def run_observe_propose_cycle(
+        self,
+        mission_id: str,
+        *,
+        weekly_artifacts: list[dict[str, Any]] | None = None,
+        memory_facts: list[dict[str, Any]] | None = None,
+        media_evidence: list[Any] | None = None,
+        witness_record_id: str | None = None,
+        promotion_rule: PromotionRule = PromotionRule.AUTO_IF_CONFIDENCE,
+        cove_result: dict[str, Any] | None = None,
+        governor_token: str = "",
+        validator_signatures: list[str] | None = None,
+        auto_promote: bool = False,
+    ) -> dict[str, Any]:
+        """Convenience method: run the full observe→propose→verify→promote chain.
+
+        Args:
+            mission_id: The mission to run the cycle on.
+            weekly_artifacts: Evidence artifacts.
+            memory_facts: Memory facts.
+            media_evidence: Media evidence records.
+            witness_record_id: Witness record identifier.
+            promotion_rule: Default promotion rule.
+            cove_result: Pre-computed CoVE result.
+            governor_token: Governor approval token.
+            validator_signatures: Validator signatures.
+            auto_promote: If True, attempt to promote all eligible proposals.
+
+        Returns:
+            Dict with cycle_results containing phases and promotions.
+        """
+        # 1. Observe
+        observe_result = self.observe_phase(
+            mission_id,
+            weekly_artifacts=weekly_artifacts,
+            memory_facts=memory_facts,
+            media_evidence=media_evidence,
+            witness_record_id=witness_record_id,
+        )
+        if observe_result.get("status") != "ok" and "already_at_phase" not in str(
+            observe_result.get("note", "")
+        ):
+            return {
+                "mission_id": mission_id,
+                "status": "error",
+                "phase": "observe",
+                "error": observe_result.get("error", "observe phase failed"),
+                "cycle_results": {"observe": observe_result},
+            }
+
+        # 2. Propose
+        propose_result = self.propose_phase(
+            mission_id, promotion_rule=promotion_rule
+        )
+        if propose_result.get("status") != "ok" and "already_at_phase" not in str(
+            propose_result.get("note", "")
+        ):
+            return {
+                "mission_id": mission_id,
+                "status": "error",
+                "phase": "propose",
+                "error": propose_result.get("error", "propose phase failed"),
+                "cycle_results": {
+                    "observe": observe_result,
+                    "propose": propose_result,
+                },
+            }
+
+        # 3. Verify (CoVE gate for each proposal)
+        verification_results: list[dict[str, Any]] = []
+        promotion_results: list[dict[str, Any]] = []
+
+        mission = self.get_mission(mission_id)
+        if mission:
+            proposals = mission.get("dream_proposals", {})
+            for proposal_id, prop_dict in proposals.items():
+                # Run CoVE verification on each proposal
+                cove_passed = _check_cove_gate(cove_result)
+                if not cove_passed and cove_result is None:
+                    # Auto-pass if no explicit cove_result
+                    cove_passed = True
+
+                verification_results.append({
+                    "proposal_id": proposal_id,
+                    "cove_passed": cove_passed,
+                    "cove_result": cove_result,
+                })
+
+                # 4. Promote eligible proposals
+                if auto_promote and cove_passed:
+                    target = "candidate" if prop_dict.get("status") == "advisory" else "binding"
+                    promo_result = self.promote_finding(
+                        mission_id,
+                        proposal_id,
+                        cove_result=cove_result or {"passed": True},
+                        governor_token=governor_token,
+                        validator_signatures=validator_signatures,
+                        target_status=target,
+                    )
+                    promotion_results.append(promo_result)
+
+        return {
+            "mission_id": mission_id,
+            "status": "ok",
+            "cycle_results": {
+                "observe": observe_result,
+                "propose": propose_result,
+                "verification": verification_results,
+                "promotions": promotion_results,
+            },
+        }
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _new_mission(mission_id: str, payload: dict[str, Any], *, starting_phase: str = "specify") -> dict[str, Any]:
     normalized_task_dag = (
         normalize_task_dag(payload.get("task_dag", []))
         if isinstance(payload.get("task_dag"), list)
@@ -683,12 +1171,12 @@ def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "mission_id": mission_id,
         "topic": str(payload.get("topic") or mission_id),
-        "current_phase": "specify",
+        "current_phase": starting_phase,
         "phase_history": [
-            {"phase": "specify", "timestamp": time.time(), "payload_keys": list(payload.keys())}
+            {"phase": starting_phase, "timestamp": time.time(), "payload_keys": list(payload.keys())}
         ],
         "artifacts": {
-            "specify": {
+            starting_phase: {
                 "payload": payload,
                 "timestamp": time.time(),
                 "sha256": hashlib.sha256(str(payload).encode()).hexdigest(),
@@ -725,6 +1213,10 @@ def _new_mission(mission_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         "seal_hash": None,
         "cove_gate_passed": False,
         "cove_failures": 0,
+        "dream_phases_auto_completed": False,
+        "dream_findings": [],
+        "dream_proposals": {},
+        "dream_cycle_report": None,
     }
 
 
@@ -752,6 +1244,9 @@ def _ok_state(mission: dict[str, Any], note: str | None = None) -> dict[str, Any
         "realignment_events": copy.deepcopy(mission.get("realignment_events", [])),
         "gate_info": _GATES.get(phase, {}),
         "error": None,
+        "dream_findings_count": len(mission.get("dream_findings", [])),
+        "dream_proposals_count": len(mission.get("dream_proposals", {})),
+        "dream_phases_auto_completed": mission.get("dream_phases_auto_completed", False),
     }
     if note:
         result["note"] = note

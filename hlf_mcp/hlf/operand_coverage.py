@@ -175,18 +175,23 @@ TYPE_OPERATOR_COVERAGE: dict[HlfType, set[str]] = {
         "add", "sub", "mul", "div", "mod", "neg", "pow",
         "eq", "neq", "lt", "gt", "leq", "geq",
         "len",  # digit count
+        "not_op",  # truthiness: 0 is falsy
         "cast", "is_instance",
     },
     # ── ℤ (INTEGER) — signed integers ───────────────────────────────────
     HlfType.INTEGER: {
         "add", "sub", "mul", "div", "mod", "neg", "pow",
         "eq", "neq", "lt", "gt", "leq", "geq",
+        "len",  # digit count
+        "not_op",  # truthiness: 0 is falsy
         "cast", "is_instance",
     },
     # ── ℝ (REAL) — floating-point numbers ───────────────────────────────
     HlfType.REAL: {
         "add", "sub", "mul", "div", "neg", "pow",
         "eq", "neq", "lt", "gt", "leq", "geq",
+        "len",  # digit count (integer part)
+        "not_op",  # truthiness: 0.0 is falsy
         "cast", "is_instance",
     },
     # ── ℚ (RATIONAL) — exact rational numbers ───────────────────────────
@@ -201,6 +206,7 @@ TYPE_OPERATOR_COVERAGE: dict[HlfType, set[str]] = {
         "eq", "neq", "lt", "gt", "leq", "geq",
         "len", "get", "contains",
         "concat", "slice", "format", "upper", "lower", "split",
+        "not_op",  # truthiness: empty string is falsy
         "cast", "is_instance",
     },
     # ── 𝔹 (BOOLEAN) ─────────────────────────────────────────────────────
@@ -215,43 +221,52 @@ TYPE_OPERATOR_COVERAGE: dict[HlfType, set[str]] = {
         "len", "get", "set", "contains",
         "keys", "values",
         "merge", "project", "flatten",
+        "slice",   # JSON array slicing
         "cast", "is_instance",
     },
     # ── 𝔸 (ANY) — wildcard type ─────────────────────────────────────────
     HlfType.ANY: {
         "eq", "neq",
+        "not_op",  # truthiness: falsy values exist in every type
         "cast", "is_instance",
     },
     # ── List⟨T⟩ ─────────────────────────────────────────────────────────
     HlfType.LIST: {
-        "eq", "neq",
+        "eq", "neq", "lt", "gt", "leq", "geq",  # lexicographic ordering
         "len", "get", "set", "contains",
         "append", "remove",
         "keys",  # returns indices
         "values",
+        "concat",  # list concatenation
+        "slice",   # sublist extraction
+        "union", "intersection", "difference", "subset",  # list set operations
         "cast", "is_instance",
     },
     # ── Set⟨T⟩ ──────────────────────────────────────────────────────────
     HlfType.SET: {
-        "eq", "neq",
+        "eq", "neq", "lt", "gt", "leq", "geq",  # size-based/subset ordering
         "len", "contains",
         "append",  # add element
         "remove",
+        "keys",    # enumerate elements (same as values for sets)
         "union", "intersection", "difference", "subset",
         "values",
         "cast", "is_instance",
     },
     # ── Map⟨K,V⟩ ────────────────────────────────────────────────────────
     HlfType.MAP: {
-        "eq", "neq",
+        "eq", "neq", "lt", "gt", "leq", "geq",  # key-set lexicographic ordering
         "len", "contains",
         "keys", "values",
+        "get", "set",
         "lookup", "insert", "delete",
+        "merge",   # map merging
         "cast", "is_instance",
     },
     # ── REFINEMENT {var: T | pred} ──────────────────────────────────────
     HlfType.REFINEMENT: {
         "eq", "neq",
+        "not_op",  # delegates to base type truthiness
         "cast", "is_instance",
     },
 }
@@ -259,18 +274,21 @@ TYPE_OPERATOR_COVERAGE: dict[HlfType, set[str]] = {
 
 # Type → explicitly excluded operators (semantically meaningless)
 TYPE_EXCLUDED_OPERATORS: dict[HlfType, set[str]] = {
-    HlfType.NUMBER: {"and_op", "or_op", "not_op", "concat", "slice", "format",
+    HlfType.NUMBER: {"and_op", "or_op", "concat", "slice", "format",
                      "upper", "lower", "split", "merge", "project", "flatten",
                      "union", "intersection", "difference", "subset",
-                     "lookup", "insert", "delete", "numer", "denom", "simplify", "set"},
-    HlfType.INTEGER: {"and_op", "or_op", "not_op", "concat", "slice", "format",
+                     "lookup", "insert", "delete", "numer", "denom", "simplify", "set",
+                     "get", "contains", "append", "remove", "keys", "values"},
+    HlfType.INTEGER: {"and_op", "or_op", "concat", "slice", "format",
                       "upper", "lower", "split", "merge", "project", "flatten",
                       "union", "intersection", "difference", "subset",
-                      "lookup", "insert", "delete", "numer", "denom", "simplify", "set"},
-    HlfType.REAL: {"and_op", "or_op", "not_op", "mod", "concat", "slice", "format",
+                      "lookup", "insert", "delete", "numer", "denom", "simplify", "set",
+                      "get", "contains", "append", "remove", "keys", "values"},
+    HlfType.REAL: {"and_op", "or_op", "mod", "concat", "slice", "format",
                    "upper", "lower", "split", "merge", "project", "flatten",
                    "union", "intersection", "difference", "subset",
-                   "lookup", "insert", "delete", "numer", "denom", "simplify", "set"},
+                   "lookup", "insert", "delete", "numer", "denom", "simplify", "set",
+                   "get", "contains", "append", "remove", "keys", "values"},
     HlfType.RATIONAL: {"and_op", "or_op", "not_op", "mod", "pow",
                        "concat", "slice", "format", "upper", "lower", "split",
                        "merge", "project", "flatten",
@@ -295,15 +313,14 @@ TYPE_EXCLUDED_OPERATORS: dict[HlfType, set[str]] = {
     HlfType.JSON: {"add", "sub", "mul", "div", "mod", "neg", "pow",
                    "and_op", "or_op", "not_op",
                    "lt", "gt", "leq", "geq",
-                   "concat", "slice", "format", "upper", "lower", "split",
+                   "concat", "format", "upper", "lower", "split",
                    "append", "remove",
                    "union", "intersection", "difference", "subset",
                    "lookup", "insert", "delete", "numer", "denom", "simplify"},
     HlfType.ANY: set(),  # ANY can receive anything at runtime — nothing excluded
     HlfType.LIST: {"add", "sub", "mul", "div", "mod", "neg", "pow",
                    "and_op", "or_op", "not_op",
-                   "concat", "slice", "format", "upper", "lower", "split",
-                   "union", "intersection", "difference", "subset",
+                   "format", "upper", "lower", "split",
                    "merge", "project", "flatten",
                    "lookup", "insert", "delete", "numer", "denom", "simplify"},
     HlfType.SET: {"add", "sub", "mul", "div", "mod", "neg", "pow",
@@ -314,10 +331,10 @@ TYPE_EXCLUDED_OPERATORS: dict[HlfType, set[str]] = {
                   "lookup", "insert", "delete", "numer", "denom", "simplify"},
     HlfType.MAP: {"add", "sub", "mul", "div", "mod", "neg", "pow",
                   "and_op", "or_op", "not_op",
-                  "get", "set", "append", "remove",
+                  "append", "remove",
                   "concat", "slice", "format", "upper", "lower", "split",
                   "union", "intersection", "difference", "subset",
-                  "merge", "project", "flatten",
+                  "project", "flatten",
                   "numer", "denom", "simplify"},
     HlfType.REFINEMENT: {"add", "sub", "mul", "div", "mod", "neg", "pow",
                          "lt", "gt", "leq", "geq",

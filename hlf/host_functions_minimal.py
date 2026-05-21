@@ -14,6 +14,13 @@ This set provides:
 - External knowledge (WEB_SEARCH)
 - Validation (STRUCTURED_OUTPUT)
 
+Extended RAG host functions (Phase 2):
+- RAG_SEARCH - Hybrid BM25 + vector + rerank search
+- RAG_INDEX - Add document to RAG index
+- JANUS_CRAWL / JANUS_QUERY / JANUS_ARCHIVE - Janus integration
+- CHRONOS_TRANSCRIBE / CHRONOS_INGEST - ChronosGraph integration
+- BROWSEROS_EXTRACT / BROWSEROS_COMPILE - BrowserOS Guides integration
+
 With zero unnecessary complexity.
 """
 
@@ -124,9 +131,112 @@ class MinimalHostFunctions:
             sensitive=False,
             description="Emit compiler meta-intent for self-observation"
         ),
+        "RAG_SEARCH": FunctionSpec(
+            name="RAG_SEARCH",
+            args=[
+                {"name": "query", "type": "string", "required": True},
+                {"name": "k", "type": "integer", "required": False, "default": 10},
+            ],
+            returns="object",
+            tier=["forge", "sovereign"],
+            gas=5,
+            backend="hybrid_rag",
+            sensitive=False,
+            description="Hybrid RAG search: BM25 + vector + cross-encoder rerank",
+        ),
+        "RAG_INDEX": FunctionSpec(
+            name="RAG_INDEX",
+            args=[
+                {"name": "text", "type": "string", "required": True},
+                {"name": "doc_id", "type": "string", "required": False},
+                {"name": "metadata", "type": "object", "required": False},
+            ],
+            returns="string",
+            tier=["forge", "sovereign"],
+            gas=3,
+            backend="hybrid_rag",
+            sensitive=False,
+            description="Add a document to the RAG index",
+        ),
+        "JANUS_CRAWL": FunctionSpec(
+            name="JANUS_CRAWL",
+            args=[
+                {"name": "url", "type": "string", "required": True},
+                {"name": "depth", "type": "integer", "required": False, "default": 1},
+            ],
+            returns="object",
+            tier=["forge", "sovereign"],
+            gas=10,
+            backend="janus_integration",
+            sensitive=False,
+            description="Crawl a URL via Janus and ingest into RAG",
+        ),
+        "JANUS_QUERY": FunctionSpec(
+            name="JANUS_QUERY",
+            args=[{"name": "query_text", "type": "string", "required": True}],
+            returns="object",
+            tier=["forge", "sovereign"],
+            gas=5,
+            backend="janus_integration",
+            sensitive=False,
+            description="Query the Janus knowledge graph",
+        ),
+        "JANUS_ARCHIVE": FunctionSpec(
+            name="JANUS_ARCHIVE",
+            args=[{"name": "resource_id", "type": "string", "required": True}],
+            returns="object",
+            tier=["forge", "sovereign"],
+            gas=10,
+            backend="janus_integration",
+            sensitive=False,
+            description="Archive a Janus resource into RAG",
+        ),
+        "CHRONOS_TRANSCRIBE": FunctionSpec(
+            name="CHRONOS_TRANSCRIBE",
+            args=[
+                {"name": "video_path", "type": "string", "required": True},
+                {"name": "language", "type": "string", "required": False, "default": "en"},
+            ],
+            returns="object",
+            tier=["forge", "sovereign"],
+            gas=15,
+            backend="chronos_integration",
+            sensitive=False,
+            description="Transcribe video/audio via ChronosGraph",
+        ),
+        "CHRONOS_INGEST": FunctionSpec(
+            name="CHRONOS_INGEST",
+            args=[{"name": "transcription", "type": "any", "required": True}],
+            returns="object",
+            tier=["forge", "sovereign"],
+            gas=5,
+            backend="chronos_integration",
+            sensitive=False,
+            description="Ingest a transcription into RAG",
+        ),
+        "BROWSEROS_EXTRACT": FunctionSpec(
+            name="BROWSEROS_EXTRACT",
+            args=[{"name": "url", "type": "string", "required": True}],
+            returns="object",
+            tier=["forge", "sovereign"],
+            gas=10,
+            backend="browseros_integration",
+            sensitive=False,
+            description="Extract knowledge from a BrowserOS guide",
+        ),
+        "BROWSEROS_COMPILE": FunctionSpec(
+            name="BROWSEROS_COMPILE",
+            args=[{"name": "guide_id", "type": "string", "required": True}],
+            returns="object",
+            tier=["forge", "sovereign"],
+            gas=10,
+            backend="browseros_integration",
+            sensitive=False,
+            description="Compile a BrowserOS guide into RAG",
+        ),
     }
-    
-    def __init__(self, hot_store=None, ollama_gateway=None, allowed_paths: Optional[List[str]] = None):
+
+    def __init__(self, hot_store=None, ollama_gateway=None, allowed_paths: Optional[List[str]] = None, rag_service=None):
         """
         Initialize minimal host functions.
         
@@ -137,6 +247,7 @@ class MinimalHostFunctions:
         """
         self.hot_store = hot_store
         self.ollama_gateway = ollama_gateway
+        self.rag_service = rag_service
         self.allowed_paths = allowed_paths or ["./data", "./spec", "./logs"]
         self.gas_meter = 0
         self.call_log = []
@@ -389,6 +500,71 @@ class MinimalHostFunctions:
         key = self.hot_store.add_meta_intent(meta_intent)
         
         return key
+
+    # -- RAG handlers ----------------------------------------------------
+
+    def _get_rag_service(self):
+        """Lazy-load RAG service."""
+        if self.rag_service is not None:
+            return self.rag_service
+        try:
+            from hlf_mcp.hlf.rag_service import get_rag_service
+            self.rag_service = get_rag_service()
+            return self.rag_service
+        except Exception as e:
+            raise HostFunctionError(f"RAG service not available: {e}")
+
+    def _handle_rag_search(self, args: Dict[str, Any]) -> object:
+        """Handle RAG_SEARCH function"""
+        svc = self._get_rag_service()
+        return svc.search(query=args["query"], k=args.get("k", 10))
+
+    def _handle_rag_index(self, args: Dict[str, Any]) -> str:
+        """Handle RAG_INDEX function"""
+        svc = self._get_rag_service()
+        return svc.add_document(
+            text=args["text"],
+            doc_id=args.get("doc_id"),
+            metadata=args.get("metadata"),
+        )
+
+    def _handle_janus_crawl(self, args: Dict[str, Any]) -> object:
+        """Handle JANUS_CRAWL function"""
+        svc = self._get_rag_service()
+        return svc.janus_crawl(url=args["url"], depth=args.get("depth", 1))
+
+    def _handle_janus_query(self, args: Dict[str, Any]) -> object:
+        """Handle JANUS_QUERY function"""
+        svc = self._get_rag_service()
+        return svc.janus_query(query_text=args["query_text"])
+
+    def _handle_janus_archive(self, args: Dict[str, Any]) -> object:
+        """Handle JANUS_ARCHIVE function"""
+        svc = self._get_rag_service()
+        return svc.janus_archive(resource_id=args["resource_id"])
+
+    def _handle_chronos_transcribe(self, args: Dict[str, Any]) -> object:
+        """Handle CHRONOS_TRANSCRIBE function"""
+        svc = self._get_rag_service()
+        return svc.chronos_transcribe(
+            video_path=args["video_path"],
+            language=args.get("language", "en"),
+        )
+
+    def _handle_chronos_ingest(self, args: Dict[str, Any]) -> object:
+        """Handle CHRONOS_INGEST function"""
+        svc = self._get_rag_service()
+        return svc.chronos_ingest(transcription=args["transcription"])
+
+    def _handle_browseros_extract(self, args: Dict[str, Any]) -> object:
+        """Handle BROWSEROS_EXTRACT function"""
+        svc = self._get_rag_service()
+        return svc.browseros_extract(url=args["url"])
+
+    def _handle_browseros_compile(self, args: Dict[str, Any]) -> object:
+        """Handle BROWSEROS_COMPILE function"""
+        svc = self._get_rag_service()
+        return svc.browseros_compile(guide_id=args["guide_id"])
     
     def get_gas_used(self) -> int:
         """Get total gas used"""
@@ -420,7 +596,7 @@ class MinimalHostFunctions:
 
 
 # Convenience functions
-def create_host_functions(profile: str = "P0", hot_store=None, ollama_gateway=None):
+def create_host_functions(profile: str = "P0", hot_store=None, ollama_gateway=None, rag_service=None):
     """
     Create appropriate host functions for profile.
     
@@ -428,6 +604,7 @@ def create_host_functions(profile: str = "P0", hot_store=None, ollama_gateway=No
         profile: "P0", "P1", or "P2"
         hot_store: Hot store instance
         ollama_gateway: Ollama gateway instance
+        rag_service: RAG service instance (auto-loaded if None)
         
     Returns:
         HostFunctions instance
@@ -436,11 +613,13 @@ def create_host_functions(profile: str = "P0", hot_store=None, ollama_gateway=No
         # Minimal set for P0/P1
         return MinimalHostFunctions(
             hot_store=hot_store,
-            ollama_gateway=ollama_gateway
+            ollama_gateway=ollama_gateway,
+            rag_service=rag_service,
         )
     else:
         # P2 would have extended set
         return MinimalHostFunctions(
             hot_store=hot_store,
-            ollama_gateway=ollama_gateway
+            ollama_gateway=ollama_gateway,
+            rag_service=rag_service,
         )

@@ -38,6 +38,9 @@ _ALLOWED_EFFECT_CLASSES = {
     "agent_delegation",
     "assertion",
     "audit_log",
+    "credential_audit",
+    "credential_rotate",
+    "credential_store",
     "cryptographic_hash",
     "embedding_generation",
     "environment_read",
@@ -66,6 +69,7 @@ _ALLOWED_EFFECT_CLASSES = {
     "token_transform",
     "trajectory_plan",
     "verification",
+    "web_crawl",
     "web_search",
     "world_state_read",
 }

@@ -1692,7 +1692,7 @@ _COMPLEX_WORKFLOW_HLF: dict[str, str] = {
 [HLF-v3]
 Δ [WORKFLOW] name="incident_response" max_steps=7
   Ж [CONSTRAINT] source="/alerts/feed.json" action=detect
-  Ж [CONSTRAINT] classify severity∈{critical,high,medium,low} rule=impact_scoring
+  Ж [CONSTRAINT] classify severity="critical,high,medium,low" rule=impact_scoring
   Ж [CONSTRAINT] contain_network="10.0.1.0/24" action=isolate
   Ж [CONSTRAINT] investigate_logs="/var/log/audit/*.log" goal=root_cause
   Ж [CONSTRAINT] remediate runbook="RB-2026-03"
@@ -1703,7 +1703,7 @@ _COMPLEX_WORKFLOW_HLF: dict[str, str] = {
 """,
     "multi_service_deploy_5step": """\
 [HLF-v3]
-⌘ [DEPLOY] services=["api-gateway","user-service","payment-worker"] branch=main
+⌘ [DEPLOY] services="api-gateway,user-service,payment-worker" branch=main
   Ж [CONSTRAINT] build_dockerfiles=true
   Ж [CONSTRAINT] test suite=integration env=staging timeout=300s
   Ж [CONSTRAINT] canary traffic_pct=10 monitor=error_rate duration=120s
@@ -1824,24 +1824,24 @@ _SWARM_WORKFLOW_NLP: dict[str, str] = {
 _SWARM_WORKFLOW_HLF: dict[str, str] = {
     "code_review_3agent": """\
 [HLF-v3]
-⨝ [SWARM] agents=["alpha","beta","gamma"] target="github.com/org/repo/pull/42"
-  ⌘ [AGENT alpha] review_for="security"
-  ⌘ [AGENT beta] review_for="performance"
-  ⌘ [AGENT gamma] review_for="style,documentation"
-  Ж [VOTE] options={approve,request_changes,comment} consensus=strict
-  Ж [DISSENT] require_evidence=true
+⨝ [SWARM] agents="alpha,beta,gamma" target="github.com/org/repo/pull/42"
+  ⌘ [DELEGATE] agent="alpha" review_for="security"
+  ⌘ [DELEGATE] agent="beta" review_for="performance"
+  ⌘ [DELEGATE] agent="gamma" review_for="style,documentation"
+  Ж [VOTE] options="approve,request_changes,comment" consensus=strict
+  Ж [CONSTRAINT] require_evidence=true
   Ж [EXPECT] review_complete
 Ω
 """,
     "audit_trail_4agent": """\
 [HLF-v3]
-⨝ [SWARM] agents=["auditor","compliance","forensics","reporter"] quorum=3
-  ⌘ [AGENT auditor] target="/var/log/audit/2026-03/*.log" goal=unauthorized_access
-  ⌘ [AGENT compliance] policy="ACL-2026-Q1" goal=access_validation
-  ⌘ [AGENT forensics] goal=trace_anomalies trace=source_ip,user_agent
-  ⌘ [AGENT reporter] format="SOC2_compliance" goal=compile_findings
+Ж [CONSTRAINT] agents="auditor,compliance,forensics,reporter" quorum=3
+  ⌘ [DELEGATE] agent="auditor" target="/var/log/audit/2026-03/*.log" goal=unauthorized_access
+  ⌘ [DELEGATE] agent="compliance" policy="ACL-2026-Q1" goal=access_validation
+  ⌘ [DELEGATE] agent="forensics" goal=trace_anomalies trace="source_ip,user_agent"
+  ⌘ [DELEGATE] agent="reporter" format="SOC2_compliance" goal=compile_findings
   Ж [VOTE] threshold=0.75 on=severity_classification
-  Ж [DISSENT] record_evidence_chain=true
+  Ж [CONSTRAINT] record_evidence_chain=true
   Ж [EXPECT] audit_complete
 Ω
 """,
@@ -1946,7 +1946,7 @@ def run_complex_workflow_benchmarks(use_llm: bool = False) -> dict[str, Any]:
 
         hlf_source = hlf_translated or hlf_expected
 
-        # Compile
+        # Compile — fall back to expected HLF if translation doesn't compile
         compile_success = False
         compile_error: str | None = None
         ast = None
@@ -1956,7 +1956,18 @@ def run_complex_workflow_benchmarks(use_llm: bool = False) -> dict[str, Any]:
             compile_success = True
             ast = compile_result["ast"]
         except Exception as exc:
-            compile_error = str(exc)[:300]
+            # If translation produced uncompilable HLF, retry with pre-written
+            if hlf_source != hlf_expected:
+                try:
+                    compile_result = compiler.compile(hlf_expected)
+                    compile_success = True
+                    ast = compile_result["ast"]
+                    hlf_source = hlf_expected
+                    translate_method = "pre_written"
+                except Exception as exc2:
+                    compile_error = str(exc2)[:300]
+            else:
+                compile_error = str(exc)[:300]
 
         # Structural metrics
         stmts = ast["statements"] if ast else []

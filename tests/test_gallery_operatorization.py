@@ -1434,6 +1434,384 @@ class TestGalleryInitExports:
         assert hasattr(hlf_mcp.gallery, "export_evidence_report")
         assert callable(hlf_mcp.gallery.export_evidence_report)
 
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# 3-Pillar Dynamic Scorecard Tests
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestTypedEffectPillarScore:
+    """Tests for compute_typed_effect_pillar_score()."""
+
+    def test_returns_valid_structure(self) -> None:
+        """Returns dict with score_pct, components, status."""
+        from hlf_mcp.gallery.operator_dashboard import compute_typed_effect_pillar_score
+        result = compute_typed_effect_pillar_score()
+        assert isinstance(result, dict)
+        assert "score_pct" in result
+        assert "components" in result
+        assert "status" in result
+        assert isinstance(result["components"], dict)
+
+    def test_score_in_valid_range(self) -> None:
+        """Score is between 0 and 100."""
+        from hlf_mcp.gallery.operator_dashboard import compute_typed_effect_pillar_score
+        result = compute_typed_effect_pillar_score()
+        assert 0.0 <= result["score_pct"] <= 100.0
+
+    def test_components_have_required_fields(self) -> None:
+        """Each component has score_pct, detail, weight."""
+        from hlf_mcp.gallery.operator_dashboard import compute_typed_effect_pillar_score
+        result = compute_typed_effect_pillar_score()
+        for comp_name, comp_info in result["components"].items():
+            assert "score_pct" in comp_info, f"Missing score_pct in {comp_name}"
+            assert "detail" in comp_info, f"Missing detail in {comp_name}"
+            assert "weight" in comp_info, f"Missing weight in {comp_name}"
+            assert isinstance(comp_info["score_pct"], (int, float))
+            assert isinstance(comp_info["detail"], str)
+            assert isinstance(comp_info["weight"], (int, float))
+
+    def test_weights_sum_to_one(self) -> None:
+        """Component weights sum to 1.0."""
+        from hlf_mcp.gallery.operator_dashboard import compute_typed_effect_pillar_score
+        result = compute_typed_effect_pillar_score()
+        total_weight = sum(comp["weight"] for comp in result["components"].values())
+        assert total_weight == pytest.approx(1.0, abs=0.01)
+
+    def test_status_is_valid(self) -> None:
+        """Status is one of healthy/degraded/critical."""
+        from hlf_mcp.gallery.operator_dashboard import compute_typed_effect_pillar_score
+        result = compute_typed_effect_pillar_score()
+        assert result["status"] in ("healthy", "degraded", "critical")
+
+    def test_weighted_average_matches_score(self) -> None:
+        """Score equals weighted average of component scores."""
+        from hlf_mcp.gallery.operator_dashboard import compute_typed_effect_pillar_score
+        result = compute_typed_effect_pillar_score()
+        expected = sum(
+            comp["score_pct"] * comp["weight"] for comp in result["components"].values()
+        )
+        assert result["score_pct"] == pytest.approx(expected, abs=0.5)
+
+    def test_all_four_components_present(self) -> None:
+        """The four required components are present."""
+        from hlf_mcp.gallery.operator_dashboard import compute_typed_effect_pillar_score
+        result = compute_typed_effect_pillar_score()
+        expected_components = {
+            "cross_type_coercion", "heterogeneous_composition",
+            "test_coverage", "container_coercion",
+        }
+        assert set(result["components"].keys()) == expected_components
+
+
+class TestFormalVerificationPillarScore:
+    """Tests for compute_formal_verification_pillar_score()."""
+
+    def test_returns_valid_structure(self) -> None:
+        """Returns dict with score_pct, components, status."""
+        from hlf_mcp.gallery.operator_dashboard import compute_formal_verification_pillar_score
+        result = compute_formal_verification_pillar_score()
+        assert isinstance(result, dict)
+        assert "score_pct" in result
+        assert "components" in result
+        assert "status" in result
+        assert isinstance(result["components"], dict)
+
+    def test_score_in_valid_range(self) -> None:
+        """Score is between 0 and 100."""
+        from hlf_mcp.gallery.operator_dashboard import compute_formal_verification_pillar_score
+        result = compute_formal_verification_pillar_score()
+        assert 0.0 <= result["score_pct"] <= 100.0
+
+    def test_components_have_required_fields(self) -> None:
+        """Each component has score_pct, detail, weight."""
+        from hlf_mcp.gallery.operator_dashboard import compute_formal_verification_pillar_score
+        result = compute_formal_verification_pillar_score()
+        for comp_name, comp_info in result["components"].items():
+            assert "score_pct" in comp_info, f"Missing score_pct in {comp_name}"
+            assert "detail" in comp_info, f"Missing detail in {comp_name}"
+            assert "weight" in comp_info, f"Missing weight in {comp_name}"
+            assert isinstance(comp_info["score_pct"], (int, float))
+            assert isinstance(comp_info["detail"], str)
+            assert isinstance(comp_info["weight"], (int, float))
+
+    def test_weights_sum_to_one(self) -> None:
+        """Component weights sum to ~1.0."""
+        from hlf_mcp.gallery.operator_dashboard import compute_formal_verification_pillar_score
+        result = compute_formal_verification_pillar_score()
+        total_weight = sum(comp["weight"] for comp in result["components"].values())
+        assert total_weight == pytest.approx(1.0, abs=0.01)
+
+    def test_status_is_valid(self) -> None:
+        """Status is one of healthy/degraded/critical."""
+        from hlf_mcp.gallery.operator_dashboard import compute_formal_verification_pillar_score
+        result = compute_formal_verification_pillar_score()
+        assert result["status"] in ("healthy", "degraded", "critical")
+
+    def test_all_four_components_present(self) -> None:
+        """The four required components are present."""
+        from hlf_mcp.gallery.operator_dashboard import compute_formal_verification_pillar_score
+        result = compute_formal_verification_pillar_score()
+        expected_components = {
+            "z3_solver_coverage", "inductive_proof_automation",
+            "proof_depth", "test_coverage",
+        }
+        assert set(result["components"].keys()) == expected_components
+
+
+class TestGalleryOperatorPillarScore:
+    """Tests for compute_gallery_operator_pillar_score()."""
+
+    def test_returns_valid_structure(self) -> None:
+        """Returns dict with score_pct, components, status."""
+        from hlf_mcp.gallery.operator_dashboard import compute_gallery_operator_pillar_score
+        result = compute_gallery_operator_pillar_score()
+        assert isinstance(result, dict)
+        assert "score_pct" in result
+        assert "components" in result
+        assert "status" in result
+        assert isinstance(result["components"], dict)
+
+    def test_score_in_valid_range(self) -> None:
+        """Score is between 0 and 100."""
+        from hlf_mcp.gallery.operator_dashboard import compute_gallery_operator_pillar_score
+        result = compute_gallery_operator_pillar_score()
+        assert 0.0 <= result["score_pct"] <= 100.0
+
+    def test_with_dashboard_data_input(self) -> None:
+        """Works with pre-built dashboard data."""
+        from hlf_mcp.gallery.operator_dashboard import (
+            compute_gallery_operator_pillar_score,
+            build_dashboard_data,
+        )
+        dashboard = build_dashboard_data()
+        result = compute_gallery_operator_pillar_score(dashboard_data=dashboard)
+        assert isinstance(result, dict)
+        assert "score_pct" in result
+        assert 0.0 <= result["score_pct"] <= 100.0
+
+    def test_components_match_weights(self) -> None:
+        """Components have the right 6 weighted sub-scores."""
+        from hlf_mcp.gallery.operator_dashboard import compute_gallery_operator_pillar_score
+        result = compute_gallery_operator_pillar_score()
+        expected_components = {
+            "verification_viewer", "manifest_viewer", "provenance_viewer",
+            "type_explorer", "operator_dashboard", "feedback_loop",
+        }
+        assert set(result["components"].keys()) == expected_components
+        total_weight = sum(comp["weight"] for comp in result["components"].values())
+        assert total_weight == pytest.approx(1.0, abs=0.01)
+
+    def test_status_is_valid(self) -> None:
+        """Status is one of healthy/degraded/critical."""
+        from hlf_mcp.gallery.operator_dashboard import compute_gallery_operator_pillar_score
+        result = compute_gallery_operator_pillar_score()
+        assert result["status"] in ("healthy", "degraded", "critical")
+
+    def test_gallery_thresholds_different(self) -> None:
+        """Gallery pillar uses 75%/60% thresholds (different from others)."""
+        from hlf_mcp.gallery.operator_dashboard import compute_gallery_operator_pillar_score
+        result = compute_gallery_operator_pillar_score()
+        score = result["score_pct"]
+        if score >= 75:
+            assert result["status"] == "healthy"
+        elif score >= 60:
+            assert result["status"] == "degraded"
+        else:
+            assert result["status"] == "critical"
+
+
+class TestBuildFullScorecard:
+    """Tests for build_full_scorecard()."""
+
+    def test_returns_valid_format(self) -> None:
+        """Returns dict with pillars, overall_score_pct, etc."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        assert isinstance(result, dict)
+        assert "pillars" in result
+        assert "overall_score_pct" in result
+        assert "overall_status" in result
+        assert "gap_analysis" in result
+        assert "generated_at" in result
+        assert "scorecard_id" in result
+
+    def test_three_pillars_present(self) -> None:
+        """All 3 pillars in scorecard."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        assert len(result["pillars"]) == 3
+        pillar_names = [p["name"] for p in result["pillars"]]
+        assert "Typed Effect Algebra" in pillar_names
+        assert "Formal Verification" in pillar_names
+        assert "Gallery Operator Legibility" in pillar_names
+
+    def test_overall_is_weighted_average(self) -> None:
+        """Overall score = weighted average of pillar scores."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        expected = (
+            result["pillars"][0]["score_pct"] * result["pillars"][0]["weight"]
+            + result["pillars"][1]["score_pct"] * result["pillars"][1]["weight"]
+            + result["pillars"][2]["score_pct"] * result["pillars"][2]["weight"]
+        ) / sum(p["weight"] for p in result["pillars"])
+        assert result["overall_score_pct"] == pytest.approx(expected, abs=0.5)
+
+    def test_gap_analysis_included(self) -> None:
+        """Gap analysis present for each pillar."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        assert isinstance(result["gap_analysis"], list)
+
+    def test_each_pillar_has_target(self) -> None:
+        """Each pillar has a target_pct."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        for pillar in result["pillars"]:
+            assert "target_pct" in pillar
+            assert isinstance(pillar["target_pct"], (int, float))
+            assert pillar["target_pct"] > 0
+
+    def test_pillar_weights_correct(self) -> None:
+        """Pillar weights are 8, 7, 4 respectively."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        assert result["pillars"][0]["weight"] == 8
+        assert result["pillars"][1]["weight"] == 7
+        assert result["pillars"][2]["weight"] == 4
+
+    def test_overall_score_in_range(self) -> None:
+        """Overall score is between 0 and 100."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        assert 0.0 <= result["overall_score_pct"] <= 100.0
+
+    def test_scorecard_id_format(self) -> None:
+        """Scorecard ID has expected format."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        assert result["scorecard_id"].startswith("scorecard-")
+        assert len(result["scorecard_id"]) > len("scorecard-")
+
+    def test_generated_at_is_iso(self) -> None:
+        """Generated timestamp is ISO format."""
+        from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+        result = build_full_scorecard()
+        assert "T" in result["generated_at"]
+        assert "Z" in result["generated_at"] or "+" in result["generated_at"] or result["generated_at"].endswith("Z")
+
+
+class TestScorecardCLI:
+    """Tests for scorecard CLI subcommand."""
+
+    def test_scorecard_subcommand_in_parser(self) -> None:
+        """Parser accepts 'scorecard' subcommand."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["scorecard"])
+        assert args.subcommand == "scorecard"
+
+    def test_scorecard_json_flag(self) -> None:
+        """--json flag recognized for scorecard."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["scorecard", "--json"])
+        assert args.subcommand == "scorecard"
+        assert args.scorecard_json is True
+
+    def test_scorecard_json_short_flag(self) -> None:
+        """-j flag recognized for scorecard."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["scorecard", "-j"])
+        assert args.subcommand == "scorecard"
+        assert args.scorecard_json is True
+
+    def test_scorecard_runs(self) -> None:
+        """scorecard subcommand exits cleanly."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["scorecard"])
+        assert exit_code == 0
+
+    def test_scorecard_json_runs(self) -> None:
+        """scorecard --json subcommand exits cleanly."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["scorecard", "--json"])
+        assert exit_code == 0
+
+
+class TestPillarScoreBackwardCompat:
+    """Tests for backward compatibility with existing dashboard format."""
+
+    def test_build_dashboard_still_has_pillar_score(self) -> None:
+        """Old pillar_score field still present."""
+        from hlf_mcp.gallery.operator_dashboard import build_dashboard_data
+        dashboard = build_dashboard_data()
+        assert "pillar_score" in dashboard
+        assert "pillar" in dashboard["pillar_score"]
+        assert dashboard["pillar_score"]["pillar"] == "gallery-operator-legibility"
+
+    def test_build_dashboard_has_pillar_scores(self) -> None:
+        """New pillar_scores field present."""
+        from hlf_mcp.gallery.operator_dashboard import build_dashboard_data
+        dashboard = build_dashboard_data()
+        assert "pillar_scores" in dashboard
+        assert isinstance(dashboard["pillar_scores"], dict)
+
+    def test_build_dashboard_has_full_scorecard(self) -> None:
+        """full_scorecard field present in dashboard."""
+        from hlf_mcp.gallery.operator_dashboard import build_dashboard_data
+        dashboard = build_dashboard_data()
+        assert "full_scorecard" in dashboard
+        assert isinstance(dashboard["full_scorecard"], dict)
+
+    def test_old_pillar_score_unchanged(self) -> None:
+        """The old pillar_score field structure is preserved."""
+        from hlf_mcp.gallery.operator_dashboard import build_dashboard_data
+        dashboard = build_dashboard_data()
+        ps = dashboard["pillar_score"]
+        assert "score_pct" in ps
+        assert "status" in ps
+        assert "target_pct" in ps
+        assert "components" in ps
+
+    def test_full_scorecard_has_pillars(self) -> None:
+        """full_scorecard in dashboard has pillars if computed."""
+        from hlf_mcp.gallery.operator_dashboard import build_dashboard_data
+        dashboard = build_dashboard_data()
+        fc = dashboard["full_scorecard"]
+        if fc:  # May be empty if computation failed
+            assert "pillars" in fc
+            assert "overall_score_pct" in fc
+
+
+class TestScorecardExports:
+    """Tests for scorecard function exports from gallery __init__."""
+
+    def test_compute_typed_effect_exported(self) -> None:
+        """compute_typed_effect_pillar_score is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "compute_typed_effect_pillar_score")
+        assert callable(hlf_mcp.gallery.compute_typed_effect_pillar_score)
+
+    def test_compute_formal_verification_exported(self) -> None:
+        """compute_formal_verification_pillar_score is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "compute_formal_verification_pillar_score")
+        assert callable(hlf_mcp.gallery.compute_formal_verification_pillar_score)
+
+    def test_compute_gallery_operator_exported(self) -> None:
+        """compute_gallery_operator_pillar_score is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "compute_gallery_operator_pillar_score")
+        assert callable(hlf_mcp.gallery.compute_gallery_operator_pillar_score)
+
+    def test_build_full_scorecard_exported(self) -> None:
+        """build_full_scorecard is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "build_full_scorecard")
+        assert callable(hlf_mcp.gallery.build_full_scorecard)
+
     def test_feedback_default_severity(self) -> None:
         """Default severity is 50."""
         from hlf_mcp.gallery.operator_cli import build_parser

@@ -48,6 +48,10 @@ __all__ = [
     "export_evidence_report",
     "operator_cli_main",
     "operator_cli_build_parser",
+    "compute_typed_effect_pillar_score",
+    "compute_formal_verification_pillar_score",
+    "compute_gallery_operator_pillar_score",
+    "build_full_scorecard",
 ]
 
 from hlf_mcp.gallery.type_explorer import demo as run_type_explorer_demo
@@ -77,6 +81,10 @@ from hlf_mcp.gallery.operator_dashboard import (
     render_evidence_panel,
     display_evidence_panel,
     export_evidence_report,
+    compute_typed_effect_pillar_score,
+    compute_formal_verification_pillar_score,
+    compute_gallery_operator_pillar_score,
+    build_full_scorecard,
 )
 from hlf_mcp.gallery.evidence_renderer import EvidenceSummaryRenderer
 from hlf_mcp.gallery.telemetry import (

@@ -860,6 +860,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output file path (prints to stdout if not specified)",
     )
 
+    # Scorecard subcommand
+    scorecard_parser = subparsers.add_parser("scorecard", help="Show full 3-pillar scorecard")
+    scorecard_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        dest="scorecard_json",
+        help="Output scorecard as JSON",
+    )
+
     # Feedback subcommand group
     feedback_parser = subparsers.add_parser("feedback", help="Operator feedback loop commands")
     feedback_sub = feedback_parser.add_subparsers(dest="feedback_action", help="Feedback actions")
@@ -920,6 +929,114 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# ── Scorecard Handler ────────────────────────────────────────────────────────────
+
+
+def _cmd_scorecard(args: argparse.Namespace) -> int:
+    """Handle 'scorecard' subcommand: full 3-pillar weighted scorecard."""
+    from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
+
+    scorecard = build_full_scorecard()
+
+    if getattr(args, 'scorecard_json', False):
+        print(json.dumps(scorecard, indent=2))
+        return 0
+
+    if _RICH:
+        console = Console()
+        console.print()
+        console.rule("[bold cyan]HLF 3-Pillar Scorecard[/bold cyan]")
+        console.print()
+
+        # Pillar table
+        table = Table(title="Pillar Scores", box=box.SIMPLE_HEAVY)
+        table.add_column("Pillar", style="cyan")
+        table.add_column("Score", style="white")
+        table.add_column("Weight", style="dim")
+        table.add_column("Target", style="yellow")
+        table.add_column("Gap", style="magenta")
+        table.add_column("Status")
+
+        for pillar in scorecard["pillars"]:
+            status = pillar["status"]
+            color = "green" if status == "healthy" else "yellow" if status == "degraded" else "red"
+            gap_str = f"{pillar['gap_pct']:+.1f}%" if pillar['gap_pct'] != 0 else "✓"
+            table.add_row(
+                pillar["name"],
+                f"[{color}]{pillar['score_pct']}%[/{color}]",
+                str(pillar["weight"]),
+                f"{pillar['target_pct']}%",
+                gap_str,
+                f"[{color}]{pillar['status'].upper()}[/{color}]",
+            )
+
+        # Overall row
+        table.add_section()
+        overall_color = (
+            "green" if scorecard["overall_score_pct"] >= 78
+            else "yellow" if scorecard["overall_score_pct"] >= 65
+            else "red"
+        )
+        table.add_row(
+            "[bold]OVERALL[/bold]",
+            f"[bold {overall_color}]{scorecard['overall_score_pct']}%[/bold {overall_color}]",
+            "19",
+            "",
+            "",
+            f"[bold {overall_color}]{(scorecard.get('overall_status', '')).upper()}[/bold {overall_color}]",
+        )
+        console.print(table)
+        console.print()
+
+        # Component breakdowns
+        console.rule("[bold]Component Breakdowns[/bold]")
+        for pillar in scorecard["pillars"]:
+            console.print(
+                f"\n[bold cyan]{pillar['name']}[/bold cyan] "
+                f"(weight: {pillar['weight']}, score: {pillar['score_pct']}%)"
+            )
+            for comp_name, comp_info in pillar.get("components", {}).items():
+                c_score = comp_info.get("score_pct", 0)
+                c_color = "green" if c_score >= 70 else "yellow" if c_score >= 50 else "red"
+                c_detail = comp_info.get("detail", "")
+                console.print(
+                    f"  [{c_color}]{comp_name:<30} {c_score:>5.1f}%[/{c_color}]  {c_detail}"
+                )
+
+        # Gap analysis
+        if scorecard.get("gap_analysis"):
+            console.print()
+            console.rule("[bold yellow]Gap Analysis[/bold yellow]")
+            for gap in scorecard["gap_analysis"]:
+                console.print(f"  [yellow]►[/yellow] {gap}")
+
+        console.print()
+    else:
+        print(f"{'Pillar':<25} {'Score':>8} {'Weight':>8} {'Target':>8} {'Gap':>8} {'Status':>12}")
+        print("-" * 80)
+        for pillar in scorecard["pillars"]:
+            gap_str = f"{pillar['gap_pct']:+.1f}%" if pillar['gap_pct'] != 0 else "0.0%"
+            print(
+                f"{pillar['name']:<25} {pillar['score_pct']:>7.1f}% "
+                f"{pillar['weight']:>7} {pillar['target_pct']:>7.1f}% "
+                f"{gap_str:>8} {pillar['status']:>12}"
+            )
+        print("-" * 80)
+        print(f"{'OVERALL':<25} {scorecard['overall_score_pct']:>7.1f}% {'19':>7}")
+        print()
+        print("Component Breakdowns:")
+        for pillar in scorecard["pillars"]:
+            print(f"  {pillar['name']} (weight: {pillar['weight']}):")
+            for comp_name, comp_info in pillar.get("components", {}).items():
+                print(
+                    f"    {comp_name:<28} {comp_info.get('score_pct', 0):>5.1f}%  "
+                    f"{comp_info.get('detail', '')}"
+                )
+        print()
+
+    return 0
+
+
 # ── Main Entry Point ─────────────────────────────────────────────────────────────
 
 
@@ -956,6 +1073,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_missions(args)
     elif args.subcommand == "export":
         return _cmd_export(args)
+    elif args.subcommand == "scorecard":
+        return _cmd_scorecard(args)
     elif args.subcommand == "feedback":
         if args.feedback_action == "ack":
             return _cmd_feedback_ack(args)

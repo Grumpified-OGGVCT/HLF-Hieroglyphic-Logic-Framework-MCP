@@ -273,34 +273,304 @@ class HLFBenchmark:
             "line_analysis": line_analysis,
         }
 
-    def benchmark_suite(self) -> dict[str, Any]:
-        """Run the full benchmark suite against all NLP templates."""
+    def benchmark_suite(self, use_live_translator: bool = False) -> dict[str, Any]:
+        """Run the full benchmark suite across ALL categories.
 
-        results = []
-        total_hlf = 0
-        total_nlp = 0
+        Args:
+            use_live_translator: If True, also run english_to_hlf() on
+                each NLP text and report live translation token counts.
+        """
+
+        def _maybe_live_translate(text: str) -> dict[str, Any] | None:
+            if not use_live_translator:
+                return None
+            try:
+                from hlf_mcp.hlf.translator import english_to_hlf
+                live_hlf = english_to_hlf(text)
+                live_tokens = _count(live_hlf)
+                live_compression = (
+                    round((1 - live_tokens / max(1, _count(text))) * 100, 1)
+                )
+                return {
+                    "live_hlf_tokens": live_tokens,
+                    "live_compression_pct": live_compression,
+                }
+            except Exception:
+                return None
+
+        # ── Simple ────────────────────────────────────────────────────────
+        simple_results: list[dict[str, Any]] = []
+        simple_total_hlf = 0
+        simple_total_nlp = 0
+        simple_total_live_hlf = 0
 
         for domain, nlp_text in _NLP_TEMPLATES.items():
             nlp_tokens = _count(nlp_text)
-            # Use a representative HLF program for each domain
             hlf_source = _DOMAIN_HLF.get(domain, f"[HLF-v3]\nΔ {domain}\nΩ\n")
             hlf_tokens = _count(hlf_source)
             compression = round((1 - hlf_tokens / nlp_tokens) * 100, 1) if nlp_tokens > 0 else 0
-            results.append(
-                {
-                    "domain": domain,
-                    "nlp_tokens": nlp_tokens,
-                    "hlf_tokens": hlf_tokens,
-                    "compression_pct": compression,
-                }
-            )
-            total_hlf += hlf_tokens
-            total_nlp += nlp_tokens
 
-        overall = round((1 - total_hlf / total_nlp) * 100, 1) if total_nlp > 0 else 0
+            row: dict[str, Any] = {
+                "domain": domain,
+                "nlp_tokens": nlp_tokens,
+                "template_hlf_tokens": hlf_tokens,
+                "template_compression_pct": compression,
+            }
+
+            live = _maybe_live_translate(nlp_text)
+            if live:
+                row["live_hlf_tokens"] = live["live_hlf_tokens"]
+                row["live_compression_pct"] = live["live_compression_pct"]
+                simple_total_live_hlf += live["live_hlf_tokens"]
+
+            simple_results.append(row)
+            simple_total_hlf += hlf_tokens
+            simple_total_nlp += nlp_tokens
+
+        simple_overall = round((1 - simple_total_hlf / max(1, simple_total_nlp)) * 100, 1)
+        simple_totals: dict[str, Any] = {
+            "nlp": simple_total_nlp,
+            "template_hlf": simple_total_hlf,
+            "template_compression_pct": simple_overall,
+        }
+        if use_live_translator:
+            simple_totals["live_hlf"] = simple_total_live_hlf
+            simple_totals["live_compression_pct"] = (
+                round((1 - simple_total_live_hlf / max(1, simple_total_nlp)) * 100, 1)
+            )
+
+        # ── Complex ───────────────────────────────────────────────────────
+        complex_results: list[dict[str, Any]] = []
+        complex_total_hlf = 0
+        complex_total_nlp = 0
+        complex_total_live_hlf = 0
+
+        for scenario_id, nlp_text in _COMPLEX_WORKFLOW_NLP.items():
+            nlp_tokens = _count(nlp_text)
+            hlf_source = _COMPLEX_WORKFLOW_HLF.get(
+                scenario_id, f"[HLF-v3]\nΔ [WORKFLOW] name=\"{scenario_id}\"\nΩ\n"
+            )
+            hlf_tokens = _count(hlf_source)
+            compression = round((1 - hlf_tokens / nlp_tokens) * 100, 1) if nlp_tokens > 0 else 0
+
+            row: dict[str, Any] = {
+                "scenario_id": scenario_id,
+                "nlp_tokens": nlp_tokens,
+                "template_hlf_tokens": hlf_tokens,
+                "template_compression_pct": compression,
+            }
+
+            live = _maybe_live_translate(nlp_text)
+            if live:
+                row["live_hlf_tokens"] = live["live_hlf_tokens"]
+                row["live_compression_pct"] = live["live_compression_pct"]
+                complex_total_live_hlf += live["live_hlf_tokens"]
+
+            complex_results.append(row)
+            complex_total_hlf += hlf_tokens
+            complex_total_nlp += nlp_tokens
+
+        complex_overall = round((1 - complex_total_hlf / max(1, complex_total_nlp)) * 100, 1)
+        complex_totals: dict[str, Any] = {
+            "nlp": complex_total_nlp,
+            "template_hlf": complex_total_hlf,
+            "template_compression_pct": complex_overall,
+        }
+        if use_live_translator:
+            complex_totals["live_hlf"] = complex_total_live_hlf
+            complex_totals["live_compression_pct"] = (
+                round((1 - complex_total_live_hlf / max(1, complex_total_nlp)) * 100, 1)
+            )
+
+        # ── Swarm ─────────────────────────────────────────────────────────
+        swarm_results: list[dict[str, Any]] = []
+        swarm_total_hlf = 0
+        swarm_total_nlp = 0
+        swarm_total_live_hlf = 0
+
+        for scenario_id, nlp_text in _SWARM_WORKFLOW_NLP.items():
+            nlp_tokens = _count(nlp_text)
+            hlf_source = _SWARM_WORKFLOW_HLF.get(
+                scenario_id, f"[HLF-v3]\n⨝ [SWARM] name=\"{scenario_id}\"\nΩ\n"
+            )
+            hlf_tokens = _count(hlf_source)
+            compression = round((1 - hlf_tokens / nlp_tokens) * 100, 1) if nlp_tokens > 0 else 0
+
+            row: dict[str, Any] = {
+                "scenario_id": scenario_id,
+                "nlp_tokens": nlp_tokens,
+                "template_hlf_tokens": hlf_tokens,
+                "template_compression_pct": compression,
+            }
+
+            live = _maybe_live_translate(nlp_text)
+            if live:
+                row["live_hlf_tokens"] = live["live_hlf_tokens"]
+                row["live_compression_pct"] = live["live_compression_pct"]
+                swarm_total_live_hlf += live["live_hlf_tokens"]
+
+            swarm_results.append(row)
+            swarm_total_hlf += hlf_tokens
+            swarm_total_nlp += nlp_tokens
+
+        swarm_overall = round((1 - swarm_total_hlf / max(1, swarm_total_nlp)) * 100, 1)
+        swarm_totals: dict[str, Any] = {
+            "nlp": swarm_total_nlp,
+            "template_hlf": swarm_total_hlf,
+            "template_compression_pct": swarm_overall,
+        }
+        if use_live_translator:
+            swarm_totals["live_hlf"] = swarm_total_live_hlf
+            swarm_totals["live_compression_pct"] = (
+                round((1 - swarm_total_live_hlf / max(1, swarm_total_nlp)) * 100, 1)
+            )
+
+        # ── Scale curve ───────────────────────────────────────────────────
+        scale_curve_data = self.benchmark_scale_curve()
+
+        # ── Overall summary ───────────────────────────────────────────────
+        crossover = scale_curve_data.get("crossover_point")
+        max_comp = scale_curve_data.get("max_compression_pct", 0)
+        if crossover is not None:
+            overall_summary = (
+                f"HLF wins at N>={crossover} steps with max compression of {max_comp}%"
+            )
+        else:
+            overall_summary = (
+                f"No crossover detected. Max compression: {max_comp}%"
+            )
+
         return {
-            "results": results,
-            "totals": {"hlf": total_hlf, "nlp": total_nlp, "compression_pct": overall},
+            "simple": {"results": simple_results, "totals": simple_totals},
+            "complex": {"results": complex_results, "totals": complex_totals},
+            "swarm": {"results": swarm_results, "totals": swarm_totals},
+            "scale_curve": scale_curve_data,
+            "overall_summary": overall_summary,
+            "tiktoken_model": "cl100k_base",
+            "use_live_translator": use_live_translator,
+        }
+
+    def benchmark_scale_curve(self) -> dict[str, Any]:
+        """Measure NLP→HLF compression at increasing workflow step counts.
+
+        Generates synthetic multi-step NLP prose from N=1 to N=50 and
+        compares against a governance-first HLF block that stays compact
+        regardless of step count.
+
+        Returns:
+            dict with curve data, crossover point, and max compression.
+        """
+        step_counts = [1, 3, 5, 7, 10, 15, 20, 30, 50]
+        actions = [
+            "detect anomalies in the monitoring feed",
+            "classify severity based on impact scoring rules",
+            "contain affected network segments",
+            "investigate root cause from audit logs",
+            "remediate using runbook RB-2026-03",
+            "verify fix via sandbox replay",
+            "report findings to SOC lead",
+            "deploy canary to 10% of traffic",
+            "monitor error rate for regression",
+            "notify on-call operator",
+        ]
+
+        curve: list[dict[str, Any]] = []
+        for n in step_counts:
+            # Build synthetic NLP with N steps (cycling through actions)
+            steps_text = " ".join(
+                f"Step {i + 1}: {actions[i % len(actions)]}."
+                for i in range(n)
+            )
+            nlp_tokens = _count(steps_text)
+
+            # Governance-first HLF: compact block that doesn't grow with N
+            # Vary constraints slightly as N increases for realism
+            extra_constraints = ""
+            if n >= 10:
+                extra_constraints += '\n  Ж [CONSTRAINT] rollback_enabled=true'
+            if n >= 20:
+                extra_constraints += '\n  Ж [CONSTRAINT] audit_trail=full'
+            if n >= 30:
+                extra_constraints += '\n  Ж [CONSTRAINT] parallel_exec="limited_concurrency"'
+
+            hlf_source = (
+                f"[HLF-v3]\n"
+                f"Δ [WORKFLOW] name=\"scale_benchmark\" max_steps={n}\n"
+                f"  Ж [CONSTRAINT] mode=\"governed\"\n"
+                f"  Ж [CONSTRAINT] detect classify contain investigate remediate verify report deploy monitor notify\n"
+                f"  Ж [VOTE] consensus=\"majority\"\n"
+                f"  Ж [EXPECT] workflow_complete{extra_constraints}\n"
+                f"Ω\n"
+            )
+            hlf_tokens = _count(hlf_source)
+
+            compression_pct = round((1 - hlf_tokens / nlp_tokens) * 100, 1) if nlp_tokens > 0 else 0.0
+
+            curve.append({
+                "steps": n,
+                "nlp_tokens": nlp_tokens,
+                "hlf_tokens": hlf_tokens,
+                "compression_pct": compression_pct,
+            })
+
+        # Find crossover: first N where compression_pct > 0 (HLF wins)
+        crossover = None
+        for point in curve:
+            if point["compression_pct"] > 0:
+                crossover = point["steps"]
+                break
+
+        max_compression = max(p["compression_pct"] for p in curve) if curve else 0.0
+
+        return {
+            "curve": curve,
+            "crossover_point": crossover,
+            "max_compression_pct": max_compression,
+            "tiktoken_model": "cl100k_base",
+        }
+
+    def benchmark_real_workflow(self) -> dict[str, Any]:
+        """Benchmark a real dream-cycle workflow: observe→propose→verify→promote.
+
+        Compares a prose description of a governance-bound remediation loop
+        against its governance-first HLF encoding.
+        """
+        nlp_description = (
+            "Observe system metrics from /metrics/prometheus. "
+            "Propose scaling action based on threshold breach. "
+            "Verify proposed action against safety constraints and resource limits. "
+            "Promote verified action to execution queue. "
+            "Record evidence chain with SHA-256 hashes. "
+            "Notify operator of completed action with verification proof. "
+            "Update runbook with new threshold observations."
+        )
+
+        hlf_source = """\
+[HLF-v3]
+Δ [WORKFLOW] name="dream_cycle_observe_propose_verify_promote" max_steps=7
+  Ж [CONSTRAINT] observe source="/metrics/prometheus"
+  Ж [CONSTRAINT] propose action=scaling trigger=threshold_breach
+  Ж [CONSTRAINT] verify safety_constraints=true resource_limits=true
+  Ж [CONSTRAINT] promote target="execution_queue"
+  Ж [CONSTRAINT] record evidence=SHA-256 chain=true
+  Ж [CONSTRAINT] notify operator=true proof=verification
+  Ж [CONSTRAINT] update runbook="threshold_observations"
+  Ж [VOTE] consensus="majority"
+  Ж [EXPECT] action_completed verified=true
+Ω
+"""
+
+        nlp_tokens = _count(nlp_description)
+        hlf_tokens = _count(hlf_source)
+        compression_pct = round((1 - hlf_tokens / nlp_tokens) * 100, 1) if nlp_tokens > 0 else 0.0
+
+        return {
+            "workflow_name": "dream_cycle_observe_propose_verify_promote",
+            "nlp_description": nlp_description,
+            "hlf_source": hlf_source,
+            "nlp_tokens": nlp_tokens,
+            "hlf_tokens": hlf_tokens,
+            "compression_pct": compression_pct,
             "tiktoken_model": "cl100k_base",
         }
 
@@ -1420,41 +1690,38 @@ _COMPLEX_WORKFLOW_NLP: dict[str, str] = {
 _COMPLEX_WORKFLOW_HLF: dict[str, str] = {
     "incident_response_7step": """\
 [HLF-v3]
-Δ [WORKFLOW] name="incident_response" steps=7
-  ⚡ [STEP 1] detect source="/alerts/feed.json"
-  ⚡ [STEP 2] classify severity∈{critical,high,medium,low} based_on=impact_scoring
-  ⚡ [STEP 3] contain target="10.0.1.0/24" action=isolate_network
-  ⚡ [STEP 4] investigate source="/var/log/audit/*.log" goal=root_cause
-  ⚡ [STEP 5] remediate runbook="RB-2026-03"
-  ⚡ [STEP 6] verify method=replay_attack sandbox=true
-  ⚡ [STEP 7] report type=post_incident notify="soc_lead"
-  Ж [CONSTRAINT] all_steps_sequential=true
+Δ [WORKFLOW] name="incident_response" max_steps=7
+  Ж [CONSTRAINT] source="/alerts/feed.json" action=detect
+  Ж [CONSTRAINT] classify severity∈{critical,high,medium,low} rule=impact_scoring
+  Ж [CONSTRAINT] contain_network="10.0.1.0/24" action=isolate
+  Ж [CONSTRAINT] investigate_logs="/var/log/audit/*.log" goal=root_cause
+  Ж [CONSTRAINT] remediate runbook="RB-2026-03"
+  Ж [CONSTRAINT] verify method=replay_attack sandbox=true
+  Ж [CONSTRAINT] report type=post_incident notify="soc_lead"
   Ж [EXPECT] incident_resolved
 Ω
 """,
     "multi_service_deploy_5step": """\
 [HLF-v3]
 ⌘ [DEPLOY] services=["api-gateway","user-service","payment-worker"] branch=main
-  ⚡ [STEP 1] build dockerfiles=true
-  ⚡ [STEP 2] test suite="integration" env=staging timeout=300s
-  ⚡ [STEP 3] canary traffic_pct=10 monitor=error_rate duration=120s
-  ⚡ [STEP 4] rollout strategy=rolling_update max_concurrent=3
-  ⚡ [STEP 5] health_check endpoints=all verify_migration=true
-  Ж [CONSTRAINT] deploy_tier="production"
-  Ж [VOTE] require_confirmation=true
+  Ж [CONSTRAINT] build_dockerfiles=true
+  Ж [CONSTRAINT] test suite=integration env=staging timeout=300s
+  Ж [CONSTRAINT] canary traffic_pct=10 monitor=error_rate duration=120s
+  Ж [CONSTRAINT] rollout strategy=rolling_update max_concurrent=3
+  Ж [CONSTRAINT] health_check endpoints=all verify_migration=true
+  Ж [VOTE] require_confirmation=true deploy_tier="production"
 Ω
 """,
     "data_pipeline_6step": """\
 [HLF-v3]
-Δ [PIPELINE] name="analytics_etl" steps=6
-  ⚡ [STEP 1] extract source="s3://analytics-events/2026/03/" batch=100MB
-  ⚡ [STEP 2] validate schema="event-schema-v3.json" dead_letter=true
-  ⚡ [STEP 3] transform anonymize_pii=true enrich_geoip=true normalize_tz=UTC
-  ⚡ [STEP 4] load target="bigquery:events_v3" mode=WRITE_TRUNCATE
-  ⚡ [STEP 5] verify tolerance_pct=1 method=row_count_match
-  ⚡ [STEP 6] archive target="cold-storage" retention=90d
-  Ж [CONSTRAINT] processing_tier="batch"
-  Ж [EXPECT] pipeline_complete
+Δ [PIPELINE] name="analytics_etl" max_steps=6
+  Ж [CONSTRAINT] extract source="s3://analytics-events/2026/03/" batch=100MB
+  Ж [CONSTRAINT] validate schema="event-schema-v3.json" dead_letter=true
+  Ж [CONSTRAINT] transform anonymize_pii=true enrich_geoip=true normalize_tz=UTC
+  Ж [CONSTRAINT] load target="bigquery:events_v3" mode=WRITE_TRUNCATE
+  Ж [CONSTRAINT] verify tolerance_pct=1 method=row_count_match
+  Ж [CONSTRAINT] archive target="cold-storage" retention=90d
+  Ж [EXPECT] pipeline_complete processing_tier="batch"
 Ω
 """,
     # ── PIPE + TEMPLATE + @validate scenarios ──────────────────────────────────

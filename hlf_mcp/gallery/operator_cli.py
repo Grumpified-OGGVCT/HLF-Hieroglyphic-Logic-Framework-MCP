@@ -451,6 +451,124 @@ def _cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── Evidence Subcommand Handler ──────────────────────────────────────────────────
+
+
+def _cmd_evidence(args: argparse.Namespace) -> int:
+    """Handle 'evidence' subcommand: evidence chain summary."""
+    from hlf_mcp.gallery.operator_dashboard import (
+        render_evidence_panel,
+        render_dream_findings_panel,
+    )
+
+    evidence_type = args.evidence_type
+    limit = args.limit
+
+    if evidence_type in ("contract", "media", "all"):
+        panel = render_evidence_panel(use_live_data=True, max_display=limit)
+        if panel:
+            if _RICH:
+                Console().print(panel)
+                Console().print()
+            else:
+                print(panel)
+
+    if evidence_type in ("findings", "all"):
+        panel = render_dream_findings_panel(use_live_data=True, max_display=limit)
+        if panel:
+            if _RICH:
+                Console().print(panel)
+                Console().print()
+            else:
+                print(panel)
+
+    return 0
+
+
+# ── Missions Subcommand Handler ──────────────────────────────────────────────────
+
+
+def _cmd_missions(args: argparse.Namespace) -> int:
+    """Handle 'missions' subcommand: mission statuses."""
+    from hlf_mcp.gallery.operator_dashboard import (
+        render_mission_panel,
+        _get_lifecycle,
+    )
+
+    lifecycle = _get_lifecycle()
+    missions: list[dict[str, Any]] = []
+    if lifecycle:
+        try:
+            missions = lifecycle.list_missions() or []
+        except Exception:
+            pass
+
+    # Apply status filter
+    status_filter = args.status
+    if status_filter != "all":
+        matched: list[dict[str, Any]] = []
+        for m in missions:
+            verdict = str(m.get("verdict", "")).lower()
+            sealed = m.get("sealed", False)
+            if status_filter == "active" and not sealed:
+                matched.append(m)
+            elif status_filter == "sealed" and sealed:
+                matched.append(m)
+            elif status_filter == "passed" and verdict == "passed":
+                matched.append(m)
+            elif status_filter == "failed" and verdict in ("failed", "blocked", "rejected"):
+                matched.append(m)
+            elif status_filter == "blocked" and verdict == "blocked":
+                matched.append(m)
+        missions = matched
+
+    panel = render_mission_panel(missions=missions, use_live_data=False, max_display=args.limit)
+    if panel:
+        if _RICH:
+            Console().print(panel)
+            Console().print()
+        else:
+            print(panel)
+
+    if not missions:
+        print(f"No missions found matching status filter: {status_filter}")
+
+    return 0
+
+
+# ── Export Subcommand Handler ────────────────────────────────────────────────────
+
+
+def _cmd_export(args: argparse.Namespace) -> int:
+    """Handle 'export' subcommand: export evidence report."""
+    from hlf_mcp.gallery.operator_dashboard import export_evidence_report
+
+    fmt = args.export_format
+    output_path = args.export_output
+
+    try:
+        content = export_evidence_report(
+            output_format=fmt,
+            output_path=output_path,
+            use_live_data=True,
+        )
+    except Exception as e:
+        print(f"Error generating report: {e}", file=sys.stderr)
+        return 1
+
+    if output_path is None:
+        print(content)
+    else:
+        if _RICH:
+            Console().print(f"[green]Report written to: {output_path}[/green]")
+            Console().print(f"[dim]Size: {len(content)} bytes[/dim]")
+        else:
+            print(f"Report written to: {output_path}")
+            print(f"Size: {len(content)} bytes")
+
+    return 0
+
+
 # ── Feedback Subcommand Handlers ─────────────────────────────────────────────────
 
 # Module-level feedback collector singleton for CLI usage
@@ -695,6 +813,53 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("violations", help="Show constitutional violations")
     subparsers.add_parser("audit", help="Show manifest audit trail")
 
+    # Evidence subcommand
+    evidence_parser = subparsers.add_parser("evidence", help="Show evidence chain summary")
+    evidence_parser.add_argument(
+        "--type", "-t",
+        dest="evidence_type",
+        choices=["contract", "media", "findings", "all"],
+        default="all",
+        help="Evidence type to display (default: all)",
+    )
+    evidence_parser.add_argument(
+        "--limit", "-n",
+        type=int,
+        default=10,
+        help="Maximum items to display (default: 10)",
+    )
+
+    # Missions subcommand
+    missions_parser = subparsers.add_parser("missions", help="Show mission statuses")
+    missions_parser.add_argument(
+        "--status", "-s",
+        choices=["all", "active", "sealed", "passed", "failed", "blocked"],
+        default="all",
+        help="Filter missions by status (default: all)",
+    )
+    missions_parser.add_argument(
+        "--limit", "-n",
+        type=int,
+        default=20,
+        help="Maximum missions to display (default: 20)",
+    )
+
+    # Export subcommand
+    export_parser = subparsers.add_parser("export", help="Export evidence report")
+    export_parser.add_argument(
+        "--format", "-f",
+        dest="export_format",
+        choices=["markdown", "json", "text"],
+        default="markdown",
+        help="Output format (default: markdown)",
+    )
+    export_parser.add_argument(
+        "--output", "-o",
+        dest="export_output",
+        default=None,
+        help="Output file path (prints to stdout if not specified)",
+    )
+
     # Feedback subcommand group
     feedback_parser = subparsers.add_parser("feedback", help="Operator feedback loop commands")
     feedback_sub = feedback_parser.add_subparsers(dest="feedback_action", help="Feedback actions")
@@ -785,6 +950,12 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_violations(args)
     elif args.subcommand == "audit":
         return _cmd_audit(args)
+    elif args.subcommand == "evidence":
+        return _cmd_evidence(args)
+    elif args.subcommand == "missions":
+        return _cmd_missions(args)
+    elif args.subcommand == "export":
+        return _cmd_export(args)
     elif args.subcommand == "feedback":
         if args.feedback_action == "ack":
             return _cmd_feedback_ack(args)

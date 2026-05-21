@@ -40,6 +40,45 @@ try:
 except ImportError:
     _RICH = False
 
+# ── Optional live data imports ─────────────────────────────────────────────────
+_LIVE_IMPORTS_OK = False
+_LIVE_IMPORT_ERRORS: list[str] = []
+
+try:
+    from hlf_mcp.instinct.lifecycle import InstinctLifecycle
+    _LIVE_IMPORTS_OK = True
+except ImportError as e:
+    _LIVE_IMPORT_ERRORS.append(f"InstinctLifecycle: {e}")
+
+try:
+    from hlf_mcp.hlf.memory_node import EvidenceContract
+except ImportError as e:
+    _LIVE_IMPORT_ERRORS.append(f"EvidenceContract: {e}")
+
+try:
+    from hlf_mcp.media_evidence import MediaEvidenceRecord
+except ImportError as e:
+    _LIVE_IMPORT_ERRORS.append(f"MediaEvidenceRecord: {e}")
+
+try:
+    from hlf_mcp.dream_cycle import DreamFinding, DreamCycleReport, build_dream_findings
+except ImportError as e:
+    _LIVE_IMPORT_ERRORS.append(f"DreamCycle: {e}")
+
+# ── Module-level lifecycle singleton for live data ────────────────────────────
+_lifecycle: Any = None
+
+
+def _get_lifecycle() -> Any:
+    """Get or create the module-level InstinctLifecycle singleton."""
+    global _lifecycle
+    if _lifecycle is None and _LIVE_IMPORTS_OK:
+        try:
+            _lifecycle = InstinctLifecycle()
+        except Exception:
+            pass
+    return _lifecycle
+
 
 def _now_iso() -> str:
     """Return current UTC timestamp in ISO 8601 format."""
@@ -51,12 +90,51 @@ def _generate_trace_ref() -> str:
     return f"trace-{uuid.uuid4().hex[:12]}"
 
 
-def collect_swarm_state(swarm_observer: Any | None = None) -> dict[str, Any]:
+def collect_swarm_state(
+    swarm_observer: Any | None = None,
+    use_live_data: bool = True,
+) -> dict[str, Any]:
     """Collect active swarm state from the SwarmObserver.
 
     Returns a dictionary with swarm events, active agents, and phase information.
     Falls back to a simulated state if no live observer is available.
+
+    Args:
+        swarm_observer: Optional live SwarmObserver instance.
+        use_live_data: When True, attempt to read from InstinctLifecycle missions.
+                       When False, use simulated data immediately.
     """
+    # ── Live data path: read from InstinctLifecycle missions ────────────────
+    if use_live_data:
+        lifecycle = _get_lifecycle()
+        if lifecycle is not None:
+            try:
+                missions = lifecycle.list_missions()
+                if missions:
+                    phases: dict[str, int] = {}
+                    total_events = 0
+                    for m in missions:
+                        phase = m.get("current_phase", "unknown")
+                        phases[phase] = phases.get(phase, 0) + 1
+                        total_events += m.get("plan_nodes", 0)
+                    phase_distribution = [
+                        {"phase": phase, "count": count}
+                        for phase, count in sorted(phases.items())
+                    ]
+                    return {
+                        "source": "live",
+                        "total_events": total_events,
+                        "recent_events": [],
+                        "active_agents": len(missions),
+                        "has_active_phases": bool(phases),
+                        "phase_distribution": phase_distribution,
+                        "total_missions": len(missions),
+                        "sealed_missions": sum(1 for m in missions if m.get("sealed")),
+                    }
+            except Exception:
+                pass
+
+    # ── Swarm observer path (legacy) ────────────────────────────────────────
     if swarm_observer is not None:
         try:
             log_entries = swarm_observer.get_log()
@@ -102,12 +180,68 @@ def collect_swarm_state(swarm_observer: Any | None = None) -> dict[str, Any]:
     }
 
 
-def collect_verification_decisions() -> dict[str, Any]:
+def collect_verification_decisions(
+    use_live_data: bool = True,
+) -> dict[str, Any]:
     """Collect verification gate decisions from recent activity.
 
     Returns a dictionary summarizing gate decisions. Uses simulated data
     when no live data is available.
+
+    Args:
+        use_live_data: When True, attempt to read from actual verification missions.
+                       When False, use simulated data immediately.
     """
+    # ── Live data path: read from InstinctLifecycle missions ────────────────
+    if use_live_data:
+        lifecycle = _get_lifecycle()
+        if lifecycle is not None:
+            try:
+                missions = lifecycle.list_missions()
+                if missions:
+                    decisions: list[dict[str, Any]] = []
+                    proceed_count = 0
+                    warn_count = 0
+                    block_count = 0
+                    for m in missions:
+                        verdict = str(m.get("verdict", "")).lower()
+                        mission_id = str(m.get("mission_id", ""))
+                        if verdict in ("passed", "proceed"):
+                            decision = "PROCEED"
+                            proceed_count += 1
+                        elif verdict in ("warn", "pending"):
+                            decision = "WARN"
+                            warn_count += 1
+                        elif verdict in ("failed", "blocked", "block", "rejected"):
+                            decision = "BLOCK"
+                            block_count += 1
+                        else:
+                            decision = "WARN"
+                            warn_count += 1
+                        decisions.append({
+                            "program": m.get("title", mission_id),
+                            "mission_id": mission_id,
+                            "decision": decision,
+                            "checks_passed": int(m.get("plan_nodes_done", 0)),
+                            "checks_total": int(m.get("plan_nodes", 0)),
+                            "timestamp": _now_iso(),
+                        })
+                    total = proceed_count + warn_count + block_count
+                    return {
+                        "source": "live",
+                        "decisions": decisions,
+                        "summary": {
+                            "total_programs": total,
+                            "proceed": proceed_count,
+                            "warn": warn_count,
+                            "block": block_count,
+                            "pass_rate_pct": round(proceed_count / total * 100, 1) if total else 0.0,
+                        },
+                    }
+            except Exception:
+                pass
+
+    # ── Simulated verification decisions ────────────────────────────────────
     return {
         "source": "simulated",
         "decisions": [
@@ -130,12 +264,55 @@ def collect_verification_decisions() -> dict[str, Any]:
     }
 
 
-def collect_constitutional_violations() -> dict[str, Any]:
+def collect_constitutional_violations(
+    use_live_data: bool = True,
+) -> dict[str, Any]:
     """Collect constitutional violations from the governance layer.
 
     Returns a dictionary with violation details. Uses simulated data
     when no live data is available.
+
+    Args:
+        use_live_data: When True, attempt to read from actual constitutional data.
+                       When False, use simulated data immediately.
     """
+    # ── Live data path: read from constitution logs / manifest audit ───────
+    if use_live_data:
+        lifecycle = _get_lifecycle()
+        if lifecycle is not None:
+            try:
+                missions = lifecycle.list_missions()
+                violations: list[dict[str, Any]] = []
+                for m in missions:
+                    verdict = str(m.get("verdict", "")).lower()
+                    if verdict in ("blocked", "failed", "rejected"):
+                        violations.append({
+                            "rule_id": m.get("blocking_rule", "R-X"),
+                            "rule_name": m.get("blocking_rule_name", "Constitutional Violation"),
+                            "location": str(m.get("mission_id", "unknown")),
+                            "detail": str(m.get("verdict_reason", "Blocked by constitutional gate")),
+                            "severity": "high" if verdict == "blocked" else "medium",
+                            "timestamp": _now_iso(),
+                        })
+                if violations:
+                    high_count = sum(1 for v in violations if v["severity"] == "high")
+                    med_count = sum(1 for v in violations if v["severity"] == "medium")
+                    low_count = sum(1 for v in violations if v["severity"] == "low")
+                    return {
+                        "source": "live",
+                        "violations": violations,
+                        "summary": {
+                            "total_violations": len(violations),
+                            "high_severity": high_count,
+                            "medium_severity": med_count,
+                            "low_severity": low_count,
+                            "blocked_count": high_count,
+                        },
+                    }
+            except Exception:
+                pass
+
+    # ── Simulated constitutional violations ─────────────────────────────────
     return {
         "source": "simulated",
         "violations": [
@@ -156,12 +333,59 @@ def collect_constitutional_violations() -> dict[str, Any]:
     }
 
 
-def collect_manifest_audit_trail() -> dict[str, Any]:
+def collect_manifest_audit_trail(
+    use_live_data: bool = True,
+) -> dict[str, Any]:
     """Collect manifest audit trail from recent deployments.
 
     Returns a dictionary with manifest approval records. Uses simulated
     data when no live data is available.
+
+    Args:
+        use_live_data: When True, attempt to read from actual mission data.
+                       When False, use simulated data immediately.
     """
+    # ── Live data path: read from mission ledgers ──────────────────────────
+    if use_live_data:
+        lifecycle = _get_lifecycle()
+        if lifecycle is not None:
+            try:
+                missions = lifecycle.list_missions()
+                deployments: list[dict[str, Any]] = []
+                for m in missions:
+                    mission_id = str(m.get("mission_id", ""))
+                    try:
+                        ledger = lifecycle.get_ledger(mission_id) if mission_id else None
+                    except Exception:
+                        ledger = None
+                    approved = bool(m.get("sealed", False)) and str(m.get("verdict", "")) == "passed"
+                    deployments.append({
+                        "program": str(m.get("title", mission_id)),
+                        "mission_id": mission_id,
+                        "tier": str(m.get("tier", "hearth")),
+                        "capabilities": m.get("declared_capabilities", []),
+                        "approved": approved,
+                        "signature": f"sha256:mission-{mission_id[:12]}",
+                        "timestamp": _now_iso(),
+                        "ledger_entries": len(ledger) if isinstance(ledger, list) else 0,
+                    })
+                approved_count = sum(1 for d in deployments if d["approved"])
+                rejected_count = len(deployments) - approved_count
+                total = len(deployments)
+                return {
+                    "source": "live",
+                    "deployments": deployments,
+                    "summary": {
+                        "total_deployments": total,
+                        "approved": approved_count,
+                        "rejected": rejected_count,
+                        "approval_rate_pct": round(approved_count / total * 100, 1) if total else 0.0,
+                    },
+                }
+            except Exception:
+                pass
+
+    # ── Simulated manifest audit trail ─────────────────────────────────────
     return {
         "source": "simulated",
         "deployments": [
@@ -186,6 +410,7 @@ def collect_manifest_audit_trail() -> dict[str, Any]:
 
 def build_dashboard_data(
     swarm_observer: Any | None = None,
+    use_live_data: bool = True,
 ) -> dict[str, Any]:
     """Build the complete operator dashboard data dictionary.
 
@@ -194,6 +419,8 @@ def build_dashboard_data(
 
     Args:
         swarm_observer: Optional live SwarmObserver instance.
+        use_live_data: When True, attempt to read from live data sources.
+                       When False, use simulated data for all collectors.
 
     Returns:
         Dictionary with all dashboard sections ready for JSON serialization.
@@ -201,10 +428,10 @@ def build_dashboard_data(
     now = _now_iso()
     dashboard_id = hashlib.sha256(f"hlf-dashboard-{now}".encode()).hexdigest()[:16]
 
-    swarm = collect_swarm_state(swarm_observer)
-    verification = collect_verification_decisions()
-    constitutional = collect_constitutional_violations()
-    manifest = collect_manifest_audit_trail()
+    swarm = collect_swarm_state(swarm_observer, use_live_data=use_live_data)
+    verification = collect_verification_decisions(use_live_data=use_live_data)
+    constitutional = collect_constitutional_violations(use_live_data=use_live_data)
+    manifest = collect_manifest_audit_trail(use_live_data=use_live_data)
 
     # ── Compute aggregate health ─────────────────────────────────────────────
     verification_pass_rate = verification["summary"]["pass_rate_pct"]
@@ -621,6 +848,400 @@ def integrate_telemetry_snapshot(
     return dashboard
 
 
+# ── Mission Panel ─────────────────────────────────────────────────────────────
+
+
+def render_mission_panel(
+    missions: list[dict[str, Any]] | None = None,
+    use_live_data: bool = True,
+    max_display: int = 10,
+) -> str | None:
+    """Render a mission status panel from InstinctLifecycle mission data.
+
+    Args:
+        missions: Pre-fetched mission list, or None to auto-fetch.
+        use_live_data: If auto-fetching, whether to use live data.
+        max_display: Maximum number of missions to display.
+
+    Returns:
+        Rich-rendered panel string, or None if Rich unavailable.
+    """
+    if missions is None:
+        lifecycle = _get_lifecycle()
+        if lifecycle is not None and use_live_data:
+            try:
+                missions = lifecycle.list_missions()
+            except Exception:
+                missions = []
+
+    if not missions:
+        if _RICH:
+            return str(Panel(
+                "[dim]No missions found[/dim]",
+                title="Active Missions",
+                border_style="dim",
+            ))
+        return None
+
+    if not _RICH:
+        # Plain text fallback
+        lines = ["\n── Active Missions ──"]
+        for m in missions[:max_display]:
+            mid = str(m.get("mission_id", ""))[:12]
+            title = str(m.get("title", "unnamed"))[:40]
+            sealed = "🔒" if m.get("sealed") else "📋"
+            verdict = str(m.get("verdict", "pending"))
+            lines.append(f"  {sealed} {mid}  {title:<42}  [{verdict}]")
+        return "\n".join(lines)
+
+    from rich.table import Table as RichTable
+    table = RichTable(title="Active Missions", box=box.SIMPLE)
+    table.add_column("ID", style="dim")
+    table.add_column("Title", style="cyan")
+    table.add_column("Phase", style="magenta")
+    table.add_column("Verdict")
+    table.add_column("Sealed")
+
+    for m in missions[:max_display]:
+        mid = str(m.get("mission_id", ""))[:12]
+        title = str(m.get("title", "unnamed"))[:50]
+        phase = str(m.get("current_phase", "unknown"))
+        verdict = str(m.get("verdict", "pending"))
+        verdict_color = (
+            "green" if verdict == "passed"
+            else "red" if verdict in ("failed", "blocked", "rejected")
+            else "yellow" if verdict == "warn"
+            else "dim"
+        )
+        sealed = "[green]✓[/green]" if m.get("sealed") else "[dim]○[/dim]"
+        table.add_row(mid, title, phase, f"[{verdict_color}]{verdict}[/{verdict_color}]", sealed)
+
+    return str(table)
+
+
+def display_mission_panel(
+    use_live_data: bool = True,
+    max_display: int = 10,
+) -> None:
+    """Display the mission status panel on the console.
+
+    Args:
+        use_live_data: Whether to attempt live data fetch.
+        max_display: Maximum missions to show.
+    """
+    panel = render_mission_panel(use_live_data=use_live_data, max_display=max_display)
+    if panel:
+        if _RICH:
+            Console().print(panel)
+            Console().print()
+        else:
+            print(panel)
+
+
+# ── Dream Findings Panel ──────────────────────────────────────────────────────
+
+
+def render_dream_findings_panel(
+    findings: list[Any] | None = None,
+    use_live_data: bool = True,
+    max_display: int = 5,
+) -> str | None:
+    """Render a dream findings panel with quality scores and witness status.
+
+    Args:
+        findings: Pre-fetched DreamFinding list, or None to auto-fetch.
+        use_live_data: If auto-fetching, whether to use live data.
+        max_display: Maximum findings to show.
+
+    Returns:
+        Rich-rendered panel string, or None if Rich unavailable.
+    """
+    if findings is None and use_live_data:
+        try:
+            from hlf_mcp.dream_cycle import build_dream_findings
+            findings = build_dream_findings() or []
+        except Exception:
+            findings = []
+
+    if not findings:
+        if _RICH:
+            return str(Panel(
+                "[dim]No dream findings available[/dim]",
+                title="Dream Findings",
+                border_style="dim",
+            ))
+        return None
+
+    if not _RICH:
+        lines = ["\n── Dream Findings ──"]
+        for f in findings[:max_display]:
+            fid = str(getattr(f, "finding_id", "?"))[:12]
+            title = str(getattr(f, "title", "untitled"))[:50]
+            quality = getattr(f, "quality_score", 0.0)
+            witness = str(getattr(f, "witness_status", "?"))
+            lines.append(f"  [{witness}] {fid}  {title}  (quality: {quality:.2f})")
+        return "\n".join(lines)
+
+    table = Table(title="Dream Findings", box=box.SIMPLE)
+    table.add_column("ID", style="dim")
+    table.add_column("Title", style="cyan")
+    table.add_column("Quality", style="yellow")
+    table.add_column("Witness", style="magenta")
+    table.add_column("Advisory")
+
+    for f in findings[:max_display]:
+        fid = str(getattr(f, "finding_id", "?"))[:12]
+        title = str(getattr(f, "title", "untitled"))[:50]
+        quality = getattr(f, "quality_score", 0.0)
+        witness = str(getattr(f, "witness_status", "?"))
+        advisory = "[yellow]⚠[/yellow]" if getattr(f, "advisory_only", False) else "[green]✓[/green]"
+        quality_color = "green" if quality >= 0.7 else "yellow" if quality >= 0.4 else "red"
+        table.add_row(fid, title, f"[{quality_color}]{quality:.2f}[/{quality_color}]", witness, advisory)
+
+    return str(table)
+
+
+def display_dream_findings_panel(
+    use_live_data: bool = True,
+    max_display: int = 5,
+) -> None:
+    """Display the dream findings panel on the console.
+
+    Args:
+        use_live_data: Whether to attempt live data fetch.
+        max_display: Maximum findings to show.
+    """
+    panel = render_dream_findings_panel(use_live_data=use_live_data, max_display=max_display)
+    if panel:
+        if _RICH:
+            Console().print(panel)
+            Console().print()
+        else:
+            print(panel)
+
+
+# ── Evidence Panel ────────────────────────────────────────────────────────────
+
+
+def render_evidence_panel(
+    evidence: list[Any] | None = None,
+    use_live_data: bool = True,
+    max_display: int = 8,
+) -> str | None:
+    """Render an evidence summary panel from EvidenceContract or MediaEvidenceRecord data.
+
+    Args:
+        evidence: Pre-fetched evidence list, or None to auto-fetch.
+        use_live_data: If auto-fetching, whether to use live data.
+        max_display: Maximum evidence items to show.
+
+    Returns:
+        Rich-rendered panel string, or None if Rich unavailable.
+    """
+    if evidence is None and use_live_data:
+        try:
+            from hlf_mcp.hlf.memory_node import EvidenceContract
+            from hlf_mcp.media_evidence import MediaEvidenceRecord
+        except ImportError:
+            evidence = []
+
+    if not evidence:
+        if _RICH:
+            return str(Panel(
+                "[dim]No evidence records found[/dim]",
+                title="Evidence Chain",
+                border_style="dim",
+            ))
+        return None
+
+    if not _RICH:
+        lines = ["\n── Evidence Chain ──"]
+        for e in evidence[:max_display]:
+            if isinstance(e, dict):
+                sha = str(e.get("sha256", e.get("artifact_id", "?")))[:12]
+                tier = str(e.get("trust_tier", "?"))
+                confidence = e.get("confidence", 0.0)
+                lines.append(f"  [{tier}] {sha}  confidence: {confidence:.0%}")
+            else:
+                sha = str(getattr(e, "sha256", getattr(e, "artifact_id", "?")))[:12]
+                tier = str(getattr(e, "trust_tier", "?"))
+                confidence = getattr(e, "confidence", 0.0)
+                lines.append(f"  [{tier}] {sha}  confidence: {confidence:.0%}")
+        return "\n".join(lines)
+
+    table = Table(title="Evidence Chain", box=box.SIMPLE)
+    table.add_column("SHA", style="dim")
+    table.add_column("Type", style="cyan")
+    table.add_column("Tier", style="magenta")
+    table.add_column("Confidence")
+    table.add_column("Provenance")
+
+    for e in evidence[:max_display]:
+        sha = str(getattr(e, "sha256", getattr(e, "artifact_id", "?")))[:12]
+        artifact_form = str(getattr(e, "artifact_form", getattr(e, "media_type", "evidence")))
+        tier = str(getattr(e, "trust_tier", "?"))
+        confidence = float(getattr(e, "confidence", 0.0))
+        provenance = str(getattr(e, "provenance_grade", getattr(e, "provenance", "?")))
+        conf_color = "green" if confidence >= 0.8 else "yellow" if confidence >= 0.5 else "red"
+        table.add_row(sha, artifact_form, tier, f"[{conf_color}]{confidence:.0%}[/{conf_color}]", provenance)
+
+    return str(table)
+
+
+def display_evidence_panel(
+    use_live_data: bool = True,
+    max_display: int = 8,
+) -> None:
+    """Display the evidence chain panel on the console.
+
+    Args:
+        use_live_data: Whether to attempt live data fetch.
+        max_display: Maximum evidence items to show.
+    """
+    panel = render_evidence_panel(use_live_data=use_live_data, max_display=max_display)
+    if panel:
+        if _RICH:
+            Console().print(panel)
+            Console().print()
+        else:
+            print(panel)
+
+
+# ── Evidence Report Export ────────────────────────────────────────────────────
+
+
+def export_evidence_report(
+    output_format: str = "markdown",
+    output_path: str | None = None,
+    use_live_data: bool = True,
+) -> str:
+    """Export an evidence report in the specified format.
+
+    Args:
+        output_format: One of 'markdown', 'json', or 'text'.
+        output_path: Optional file path to write the report. If None, returns as string.
+        use_live_data: Whether to attempt live data for evidence sources.
+
+    Returns:
+        The report content as a string.
+
+    Raises:
+        ValueError: If output_format is unsupported.
+    """
+    # ── Collect all evidence data ──────────────────────────────────────────
+    dashboard = build_dashboard_data(use_live_data=use_live_data)
+    lifecycle = _get_lifecycle()
+    missions_data: list[dict[str, Any]] = []
+    if lifecycle and use_live_data:
+        try:
+            missions_data = lifecycle.list_missions() or []
+        except Exception:
+            pass
+
+    now = _now_iso()
+
+    if output_format == "json":
+        report_data = {
+            "report_id": hashlib.sha256(f"evidence-report-{now}".encode()).hexdigest()[:16],
+            "generated_at": now,
+            "dashboard": dashboard,
+            "missions": missions_data,
+            "source_mode": "live" if use_live_data else "simulated",
+        }
+        content = json.dumps(report_data, indent=2, ensure_ascii=False)
+
+    elif output_format in ("markdown", "text"):
+        lines: list[str] = []
+        lines.append(f"# HLF Evidence Report")
+        lines.append(f"")
+        lines.append(f"**Generated:** {now}")
+        lines.append(f"**Source Mode:** {'Live' if use_live_data else 'Simulated'}")
+        lines.append(f"**Dashboard ID:** {dashboard['dashboard_id']}")
+        lines.append(f"**Overall Status:** {dashboard['overall_status'].upper()}")
+        lines.append(f"")
+
+        # Verification summary
+        ver = dashboard["verification"]
+        ver_s = ver.get("summary", {})
+        lines.append(f"## Verification Gate")
+        lines.append(f"")
+        lines.append(f"| Metric | Value |")
+        lines.append(f"|--------|-------|")
+        lines.append(f"| Source | {ver.get('source', 'unknown')} |")
+        lines.append(f"| Total Programs | {ver_s.get('total_programs', 'N/A')} |")
+        lines.append(f"| Proceed | {ver_s.get('proceed', 'N/A')} |")
+        lines.append(f"| Warn | {ver_s.get('warn', 'N/A')} |")
+        lines.append(f"| Block | {ver_s.get('block', 'N/A')} |")
+        lines.append(f"| Pass Rate | {ver_s.get('pass_rate_pct', 'N/A')}% |")
+        lines.append(f"")
+
+        # Constitutional
+        const = dashboard["constitutional"]
+        const_s = const.get("summary", {})
+        lines.append(f"## Constitutional Violations")
+        lines.append(f"")
+        lines.append(f"| Metric | Value |")
+        lines.append(f"|--------|-------|")
+        lines.append(f"| Source | {const.get('source', 'unknown')} |")
+        lines.append(f"| Total | {const_s.get('total_violations', 'N/A')} |")
+        lines.append(f"| High | {const_s.get('high_severity', 'N/A')} |")
+        lines.append(f"| Medium | {const_s.get('medium_severity', 'N/A')} |")
+        lines.append(f"| Low | {const_s.get('low_severity', 'N/A')} |")
+        lines.append(f"| Blocked | {const_s.get('blocked_count', 'N/A')} |")
+        lines.append(f"")
+
+        # Manifest
+        man = dashboard["manifest_audit"]
+        man_s = man.get("summary", {})
+        lines.append(f"## Manifest Audit")
+        lines.append(f"")
+        lines.append(f"| Metric | Value |")
+        lines.append(f"|--------|-------|")
+        lines.append(f"| Source | {man.get('source', 'unknown')} |")
+        lines.append(f"| Total | {man_s.get('total_deployments', 'N/A')} |")
+        lines.append(f"| Approved | {man_s.get('approved', 'N/A')} |")
+        lines.append(f"| Rejected | {man_s.get('rejected', 'N/A')} |")
+        lines.append(f"| Rate | {man_s.get('approval_rate_pct', 'N/A')}% |")
+        lines.append(f"")
+
+        # Missions
+        if missions_data:
+            lines.append(f"## Missions ({len(missions_data)} total)")
+            lines.append(f"")
+            lines.append(f"| ID | Title | Phase | Verdict | Sealed |")
+            lines.append(f"|----|-------|-------|---------|--------|")
+            for m in missions_data[:20]:
+                mid = str(m.get("mission_id", ""))[:12]
+                title = str(m.get("title", "unnamed"))[:40]
+                phase = str(m.get("current_phase", "unknown"))
+                verdict = str(m.get("verdict", "pending"))
+                sealed = "✓" if m.get("sealed") else "○"
+                lines.append(f"| {mid} | {title} | {phase} | {verdict} | {sealed} |")
+            lines.append(f"")
+
+        # Pillar score
+        pillar = dashboard.get("pillar_score", {})
+        lines.append(f"## Pillar Score")
+        lines.append(f"")
+        lines.append(f"- **Pillar:** {pillar.get('pillar', 'N/A')}")
+        lines.append(f"- **Score:** {pillar.get('score_pct', 'N/A')}%")
+        lines.append(f"- **Target:** {pillar.get('target_pct', 'N/A')}%")
+        lines.append(f"- **Status:** {pillar.get('status', 'N/A')}")
+        lines.append(f"")
+
+        content = "\n".join(lines)
+
+    else:
+        raise ValueError(f"Unsupported output format: {output_format!r}. Use 'markdown', 'json', or 'text'.")
+
+    if output_path:
+        p = Path(output_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    return content
+
+
 def display_dashboard_with_alerts(dashboard: dict[str, Any]) -> None:
     """Display the dashboard with alert threshold coloring.
 
@@ -904,16 +1525,28 @@ def build_dashboard_with_feedback(
     return dashboard
 
 
-def demo() -> None:
+def demo(
+    use_live_data: bool = True,
+) -> None:
     """Run the operator dashboard demonstration.
 
     Collects all dashboard metrics, displays them with rich formatting,
     generates the dashboard JSON file, records trend snapshot, displays
-    alert thresholds, and shows the fatigue gauge.
+    alert thresholds, mission panel, dream findings, evidence panel,
+    and shows the fatigue gauge.
+
+    Args:
+        use_live_data: When True, attempt live data from InstinctLifecycle.
+                       When False, use simulated data for all panels.
     """
-    dashboard = build_dashboard_with_trend(record=True)
+    dashboard = build_dashboard_with_trend(record=True, swarm_observer=None)
     display_dashboard(dashboard)
     display_dashboard_with_alerts(dashboard)
+
+    # ── New operator panels ────────────────────────────────────────────────
+    display_mission_panel(use_live_data=use_live_data)
+    display_dream_findings_panel(use_live_data=use_live_data)
+    display_evidence_panel(use_live_data=use_live_data)
 
     # Display fatigue gauge with demo data
     from hlf_mcp.gallery.telemetry import FeedbackCollector, create_default_feedback_collector
@@ -947,7 +1580,7 @@ def demo() -> None:
     )
 
     # Generate the JSON data file
-    json_output = generate_dashboard_json()
+    json_output = generate_dashboard_json(swarm_observer=None)
     if _RICH:
         Console().print(f"\n[dim]Dashboard JSON written to docs/hlf-dashboard-data.json[/dim]")
         Console().print(f"[dim]Trend snapshots recorded: {len(get_trend_history())}[/dim]")

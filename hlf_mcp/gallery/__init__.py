@@ -25,6 +25,7 @@ __all__ = [
     "AlertFeedback",
     "FeedbackStatistics",
     "create_default_feedback_collector",
+    "EvidenceSummaryRenderer",
     "compute_alert_threshold",
     "compute_alert_color",
     "compute_pillar_alerts",
@@ -38,6 +39,13 @@ __all__ = [
     "compute_feedback_metrics",
     "render_fatigue_gauge",
     "display_fatigue_gauge",
+    "render_mission_panel",
+    "display_mission_panel",
+    "render_dream_findings_panel",
+    "display_dream_findings_panel",
+    "render_evidence_panel",
+    "display_evidence_panel",
+    "export_evidence_report",
     "operator_cli_main",
     "operator_cli_build_parser",
 ]
@@ -62,7 +70,15 @@ from hlf_mcp.gallery.operator_dashboard import (
     compute_feedback_metrics,
     render_fatigue_gauge,
     display_fatigue_gauge,
+    render_mission_panel,
+    display_mission_panel,
+    render_dream_findings_panel,
+    display_dream_findings_panel,
+    render_evidence_panel,
+    display_evidence_panel,
+    export_evidence_report,
 )
+from hlf_mcp.gallery.evidence_renderer import EvidenceSummaryRenderer
 from hlf_mcp.gallery.telemetry import (
     TelemetryCollector,
     TelemetrySnapshot,

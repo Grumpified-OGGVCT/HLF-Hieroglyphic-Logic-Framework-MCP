@@ -1263,6 +1263,177 @@ class TestFeedbackCLIParsing:
         args = parser.parse_args(["feedback", "ack", "alert-1"])
         assert args.operator == "cli-operator"
 
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# New CLI Subcommand Parsing Tests
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestNewCLISubcommands:
+    """Tests for evidence, missions, and export subcommands."""
+
+    def test_evidence_subcommand_in_parser(self) -> None:
+        """Parser accepts 'evidence' as a subcommand."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["evidence"])
+        assert args.subcommand == "evidence"
+        assert args.evidence_type == "all"
+        assert args.limit == 10
+
+    def test_evidence_with_type_and_limit(self) -> None:
+        """'evidence' accepts --type and --limit flags."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["evidence", "--type", "contract", "--limit", "5"])
+        assert args.evidence_type == "contract"
+        assert args.limit == 5
+
+    def test_missions_subcommand_in_parser(self) -> None:
+        """Parser accepts 'missions' as a subcommand."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["missions"])
+        assert args.subcommand == "missions"
+        assert args.status == "all"
+        assert args.limit == 20
+
+    def test_missions_with_status_filter(self) -> None:
+        """'missions' accepts --status and --limit flags."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["missions", "--status", "passed", "--limit", "5"])
+        assert args.status == "passed"
+        assert args.limit == 5
+
+    def test_export_subcommand_in_parser(self) -> None:
+        """Parser accepts 'export' as a subcommand."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["export"])
+        assert args.subcommand == "export"
+        assert args.export_format == "markdown"
+        assert args.export_output is None
+
+    def test_export_with_format_and_output(self) -> None:
+        """'export' accepts --format and --output flags."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["export", "--format", "json", "--output", "report.json"])
+        assert args.export_format == "json"
+        assert args.export_output == "report.json"
+
+    def test_export_format_choices(self) -> None:
+        """'export --format' only accepts markdown, json, or text."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["export", "--format", "text"])
+        assert args.export_format == "text"
+
+    def test_evidence_type_choices(self) -> None:
+        """'evidence --type' only accepts contract, media, findings, or all."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["evidence", "--type", "media"])
+        assert args.evidence_type == "media"
+
+    def test_missions_status_choices(self) -> None:
+        """'missions --status' only accepts valid status values."""
+        from hlf_mcp.gallery.operator_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["missions", "--status", "active"])
+        assert args.status == "active"
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# CLI Subcommand Routing Tests
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestCLISubcommandRouting:
+    """Tests for CLI main() routing of new subcommands."""
+
+    def test_evidence_routes_to_handler(self) -> None:
+        """'evidence' subcommand exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["evidence"])
+        assert exit_code == 0
+
+    def test_missions_routes_to_handler(self) -> None:
+        """'missions' subcommand exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["missions"])
+        assert exit_code == 0
+
+    def test_export_routes_to_handler(self) -> None:
+        """'export' subcommand exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["export", "--format", "markdown"])
+        assert exit_code == 0
+
+    def test_export_json_routes_to_handler(self) -> None:
+        """'export --format json' subcommand exits with code 0."""
+        from hlf_mcp.gallery.operator_cli import main
+        exit_code = _capture_output(main, ["export", "--format", "json"])
+        assert exit_code == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# Gallery __init__ Export Tests
+# ══════════════════════════════════════════════════════════════════════════════════
+
+
+class TestGalleryInitExports:
+    """Tests for gallery __init__.py exports of new components."""
+
+    def test_evidence_summary_renderer_exported(self) -> None:
+        """EvidenceSummaryRenderer is exported from gallery __init__."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "EvidenceSummaryRenderer")
+        assert hlf_mcp.gallery.EvidenceSummaryRenderer is not None
+
+    def test_render_mission_panel_exported(self) -> None:
+        """render_mission_panel is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "render_mission_panel")
+        assert callable(hlf_mcp.gallery.render_mission_panel)
+
+    def test_display_mission_panel_exported(self) -> None:
+        """display_mission_panel is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "display_mission_panel")
+        assert callable(hlf_mcp.gallery.display_mission_panel)
+
+    def test_render_dream_findings_panel_exported(self) -> None:
+        """render_dream_findings_panel is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "render_dream_findings_panel")
+        assert callable(hlf_mcp.gallery.render_dream_findings_panel)
+
+    def test_display_dream_findings_panel_exported(self) -> None:
+        """display_dream_findings_panel is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "display_dream_findings_panel")
+        assert callable(hlf_mcp.gallery.display_dream_findings_panel)
+
+    def test_render_evidence_panel_exported(self) -> None:
+        """render_evidence_panel is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "render_evidence_panel")
+        assert callable(hlf_mcp.gallery.render_evidence_panel)
+
+    def test_display_evidence_panel_exported(self) -> None:
+        """display_evidence_panel is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "display_evidence_panel")
+        assert callable(hlf_mcp.gallery.display_evidence_panel)
+
+    def test_export_evidence_report_exported(self) -> None:
+        """export_evidence_report is exported from gallery."""
+        import hlf_mcp.gallery
+        assert hasattr(hlf_mcp.gallery, "export_evidence_report")
+        assert callable(hlf_mcp.gallery.export_evidence_report)
+
     def test_feedback_default_severity(self) -> None:
         """Default severity is 50."""
         from hlf_mcp.gallery.operator_cli import build_parser

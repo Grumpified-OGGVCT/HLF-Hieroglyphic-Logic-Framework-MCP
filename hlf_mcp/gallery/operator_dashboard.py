@@ -2042,7 +2042,18 @@ def compute_formal_verification_pillar_score() -> dict[str, Any]:
         "score_pct": weighted_score,
         "components": components,
         "status": status,
+        "proof_surface": _get_proof_surface_text(),
     }
+
+
+def _get_proof_surface_text() -> str:
+    """Lazily load the ASCII proof surface text for the dashboard."""
+    try:
+        from hlf_mcp.hlf.ascii_proof_surface import AsciiProofSurface
+        surface = AsciiProofSurface()
+        return surface.compact()
+    except Exception:
+        return "Proof surface unavailable."
 
 
 def compute_gallery_operator_pillar_score(

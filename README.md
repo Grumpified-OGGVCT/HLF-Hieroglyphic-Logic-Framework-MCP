@@ -1837,7 +1837,8 @@ Reviewer note:
 
 ### Phase 3 — Universal Usability 🌐 (planned)
 
-- [ ] **ASCII surface**: round-trip `IF risk > 0 THEN [RESULT]` ↔ `⊎ risk > 0 ⇒ [RESULT]`
+- [x] **ASCII surface**: round-trip `IF risk > 0 THEN [RESULT]` ↔ `⊎ risk > 0 ⇒ [RESULT]` (`hlf_mcp/hlf/ascii_surface.py`)
+- [x] **ASCII proof lattice**: terminal-renderable formal verification proof surface with operator family coverage, proof depth, regression status, and Z3 solver indicators (`hlf_mcp/hlf/ascii_proof_surface.py`)
 - [ ] **WASM target**: compile HLF programs to WebAssembly for browser/edge execution
 - [ ] **OCI registry push**: complete `OCIClient.push()` for module publishing
 - [x] **Z3 formal verification**: `z3_verify` host function — 12/12 operator families covered (94.2%)

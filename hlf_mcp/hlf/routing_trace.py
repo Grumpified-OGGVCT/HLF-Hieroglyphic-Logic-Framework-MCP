@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -52,6 +55,20 @@ class RouteTraceRecord:
     lane_candidate_summary: dict[str, Any] = field(default_factory=dict)
     execution_admission: dict[str, Any] = field(default_factory=dict)
     operator_summary: str = ""
+    fail_closed: bool = False
+
+    def __post_init__(self) -> None:
+        """Soft contract validation — logs warnings for contract violations."""
+        # Deferred import to avoid circular dependency at module level
+        from hlf_mcp.hlf.routing_contracts import validate_route_trace
+
+        violations = validate_route_trace(self)
+        if violations:
+            logger.warning(
+                "RouteTraceRecord contract violations (%d): %s",
+                len(violations),
+                "; ".join(violations),
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -65,6 +82,7 @@ class RouteTraceRecord:
             "lane_candidate_summary": dict(self.lane_candidate_summary),
             "execution_admission": dict(self.execution_admission),
             "operator_summary": self.operator_summary,
+            "fail_closed": self.fail_closed,
         }
 
 

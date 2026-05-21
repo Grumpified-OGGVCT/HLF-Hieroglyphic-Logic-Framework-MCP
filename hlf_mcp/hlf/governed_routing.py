@@ -77,6 +77,31 @@ class GovernedRouteVerdict:
         }
 
 
+def build_fail_closed_verdict(
+    reason: str = "policy_or_evidence_missing",
+) -> GovernedRouteVerdict:
+    """Return a deny verdict for fail-closed routing.
+
+    Used when evidence or policy basis is required but absent,
+    ensuring the routing fabric fails safe rather than silently
+    promoting an unvalidated route.
+    """
+    return GovernedRouteVerdict(
+        allowed=False,
+        decision="deny",
+        governance_mode="fail_closed",
+        review_required=True,
+        selected_lane="",
+        primary_model="",
+        fallback_model="",
+        align_action="DENY",
+        rationale=[f"Fail-closed: {reason}"],
+        policy_constraints=[
+            "Fail-closed verdict issued due to missing evidence or policy basis."
+        ],
+    )
+
+
 def build_governed_route(
     *,
     workload: str,
@@ -89,6 +114,10 @@ def build_governed_route(
     fallback_recommendation: dict[str, Any],
     selected_lane: str = "retrieval",
     lane_candidate_summary: dict[str, Any] | None = None,
+    benchmark_evidence: dict[str, Any] | None = None,
+    policy_basis: dict[str, Any] | None = None,
+    require_evidence: bool = False,
+    require_policy_basis: bool = False,
 ) -> GovernedRouteVerdict:
     primary_model = str(embedding_recommendation.get("model", ""))
     fallback_model = str(fallback_recommendation.get("model", ""))
@@ -98,6 +127,16 @@ def build_governed_route(
     gpu_vram_gb = float(hardware_summary.get("gpu_vram_gb") or 0.0)
     ollama_available = bool(runtime_status.get("ollama_available", False))
     normalized_trust_state = trust_state.strip().lower() or "trusted"
+
+    # ── Fail-closed gating (evidence / policy basis) ─────────────────────
+    if require_evidence and not benchmark_evidence:
+        return build_fail_closed_verdict(
+            "require_evidence=True but benchmark_evidence is empty or absent"
+        )
+    if require_policy_basis and not policy_basis:
+        return build_fail_closed_verdict(
+            "require_policy_basis=True but policy_basis is empty or absent"
+        )
 
     rationale: list[str] = [
         "Routing stays deterministic-first and audit-bound even when semantic retrieval is available.",

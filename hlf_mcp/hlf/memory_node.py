@@ -615,11 +615,12 @@ class EvidenceContract:
     collection_metadata: dict[str, Any] | None = None
     workflow_run_url: str = ""
 
-    _VALID_TRUST_TIERS = {"verified", "validated", "trusted", "untrusted", "local"}
+    _VALID_TRUST_TIERS = {"verified", "validated", "trusted", "untrusted", "local", "normalized"}
     _VALID_PROVENANCE = {"evidence-backed", "declared", "heuristic", "none"}
-    _VALID_AUTHORITIES = {"canonical", "derived", "advisory", "unverified"}
-    _VALID_ARTIFACT_FORMS = {"test-artifact", "governance-report", "memory-node", "specification", "fixture"}
-    _VALID_MEMORY_STRATA = {"working", "archive", "cache"}
+    _VALID_AUTHORITIES = {"canonical", "derived", "advisory", "unverified", "external", "draft"}
+    _VALID_ARTIFACT_FORMS = {"test-artifact", "governance-report", "memory-node", "specification", "fixture",
+                             "raw_intake", "canonical_knowledge"}
+    _VALID_MEMORY_STRATA = {"working", "archive", "cache", "episodic", "semantic", "provenance"}
     _VALID_STORAGE_TIERS = {"hot", "warm", "cold"}
 
     def validate(self) -> tuple[bool, list[str]]:
@@ -714,6 +715,139 @@ class EvidenceContract:
             storage_tier=data.get("storage_tier", "hot"),
             collection_metadata=data.get("collection_metadata"),
             workflow_run_url=data.get("workflow_run_url", ""),
+        )
+
+    @classmethod
+    def normalize(cls, data: dict[str, Any] | None) -> "EvidenceContract":
+        """Normalize a raw evidence dict from the RAG/storage layer into a valid EvidenceContract.
+
+        Handles the divergences between rag/memory.py output format and EvidenceContract fields:
+        - ``freshness_status`` / ``superseded`` (rag) vs ``fresh_until`` / ``supersedes_sha256`` (contract)
+        - ``revoked`` / ``tombstoned`` as int (SQLite) vs bool
+        - ``source_lineage`` nested dict → flat ``source_file`` / ``collector`` / ``collected_at``
+        - Extra storage-layer fields go into ``collection_metadata``
+        """
+        if not data:
+            return cls()
+
+        # ── Core identity ──────────────────────────────────────────────────
+        sha256 = str(data.get("sha256", "") or data.get("content_hash", "") or "").strip()
+
+        # ── Boolean coercion (SQLite uses INTEGER 0/1) ─────────────────────
+        revoked = bool(data.get("revoked", False))
+        tombstoned = bool(data.get("tombstoned", False))
+
+        # ── Trust tier ─────────────────────────────────────────────────────
+        trust_tier = str(data.get("trust_tier") or "trusted").strip().lower()
+        if trust_tier not in cls._VALID_TRUST_TIERS:
+            trust_tier = "trusted"
+
+        # ── Provenance ─────────────────────────────────────────────────────
+        provenance_grade = str(data.get("provenance_grade") or "declared").strip().lower()
+        if provenance_grade not in cls._VALID_PROVENANCE:
+            provenance_grade = "declared"
+
+        # ── Authority ──────────────────────────────────────────────────────
+        source_authority_label = str(
+            data.get("source_authority_label") or "canonical"
+        ).strip().lower()
+        if source_authority_label not in cls._VALID_AUTHORITIES:
+            source_authority_label = "canonical"
+
+        # ── Source lineage (flat or nested) ────────────────────────────────
+        source_lineage = data.get("source_lineage") if isinstance(data.get("source_lineage"), dict) else {}
+        source_file = str(
+            data.get("source_file") or data.get("source_path")
+            or source_lineage.get("source_file") or source_lineage.get("source_path") or ""
+        )
+        collector = str(
+            data.get("collector") or source_lineage.get("collector") or ""
+        )
+        collected_at = str(
+            data.get("collected_at")
+            or source_lineage.get("collected_at") or ""
+        )
+        source_capture = data.get("source_capture")
+        if isinstance(source_capture, dict) and not collected_at:
+            collected_at = str(source_capture.get("captured_at", ""))
+
+        # ── Freshness ──────────────────────────────────────────────────────
+        fresh_until = data.get("fresh_until") or None
+
+        # ── Supersession ────────────────────────────────────────────────────
+        supersedes_sha256 = str(
+            data.get("supersedes_sha256") or data.get("superseded_by_sha256") or ""
+        ).strip()
+        if supersedes_sha256 and not re.fullmatch(r"[0-9a-fA-F]{64}", supersedes_sha256):
+            supersedes_sha256 = ""
+
+        # ── Artifact form ──────────────────────────────────────────────────
+        artifact_form = str(data.get("artifact_form") or "raw_intake").strip().lower()
+        if artifact_form not in cls._VALID_ARTIFACT_FORMS:
+            artifact_form = "raw_intake"
+
+        # ── Memory stratum ─────────────────────────────────────────────────
+        memory_stratum = str(data.get("memory_stratum") or "working").strip().lower()
+        if memory_stratum not in cls._VALID_MEMORY_STRATA:
+            memory_stratum = "working"
+
+        # ── Storage tier ───────────────────────────────────────────────────
+        storage_tier = str(data.get("storage_tier") or "hot").strip().lower()
+        if storage_tier not in cls._VALID_STORAGE_TIERS:
+            storage_tier = "hot"
+
+        # ── Workflow URL ───────────────────────────────────────────────────
+        workflow_run_url = str(data.get("workflow_run_url") or "")
+
+        # ── Confidence ─────────────────────────────────────────────────────
+        try:
+            confidence = float(data.get("confidence", 0.5))
+        except (TypeError, ValueError):
+            confidence = 0.5
+        confidence = max(0.0, min(1.0, confidence))
+
+        # ── Collection metadata (capture excess storage-layer fields) ───────
+        known_keys = {
+            "sha256", "content_hash", "confidence", "trust_tier", "provenance_grade",
+            "source_authority_label", "source_file", "source_path", "collector",
+            "collected_at", "fresh_until", "freshness_status", "revoked", "tombstoned",
+            "supersedes_sha256", "superseded", "artifact_form", "memory_stratum",
+            "storage_tier", "workflow_run_url", "source_lineage", "source_capture",
+            "operator_summary", "operator_identity", "admission_decision",
+            "salience_score", "promotion_eligible", "state", "topic", "content",
+            "provenance", "tags", "entry_kind", "domain", "solution_kind",
+            "evaluation", "evaluation_id", "evaluation_authority",
+            "content_hash_valid", "integrity_status", "supersession_chain_length",
+            "pointer", "pointer_alias", "artifact_contract", "artifact_kind",
+            "canonicalized", "source_lineage_present", "source_lineage_hash",
+        }
+        excess = {k: v for k, v in data.items() if k not in known_keys}
+        collection_metadata = data.get("collection_metadata")
+        if isinstance(collection_metadata, dict) and collection_metadata:
+            excess = {**collection_metadata, **excess}
+        elif not excess:
+            collection_metadata = None
+        else:
+            collection_metadata = excess
+
+        return cls(
+            sha256=sha256,
+            confidence=confidence,
+            trust_tier=trust_tier,
+            provenance_grade=provenance_grade,
+            source_authority_label=source_authority_label,
+            source_file=source_file,
+            collector=collector,
+            collected_at=collected_at,
+            fresh_until=fresh_until,
+            revoked=revoked,
+            tombstoned=tombstoned,
+            supersedes_sha256=supersedes_sha256,
+            artifact_form=artifact_form,
+            memory_stratum=memory_stratum,
+            storage_tier=storage_tier,
+            collection_metadata=collection_metadata,
+            workflow_run_url=workflow_run_url,
         )
 
 
@@ -812,11 +946,16 @@ def check_evidence_freshness(
     superseded = evidence_row.get("superseded_by_sha256", "")
     revoked = evidence_row.get("revoked", False)
     tombstoned = evidence_row.get("tombstoned", False)
+    content_hash_valid = evidence_row.get("content_hash_valid", True)
 
     # Mandatory purposes reject stale, revoked, tombstoned, superseded
     mandatory_purposes = {"execution_admission", "governance_vote", "audit_entry"}
     overridable_purposes = {"default", "memory_recall", "dream_cycle"}
     unrestricted_purposes = {"benchmark", "dream_proposal", "media_synthesis"}
+
+    # Tampered content hash is always hard-rejected regardless of purpose
+    if content_hash_valid is False:
+        return FreshnessVerdict(False, "tampered", ["Content hash does not match — evidence may be tampered"])
 
     if purpose in unrestricted_purposes:
         reasons = []
@@ -892,5 +1031,5 @@ def resolve_supersession_chain(
         "chain": chain,
         "length": len(chain),
         "cycle_detected": False,
-        "terminal": current if current else None,
+        "terminal": chain[-1] if chain else (sha256 if sha256 else None),
     }

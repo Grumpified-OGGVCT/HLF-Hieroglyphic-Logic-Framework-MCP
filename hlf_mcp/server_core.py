@@ -744,6 +744,118 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "total_snapshots": 0,
             }
 
+    @mcp.tool()
+    def hlf_hitl_list_pending() -> dict[str, Any]:
+        """List all pending HITL (Human-in-the-Loop) approval requests.
+
+        Returns all capsules awaiting operator approval, including their
+        approval tokens, intent summaries, and timeout status.
+        """
+        try:
+            from hlf_mcp.hlf.hitl_gate import HITLGate
+            gate = HITLGate.get_instance()
+            pending = gate.list_pending()
+            return {
+                "status": "ok",
+                "count": len(pending),
+                "pending": pending,
+            }
+        except Exception as exc:
+            return {"status": "error", "error": str(exc), "count": 0, "pending": []}
+
+    @mcp.tool()
+    def hlf_hitl_approve(
+        capsule_id: str,
+        operator_id: str = "mcp-operator",
+        approval_token: str = "",
+    ) -> dict[str, Any]:
+        """Approve a pending HITL capsule approval request.
+
+        Args:
+            capsule_id: The capsule ID to approve.
+            operator_id: Identifier for the approving operator.
+            approval_token: Optional approval token for verification.
+
+        Returns the updated approval request status.
+        """
+        from hlf_mcp.hlf.hitl_gate import HITLGate, ApprovalRequest
+        gate = HITLGate.get_instance()
+
+        existing = gate.get_status(capsule_id)
+        if existing is None:
+            return {"status": "error", "error": f"No pending approval for capsule {capsule_id}"}
+        if existing.get("status") != "AWAITING_HUMAN_APPROVAL":
+            return {"status": "error", "error": f"Capsule {capsule_id} is not awaiting approval (status: {existing.get('status')})"}
+
+        if approval_token:
+            request = ApprovalRequest.from_dict(existing)
+            expected_token = gate.build_approval_token(request)
+            if approval_token != expected_token:
+                return {"status": "error", "error": "Approval token mismatch"}
+
+        try:
+            updated = gate.approve(capsule_id, operator_id)
+            return {
+                "status": "ok",
+                "action": "approved",
+                "capsule_id": capsule_id,
+                "approved_by": operator_id,
+                "approved_at": updated.approved_at,
+            }
+        except FileNotFoundError:
+            return {"status": "error", "error": f"No pending approval for capsule {capsule_id}"}
+
+    @mcp.tool()
+    def hlf_hitl_reject(
+        capsule_id: str,
+        reason: str = "",
+        operator_id: str = "mcp-operator",
+    ) -> dict[str, Any]:
+        """Reject a pending HITL capsule approval request.
+
+        Args:
+            capsule_id: The capsule ID to reject.
+            reason: Human-readable reason for rejection.
+            operator_id: Identifier for the rejecting operator.
+
+        Returns the updated approval request status.
+        """
+        from hlf_mcp.hlf.hitl_gate import HITLGate
+        gate = HITLGate.get_instance()
+
+        existing = gate.get_status(capsule_id)
+        if existing is None:
+            return {"status": "error", "error": f"No pending approval for capsule {capsule_id}"}
+
+        try:
+            updated = gate.reject(capsule_id, reason or "Rejected by operator", operator_id)
+            return {
+                "status": "ok",
+                "action": "rejected",
+                "capsule_id": capsule_id,
+                "rejected_by": operator_id,
+                "reason": updated.rejection_reason,
+                "rejected_at": updated.approved_at,
+            }
+        except FileNotFoundError:
+            return {"status": "error", "error": f"No pending approval for capsule {capsule_id}"}
+
+    @mcp.tool()
+    def hlf_hitl_status(capsule_id: str) -> dict[str, Any]:
+        """Check the HITL approval status of a specific capsule.
+
+        Args:
+            capsule_id: The capsule ID to check.
+
+        Returns the current approval request status, or None if not found.
+        """
+        from hlf_mcp.hlf.hitl_gate import HITLGate
+        gate = HITLGate.get_instance()
+        status = gate.get_status(capsule_id)
+        if status is None:
+            return {"status": "not_found", "capsule_id": capsule_id}
+        return {"status": "ok", "capsule_id": capsule_id, "hitl_status": status}
+
     return {
         "hlf_compile": hlf_compile,
         "hlf_format": hlf_format,
@@ -767,4 +879,8 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "janus_archive": janus_archive,
         "hlf_latent_recursive_infer": hlf_latent_recursive_infer,
         "hlf_resource_report": hlf_resource_report,
+        "hlf_hitl_list_pending": hlf_hitl_list_pending,
+        "hlf_hitl_approve": hlf_hitl_approve,
+        "hlf_hitl_reject": hlf_hitl_reject,
+        "hlf_hitl_status": hlf_hitl_status,
     }

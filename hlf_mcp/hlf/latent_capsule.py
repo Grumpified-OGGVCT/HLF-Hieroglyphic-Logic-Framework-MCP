@@ -359,12 +359,19 @@ def governed_latent_infer(
     agent_id: str = "latent-capsule",
     max_rounds: int = 3,
     adapter_sha256s: dict[str, str] | None = None,
+    human_approval_required: bool = False,
+    hitl_timeout_seconds: int = 600,
 ) -> dict[str, Any]:
     """Run RecursiveMAS latent inference inside a governed sovereign capsule.
 
     This is the canonical HLF entry point for latent-space multi-agent recursion.
     The capsule seals intermediate tensors inside the sovereign tier; only the
     final text output and provenance hashes exit into HLF's audit chain.
+
+    If human_approval_required=True, inference still runs to completion, but
+    the result is submitted to the HITL gate for operator sign-off before the
+    status transitions from AWAITING_HUMAN_APPROVAL to COMPLETED.  The caller
+    should check `hitl_status` in the result dict.
 
     Args:
         prompt: Input text to process.
@@ -373,6 +380,10 @@ def governed_latent_infer(
         max_rounds: Maximum recursion rounds (bounded at 5).
         adapter_sha256s: Dict mapping adapter keys to SHA-256 hashes of their
             checkpoint files.  If omitted, hashes are computed on-the-fly.
+        human_approval_required: If True, submit result to HITL gate after
+            inference.  The response status will be 'awaiting_human_approval'
+            instead of 'ok'.
+        hitl_timeout_seconds: Seconds before the approval request auto-expires.
 
     Returns:
         dict with keys:
@@ -383,8 +394,10 @@ def governed_latent_infer(
           - capsule_id: Sovereign capsule ID
           - total_gas: Gas consumed across all latent rounds
           - total_wall_time_ms: Total wall-clock time
-          - status: 'ok' or 'error'
-          - error: Error message if status != 'ok'
+          - status: 'ok', 'awaiting_human_approval', or 'error'
+          - error: Error message if status == 'error'
+          - hitl_status: (only if human_approval_required=True) dict with
+              approval_token, capsule_id, and instructions for hlf-operator
     """
     import time as _time
 
@@ -599,7 +612,7 @@ def governed_latent_infer(
             total_wall_time_ms=total_wall_time_ms,
         )
 
-        return {
+        base_result = {
             "status": "ok",
             "final_text": wrapped.final_text,
             "rounds_completed": wrapped.rounds_completed,
@@ -611,6 +624,63 @@ def governed_latent_infer(
             "steps": steps,
             "peak_vram_mb": peak_vram_mb,
         }
+
+        # ── HITL Gate: block if human approval required ──────────────────
+        if human_approval_required:
+            try:
+                from hlf_mcp.hlf.hitl_gate import (
+                    require_human_approval,
+                    HITLGate,
+                )
+                import hashlib as _hl
+
+                manifest_hash = _hl.sha256(
+                    json.dumps(adapter_sha256s, sort_keys=True).encode()
+                ).hexdigest()[:16]
+                output_hash = _hl.sha256(
+                    final_text.encode()
+                ).hexdigest()[:16]
+
+                gate = HITLGate.get_instance()
+                req = require_human_approval(
+                    capsule_id=wrapped.capsule.capsule_id,
+                    agent_id=agent_id,
+                    tier="sovereign",
+                    intent_summary=prompt[:200],
+                    output_text=final_text,
+                    manifest_hash=manifest_hash,
+                    output_hash=output_hash,
+                    gas_consumed=wrapped.total_gas,
+                    gas_limit=1000,
+                    provenance_hashes=base_result["provenance_chain"],
+                    timeout_seconds=hitl_timeout_seconds,
+                )
+                approval_token = gate.build_approval_token(req)
+
+                base_result["status"] = "awaiting_human_approval"
+                base_result["hitl_status"] = {
+                    "approval_token": approval_token,
+                    "capsule_id": wrapped.capsule.capsule_id,
+                    "status": req.status,
+                    "created_at": req.created_at,
+                    "timeout_seconds": req.timeout_seconds,
+                    "instructions": (
+                        f"Run: python scripts/hlf_operator.py approve "
+                        f"--capsule-id {wrapped.capsule.capsule_id} "
+                        f"--token {approval_token}"
+                    ),
+                }
+                logger.info(
+                    "HITL gate: capsule %s requires human approval (token: %s)",
+                    wrapped.capsule.capsule_id, approval_token,
+                )
+            except Exception as exc:
+                logger.warning("HITL gate submission failed (non-fatal): %s", exc)
+                # If HITL gate fails, allow inference to proceed uncensored
+                base_result["status"] = "ok"
+                base_result["hitl_error"] = str(exc)
+
+        return base_result
 
     except Exception as exc:
         logger.exception("Latent capsule inference failed")

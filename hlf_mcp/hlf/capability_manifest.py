@@ -197,6 +197,10 @@ class CapabilityManifest:
     trust_tier: str = "advisory"  # minimum tier required to execute
     compiled_at: str = ""  # ISO 8601 timestamp
     compiler_version: str = HLF_COMPILER_VERSION
+    model_versions: dict[str, str] = field(default_factory=dict)
+    # ^ model_name → expected_sha256 digest.
+    # Populated at manifest time so the runtime can verify that the locally
+    # installed model blob matches the version the program was compiled against.
 
     def __post_init__(self) -> None:
         if not self.compiled_at:
@@ -220,6 +224,7 @@ class CapabilityManifest:
             "trust_tier": self.trust_tier,
             "compiled_at": self.compiled_at,
             "compiler_version": self.compiler_version,
+            "model_versions": dict(self.model_versions),
         }
 
     @classmethod
@@ -275,6 +280,7 @@ class CapabilityManifest:
             trust_tier=str(data.get("trust_tier", "advisory")),
             compiled_at=str(data.get("compiled_at", "")),
             compiler_version=str(data.get("compiler_version", HLF_COMPILER_VERSION)),
+            model_versions=dict(data.get("model_versions", {})),
         )
 
     # ── Capability gate ─────────────────────────────────────────────────────

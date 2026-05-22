@@ -30,7 +30,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from hlf_mcp.hlf.capsules import IntentCapsule, sovereign_capsule
+from hlf_mcp.hlf.capsules import CapsuleViolation, IntentCapsule, sovereign_capsule
 
 logger = logging.getLogger(__name__)
 
@@ -361,6 +361,7 @@ def governed_latent_infer(
     adapter_sha256s: dict[str, str] | None = None,
     human_approval_required: bool = False,
     hitl_timeout_seconds: int = 600,
+    model_versions: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run RecursiveMAS latent inference inside a governed sovereign capsule.
 
@@ -373,6 +374,10 @@ def governed_latent_infer(
     status transitions from AWAITING_HUMAN_APPROVAL to COMPLETED.  The caller
     should check `hitl_status` in the result dict.
 
+    If model_versions is provided (dict of model_name → expected_sha256), the
+    inference engine verifies that each declared model matches the live Ollama
+    digest before loading.  Mismatch = CapsuleViolation, fail closed.
+
     Args:
         prompt: Input text to process.
         session_config: RecursiveSessionConfig or dict with config keys.
@@ -384,6 +389,8 @@ def governed_latent_infer(
             inference.  The response status will be 'awaiting_human_approval'
             instead of 'ok'.
         hitl_timeout_seconds: Seconds before the approval request auto-expires.
+        model_versions: Optional dict of model_name → expected_sha256 digest.
+            If provided, runs pre-flight verification against live Ollama scan.
 
     Returns:
         dict with keys:
@@ -394,10 +401,12 @@ def governed_latent_infer(
           - capsule_id: Sovereign capsule ID
           - total_gas: Gas consumed across all latent rounds
           - total_wall_time_ms: Total wall-clock time
-          - status: 'ok', 'awaiting_human_approval', or 'error'
-          - error: Error message if status == 'error'
+          - status: 'ok', 'awaiting_human_approval', 'error', or 'capsule_violation'
+          - error: Error message if status in ('error', 'capsule_violation')
           - hitl_status: (only if human_approval_required=True) dict with
               approval_token, capsule_id, and instructions for hlf-operator
+          - model_version_results: (only if model_versions was checked) list of
+              ModelVersionResult dicts
     """
     import time as _time
 
@@ -521,6 +530,40 @@ def governed_latent_infer(
                     adapter_sha256s[key] = "unknown"
 
     capability_digest = capsule.compute_capability_digest(adapter_sha256s)
+
+    # ── Model version verification (pre-flight) ────────────────────────
+    model_version_results: list[dict[str, Any]] = []
+    if model_versions:
+        try:
+            from hlf_mcp.hlf.model_version import verify_model_versions
+            from hlf_mcp.hlf.capability_manifest import CapabilityManifest
+            _manifest = CapabilityManifest(
+                program_id=capsule.capsule.capsule_id,
+                model_versions=model_versions,
+            )
+            _results = verify_model_versions(
+                _manifest,
+                scanner=None,  # Use lazy scan via verify_model_versions
+            )
+            model_version_results = [r.to_dict() for r in _results]
+            logger.info(
+                "Model version check passed: %d model(s) verified",
+                len(model_version_results),
+            )
+        except CapsuleViolation as cv:
+            logger.error("Model version check FAILED: %s", cv)
+            return {
+                "status": "capsule_violation",
+                "error": str(cv),
+                "final_text": "",
+                "rounds_completed": 0,
+                "attestations": [],
+                "provenance_chain": [],
+                "capsule_id": capsule.capsule.capsule_id,
+                "total_gas": 0,
+                "total_wall_time_ms": 0,
+                "model_version_results": model_version_results,
+            }
 
     # ── Run the latent inference ──────────────────────────────────────
     t0 = _time.time()
@@ -648,6 +691,8 @@ def governed_latent_infer(
             "steps": steps,
             "peak_vram_mb": peak_vram_mb,
         }
+        if model_version_results:
+            base_result["model_version_results"] = model_version_results
         if oom_details:
             base_result["oom_details"] = oom_details
 

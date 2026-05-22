@@ -52,6 +52,7 @@ class ModelRecord:
     family: str = ""
     quantization: str = ""
     parameters: str = ""
+    digest: str = ""           # SHA-256 digest from Ollama (cryptographic identity)
     last_seen: float = 0.0
     first_seen: float = 0.0
 
@@ -62,6 +63,7 @@ class ModelRecord:
             "family": self.family,
             "quantization": self.quantization,
             "parameters": self.parameters,
+            "digest": self.digest,
             "last_seen": self.last_seen,
             "first_seen": self.first_seen,
         }
@@ -74,6 +76,7 @@ class ModelRecord:
             family=data.get("family", ""),
             quantization=data.get("quantization", ""),
             parameters=data.get("parameters", ""),
+            digest=data.get("digest", ""),
             last_seen=data.get("last_seen", 0.0),
             first_seen=data.get("first_seen", 0.0),
         )
@@ -157,6 +160,7 @@ class ModelScanner:
                 params = details.get("parameter_size", "")
 
                 # Try to get richer details from /api/show
+                show_data: dict[str, Any] = {}
                 try:
                     show_url = f"{self._endpoint}/api/show"
                     show_resp = httpx.post(
@@ -190,12 +194,22 @@ class ModelScanner:
                 existing = self._last_scan_models.get(model_name)
                 first_seen = existing.first_seen if existing else now
 
+                # Extract digest from tag listing (available in recent Ollama versions)
+                model_digest = raw.get("digest", "")
+
+                # /api/show may also return a digest — prefer it if available
+                if show_data:
+                    show_digest = show_data.get("digest", "")
+                    if show_digest:
+                        model_digest = show_digest
+
                 record = ModelRecord(
                     name=model_name,
                     size_bytes=size_bytes,
                     family=family,
                     quantization=quant,
                     parameters=params,
+                    digest=model_digest,
                     last_seen=now,
                     first_seen=first_seen,
                 )

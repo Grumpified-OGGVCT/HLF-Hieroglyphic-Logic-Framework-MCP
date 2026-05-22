@@ -17,13 +17,19 @@ from hlf_mcp.weekly_artifacts import (
 
 
 def print_payload(payload: object, as_json: bool) -> None:
+    import sys
     if as_json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        text = json.dumps(payload, indent=2, ensure_ascii=False)
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        print(text)
         return
     if isinstance(payload, str):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
         print(payload)
         return
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    text = json.dumps(payload, indent=2, ensure_ascii=False)
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    print(text)
 
 
 def _comma_join(values: object, *, default: str = "none") -> str:

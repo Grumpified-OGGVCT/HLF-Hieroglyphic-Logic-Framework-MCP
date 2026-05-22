@@ -97,6 +97,72 @@ class EscalationAttempt:
 # ── orchestrator ─────────────────────────────────────────────────────────────
 
 
+def _resolve_checkpoint_base(
+    cache_root: str,
+    repo_name: str,
+    fallback_hf_id: str = "",
+    *,
+    adapter_file: str = "",
+) -> str:
+    """Resolve a RecursiveMAS checkpoint path from the HF cache.
+
+    Searches the huggingface cache for a downloaded checkpoint snapshot.
+    If found, returns the snapshot path (or specific adapter file within it).
+    Falls back to the HF hub ID if the checkpoint isn't cached locally.
+
+    For model loading, returns the _plain_model_view subdirectory (which
+    excludes adapter files that confuse PEFT loading).  For adapter files,
+    returns the path within the main snapshot directory.
+
+    Args:
+        cache_root: Root of the HF cache (e.g., ~/.cache/huggingface/recursivemas)
+        repo_name: Repository name (e.g., "Sequential-Light-Planner-Qwen3-1.7B")
+        fallback_hf_id: HF hub ID to use if local checkpoint not found
+        adapter_file: Optional specific adapter .pt filename within the snapshot
+
+    Returns:
+        Local path to the checkpoint, or the fallback HF hub ID.
+    """
+    import os as _os
+
+    # Find the cache directory: models--RecursiveMAS--{repo_name}
+    cache_dir = _os.path.join(cache_root, f"models--RecursiveMAS--{repo_name}")
+    if not _os.path.isdir(cache_dir):
+        return fallback_hf_id
+
+    # Find the latest snapshot
+    snapshots_dir = _os.path.join(cache_dir, "snapshots")
+    if not _os.path.isdir(snapshots_dir):
+        return fallback_hf_id
+
+    snapshots = sorted(
+        d for d in _os.listdir(snapshots_dir)
+        if _os.path.isdir(_os.path.join(snapshots_dir, d))
+    )
+    if not snapshots:
+        return fallback_hf_id
+
+    snapshot_path = _os.path.join(snapshots_dir, snapshots[-1])
+
+    if adapter_file:
+        adapter_path = _os.path.join(snapshot_path, adapter_file)
+        if _os.path.isfile(adapter_path):
+            return adapter_path
+        # Try glob match for similar filenames
+        import glob as _glob
+        matches = _glob.glob(_os.path.join(snapshot_path, f"*{adapter_file.split('(')[0]}*"))
+        if matches:
+            return matches[0]
+        return fallback_hf_id
+
+    # For model loading, prefer _plain_model_view (excludes adapter files)
+    plain_view = _os.path.join(snapshot_path, "_plain_model_view")
+    if _os.path.isdir(plain_view) and _os.listdir(plain_view):
+        return plain_view
+
+    return snapshot_path
+
+
 class ModelOrchestrator:
     """Multi-provider escalation orchestrator.
 
@@ -176,6 +242,9 @@ class ModelOrchestrator:
         ----------
         lane : str
             The HLF lane to select models for (e.g. "reasoning", "coding").
+            Special lane "governed_latent_recursive" uses latent-space
+            multi-agent recursion (RecursiveMAS) instead of text-based
+            completion.
         messages : list[dict]
             OpenAI-format messages.
         system : str
@@ -197,6 +266,15 @@ class ModelOrchestrator:
             routers, verify response models strictly, require live
             availability.
         """
+        # ── Latent recursive lane (RecursiveMAS) ──────────────────────
+        if lane == "governed_latent_recursive":
+            return await self._complete_latent(
+                messages=messages,
+                system=system,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
         await self._ensure_clients()
 
         # Build full message list
@@ -691,6 +769,239 @@ class ModelOrchestrator:
         if "connect" in exc_str:
             return "connect_error"
         return "error"
+
+    async def _complete_latent(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        system: str = "",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> OrchestrationResult:
+        """Execute latent-space recursive inference (RecursiveMAS).
+
+        Uses the LatentRecursiveSession to run multi-agent latent recursion
+        instead of text-based provider escalation.  Falls back gracefully
+        when torch/transformers are unavailable.
+        """
+        import time as _time
+
+        from hlf_mcp.hlf.latent_model_interface import (
+            LatentRecursiveSession,
+            is_latent_available,
+        )
+
+        t0 = _time.monotonic()
+
+        # Extract prompt from messages
+        prompt = system + "\n" if system else ""
+        for msg in messages:
+            if msg.get("role") == "user":
+                prompt += msg.get("content", "")
+                break
+
+        if not prompt.strip():
+            return OrchestrationResult(
+                content="[RecursiveMAS] No prompt provided.",
+                model_used="latent_recursive",
+                model_requested="latent_recursive",
+                provider_used="latent_recursive",
+                lane="governed_latent_recursive",
+                finish_reason="error",
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                latency_s=round(_time.monotonic() - t0, 3),
+                streamed=False,
+                cost=0.0,
+            )
+
+        if not is_latent_available():
+            return OrchestrationResult(
+                content="[RecursiveMAS] Latent path unavailable. "
+                        "Install torch>=2.6 and transformers.",
+                model_used="latent_recursive",
+                model_requested="latent_recursive",
+                provider_used="latent_recursive",
+                lane="governed_latent_recursive",
+                finish_reason="error",
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                latency_s=round(_time.monotonic() - t0, 3),
+                streamed=False,
+                cost=0.0,
+            )
+
+        # Default agent config — sequential style (light), using local checkpoints
+        # Falls back to HF hub IDs if local checkpoints not found
+        _cache_root = "C:/Users/gerry/.cache/huggingface/recursivemas"
+        _cp = _resolve_checkpoint_base
+
+        agent_models = self._config.latent_agent_models if (
+            hasattr(self._config, "latent_agent_models")
+            and self._config.latent_agent_models
+        ) else {
+            "planner": _cp(_cache_root, "Sequential-Light-Planner-Qwen3-1.7B",
+                           "Qwen/Qwen2.5-1.5B-Instruct"),
+            "critic":  _cp(_cache_root, "Sequential-Light-Critic-Llama3.2-1B",
+                           "meta-llama/Llama-3.2-1B-Instruct"),
+            "solver":  _cp(_cache_root, "Sequential-Light-Solver-Qwen2.5-Math-1.5B",
+                           "Qwen/Qwen2.5-Math-1.5B"),
+        }
+
+        # Inner link checkpoint paths
+        adapter_task = getattr(self._config, "latent_adapter_task", "math")
+        inner_link_paths = {
+            "planner": _cp(_cache_root, "Sequential-Light-Planner-Qwen3-1.7B",
+                           adapter_file=f"adapter({adapter_task}).pt"),
+            "critic":  _cp(_cache_root, "Sequential-Light-Critic-Llama3.2-1B",
+                           adapter_file=f"adapter({adapter_task}).pt"),
+            "solver":  _cp(_cache_root, "Sequential-Light-Solver-Qwen2.5-Math-1.5B",
+                           adapter_file=f"adapter({adapter_task}).pt"),
+        }
+
+        # Outer link checkpoint paths (paper's sequential layout: P→C, C→S, S→P)
+        outer_link_paths = {
+            "planner_critic": _cp(_cache_root, "Sequential-Light-Outerlinks",
+                                  adapter_file=f"Planner-Critic-Outerlink({adapter_task}).pt"),
+            "critic_solver":  _cp(_cache_root, "Sequential-Light-Outerlinks",
+                                  adapter_file=f"Critic-Solver-Outerlink({adapter_task}).pt"),
+            "solver_planner": _cp(_cache_root, "Sequential-Light-Outerlinks",
+                                  adapter_file=f"Solver-Planner-Outerlink({adapter_task}).pt"),
+        }
+
+        recursion_rounds = getattr(self._config, "latent_recursion_rounds", 2)
+
+        try:
+            from hlf_mcp.hlf.latent_model_interface import RecursiveSessionConfig
+
+            config = RecursiveSessionConfig(
+                agent_models=agent_models,
+                recursion_rounds=recursion_rounds,
+                max_new_tokens=max_tokens or 512,
+                device="auto",
+                adapter_task=adapter_task,
+                inner_link_paths=inner_link_paths,
+                outer_link_paths=outer_link_paths,
+            )
+            session = LatentRecursiveSession(config)
+
+            if not session.load_all():
+                session.unload()
+                return OrchestrationResult(
+                    content="[RecursiveMAS] Failed to load agent models.",
+                    model_used="latent_recursive",
+                    model_requested="latent_recursive",
+                    provider_used="latent_recursive",
+                    lane="governed_latent_recursive",
+                    finish_reason="error",
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    latency_s=round(_time.monotonic() - t0, 3),
+                    streamed=False,
+                    cost=0.0,
+                )
+
+            result = session.recursive_infer(prompt)
+            session.unload()
+
+            latency = round(_time.monotonic() - t0, 3)
+
+            # ── Attach governed capsule provenance if available ────────
+            latent_provenance: list[str] = []
+            capsule_id: str = ""
+            try:
+                from hlf_mcp.hlf.latent_capsule import LatentCapsule
+
+                # Compute adapter hashes for immutable audit record
+                adapter_sha256s = {}
+                for key, path in {**inner_link_paths, **outer_link_paths}.items():
+                    try:
+                        import hashlib as _hashlib
+                        with open(path, "rb") as fh:
+                            adapter_sha256s[key] = _hashlib.sha256(fh.read()).hexdigest()[:16]
+                    except Exception:
+                        adapter_sha256s[key] = "unavailable"
+
+                capsule = LatentCapsule(
+                    agent_id="model-orchestrator",
+                    max_rounds=recursion_rounds,
+                )
+                cap_digest = capsule.compute_capability_digest(adapter_sha256s)
+
+                # Build attestations from steps
+                steps = result.get("steps", [])
+                for i, step in enumerate(steps):
+                    src = step.get("agent", "unknown")
+                    step_round = step.get("round", 1)
+                    src_dim = step.get("hidden_dim", 0)
+                    adapter_key = step.get("link_key", "inner")
+                    adapter_hash = adapter_sha256s.get(adapter_key, "unknown")
+
+                    from hlf_mcp.hlf.latent_capsule import LatentRoundAttestation
+                    att = LatentRoundAttestation(
+                        round_idx=step_round,
+                        source_agent=src,
+                        target_agent="next",
+                        source_dims=src_dim,
+                        target_dims=src_dim,
+                        adapter_sha256=adapter_hash,
+                        capability_digest=cap_digest,
+                        gas_consumed=capsule._GAS_PER_HANDOFF,
+                        wall_time_ms=latency * 1000.0 / max(len(steps), 1),
+                        tensor_shape=(1, 1, src_dim) if src_dim else (0,),
+                    )
+                    latent_provenance.append(att.to_provenance_hash())
+
+                capsule_id = capsule.capsule.capsule_id
+            except Exception:
+                # Non-fatal: provenance is best-effort
+                pass
+
+            return OrchestrationResult(
+                content=result.get("final_text", ""),
+                model_used="latent_recursive",
+                model_requested=",".join(agent_models.values()),
+                provider_used="latent_recursive",
+                lane="governed_latent_recursive",
+                finish_reason="stop",
+                prompt_tokens=len(prompt.split()),
+                completion_tokens=len(result.get("final_text", "").split()),
+                total_tokens=len(prompt.split()) + len(result.get("final_text", "").split()),
+                latency_s=latency,
+                streamed=False,
+                cost=0.0,
+                audit_trail=[{
+                    "depth": 0,
+                    "model": "latent_recursive",
+                    "provider": "latent_recursive",
+                    "success": True,
+                    "status": "ok",
+                    "latency_s": latency,
+                    "rounds": result.get("rounds", 0),
+                    "steps": len(result.get("steps", [])),
+                    "capsule_id": capsule_id,
+                    "latent_provenance": latent_provenance,
+                }],
+            )
+
+        except Exception as exc:
+            return OrchestrationResult(
+                content=f"[RecursiveMAS] Error: {exc}",
+                model_used="latent_recursive",
+                model_requested="latent_recursive",
+                provider_used="latent_recursive",
+                lane="governed_latent_recursive",
+                finish_reason="error",
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                latency_s=round(_time.monotonic() - t0, 3),
+                streamed=False,
+                cost=0.0,
+            )
 
     def _last_result_with_audit(
         self,

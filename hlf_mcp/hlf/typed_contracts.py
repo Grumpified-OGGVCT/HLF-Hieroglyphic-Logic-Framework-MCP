@@ -216,6 +216,7 @@ class EffectClass(Enum):
     FORMAL_VERIFICATION = "formal_verification"
     GUARDED_ACTUATION = "guarded_actuation"
     GOVERNANCE_VOTE = "governance_vote"
+    LATENT_COMMUNICATION = "latent_communication"
     LOCAL_ANALYSIS = "local_analysis"
     MEMORY_READ = "memory_read"
     MEMORY_WRITE = "memory_write"
@@ -261,6 +262,7 @@ class EffectClass(Enum):
             EffectClass.TRAJECTORY_PLAN: "embodied",
             EffectClass.GUARDED_ACTUATION: "embodied",
             EffectClass.SAFETY_STOP: "embodied",
+            EffectClass.LATENT_COMMUNICATION: "model",
         }
         return _boundaries.get(self, "local")
 
@@ -310,6 +312,7 @@ class EffectClass(Enum):
             EffectClass.TRAJECTORY_PLAN: ["embodied:trajectory_plan"],
             EffectClass.GUARDED_ACTUATION: ["embodied:guarded_actuation"],
             EffectClass.SAFETY_STOP: ["embodied:safety_stop"],
+            EffectClass.LATENT_COMMUNICATION: ["model:latent_extract", "model:latent_project", "model:latent_inject"],
         }
         return _mapping.get(self, [])
 

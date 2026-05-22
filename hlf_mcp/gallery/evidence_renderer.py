@@ -537,3 +537,101 @@ class EvidenceSummaryRenderer:
             icon = status_icons.get(status, "?")
             lines.append(f"  {icon} {node_id} [{agent_id}] → {status.upper()}")
         return "\n".join(lines)
+
+    @staticmethod
+    def render_latent_provenance(result: dict[str, Any]) -> str:
+        """Render a human-readable latent inference audit trail.
+
+        Args:
+            result: A dict from governed_latent_infer() with keys:
+                final_text, rounds_completed, attestations, provenance_chain,
+                capsule_id, total_gas, total_wall_time_ms, steps, peak_vram_mb.
+
+        Returns:
+            A Rich-formatted or plain-text audit summary.
+
+        NOTE: LATENT_PROVENANCE rendering is under active development.
+        The Merkle chain and gas accounting are live; operator-facing
+        tool surfaces for ad hoc evidence inspection are in progress.
+        """
+        attestations = result.get("attestations", [])
+        provenance = result.get("provenance_chain", [])
+        capsule_id = result.get("capsule_id", "?")
+        total_gas = result.get("total_gas", 0)
+        total_time = result.get("total_wall_time_ms", 0)
+        peak_vram = result.get("peak_vram_mb", 0)
+        final_text = result.get("final_text", "")
+
+        status_icon = "✅" if result.get("status") == "ok" else "❌"
+
+        if _RICH:
+            lines: list[str] = []
+            lines.append(
+                f"[bold]Capsule:[/bold] [cyan]{capsule_id}[/cyan]  "
+                f"{status_icon} {result.get('status', '?').upper()}"
+            )
+            lines.append(
+                f"[bold]Gas:[/bold] {total_gas}  "
+                f"[bold]Wall Time:[/bold] {total_time/1000:.1f}s  "
+                f"[bold]Peak VRAM:[/bold] {peak_vram} MB"
+            )
+            lines.append(
+                f"[bold]Rounds:[/bold] {result.get('rounds_completed', 0)}  "
+                f"[bold]Handoffs:[/bold] {len(attestations)}  "
+                f"[bold]Provenance Hashes:[/bold] {len(provenance)}"
+            )
+
+            if attestations:
+                lines.append("")
+                lines.append("[bold underline]Latent Handoff Trail:[/bold underline]")
+                for i, att in enumerate(attestations):
+                    src = att.get("source_agent", "?")
+                    tgt = att.get("target_agent", "?")
+                    adapter = att.get("adapter_sha256", "?")[:12]
+                    gas = att.get("gas_consumed", 0)
+                    lines.append(
+                        f"  [dim]#{i+1}[/dim] "
+                        f"[yellow]{src}[/yellow] → [magenta]{tgt}[/magenta]  "
+                        f"gas={gas}  adapter={adapter}..."
+                    )
+
+            if provenance:
+                lines.append("")
+                lines.append(f"[bold]Merkle Root:[/bold] [dim]{provenance[-1][:32]}...[/dim]")
+                lines.append(
+                    f"[dim]Verify with: python scripts/verify_chain.py "
+                    f"observability/openllmetry/latent_traces.jsonl[/dim]"
+                )
+
+            lines.append("")
+            lines.append("[bold]Final Output:[/bold]")
+            lines.append(f"[dim]{final_text[:300]}{'...' if len(final_text) > 300 else ''}[/dim]")
+
+            panel = Panel(
+                "\n".join(lines),
+                title="[bold magenta]Latent Provenance Audit[/bold magenta]",
+                border_style="magenta",
+            )
+            return str(panel)
+
+        # Plain text fallback
+        lines = [
+            f"Capsule: {capsule_id}  {status_icon} {result.get('status', '?').upper()}",
+            f"Gas: {total_gas}  Wall Time: {total_time/1000:.1f}s  Peak VRAM: {peak_vram} MB",
+            f"Rounds: {result.get('rounds_completed', 0)}  Handoffs: {len(attestations)}  Hashes: {len(provenance)}",
+            "",
+            "Latent Handoff Trail:",
+        ]
+        for i, att in enumerate(attestations):
+            src = att.get("source_agent", "?")
+            tgt = att.get("target_agent", "?")
+            adapter = att.get("adapter_sha256", "?")[:12]
+            gas = att.get("gas_consumed", 0)
+            lines.append(f"  #{i+1} {src} -> {tgt}  gas={gas}  adapter={adapter}...")
+
+        if provenance:
+            lines.append(f"\nMerkle Root: {provenance[-1][:32]}...")
+            lines.append("Verify: python scripts/verify_chain.py observability/openllmetry/latent_traces.jsonl")
+
+        lines.append(f"\nFinal Output:\n{final_text[:300]}{'...' if len(final_text) > 300 else ''}")
+        return "\n".join(lines)

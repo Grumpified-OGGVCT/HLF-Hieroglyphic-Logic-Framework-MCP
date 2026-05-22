@@ -49,6 +49,7 @@ _ALLOWED_EFFECT_CLASSES = {
     "formal_verification",
     "guarded_actuation",
     "governance_vote",
+    "latent_communication",
     "local_analysis",
     "memory_read",
     "memory_write",

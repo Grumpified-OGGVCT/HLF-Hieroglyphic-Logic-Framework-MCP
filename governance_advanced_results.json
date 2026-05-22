@@ -1,0 +1,100 @@
+{
+  "all_passed": true,
+  "results": [
+    {
+      "test": "A",
+      "name": "Tampered Checkpoint Detection",
+      "passed": true,
+      "details": {
+        "original_hash": "9de78dcf1af909e77d0388e576ba0b8720bdf1c38f7384abbbb705608b9a30be",
+        "corrupted_hash": "a8945c715cc3e28b0c16c58accbd480d03f37361e2cfa6d023e4f110f58ec67f",
+        "hashes_differ": true,
+        "capsule_would_detect": true,
+        "first_param": "proj1.weight"
+      }
+    },
+    {
+      "test": "B",
+      "name": "Gas Exhaustion Mid-Recursion",
+      "passed": true,
+      "details": {
+        "gas_insufficient_detected": true,
+        "gas_per_handoff": 25,
+        "gas_per_round": 75,
+        "handoffs_completed": 1,
+        "rounds_completed": 0,
+        "total_gas_used": 25,
+        "exhausts_before_handoff_2": true
+      }
+    },
+    {
+      "test": "C",
+      "name": "Tier Escalation Violation",
+      "passed": true,
+      "details": {
+        "hearth_rank": 0,
+        "sovereign_rank": 2,
+        "tier_order_correct": true,
+        "latent_capsule_tier": "sovereign",
+        "latent_capsule_is_sovereign": true,
+        "hearth_allowed_for_latent": false,
+        "validation_violations": [
+          "Tier 'hearth' cannot execute latent_communication (requires one of ['sovereign'])"
+        ],
+        "tier_rejected": true,
+        "all_checks_pass": {
+          "tier_order_correct": true,
+          "latent_is_sovereign": true,
+          "hearth_blocked_from_latent": true,
+          "validation_rejects_hearth": true
+        }
+      }
+    },
+    {
+      "test": "D",
+      "name": "Merkle Chain Tamper Resistance",
+      "passed": true,
+      "details": {
+        "original_root": "0ee583a4d502e8c55147a3a7549ce5c98e36dfff46f91fd0a75f73a5f9d417af",
+        "entry_count": 6,
+        "deletion_detected": true,
+        "deleted_root": "de5606f8cefd73bf22d3d66e5a1cf26e9e69497133f6eb4ca8d8ffd1c5353dcd",
+        "corruption_detected": true,
+        "corrupted_root": "eceff46ecba9ee715c06620fd8beac6ec8a80f7bd2d8e4f8ede3d4f76d65a5df",
+        "both_detected": {
+          "deletion": true,
+          "corruption": true
+        }
+      }
+    },
+    {
+      "test": "E",
+      "name": "HKS Exemplar Capture Simulation",
+      "passed": true,
+      "details": {
+        "has_status": true,
+        "status_is_failed": true,
+        "has_provenance_hashes": true,
+        "provenance_hash_count": 2,
+        "has_output": true,
+        "output_stored": true,
+        "has_failure_mode": true,
+        "all_required_fields": true,
+        "required_fields": [
+          "prompt",
+          "output",
+          "status",
+          "provenance_hashes",
+          "capsule_id"
+        ],
+        "all_checks": {
+          "status_is_failed": true,
+          "has_provenance_hashes": true,
+          "output_stored": true,
+          "all_required_fields": true,
+          "has_failure_mode": true
+        }
+      }
+    }
+  ]
+}

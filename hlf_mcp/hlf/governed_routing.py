@@ -10,6 +10,7 @@ RoutingDecision = Literal[
     "governed_multilingual_gpu",
     "governed_long_context_gpu",
     "governed_cloud_completion",  # completion / generation workloads via Ollama Cloud
+    "governed_latent_recursive",  # latent-space multi-agent recursion (RecursiveMAS)
 ]
 
 # Workloads that drive LLM completion rather than embedding/retrieval.

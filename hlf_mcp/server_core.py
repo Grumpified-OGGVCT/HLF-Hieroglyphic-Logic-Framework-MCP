@@ -13,6 +13,8 @@ from hlf_mcp.hlf.code_execution import execute_code_bearing_hlf
 from hlf_mcp.hlf.compiler import CompileError
 from hlf_mcp.hlf.governance_proofs import render_proof_markdown, verify_governance_proof
 from hlf_mcp.hlf.swarm_mechanics import build_swarm_mechanics_artifact
+from hlf_mcp.hlf.rag_integrations import JanusIntegration
+from hlf_mcp.hlf.latent_model_interface import build_latent_session, is_latent_available
 from hlf_mcp.ingress_support import (
     build_ingress_denial_reasons,
     persist_runtime_execution_admission,
@@ -552,6 +554,172 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                 "wat": "",
             }
 
+    # ── Phase 4: Janus Host Functions ──────────────────────────────────────────
+
+    @mcp.tool()
+    def janus_crawl(
+        url: str,
+        depth: int = 1,
+        endpoint: str = "http://localhost:8100",
+    ) -> dict[str, Any]:
+        """Crawl a URL via Janus knowledge graph and ingest into RAG.
+
+        The JanusIntegration gracefully degrades to simulated crawl if
+        the Janus service is not reachable.
+
+        Args:
+            url: URL or Janus resource path to crawl
+            depth: Crawl depth (1 = single page only)
+            endpoint: Janus service endpoint (default: http://localhost:8100)
+
+        Returns:
+            dict with 'status', 'evidence_id', 'source', 'doc_ids'.
+        """
+        try:
+            janus = JanusIntegration(janus_endpoint=endpoint)
+            evidence = janus.crawl(url, depth=depth)
+            return {
+                "status": "ok",
+                "evidence_id": evidence.evidence_id,
+                "source": evidence.source,
+                "source_type": evidence.source_type,
+                "doc_ids": evidence.rag_doc_ids,
+                "content_hash": evidence.content_hash,
+            }
+        except Exception as exc:
+            return {"status": "error", "error": str(exc), "url": url}
+
+    @mcp.tool()
+    def janus_query(
+        query_text: str,
+        endpoint: str = "http://localhost:8100",
+    ) -> dict[str, Any]:
+        """Query the Janus knowledge graph with fallback to local RAG.
+
+        Queries Janus if available; falls back to local RAG search when
+        the Janus service is not reachable.
+
+        Args:
+            query_text: Natural language or SPARQL-like query
+            endpoint: Janus service endpoint (default: http://localhost:8100)
+
+        Returns:
+            dict with 'status', 'query', 'results', 'count'.
+        """
+        try:
+            janus = JanusIntegration(janus_endpoint=endpoint)
+            result = janus.query(query_text)
+            return {"status": "ok", **result}
+        except Exception as exc:
+            return {"status": "error", "error": str(exc), "query": query_text}
+
+    @mcp.tool()
+    def janus_archive(
+        resource_id: str,
+        endpoint: str = "http://localhost:8100",
+    ) -> dict[str, Any]:
+        """Archive a Janus resource into RAG persistent storage.
+
+        Retrieves the specified resource from Janus and ingests it into
+        the RAG memory store for future provenance queries.
+
+        Args:
+            resource_id: Janus resource identifier
+            endpoint: Janus service endpoint (default: http://localhost:8100)
+
+        Returns:
+            dict with 'status', 'evidence_id', 'source', 'doc_ids'.
+        """
+        try:
+            janus = JanusIntegration(janus_endpoint=endpoint)
+            evidence = janus.archive(resource_id)
+            return {
+                "status": "ok",
+                "evidence_id": evidence.evidence_id,
+                "source": evidence.source,
+                "source_type": evidence.source_type,
+                "doc_ids": evidence.rag_doc_ids,
+                "content_hash": evidence.content_hash,
+            }
+        except Exception as exc:
+            return {"status": "error", "error": str(exc), "resource_id": resource_id}
+
+    # ── RecursiveMAS Latent Inference ─────────────────────────────────────
+
+    @mcp.tool()
+    def hlf_latent_recursive_infer(
+        prompt: str,
+        recursion_rounds: int = 2,
+        agent_models_json: str = "{}",
+    ) -> dict[str, Any]:
+        """Run multi-agent latent-space recursive inference (RecursiveMAS).
+
+        Uses direct PyTorch model access to pass hidden states between
+        agents instead of text tokens.  Requires torch + transformers.
+
+        Args:
+            prompt: Input text to process through the recursive agent chain.
+            recursion_rounds: Number of latent recursion rounds (default: 2).
+            agent_models_json: JSON dict mapping agent names to HF model IDs,
+                e.g. '{"primary":"Qwen/Qwen2.5-1.5B-Instruct","critic":"meta-llama/Llama-3.2-1B-Instruct"}'.
+
+        Returns:
+            dict with 'final_text', 'steps', 'rounds', 'status'.
+            If latent path unavailable, 'status' = 'unavailable'.
+        """
+        if not is_latent_available():
+            return {
+                "status": "unavailable",
+                "error": "Latent inference requires torch + transformers. "
+                         "Install: pip install torch transformers",
+                "final_text": "",
+                "steps": [],
+                "rounds": 0,
+            }
+
+        import json as _json
+
+        try:
+            agent_models = _json.loads(agent_models_json) if agent_models_json else {}
+        except _json.JSONDecodeError:
+            return {
+                "status": "error",
+                "error": "agent_models_json must be valid JSON",
+                "final_text": "",
+                "steps": [],
+                "rounds": 0,
+            }
+
+        if not agent_models:
+            return {
+                "status": "error",
+                "error": "At least one agent model required in agent_models_json",
+                "final_text": "",
+                "steps": [],
+                "rounds": 0,
+            }
+
+        session = build_latent_session(
+            agent_models=agent_models,
+            recursion_rounds=recursion_rounds,
+        )
+
+        if session is None:
+            return {
+                "status": "unavailable",
+                "error": "Latent path unavailable — torch/transformers not installed.",
+                "final_text": "",
+                "steps": [],
+                "rounds": 0,
+            }
+
+        try:
+            result = session.recursive_infer(prompt)
+        finally:
+            session.unload()
+
+        return result
+
     return {
         "hlf_compile": hlf_compile,
         "hlf_format": hlf_format,
@@ -570,4 +738,8 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_capture_symbolic_surface": hlf_capture_symbolic_surface,
         "hlf_weekly_evidence_summary": hlf_weekly_evidence_summary,
         "hlf_compile_wasm": hlf_compile_wasm,
+        "janus_crawl": janus_crawl,
+        "janus_query": janus_query,
+        "janus_archive": janus_archive,
+        "hlf_latent_recursive_infer": hlf_latent_recursive_infer,
     }

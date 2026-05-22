@@ -55,6 +55,8 @@ That HLF program compiles to bytecode, passes a 5-rule security ledger, runs ins
 | Docker packaging | ✅ Complete |
 | Swarm coordination with formal verification gating | ✅ Complete |
 | Stdlib: 8 modules including AES-256-GCM crypto | ✅ Complete |
+| **RecursiveMAS governed latent inference** | ✅ GPU-verified — correct on math, governed on medical (26/26 governance tests pass) |
+| **PII workflow pipeline** | ✅ Demo verified ALL_CLEAR — sovereign capsule + redaction + Merkle audit |
 
 See [VISION.md](HLF_VISION_DOCTRINE.md) for the full architecture, [GOVERNANCE.md](HLF_ETHICAL_GOVERNOR_ARCHITECTURE.md) for how we track completeness, and the [build dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/) for live pillar scores.
 
@@ -1529,6 +1531,56 @@ For single-agent tasks, HLF shows 12–30% token compression vs NLP prose (measu
 
 > **Note:** Full benchmark artifacts, methodology, and raw data are in `test-swarm-coord/MASTER_TRACKER.md`.
 
+### RecursiveMAS Governed Latent Inference Benchmarks (GPU-Verified)
+
+**Hardware:** NVIDIA RTX 3060 (12 GB VRAM). **Models:** Qwen2.5-Math-1.5B (Solver), Qwen3-1.7B (Planner), Llama-3.2-1B (Critic). **Method:** Three 1.5B-class models coordinate through governed latent-space recursion. The Planner routes reasoning, the Critic checks for errors, the Solver produces final output. All intermediate states are sealed inside a sovereign-tier IntentCapsule — only the final decoded text and SHA-256 provenance hashes exit into the Merkle-chain audit system.
+
+| Prompt | Solo Solver | RecursiveMAS Governed | VRAM Peak | Gas | Rounds | Winner |
+| --- | --- | --- | --- | --- | --- | --- |
+| **∫ x·sin(x) dx** | PARTIAL (showed work, no final answer) | **EXCELLENT** `-x·cos(x) + sin(x) + C` | 8,864 MB | 150 | 2 | **RecursiveMAS** |
+| **55F, fatigue, TSH 8.2, normal T4, iron + omeprazole** | POOR (Chinese garbled text) | POOR ("Non-Altoine's disease") | 8,872 MB | 150 | 2 | **Neither** — parametric knowledge wall |
+| **2 + 2** | CORRECT (2.75s) | CORRECT (12.83s, verbose) | 8,842 MB | 150 | 2 | **Solo** (faster, same result) |
+
+**Honest findings:**
+- **In-domain (math):** RecursiveMAS outperforms Solo. The latent loop produces a correct, concise solution where Solo only shows partial work. 27.2s total, 6 provenance hashes, 150 gas.
+- **Cross-domain (medical):** Both fail. 1.5B-class models lack the parametric knowledge for medical diagnosis. The Critic failed to veto the hallucination — "Non-Altoine's disease" and "Osteic hyperplasticity" were confidently fabricated. **This is expected behavior for models of this size.** Latent recursion structures reasoning but cannot create facts the base models don't possess.
+- **The governance layer held:** Even when model output was garbage, the capsule boundary, gas metering, Merkle chain, and tier enforcement all functioned correctly (26/26 governance tests pass).
+- **VRAM:** 8.8 GB peak for 3-model recursion. Sustains on 3060 (12 GB) but limits 4-model concurrent topology.
+- **The real value proposition for this model class is PII/PHI workflow orchestration** — not medical diagnosis, but governed extraction, redaction, and audit of structured data from sensitive documents on consumer hardware.
+
+### PII Workflow Demo (ALL_CLEAR)
+
+A synthetic 311-word patient intake form with 6 PII fields (SSN, phone, email, address, insurance ID, DOB) was processed through HLF's governed pipeline:
+
+```
+Ingest → Scan PII → Create Sovereign Capsule → Extract Structured Data
+→ Redact PII (7 fields) → Self-Audit → Merkle Chain (6 hashes)
+```
+
+**Result: ALL_CLEAR.** Zero PII leaked into extracted data. The capability manifest denied 9 PII field categories (name, SSN, address, phone, email, DOB, insurance ID, emergency contact). Every redaction is cryptographically logged with reason. The Merkle chain verifies intact.
+
+```bash
+# Run the PII workflow demo (no GPU required — works on mock path)
+python scripts/demo_pii_workflow.py
+
+# Verify the latent audit trail after GPU inference
+python scripts/verify_chain.py observability/openllmetry/latent_traces.jsonl
+
+# Render latent provenance as human-readable evidence
+python -c "
+from hlf_mcp.gallery.evidence_renderer import EvidenceSummaryRenderer
+import json
+with open('benchmark_results.json') as f:
+    data = json.load(f)
+result = data['results']['math'][1]  # RecursiveMAS math
+print(EvidenceSummaryRenderer.render_latent_provenance(result))
+"
+```
+
+Run `scripts/demo_pii_workflow.py` to see the full pipeline. The script self-audits extracted data for PII leaks and outputs `demo_pii_output.json` with the complete governance record.
+
+> **Governance stress tests:** `scripts/stress_test_governed_latent.py` (21 tests: tier enforcement, gas exhaustion, Merkle integrity, provenance format, capsule boundary) and `scripts/stress_test_governance_advanced.py` (5 tests: tampered checkpoint detection, gas exhaustion mid-recursion, tier escalation, Merkle tamper resistance, HKS exemplar capture). All 26 pass.
+
 ---
 
 
@@ -1846,20 +1898,21 @@ Reviewer note:
 - [x] **Tool HITL gate UI**: web dashboard at `/hitl` for approving `pending_hitl` tools
 - [x] **SpindleDAG executor**: task DAG with Saga compensating transactions
 
-### Phase 4 — Ecosystem Integration 🔗 (planned)
+### Phase 4 — Ecosystem Integration 🔗 (in progress — code ready, needs external services)
 
 Integrations with the Sovereign Agentic OS via HLF host functions:
 
 | Integration | HLF Host Functions | Status |
 | --- | --- | --- |
-| Project Janus (RAG pipeline) | `janus.crawl`, `janus.query`, `janus.archive` | 📋 Planned |
-| OVERWATCH (sentinel watchdog) | `overwatch.scan`, `overwatch.terminate` | ✅ Complete |
-| API-Keeper (credential vault) | `apikeeper.store`, `apikeeper.rotate` | ✅ Complete |
-| SearXng MCP (private search) | `searxng.search`, `searxng.crawl` | 📋 Planned |
-| AnythingLLM | `anythingllm.workspace_query`, `anythingllm.agent_flow` | 📋 Planned |
-| LOLLMS | `lollms.generate`, `lollms.rag_query` | 📋 Planned |
-| ollama_pulse (model catalog) | `pulse.scan`, `pulse.update_catalog` | ✅ Complete |
+| Project Janus (RAG pipeline) | `janus.crawl`, `janus.query`, `janus.archive` | ✅ MCP tools wired (`hlf_mcp/hlf/rag_integrations.py`) |
+| OVERWATCH (sentinel watchdog) | `overwatch.scan`, `overwatch.terminate` | 🟡 Code ready (`hlf_mcp/hlf/overwatch.py`) |
+| API-Keeper (credential vault) | `apikeeper.store`, `apikeeper.rotate` | 🟡 Code ready (hlf_source/test exists) |
+| SearXng MCP (private search) | `searxng.search`, `searxng.crawl` | 🟡 Dispatcher ready (needs SearXng instance) |
+| AnythingLLM | `anythingllm.workspace_query`, `anythingllm.agent_flow` | 🟡 Code ready (class + dispatcher) |
+| LOLLMS | `lollms.generate`, `lollms.rag_query` | 🟡 Code ready (LOLLMSImport class) |
+| ollama_pulse (model catalog) | `pulse.scan`, `pulse.update_catalog` | ✅ Complete (`hlf_mcp/hlf/ollama_pulse.py` + tests) |
 | Jules_Choice (coding agent) | `jules.spawn_session`, `jules.execute_sdd` | 📋 Planned |
+| **RecursiveMAS latent inference** | `hlf_latent_recursive_infer` | ✅ MCP tool wired (`hlf_mcp/hlf/latent_model_interface.py`) |
 
 ### Phase 5 — Standard, Not a Project 🏛️ (long-term)
 

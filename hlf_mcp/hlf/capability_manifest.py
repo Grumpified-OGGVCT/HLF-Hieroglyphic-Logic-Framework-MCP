@@ -95,6 +95,7 @@ EFFECT_TO_CAPABILITY: dict[EffectClass, str] = {
     EffectClass.ROUTE_SELECTION: "routing",
     EffectClass.SIMILARITY_MATH: "local",
     EffectClass.TOKEN_TRANSFORM: "local",
+    EffectClass.LATENT_COMMUNICATION: "model",
     EffectClass.TRAJECTORY_PLAN: "embodied",
 }
 
@@ -137,6 +138,7 @@ EFFECT_TO_TRUST_TIER: dict[EffectClass, str] = {
     EffectClass.TRAJECTORY_PLAN: "hearth",
     EffectClass.GUARDED_ACTUATION: "hearth",
     EffectClass.SAFETY_STOP: "hearth",
+    EffectClass.LATENT_COMMUNICATION: "trusted",
 }
 
 

@@ -1,0 +1,128 @@
+{
+  "prompts": [
+    [
+      "math",
+      "Evaluate the indefinite integral: \u222b x\u00b7sin(x) dx. Show your work step by step."
+    ],
+    [
+      "medical",
+      "A 55-year-old woman presents with fatigue, weight gain, and constipation. Labs: TSH 8.2, free T4 1.1 (normal). She takes iron supplements for anemia and omeprazole for GERD. What is the most likely diagnosis, and what is the pathophysiology?"
+    ],
+    [
+      "simple",
+      "What is 2+2?"
+    ]
+  ],
+  "results": {
+    "math": [
+      {
+        "path": "solo_solver",
+        "load_time_s": 14.19,
+        "infer_time_s": 14.18,
+        "total_time_s": 28.38,
+        "output_text": "{'status': 'ok', 'final_text': \" Dx.\\n\\nTo evaluate the indefinite integral \\\\(\\\\int x \\\\sin(x) \\\\, dx\\\\), we will use integration by parts. The formula for integration by parts is given by:\\n\\n\\\\[\\n\\\\int u \\\\, dv = uv - \\\\int v \\\\, du\\n\\\\]\\n\\nWe need to choose \\\\(u\\\\) and \\\\(dv\\\\) such that the integral of \\\\(v \\\\, du\\\\) is easier to evaluate than the original integral. Let's choose:\\n\\n\\\\[\\nu = x \\\\quad \\\\text{and} \\\\quad dv = \\\\sin(x) \\\\, dx\\n\\\\]\\n\\nThen, we need to find \\\\(du\\\\) and \\\\(v\\\\):",
+        "output_tokens": 424,
+        "vram_before_mb": 0.0,
+        "vram_after_load_mb": 2953.4,
+        "vram_peak_mb": 2962.5,
+        "quality": {
+          "has_antiderivative": false,
+          "has_correct_result": false,
+          "has_work_shown": true,
+          "quality": "partial"
+        }
+      },
+      {
+        "path": "recursive_mas_governed",
+        "load_time_s": "inline",
+        "infer_time_s": 27.24,
+        "total_time_s": 27.24,
+        "output_text": "xsin(x)dx = \u222bx d(-cos(x)) = -x cos(x) + \u222bcos(x)dx = -x cos(x) + sin(x) + C\n\nThe final answer is $\\boxed{-x \\cos(x) + \\sin(x) + C}$. We used integration by parts to evaluate the integral, where we set u = x and dv = sin(x)dx. Then, we found du = dx and v = -cos(x). The formula for integration by parts is \u222bu dv = uv - \u222bv du. Substituting the values we found, we get \u222bx sin(x)dx = -x cos(x) + \u222bcos(x)dx. Finally, we integrate cos(x) to get sin(x) and add the constant of integration C. The final answe",
+        "output_tokens": 512,
+        "vram_before_mb": 9.1,
+        "vram_peak_mb": 8863.7,
+        "gas_consumed": 150,
+        "rounds": 2,
+        "provenance_hashes": 6,
+        "capsule_id": "5e692028-2f00-4dcb-81f9-53df315a5d70",
+        "status": "ok",
+        "quality": {
+          "has_antiderivative": true,
+          "has_correct_result": true,
+          "has_work_shown": true,
+          "quality": "excellent"
+        }
+      }
+    ],
+    "medical": [
+      {
+        "path": "solo_solver",
+        "load_time_s": 1.98,
+        "infer_time_s": 17.16,
+        "total_time_s": 19.14,
+        "output_text": "{'status': 'ok', 'final_text': \" 1.2, free T4 1.1 (normal).\\n\\nTo determine the most likely diagram and pathologist'sdiagnose, we need to analyze the given information and the possible causes of the signs and Symptotes.\\n\\n1. **Symptotes:**\\n   - Fatigue: This could be due to various factors such as age, weight, or general well-being.\\n   - Weight gain: This could be due to age, weight loss, or other health issues.\\n   -\u5e38\u4ed8: This could be due to age, weight loss, or other health issues.\\n\\n2. **\u94c1",
+        "output_tokens": 583,
+        "vram_before_mb": 9.1,
+        "vram_after_load_mb": 2963.0,
+        "vram_peak_mb": 2963.0,
+        "quality": {
+          "term_hits": 1,
+          "hits": [
+            "t4"
+          ],
+          "total_terms": 10,
+          "quality": "poor"
+        }
+      },
+      {
+        "path": "recursive_mas_governed",
+        "load_time_s": "inline",
+        "infer_time_s": 28.71,
+        "total_time_s": 28.71,
+        "output_text": "?\n\nThe most likely diagram is: (1) Non-Altoine's disease (2) Osteic hyperplasticity (3) Osteic hyperplasticity (4) Osteic hyperplasticity (5) Osteic hyperplasticity\n\nThe pathologist's likelydiagnosism is: (1) Non-Altoine's disease (2) Osteic hyperplasticity (3) Osteic hyperplasticity (4) Osteic hyperplasticity (5) Osteic hyperplasticity\n\nThe most likely cause of the woman's condition is: (1) Non-Altoine's disease (2) Osteic hyperplasticity (3) Osteic hyperplasticity (4) Osteic hyperplasticity (5",
+        "output_tokens": 503,
+        "vram_before_mb": 9.1,
+        "vram_peak_mb": 8872.2,
+        "gas_consumed": 150,
+        "rounds": 2,
+        "provenance_hashes": 6,
+        "capsule_id": "26c4fc34-11d8-4475-8699-5c3cb2bbb5d0",
+        "status": "ok",
+        "quality": {
+          "term_hits": 0,
+          "hits": [],
+          "total_terms": 10,
+          "quality": "poor"
+        }
+      }
+    ],
+    "simple": [
+      {
+        "path": "solo_solver",
+        "load_time_s": 1.94,
+        "infer_time_s": 2.75,
+        "total_time_s": 4.69,
+        "output_text": "{'status': 'ok', 'final_text': \"\\n\\nThe answer is 4. Here's the reasoning:\\n\\n1. We start with the expression 2 + 2.\\n2. The plus sign (+) indicates that we need to add the numbers on either side of it.\\n3. Adding 2 and 2 gives us 4.\\n\\nSo, the final answer is \\\\boxed{4}.\", 'steps': [{'agent': 'solver', 'round': 1, 'hidden_shape': [1, 1536]}], 'rounds': 1, 'agent_count': 1}",
+        "output_tokens": 130,
+        "vram_before_mb": 9.1,
+        "vram_after_load_mb": 2963.0,
+        "vram_peak_mb": 2963.0
+      },
+      {
+        "path": "recursive_mas_governed",
+        "load_time_s": "inline",
+        "infer_time_s": 12.83,
+        "total_time_s": 12.83,
+        "output_text": "?\n\nTo solve the problem \"2+2\", we need to perform the addition operation. Here are the steps:\n\n1. Identify the numbers to be added. In this case, the numbers are 2 and 2.\n2. Add the numbers together. When you add 2 and 2, you get 4.\n\nSo, the answer to \"2+2\" is \\boxed{4}.",
+        "output_tokens": 82,
+        "vram_before_mb": 9.1,
+        "vram_peak_mb": 8841.9,
+        "gas_consumed": 150,
+        "rounds": 2,
+        "provenance_hashes": 6,
+        "capsule_id": "ab470645-9e0e-4b03-8a52-ee17819add60",
+        "status": "ok"
+      }
+    ]
+  }
+}

@@ -93,9 +93,9 @@ class TestHlfType:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestEffectClass:
-    def test_enum_has_all_33(self):
+    def test_enum_has_all_34(self):
         members = list(EffectClass)
-        assert len(members) == 33, f"Expected 33 effect classes, got {len(members)}"
+        assert len(members) == 34, f"Expected 34 effect classes, got {len(members)}"
 
     def test_system_boundary_returns_nonempty(self):
         for ec in EffectClass:

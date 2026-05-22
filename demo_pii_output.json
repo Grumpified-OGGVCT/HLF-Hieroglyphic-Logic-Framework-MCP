@@ -1,0 +1,231 @@
+{
+  "input_summary": {
+    "word_count": 311,
+    "fields_detected": 6,
+    "pii_categories": [
+      "ssn",
+      "phone",
+      "email",
+      "address",
+      "insurance_id",
+      "dob"
+    ],
+    "input_hash": "d5e18f5294f78b3608617d5c924e32e2e9bc54612a490e7badf62ba0360d01d3",
+    "form_marker": "SYNTHETIC DATA \u2014 FOR DEMONSTRATION ONLY"
+  },
+  "extracted_data": {
+    "chronic_conditions": "- Type 2 Diabetes Mellitus (diagnosed 2008) - Hypertension (diagnosed 2012) - Osteoarthritis, both knees (diagnosed 2019)",
+    "past_surgeries": "- Cholecystectomy (2010), laparoscopic, no complications - Arthroscopy, left knee (2020)",
+    "allergies": "- Penicillin (anaphylaxis) - Sulfa drugs (rash) - Latex (contact dermatitis)",
+    "current_medications": "1. Metformin 1000mg, BID (oral) 2. Lisinopril 20mg, QD (oral) 3. Atorvastatin 40mg, QHS (oral) 4. Acetaminophen 500mg, PRN for knee pain (max 2000mg/day) 5. Celecoxib 200mg, QD (oral)",
+    "chief_complaint": "Persistent fatigue and increased thirst over past 4 weeks.",
+    "vitals_bp": "148/92 mmHg",
+    "vitals_hr": "88 bpm",
+    "hba1c": "9.2%",
+    "fasting_glucose": "198 mg/dL",
+    "bmi": "31.2",
+    "medications": [
+      {
+        "name": "Metformin",
+        "dosage": "1000mg",
+        "frequency": "BID",
+        "route": "oral"
+      },
+      {
+        "name": "Lisinopril",
+        "dosage": "20mg",
+        "frequency": "QD",
+        "route": "oral"
+      },
+      {
+        "name": "Atorvastatin",
+        "dosage": "40mg",
+        "frequency": "QHS",
+        "route": "oral"
+      },
+      {
+        "name": "Acetaminophen",
+        "dosage": "500mg",
+        "frequency": "PRN for knee pain",
+        "route": "max 2000mg/day"
+      },
+      {
+        "name": "Celecoxib",
+        "dosage": "200mg",
+        "frequency": "QD",
+        "route": "oral"
+      }
+    ],
+    "diagnosis": {
+      "primary": "Uncontrolled Type 2 Diabetes Mellitus (E11.65)",
+      "differential": [
+        "Diabetic Peripheral Neuropathy",
+        "Medication Non-Adherence"
+      ],
+      "confidence": 0.87
+    }
+  },
+  "redacted_fields": [
+    {
+      "field": "ssn",
+      "original": "487-62-9135",
+      "redacted": "[REDACTED]",
+      "reason": "PII category: SSN"
+    },
+    {
+      "field": "phone",
+      "original": "(217) 555-8291",
+      "redacted": "[REDACTED]",
+      "reason": "PII category: PHONE"
+    },
+    {
+      "field": "phone",
+      "original": "(217) 555-8292",
+      "redacted": "[REDACTED]",
+      "reason": "PII category: PHONE"
+    },
+    {
+      "field": "email",
+      "original": "m.whitfield@example.com",
+      "redacted": "[REDACTED]",
+      "reason": "PII category: EMAIL"
+    },
+    {
+      "field": "address",
+      "original": "2847 Maplewood Drive",
+      "redacted": "[REDACTED]",
+      "reason": "PII category: ADDRESS"
+    },
+    {
+      "field": "insurance_id",
+      "original": "INS-88274-AM-3",
+      "redacted": "[REDACTED]",
+      "reason": "PII category: INSURANCE_ID"
+    },
+    {
+      "field": "dob",
+      "original": "05/17/1963",
+      "redacted": "[REDACTED]",
+      "reason": "PII category: DOB"
+    }
+  ],
+  "governance": {
+    "capsule_id": "5d51f343-0903-442a-8156-d7820a16ee2c",
+    "gas_consumed": 150,
+    "gas_limit": 1000,
+    "provenance_chain": [
+      "72a93c9a0d7514e78bbb2d2b562d599fc5a5e437c0799482ed3c44ab483b524c",
+      "a642a9d5535581041eed4ea412b9bd565c2218cf15ba71ff54a6028518b9c201",
+      "15bd970f042631a457bc2265a1b097f1240a005dff5f6acb78bd1a1ed23dbf12",
+      "16f603df1a30042f1dd48bad4a7a24d6cb838a6fbad99cd70b56dcdc720a2602",
+      "a49728cd5f1d23bb9e24e198f696cd7506e91343a7809ee2d6a05bcc3f6ba4a0",
+      "ec17f58167839ca108a4ff62ad61c0386599121876dd9122c57abd21f11f3e4f"
+    ],
+    "tier": "sovereign",
+    "manifest": {
+      "manifest_id": "11c808b1da964729",
+      "capsule_id": "5d51f343-0903-442a-8156-d7820a16ee2c",
+      "tier": "sovereign",
+      "declared_effects": [
+        {
+          "effect": "LATENT_EXTRACT",
+          "capability": "model_inference"
+        },
+        {
+          "effect": "LATENT_PROJECT",
+          "capability": "model_inference"
+        },
+        {
+          "effect": "LATENT_INJECT",
+          "capability": "model_inference"
+        }
+      ],
+      "allowed_fields": [
+        "medications",
+        "symptoms",
+        "diagnosis",
+        "chronic_conditions",
+        "allergies",
+        "vitals",
+        "lab_results",
+        "provider_notes"
+      ],
+      "denied_fields": [
+        "ssn",
+        "name",
+        "address",
+        "phone",
+        "email",
+        "dob",
+        "insurance_id",
+        "emergency_contact_name",
+        "emergency_contact_phone"
+      ],
+      "policy_ref": "governance/pii_policy.json",
+      "generated_at": "2026-05-22T02:19:40.706551+00:00"
+    },
+    "processing_steps": [
+      {
+        "step": 1,
+        "action": "ingest_form",
+        "input_hash": "d5e18f5294f78b3608617d5c924e32e2e9bc54612a490e7badf62ba0360d01d3",
+        "timestamp": "2026-05-22T02:19:41.195382+00:00"
+      },
+      {
+        "step": 2,
+        "action": "create_capsule",
+        "capsule_id": "5d51f343-0903-442a-8156-d7820a16ee2c",
+        "tier": "sovereign",
+        "gas_allocated": 1000
+      },
+      {
+        "step": 3,
+        "action": "scan_pii",
+        "fields_detected": 6,
+        "pii_categories": [
+          "ssn",
+          "phone",
+          "email",
+          "address",
+          "insurance_id",
+          "dob"
+        ]
+      },
+      {
+        "step": 4,
+        "action": "extract_structured_data",
+        "method": "mock_regex",
+        "model": "heuristic"
+      },
+      {
+        "step": 5,
+        "action": "redact_pii",
+        "fields_redacted": [
+          "name",
+          "ssn",
+          "address",
+          "phone",
+          "email",
+          "dob",
+          "insurance_id",
+          "emergency_contact"
+        ]
+      },
+      {
+        "step": 6,
+        "action": "validate_output",
+        "checks": [
+          "pii_scan",
+          "merkle_integrity",
+          "field_policy_compliance"
+        ]
+      }
+    ]
+  },
+  "verdict": "ALL_CLEAR",
+  "hardware": {
+    "gpu_name": "N/A (mock/CPU path)",
+    "vram_peak_mb": 0,
+    "inference_time_s": 0.488
+  }
+}

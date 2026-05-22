@@ -293,10 +293,14 @@ def _write_latent_observability_trace(
     prompt: str,
     steps: list[dict[str, Any]],
     adapter_sha256s: dict[str, str],
+    attestations: list[Any] | None = None,
+    provenance_chain: list[str] | None = None,
     total_gas: int,
     total_wall_time_ms: float,
     peak_vram_mb: float,
     final_text: str,
+    status: str = "ok",
+    secret_hashes: dict[str, str] | None = None,
 ) -> None:
     """Append a latent inference trace entry to the observability JSONL.
 
@@ -304,12 +308,25 @@ def _write_latent_observability_trace(
     with a SHA-256 trace_id computed from the canonical payload.  The resulting
     file can be validated by verify_chain.py just like standard intent-execution
     observability traces — the hashing format is identical.
+
+    The trace now includes attestations (round-by-round provenance metadata),
+    provenance_chain (Merkle hashes), and final_text for operator-facing
+    evidence rendering via hlf-evidence CLI.
     """
     import datetime as _dt
     import hashlib as _hashlib
 
     try:
         _OBS_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Serialize attestations for storage
+        serialized_attestations: list[dict[str, Any]] = []
+        if attestations:
+            for a in attestations:
+                if hasattr(a, 'to_dict'):
+                    serialized_attestations.append(a.to_dict())
+                elif isinstance(a, dict):
+                    serialized_attestations.append(a)
 
         # Build canonical payload matching verify_chain.py's expected format
         data = {
@@ -320,6 +337,12 @@ def _write_latent_observability_trace(
             "total_wall_time_ms": round(total_wall_time_ms, 1),
             "peak_vram_mb": peak_vram_mb,
             "adapter_hashes": adapter_sha256s,
+            "status": status,
+            "attestations": serialized_attestations,
+            "provenance_chain": provenance_chain or [],
+            "final_text": final_text[:1000] if final_text else "",
+            "prompt": prompt[:200] if prompt else "",
+            "secret_hashes": secret_hashes or {},
         }
 
         event_payload = {
@@ -362,6 +385,7 @@ def governed_latent_infer(
     human_approval_required: bool = False,
     hitl_timeout_seconds: int = 600,
     model_versions: dict[str, str] | None = None,
+    secrets: Any = None,  # SecretCapsule | None
 ) -> dict[str, Any]:
     """Run RecursiveMAS latent inference inside a governed sovereign capsule.
 
@@ -391,6 +415,9 @@ def governed_latent_infer(
         hitl_timeout_seconds: Seconds before the approval request auto-expires.
         model_versions: Optional dict of model_name → expected_sha256 digest.
             If provided, runs pre-flight verification against live Ollama scan.
+        secrets: Optional SecretCapsule for workflow credentials (API keys, DB
+            passwords).  Only SHA-256(ciphertext) appears in traces/audit.
+            Plaintext is available to the inference engine but never logged.
 
     Returns:
         dict with keys:
@@ -403,6 +430,7 @@ def governed_latent_infer(
           - total_wall_time_ms: Total wall-clock time
           - status: 'ok', 'awaiting_human_approval', 'error', or 'capsule_violation'
           - error: Error message if status in ('error', 'capsule_violation')
+          - secret_hashes: Dict of secret_name → SHA-256(ciphertext) if secrets active
           - hitl_status: (only if human_approval_required=True) dict with
               approval_token, capsule_id, and instructions for hlf-operator
           - model_version_results: (only if model_versions was checked) list of
@@ -415,6 +443,16 @@ def governed_latent_infer(
         agent_id=agent_id,
         max_rounds=max_rounds,
     )
+
+    # ── Resolve secret hashes for audit trail ────────────────────────
+    secret_hashes: dict[str, str] = {}
+    if secrets is not None:
+        try:
+            secret_hashes = secrets.merkle_metadata
+            logger.debug("Bound %d secrets to capsule %s", len(secret_hashes), 
+                         capsule.capsule.capsule_id)
+        except Exception as e:
+            logger.warning("Failed to resolve secret hashes: %s", e)
 
     # Pre-flight validation
     violations = capsule.validate_before_run()
@@ -429,6 +467,7 @@ def governed_latent_infer(
             "capsule_id": capsule.capsule.capsule_id,
             "total_gas": 0,
             "total_wall_time_ms": 0,
+            "secret_hashes": secret_hashes,
         }
 
     # ── Load RecursiveMAS session ────────────────────────────────────
@@ -448,6 +487,7 @@ def governed_latent_infer(
             "capsule_id": capsule.capsule.capsule_id,
             "total_gas": 0,
             "total_wall_time_ms": 0,
+            "secret_hashes": secret_hashes,
         }
 
     # Convert dict config to RecursiveSessionConfig if needed
@@ -466,6 +506,7 @@ def governed_latent_infer(
                     "attestations": [], "provenance_chain": [],
                     "capsule_id": capsule.capsule.capsule_id,
                     "total_gas": 0, "total_wall_time_ms": 0,
+                    "secret_hashes": secret_hashes,
                 }
 
             _cache_root = "C:/Users/gerry/.cache/huggingface/recursivemas"
@@ -563,6 +604,7 @@ def governed_latent_infer(
                 "total_gas": 0,
                 "total_wall_time_ms": 0,
                 "model_version_results": model_version_results,
+                "secret_hashes": secret_hashes,
             }
 
     # ── Run the latent inference ──────────────────────────────────────
@@ -580,6 +622,7 @@ def governed_latent_infer(
                 "capsule_id": capsule.capsule.capsule_id,
                 "total_gas": 0,
                 "total_wall_time_ms": 0,
+                "secret_hashes": secret_hashes,
             }
 
         partial_steps: list[dict] = []
@@ -631,18 +674,6 @@ def governed_latent_infer(
         final_text = result.get("final_text", "")
         steps = result.get("steps", [])
 
-        # ── Write observability trace for verify_chain.py ──────────────
-        _write_latent_observability_trace(
-            capsule_id=capsule.capsule.capsule_id,
-            prompt=prompt,
-            steps=steps,
-            adapter_sha256s=adapter_sha256s,
-            total_gas=capsule._GAS_PER_HANDOFF * len(steps),
-            total_wall_time_ms=total_wall_time_ms,
-            peak_vram_mb=peak_vram_mb,
-            final_text=final_text,
-        )
-
         # ── Build attestations from recorded steps ──────────────────
         attestations: list[LatentRoundAttestation] = []
         for step in steps:
@@ -690,11 +721,28 @@ def governed_latent_infer(
             "total_wall_time_ms": wrapped.total_wall_time_ms,
             "steps": steps,
             "peak_vram_mb": peak_vram_mb,
+            "secret_hashes": secret_hashes,
         }
         if model_version_results:
             base_result["model_version_results"] = model_version_results
         if oom_details:
             base_result["oom_details"] = oom_details
+
+        # ── Write observability trace for verify_chain.py / hlf-evidence ──
+        _write_latent_observability_trace(
+            capsule_id=capsule.capsule.capsule_id,
+            prompt=prompt,
+            steps=steps,
+            adapter_sha256s=adapter_sha256s,
+            attestations=attestations,
+            provenance_chain=base_result["provenance_chain"],
+            total_gas=base_result["total_gas"],
+            total_wall_time_ms=total_wall_time_ms,
+            peak_vram_mb=peak_vram_mb,
+            final_text=final_text,
+            status=base_result["status"],
+            secret_hashes=secret_hashes,
+        )
 
         # ── HITL Gate: block if human approval required ──────────────────
         if human_approval_required and not aborted:
@@ -766,4 +814,5 @@ def governed_latent_infer(
             "capsule_id": capsule.capsule.capsule_id,
             "total_gas": 0,
             "total_wall_time_ms": total_wall_time_ms,
+            "secret_hashes": secret_hashes,
         }

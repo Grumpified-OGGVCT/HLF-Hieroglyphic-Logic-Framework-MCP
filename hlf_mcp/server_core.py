@@ -763,7 +763,6 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         except Exception as exc:
             return {"status": "error", "error": str(exc), "count": 0, "pending": []}
 
-    @mcp.tool()
     def hlf_hitl_approve(
         capsule_id: str,
         operator_id: str = "mcp-operator",
@@ -771,12 +770,9 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     ) -> dict[str, Any]:
         """Approve a pending HITL capsule approval request.
 
-        Args:
-            capsule_id: The capsule ID to approve.
-            operator_id: Identifier for the approving operator.
-            approval_token: Optional approval token for verification.
-
-        Returns the updated approval request status.
+        NOTE: This function is defined for direct use only — the MCP-facing
+        version is registered via server_enterprise.py with tier gating
+        (sovereign-only). This avoids exposing operator tools to low-tier agents.
         """
         from hlf_mcp.hlf.hitl_gate import HITLGate, ApprovalRequest
         gate = HITLGate.get_instance()
@@ -805,7 +801,6 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         except FileNotFoundError:
             return {"status": "error", "error": f"No pending approval for capsule {capsule_id}"}
 
-    @mcp.tool()
     def hlf_hitl_reject(
         capsule_id: str,
         reason: str = "",
@@ -813,12 +808,9 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     ) -> dict[str, Any]:
         """Reject a pending HITL capsule approval request.
 
-        Args:
-            capsule_id: The capsule ID to reject.
-            reason: Human-readable reason for rejection.
-            operator_id: Identifier for the rejecting operator.
-
-        Returns the updated approval request status.
+        NOTE: This function is defined for direct use only — the MCP-facing
+        version is registered via server_enterprise.py with tier gating
+        (sovereign-only). This avoids exposing operator tools to low-tier agents.
         """
         from hlf_mcp.hlf.hitl_gate import HITLGate
         gate = HITLGate.get_instance()
@@ -880,7 +872,5 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_latent_recursive_infer": hlf_latent_recursive_infer,
         "hlf_resource_report": hlf_resource_report,
         "hlf_hitl_list_pending": hlf_hitl_list_pending,
-        "hlf_hitl_approve": hlf_hitl_approve,
-        "hlf_hitl_reject": hlf_hitl_reject,
         "hlf_hitl_status": hlf_hitl_status,
     }

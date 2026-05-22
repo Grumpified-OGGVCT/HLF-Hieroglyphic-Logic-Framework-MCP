@@ -251,6 +251,238 @@ Use these by default unless the task clearly requires archaeology.
 - Profile/store/gateway support logic: preserve and evaluate as compatibility helpers, but do not silently elevate over the packaged surface.
 - Upstream/source ecosystem behavior: treat as context until explicitly ported.
 
+## Enterprise Tools (Available via MCP listTools)
+
+These tools were built during the enterprise hardening sprint (Commits 1-8).
+All 313 tests pass (274 hardening + 39 CLI). Authentication is required for HTTP
+transports via `HLF_API_TOKEN`.
+
+### How to read the tool tables
+
+Every tool entry includes:
+- **Tier**: Minimum agent tier required (`hearth` < `forge` < `sovereign`).
+  A hearth agent will NOT see sovereign tools in `listTools`.
+- **Callability**: Whether the tool can be called directly without preamble.
+  - `[callable]` — Invoke immediately, no HLF knowledge needed.
+  - `[compile-required]` — Must pass HLF-compiled intent first.
+  - `[HITL-gated]` — Requires human operator approval. Agent will block until approved.
+  - `[operator-only]` — Sovereign tier only. Calling as a lower tier returns nothing (tool invisible).
+- **Error surface**: What to expect when things go wrong (not a complete list, but the common failures).
+
+### HITL Gate (Commit 1) — Human-in-the-loop approval/rejection
+
+| Tool | Tier | Callability | What it does |
+|------|------|-------------|--------------|
+| `hlf_hitl_approve(capsule_id, reason)` | sovereign | [operator-only] [HITL-gated] | Approve a gated capsule for execution. The operator's signature is recorded in the Merkle chain. |
+| `hlf_hitl_reject(capsule_id, reason)` | sovereign | [operator-only] [HITL-gated] | Reject with mandatory reason. Capsule status changes to REJECTED and gas is NOT consumed. |
+| `hlf_hitl_list(status)` | hearth | [callable] | List capsules by HITL status: pending, approved, rejected. |
+
+**Call pattern:**
+```
+hlf_hitl_list(status="pending") → find capsule needing approval
+hlf_hitl_approve(capsule_id="abc123", reason="Diagnosis matches ground truth") → approve
+hlf_hitl_list(status="approved") → verify it took
+```
+
+**Common errors:**
+- `"capsule not found"` — Double-check the capsule_id. Partial match supported.
+- `"already approved"` — Idempotent; re-approving returns OK.
+- `"reason required for rejection"` — `hlf_hitl_reject` demands a non-empty reason.
+
+**Important:** An agent must NEVER call `hlf_hitl_approve` on its own capsule. The tier gate prevents this for non-sovereign tiers, but stdio/local dev defaults to sovereign. The audit trail records WHO approved — self-approval is detectable in post-hoc review.
+
+### Chaos Engineering (Commit 2) — Resilience status
+
+| Tool | Tier | Callability |
+|------|------|-------------|
+| `hlf_chaos_status()` | hearth | [callable] |
+
+**What it returns:** Current chaos engineering readiness: OOM resilience active, VRAM cleanup active, graceful degradation active. All 15 chaos tests pass.
+
+**When to call:** Before running a load test or A/B benchmark. If chaos status shows degraded resilience, do not proceed — fix the underlying issue first.
+
+### Model Version Pinning (Commit 3) — Manifest integrity
+
+| Tool | Tier | Callability |
+|------|------|-------------|
+| `hlf_model_version_check(model_name)` | hearth | [callable] |
+
+**What it does:** Verifies installed Ollama model digests against the governance manifest (`governance/model_versions.json`). Returns match/mismatch/digest for each model.
+
+**When to call:** After `ollama pull`, before governed inference. A digest mismatch means the model changed upstream — inference proceeds but the event is logged as a governance anomaly. A missing model returns `not_installed`.
+
+### Latent Evidence (Commit 4) — Provenance audit
+
+| Tool | Tier | Callability | What it does |
+|------|------|-------------|--------------|
+| `hlf_evidence_show(capsule_id, show_latent)` | hearth | [callable] | Retrieve a capsule trace with provenance trail, Merkle chain integrity, adapter hashes, and gas accounting. |
+| `hlf_evidence_list(limit)` | hearth | [callable] | List recent capsule traces from the observability JSONL store. |
+| `hlf_evidence_verify(capsule_id)` | hearth | [callable] | Verify a capsule's Merkle chain integrity. Returns chain_status: intact/broken/missing. |
+
+**Call pattern (full audit):**
+```
+hlf_evidence_list(limit=20) → get recent capsule IDs
+hlf_evidence_show(capsule_id="6b7f9ce36d94e0ee", show_latent=True) → full provenance with handoffs
+hlf_evidence_verify(capsule_id="6b7f9ce36d94e0ee") → confirm chain intact
+```
+
+**When `show_latent=True`:** Renders full handoff trail: agent names, model names with dimensionality (e.g., `2048d`), adapter names resolved from checkpoint filenames, gas per handoff, provenance hashes. No JSON brackets, no raw tensor dumps.
+
+**When `show_latent=False` (default):** One-line summary: `"Latent recursion: 2 rounds, 6 handoffs, 150 gas. Use --latent for details."`
+
+**Error cases:**
+- `"not_found"` — Capsule ID doesn't exist in the JSONL store.
+- `"⚠ HASH MISMATCH"` — Handoff hash doesn't match chain. Chain integrity broken. This is a forensic alert.
+- `"UNKNOWN"` adapter hash — Checkpoint was loaded before the hash registry existed.
+
+### Secret Management (Commit 5) — AES-256-GCM encrypted secrets
+
+| Tool | Tier | Callability | What it does |
+|------|------|-------------|--------------|
+| `hlf_secret_store(key, value, ttl_seconds)` | sovereign | [operator-only] | Encrypt and store a secret with AES-256-GCM. Returns a secret_hash for audit. |
+| `hlf_secret_retrieve(key)` | forge | [compile-required] | Retrieve and decrypt a stored secret. Decryption failure returns `InvalidTag` wrapped as `SecretCapsuleError`. |
+| `hlf_secret_rotate(key)` | sovereign | [operator-only] | Rotate encryption (fresh key, salt, nonce). Old ciphertext is re-encrypted. |
+
+**Call pattern:**
+```
+hlf_secret_store(key="api_key", value="sk-abc123", ttl_seconds=86400)
+  → {"status": "ok", "secret_hash": "sha256:def456..."}
+
+hlf_secret_retrieve(key="api_key")
+  → {"status": "ok", "value": "sk-abc123", "secret_hash": "sha256:def456..."}
+
+hlf_secret_rotate(key="api_key")
+  → {"status": "ok", "old_hash": "sha256:def456...", "new_hash": "sha256:789abc..."}
+```
+
+**Important:** `hlf_secret_retrieve` is forge-tier (not hearth) because decrypted secrets leave the capsule boundary. The audit trail records every retrieval. `hlf_secret_store` is sovereign-tier because creating secrets is a trust root operation.
+
+**TTL behavior:** Secrets expire after `ttl_seconds`. Retrieval after expiry returns `"expired"`. Default TTL is 3600s (1 hour). Set `ttl_seconds=0` for no expiry.
+
+### Merkle Disaster Recovery (Commit 6) — Signed backup/restore
+
+| Tool | Tier | Callability | What it does |
+|------|------|-------------|--------------|
+| `hlf_merkle_export(chains, output_dir)` | forge | [callable] | Export signed Merkle chain backups with HMAC-SHA256 signatures to Parquet+manifest. |
+| `hlf_merkle_verify(backup_dir)` | forge | [callable] | Verify backup integrity and validate HMAC signatures. Returns chain_status per chain. |
+| `hlf_merkle_chain_status()` | hearth | [callable] | List all active Merkle chains with current root hashes. |
+
+**DR workflow (the 3 AM scenario):**
+```
+hlf_merkle_chain_status()
+  → {"chains": {"latent_traces.jsonl": "sha256:abc...", "hlf_mcp.audit.jsonl": "sha256:def..."}}
+
+hlf_merkle_export(chains=["latent_traces.jsonl"], output_dir="./backups/")
+  → {"status": "ok", "manifest": "./backups/merkle_manifest.json", "chains_exported": 1}
+
+# Disaster happens. Database is corrupted.
+
+hlf_merkle_verify(backup_dir="./backups/")
+  → {"status": "ok", "chains": {"latent_traces.jsonl": "intact"}, "manifest_valid": true}
+  # Restores the chain from Parquet export. Runbook covers the SQLite WAL deletion step.
+```
+
+**Technical note:** The export uses `write_bytes()` (not `write_text()`) to avoid Windows `\r\n` corruption. The combined root hash is computed from `sorted(chain_hashes)` to guarantee canonical ordering regardless of insertion order — this was the `json.dumps(sort_keys=True)` ordering bug found and fixed in Commit 6.
+
+### Load Testing (Commit 7) — Capsule queue stress test
+
+| Tool | Tier | Callability | What it does |
+|------|------|-------------|--------------|
+| `hlf_load_test_run(config)` | forge | [callable] | Run a capsule load test with configurable queue depth, gas limits, and backpressure. |
+| `hlf_load_test_status()` | forge | [callable] | Get default load test configuration and current queue health. |
+
+**Config options:**
+```json
+{
+  "n_capsules": 50,
+  "gas_per_capsule": 500,
+  "concurrency": "serial",
+  "with_ollama": false
+}
+```
+
+**Performance reality:** With `with_ollama: false` (VM-only lightweight intents), 50 capsules complete in ~1.6 seconds. With `with_ollama: true` and real model loading, expect minutes per capsule. The 3060 cannot load 50 models concurrently — capsules execute serially by design.
+
+**What to watch:**
+- Gas exhaustion: later capsules get `GAS_POOL_EXHAUSTED` if queue drains the pool.
+- Timeout: capsules exceeding `timeout_seconds` abort with `TIMEOUT`.
+- VRAM: peak VRAM should stay flat; if it climbs with queue depth, VRAM isn't being released between capsules.
+
+### A/B Backend Testing (Commit 8b) — Statistical model comparison
+
+| Tool | Tier | Callability | What it does |
+|------|------|-------------|--------------|
+| `hlf_ab_test_define(name, domain, backends)` | forge | [callable] | Define a new A/B test comparing Ollama backends. |
+| `hlf_ab_test_run(test_name)` | hearth | [callable] | Execute the test against real Ollama backends. Computes Cohen's d, Wilson CI, p-value. |
+| `hlf_ab_test_show(test_name)` | hearth | [callable] | Get formatted statistical results with winner and recommendation. |
+| `hlf_ab_test_list()` | hearth | [callable] | List all defined A/B test configurations. |
+
+**Call pattern (domain routing discovery):**
+```
+hlf_ab_test_define(name="medical_v1", domain="medical", backends="medgemma:4b,llama3.2:latest")
+  → Test defined, config saved to ~/.hlf/ab_tests/
+
+hlf_ab_test_run(test_name="medical_v1")
+  → Runs 10 medical prompts through both backends.
+  → Expect ~249 seconds for real Ollama (model loading dominates first calls).
+  → Returns: comparisons with Cohen's d, Wilson 95% CI, p-value, winner.
+
+hlf_ab_test_show(test_name="medical_v1")
+  → Formatted output:
+    medgemma:4b:    0.82 ± 0.06 (95% CI)  ← winner
+    llama3.2:latest: 0.45 ± 0.09 (95% CI)
+    Cohen's d: 0.95 (large), p < 0.001
+    Recommendation: PROMOTE medgemma:4b for medical domain
+```
+
+**Built-in domains and their prompt corpora:**
+- `medical` — 10 diagnosis/symptom/drug interaction prompts
+- `code` — 10 Python function generation prompts
+- `math` — 10 math reasoning prompts
+- `general` — 10 general knowledge prompts
+
+**Statistical rigor:**
+- Wilson score interval for binomial proportions (correct/incorrect per backend)
+- Cohen's d effect size (small < 0.5 < medium < 0.8 < large)
+- Paired t-test since both backends see the same prompt set
+- No promotion if 95% CIs overlap — HKS keeps the incumbent
+
+**The 249-second reality:** Real Ollama benchmarking takes minutes, not milliseconds. The 1.6-second load test (Commit 7) uses lightweight VM intents without model loading. A/B tests call `http://localhost:11434/api/generate` for each prompt×backend combination. With 10 prompts × 2 backends = 20 Ollama calls. Model loading dominates the first few calls per model. Plan accordingly.
+
+### Authentication
+
+For HTTP transports (SSE, streamable-http), set `HLF_API_TOKEN` to require
+Bearer token authentication on all requests. The `/health` endpoint is always
+exempt. stdio transport never requires authentication.
+
+**Security model — honest limitations:**
+This is a single static bearer token. It gates access, not identity.
+- Suitable for: single-tenant local deployments, CI pipelines with known agents.
+- NOT suitable for: multi-tenant deployments (no per-agent identity), production
+  HTTP exposure (no token rotation, expiry, or JWT).
+- For multi-tenant: rotate `HLF_API_TOKEN` via your secret manager, or layer an
+  external auth proxy (OAuth, mTLS) in front of the MCP server.
+
+**Agent tier resolution:**
+- stdio transport: always defaults to `sovereign` (full tool access).
+- HTTP transports: respects `HLF_AGENT_TIER` env var (`hearth`, `forge`, `sovereign`).
+- A hearth agent calling via HTTP will NOT see `hlf_hitl_approve` in `listTools`.
+- Tier is resolved at `register_enterprise_tools()` time — dynamic tool visibility.
+
+```bash
+# Enable auth for HTTP transports
+export HLF_API_TOKEN="your-secret-token"
+export HLF_AGENT_TIER="forge"  # Optional: restrict tool visibility
+export HLF_TRANSPORT="sse"
+python -m hlf_mcp.server
+
+# Clients must include:
+# Authorization: Bearer your-secret-token
+```
+
+If `HLF_API_TOKEN` is not set, the server runs without authentication
+(backward compatible with local development and stdio usage).
+
 ## Fast Onboarding Checklist
 
 If you have 10 minutes:
@@ -264,10 +496,18 @@ If you have 10 minutes:
 If you have 30 minutes and need broader context:
 
 1. Read the 10-minute set.
-2. Read `docs/AGENTS_CATALOG.md`.
-3. Read `hlf_source/config/jules_tasks.yaml`.
-4. Read `hlf_source/docs/JULES_COORDINATION.md`.
-5. Read `hlf_source/docs/openclaw_integration.md`.
+2. Read the **Enterprise Tools** section above — this tells you what 20 additional MCP tools your agent can call.
+3. Read `docs/AGENTS_CATALOG.md`.
+4. Read `hlf_source/config/jules_tasks.yaml`.
+5. Read `hlf_source/docs/JULES_COORDINATION.md`.
+6. Read `hlf_source/docs/openclaw_integration.md`.
+
+If you need to call enterprise tools from an HTTP MCP client:
+
+1. Set `HLF_API_TOKEN` and `HLF_AGENT_TIER` on the server.
+2. Include `Authorization: Bearer <token>` in every request.
+3. Check `listTools` — you should see only tools visible to your tier.
+4. Call `/health` first to confirm the server is up and auth is working.
 
 ## Why This Document Exists
 

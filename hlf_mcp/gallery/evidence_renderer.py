@@ -612,7 +612,11 @@ class EvidenceSummaryRenderer:
                 title="[bold magenta]Latent Provenance Audit[/bold magenta]",
                 border_style="magenta",
             )
-            return str(panel)
+            # Render the Panel to a string via Console
+            from io import StringIO as _StringIO
+            console = Console(file=_StringIO(), force_terminal=True, width=100, color_system="standard")
+            console.print(panel)
+            return console.file.getvalue()
 
         # Plain text fallback
         lines = [

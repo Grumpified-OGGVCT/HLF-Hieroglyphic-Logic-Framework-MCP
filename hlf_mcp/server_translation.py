@@ -1020,7 +1020,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
             return {"status": "error", "error": str(exc)}
 
     @mcp.tool()
-    def hlf_governed_swarm_mechanics(
+    async def hlf_governed_swarm_mechanics(
         text: str = "",
         source: str = "",
         handoff: dict[str, Any] | None = None,
@@ -1045,12 +1045,12 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
                         "error": "text, source, or handoff.raw_hlf_source is required",
                         "boundary": {"mode": "local_bounded_swarm", "distributed_a2a": False},
                     }
-                translation = asyncio.run(hlf_translate_to_hlf(
+                translation = await hlf_translate_to_hlf(
                     text,
                     language=language,
                     cognitive_lane_policy=cognitive_lane_policy,
                     handoff_mode="swarm",
-                ))
+                )
                 if translation.get("status") != "ok":
                     return translation
                 raw_hlf_source = str(translation["source"])

@@ -48,6 +48,8 @@ from hlf_mcp.server_resources import register_resources
 from hlf_mcp.server_translation import register_translation_tools
 from hlf_mcp.server_verifier import register_verifier_tools
 from hlf_mcp.server_workflow_benchmark import register_workflow_benchmark_tools
+from hlf_mcp.server_auth import auth_middleware, HLF_API_TOKEN
+from hlf_mcp.server_enterprise import register_enterprise_tools
 
 _log = logging.getLogger(__name__)
 
@@ -107,6 +109,7 @@ REGISTERED_TOOLS.update(register_workflow_benchmark_tools(mcp))
 REGISTERED_TOOLS.update(register_governance_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_feedback_tools(mcp))
 REGISTERED_TOOLS.update(register_handoff_tools(mcp, _ctx))
+REGISTERED_TOOLS.update(register_enterprise_tools(mcp, _ctx))
 
 
 @mcp.tool()
@@ -350,8 +353,14 @@ def main() -> None:
         )
     else:
         _log.info("RAGMemory persistent DB: %s", _db_path)
-    _startup_self_index()
+    if not os.environ.get("HLF_SKIP_SELF_INDEX"):
+        _startup_self_index()
+    else:
+        _log.info("HLF_SKIP_SELF_INDEX is set — skipping doc ingestion at startup.")
     transport = os.environ.get("HLF_TRANSPORT", "stdio").lower().strip()
+
+    if transport in ("sse", "http", "streamable-http"):
+        auth_middleware(transport)  # Enable Bearer token auth for HTTP transports
 
     if transport == "stdio":
         mcp.run(transport="stdio")

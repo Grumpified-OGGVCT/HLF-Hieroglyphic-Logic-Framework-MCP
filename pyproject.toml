@@ -69,7 +69,7 @@ select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
+# asyncio_mode = "auto"  # not used — conftest.py has custom pytest_pyfunc_call hook
 # Default automated collection lives under tests/. Root-level legacy probes and
 # smoke scripts remain manual until fully migrated or retired.
 testpaths = [

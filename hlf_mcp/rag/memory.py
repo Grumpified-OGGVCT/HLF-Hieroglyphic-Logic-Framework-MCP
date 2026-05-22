@@ -2887,7 +2887,15 @@ class RAGMemory:
         When ``bypass_vector_dedup=True``, vector-similarity dedup is skipped.
         Use for high-value governed entries (e.g. hks_exemplar repair patterns)
         that must not be silently deduped against unrelated same-topic entries.
+
+        Vector dedup is automatically bypassed when ``supersedes_sha256``
+        is provided — a fact that explicitly supersedes another must never
+        be silently rejected as a near-duplicate of the superseded entry.
         """
+        # Automatically bypass vector dedup when superseding a prior fact.
+        if supersedes_sha256:
+            bypass_vector_dedup = True
+
         # ── Write-path evidence validation ────────────────────────────────
         if not content or not content.strip():
             return {"stored": False, "error": "empty_content", "sha256": ""}

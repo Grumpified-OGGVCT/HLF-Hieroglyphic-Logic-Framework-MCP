@@ -1,6 +1,6 @@
 {
-  "dashboard_id": "6974e27b224da6f4",
-  "generated_at": "2026-05-22T03:07:20Z",
+  "dashboard_id": "2867c0872a666040",
+  "generated_at": "2026-05-22T15:45:24Z",
   "overall_status": "degraded",
   "pillar_score": {
     "pillar": "gallery-operator-legibility",
@@ -62,11 +62,11 @@
       "status": "healthy"
     },
     "formal_verification": {
-      "score_pct": 94.2,
+      "score_pct": 56.2,
       "components": {
         "z3_solver_coverage": {
-          "score_pct": 100.0,
-          "detail": "12/12 operator families with Z3 encoding (100.0%)",
+          "score_pct": 0.0,
+          "detail": "0/12 operator families with Z3 encoding (0.0%)",
           "weight": 0.35
         },
         "inductive_proof_automation": {
@@ -75,8 +75,8 @@
           "weight": 0.3
         },
         "proof_depth": {
-          "score_pct": 85.0,
-          "detail": "Proof depth rating: 'deep' (85.0%); 3 total depth",
+          "score_pct": 65.0,
+          "detail": "Proof depth rating: 'moderate' (65.0%); 2 total depth",
           "weight": 0.15
         },
         "test_coverage": {
@@ -85,8 +85,8 @@
           "weight": 0.2
         }
       },
-      "status": "healthy",
-      "proof_surface": "\u001b[1mHLF Proof Surface — Compact View\u001b[0m\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m\n  \u001b[32m\u001b[1m \u001b[1mboolean           \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mcontainer         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1meffect            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mgas               \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mnumeric           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mrational          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mset               \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mspatial           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mspec_gate         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mstring            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtemporal          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtype_system       \u001b[0m [L:0] admitted     100%\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m"
+      "status": "critical",
+      "proof_surface": "\u001b[1mHLF Proof Surface — Compact View\u001b[0m\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m\n  \u001b[31m\u001b[1m \u001b[1mboolean           \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mcontainer         \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1meffect            \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mgas               \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mnumeric           \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mrational          \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mset               \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mspatial           \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mspec_gate         \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mstring            \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mtemporal          \u001b[0m [·:0] —              0%\n  \u001b[31m\u001b[1m \u001b[1mtype_system       \u001b[0m [·:0] —              0%\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m"
     },
     "gallery_operator_legibility": {
       "score_pct": 82.8,
@@ -164,15 +164,15 @@
       },
       {
         "name": "Formal Verification",
-        "score_pct": 94.2,
+        "score_pct": 56.2,
         "weight": 7,
-        "status": "healthy",
+        "status": "critical",
         "target_pct": 80.0,
-        "gap_pct": -14.2,
+        "gap_pct": 23.8,
         "components": {
           "z3_solver_coverage": {
-            "score_pct": 100.0,
-            "detail": "12/12 operator families with Z3 encoding (100.0%)",
+            "score_pct": 0.0,
+            "detail": "0/12 operator families with Z3 encoding (0.0%)",
             "weight": 0.35
           },
           "inductive_proof_automation": {
@@ -181,8 +181,8 @@
             "weight": 0.3
           },
           "proof_depth": {
-            "score_pct": 85.0,
-            "detail": "Proof depth rating: 'deep' (85.0%); 3 total depth",
+            "score_pct": 65.0,
+            "detail": "Proof depth rating: 'moderate' (65.0%); 2 total depth",
             "weight": 0.15
           },
           "test_coverage": {
@@ -238,11 +238,13 @@
         }
       }
     ],
-    "overall_score_pct": 89.8,
-    "overall_status": "healthy",
-    "gap_analysis": [],
-    "generated_at": "2026-05-22T03:07:47Z",
-    "scorecard_id": "scorecard-ca7204ed0b58"
+    "overall_score_pct": 75.8,
+    "overall_status": "degraded",
+    "gap_analysis": [
+      "Formal Verification: gap of +23.8% to target 80.0% — extend Z3 encodings and inductive proof automation"
+    ],
+    "generated_at": "2026-05-22T15:45:24Z",
+    "scorecard_id": "scorecard-165b8a2f5b0d"
   },
   "swarm": {
     "source": "simulated",
@@ -255,7 +257,7 @@
         "role": "compiler",
         "event_type": "complete",
         "message": "Compiled 12 fixtures successfully",
-        "timestamp_ns": 1779419235037785600
+        "timestamp_ns": 1779464719308021504
       },
       {
         "swarm_id": "swarm-001",
@@ -264,7 +266,7 @@
         "role": "verifier",
         "event_type": "progress",
         "message": "Verifying 8 properties...",
-        "timestamp_ns": 1779419237037785600
+        "timestamp_ns": 1779464721308023296
       },
       {
         "swarm_id": "swarm-001",
@@ -273,7 +275,7 @@
         "role": "governor",
         "event_type": "started",
         "message": "Constitutional check in progress",
-        "timestamp_ns": 1779419239037785600
+        "timestamp_ns": 1779464723308024064
       }
     ],
     "active_agents": 3,
@@ -287,28 +289,28 @@
         "decision": "PROCEED",
         "checks_passed": 5,
         "checks_total": 5,
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       },
       {
         "program": "security_audit.hlf",
         "decision": "PROCEED",
         "checks_passed": 6,
         "checks_total": 6,
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       },
       {
         "program": "db_migration.hlf",
         "decision": "PROCEED",
         "checks_passed": 7,
         "checks_total": 7,
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       },
       {
         "program": "delegation.hlf",
         "decision": "WARN",
         "checks_passed": 4,
         "checks_total": 5,
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       }
     ],
     "summary": {
@@ -328,7 +330,7 @@
         "location": "network_output",
         "detail": "Unsanitized data egress detected without explicit capability declaration",
         "severity": "high",
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       },
       {
         "rule_id": "R-2",
@@ -336,7 +338,7 @@
         "location": "http_request",
         "detail": "Network effect in untrusted code path",
         "severity": "medium",
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       }
     ],
     "summary": {
@@ -359,7 +361,7 @@
         ],
         "approved": true,
         "signature": "sha256:aaa111bbb222",
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       },
       {
         "program": "security_audit.hlf",
@@ -371,7 +373,7 @@
         ],
         "approved": true,
         "signature": "sha256:abc123def456",
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       },
       {
         "program": "db_migration.hlf",
@@ -383,7 +385,7 @@
         ],
         "approved": true,
         "signature": "sha256:def789ghi012",
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       },
       {
         "program": "agent_delegation.hlf",
@@ -397,7 +399,7 @@
         "approved": false,
         "signature": "sha256:jkl345mno678",
         "rejection_reason": "AI_INFER requires sovereign tier approval gate",
-        "timestamp": "2026-05-22T03:07:20Z"
+        "timestamp": "2026-05-22T15:45:24Z"
       }
     ],
     "summary": {

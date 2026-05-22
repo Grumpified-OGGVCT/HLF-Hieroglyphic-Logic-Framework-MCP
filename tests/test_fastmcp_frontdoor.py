@@ -627,7 +627,9 @@ def test_hlf_weekly_evidence_summary_reads_history(tmp_path) -> None:
 
 def test_server_instruction_summary_tracks_registered_surface() -> None:
     exported_tools = {
-        name for name in dir(server) if name.startswith("hlf_") and callable(getattr(server, name))
+        name for name in dir(server)
+        if (name.startswith("hlf_") or name.startswith("janus_"))
+        and callable(getattr(server, name))
     }
 
     assert len(server.REGISTERED_TOOLS) == len(exported_tools)

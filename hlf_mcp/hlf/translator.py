@@ -973,32 +973,6 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
                 var = _extract_var_name(parts[0]) or "var"
                 val = parts[1].strip().rstrip(",")
                 actions.append(f"SET {var} = {val}")
-        elif any(w in s_lower for w in profile.log_words):
-            # Extract the message after the log keyword
-            log_words_list = [w for w in profile.log_words if w in s_lower]
-            if log_words_list:
-                kw = max(log_words_list, key=len)  # longest match
-                after_kw = s_lower.split(kw, 1)[-1].strip().rstrip(".")
-                target = '"' + after_kw.replace('"', "'") + '"'
-            else:
-                target = _extract_quoted(s) or '"console"'
-            actions.append(f"LOG {target}")
-        elif any(w in s_lower for w in profile.source_words):
-            path = _extract_path(s, language=language) or _extract_quoted(s) or "'data'"
-            actions.append(f"SOURCE path={path}")
-        elif any(w in s_lower for w in profile.summary_words):
-            actions.append("SUMMARY [SUMMARY]")
-        elif any(w in s_lower for w in profile.branch_words):
-            actions.append("⊎ [BRANCH]")
-        elif any(w in s_lower for w in profile.spec_words):
-            actions.append("SPEC_DEFINE")
-        elif any(w in s_lower for w in profile.memory_store_words):
-            key = _extract_memory_key(s) or profile.memory_label
-            val = _extract_memory_value(s) or s[:40].replace('"', "'")
-            actions.append(f'MEMORY [{key}] value="{val}"')
-        elif any(w in s_lower for w in profile.memory_recall_words):
-            key = _extract_memory_key(s) or profile.recall_label
-            actions.append(f"RECALL [{key}]")
         elif any(w in s_lower for w in profile.analyze_words):
             path = _extract_path(s, language=language) or "."
             actions.append(f'Δ [INTENT] goal="{profile.analyze_goal}" target="{path}"')
@@ -1009,6 +983,16 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
             actions.append(f'⌘ [DELEGATE] agent="{agent}" goal="{profile.delegate_goal}"')
         elif any(w in s_lower for w in profile.route_words):
             actions.append(f'⌘ [ROUTE] strategy="{profile.route_strategy}" tier="$DEPLOYMENT_TIER"')
+        elif any(w in s_lower for w in profile.log_words):
+            # Skip log_words if the match is from a file extension (.log, .log.gz, etc.)
+            log_words_list = [w for w in profile.log_words if w in s_lower]
+            if log_words_list:
+                kw = max(log_words_list, key=len)  # longest match
+                after_kw = s_lower.split(kw, 1)[-1].strip().rstrip(".")
+                target = '"' + after_kw.replace('"', "'") + '"'
+            else:
+                target = _extract_quoted(s) or '"console"'
+            actions.append(f"LOG {target}")
         elif any(w in s_lower for w in profile.memory_store_words):
             key = _extract_memory_key(s) or profile.memory_label
             val = _extract_memory_value(s) or s[:40].replace('"', "'")

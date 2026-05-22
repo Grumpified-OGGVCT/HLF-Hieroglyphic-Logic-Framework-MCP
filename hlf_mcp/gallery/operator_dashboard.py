@@ -474,7 +474,7 @@ def build_dashboard_data(
         typed_pillar = compute_typed_effect_pillar_score()
         formal_pillar = compute_formal_verification_pillar_score()
         gallery_pillar = compute_gallery_operator_pillar_score(
-            dashboard_data=None,  # avoid recursion; use partial data below
+            dashboard_data={},  # avoid recursion: empty dict skips build_dashboard_data() call
             feedback_collector=None,
         )
         pillar_scores = {

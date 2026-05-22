@@ -25,6 +25,10 @@ def pytest_configure(config: pytest.Config) -> None:
         "requires_ollama: mark test as requiring a live Ollama instance "
         "(skipped by default unless --run-ollama is passed)",
     )
+    config.addinivalue_line(
+        "markers",
+        "asyncio: mark test as an async test (handled by custom pytest_pyfunc_call hook)",
+    )
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

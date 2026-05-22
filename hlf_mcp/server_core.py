@@ -720,6 +720,30 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
 
         return result
 
+    # ── Resource Monitor Report ────────────────────────────────────────────
+
+    @mcp.tool()
+    def hlf_resource_report() -> dict[str, Any]:
+        """Get GPU VRAM and latent inference resource usage report.
+
+        Returns a snapshot of active latent inference sessions, including
+        model count, adapter count, VRAM allocated, and GPU availability.
+        """
+        try:
+            from hlf_mcp.hlf.resource_monitor import ResourceMonitor
+            monitor = ResourceMonitor.get_instance()
+            return monitor.get_resource_report()
+        except ImportError:
+            return {
+                "status": "unavailable",
+                "error": "ResourceMonitor not importable",
+                "snapshot": {},
+                "active_sessions": [],
+                "active_session_count": 0,
+                "total_session_records": 0,
+                "total_snapshots": 0,
+            }
+
     return {
         "hlf_compile": hlf_compile,
         "hlf_format": hlf_format,
@@ -742,4 +766,5 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "janus_query": janus_query,
         "janus_archive": janus_archive,
         "hlf_latent_recursive_infer": hlf_latent_recursive_infer,
+        "hlf_resource_report": hlf_resource_report,
     }

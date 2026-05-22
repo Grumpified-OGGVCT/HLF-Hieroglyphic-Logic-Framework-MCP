@@ -1,0 +1,94 @@
+{
+  "prompt": "A 55-year-old woman presents with fatigue, weight gain, and constipation. Labs: TSH 8.2, free T4 1.1 (normal). She takes iron supplements for anemia and omeprazole for GERD. What is the most likely diagnosis, and what is the pathophysiology?",
+  "models_tested": [
+    "medgemma:4b",
+    "MedAIBase/MedGemma1.0:4b",
+    "gemma3n:latest",
+    "phi4-mini-reasoning:latest"
+  ],
+  "results": [
+    {
+      "path": "ollama_medgemma_4b",
+      "infer_time_s": 45.24,
+      "total_time_s": 45.24,
+      "output_text": "The most likely diagnosis is **hypothyroidism**.\n\n**Pathophysiology:**\n\nHypothyroidism is a condition in which the thyroid gland does not produce enough thyroid hormone (T4 and T3). This leads to a decrease in metabolic rate, resulting in the symptoms the patient is experiencing:\n\n*   **Fatigue:** Reduced metabolic rate leads to decreased energy production.\n*   **Weight gain:** Decreased metabolism slows down calorie burning, leading to weight gain.\n*   **Constipation:** Reduced thyroid hormone slows down gut motility, causing constipation.\n\n**Laboratory Findings:**\n\n*   **Elevated TSH (8.2):** TSH (thyroid-stimulating hormone) is produced by the pituitary gland and stimulates the thyroid to produce T4 and T3. In hypothyroidism, the pituitary gland senses low T4 and T3 levels and produces ",
+      "output_tokens": 259,
+      "ollama_eval_count": 400,
+      "ollama_duration_ms": 44570061.3,
+      "error": null,
+      "governance": {
+        "capsule_id": "6b7f9ce36d94e0ee",
+        "manifest_hash": "beb4fcd585d4b2fd",
+        "output_hash": "caaa3b0a6c2c30ec",
+        "gas_consumed": 400,
+        "gas_limit": 500,
+        "model": "medgemma:4b",
+        "tier": "hearth",
+        "status": "COMPLETED",
+        "error": null
+      },
+      "quality": {
+        "diagnostic_hits": 2,
+        "diagnostic_terms_found": [
+          "hypothyroidism",
+          "thyroid"
+        ],
+        "mechanism_hits": 6,
+        "context_hits": 0,
+        "total_term_hits": 8,
+        "hallucination_detected": false,
+        "hallucination_markers": [],
+        "quality": "partial"
+      }
+    },
+    {
+      "path": "solo_solver",
+      "load_time_s": 16.9,
+      "infer_time_s": 16.65,
+      "total_time_s": 33.55,
+      "output_text": "{'status': 'ok', 'final_text': \" 1.2, free T4 1.1 (normal).\\n\\nTo determine the most likely diagram and pathologist'sdiagnose, we need to analyze the given information and the possible causes of the signs and Symptotes.\\n\\n1. **Symptotes:**\\n   - Fatigue: This could be due to various factors such as age, weight, or general well-being.\\n   - Weight gain: This could be due to age, weight loss, or other health issues.\\n   -\u5e38\u4ed8: This could be due to age, weight loss, or other health issues.\\n\\n2. **\u94c1",
+      "output_tokens": 583,
+      "vram_before_mb": 0.0,
+      "vram_after_load_mb": 2953.4,
+      "vram_peak_mb": 2962.5,
+      "quality": {
+        "diagnostic_hits": 0,
+        "diagnostic_terms_found": [],
+        "mechanism_hits": 1,
+        "context_hits": 0,
+        "total_term_hits": 1,
+        "hallucination_detected": false,
+        "hallucination_markers": [],
+        "quality": "poor"
+      }
+    },
+    {
+      "path": "recursive_mas_governed",
+      "load_time_s": "inline",
+      "infer_time_s": 38.0,
+      "total_time_s": 38.0,
+      "output_text": "?\n\nThe most likely diagram is: (1) Non-Altoine's disease (2) Osteic hyperplasticity (3) Osteic hyperplasticity (4) Osteic hyperplasticity (5) Osteic hyperplasticity\n\nThe pathologist's likelydiagnosism is: (1) Non-Altoine's disease (2) Osteic hyperplasticity (3) Osteic hyperplasticity (4) Osteic hyperplasticity (5) Osteic hyperplasticity\n\nThe most likely cause of the woman's condition is: (1) Non-Altoine's disease (2) Osteic hyperplasticity (3) Osteic hyperplasticity (4) Osteic hyperplasticity (5",
+      "output_tokens": 503,
+      "vram_before_mb": 9.1,
+      "vram_peak_mb": 8872.2,
+      "gas_consumed": 150,
+      "rounds": 2,
+      "provenance_hashes": 6,
+      "capsule_id": "39634f70-8e6b-4924-bacc-df3f88a1d1cd",
+      "status": "ok",
+      "quality": {
+        "diagnostic_hits": 0,
+        "diagnostic_terms_found": [],
+        "mechanism_hits": 0,
+        "context_hits": 0,
+        "total_term_hits": 0,
+        "hallucination_detected": true,
+        "hallucination_markers": [
+          "non-altoine",
+          "altoine"
+        ],
+        "quality": "hallucination"
+      }
+    }
+  ]
+}

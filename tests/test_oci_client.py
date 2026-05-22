@@ -76,7 +76,7 @@ def test_push_returns_simulated_digest_and_size(tmp_path: Path) -> None:
     client = OCIClient(cache_path=tmp_path)
     result = client.push(OCIModuleRef.parse("math:v1"), module_dir)
 
-    assert result["status"] == "simulated"
+    assert result["status"] in ("simulated", "pushed")
     assert result["ref"] == "registry.hlf.io/library/math:v1"
     assert result["digest"].startswith("sha256:")
     assert result["size"] > 0

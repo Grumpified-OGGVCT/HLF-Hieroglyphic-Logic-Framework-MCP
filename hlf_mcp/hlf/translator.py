@@ -1005,6 +1005,17 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
         elif any(w in s_lower for w in profile.assert_words):
             constraint = _extract_quoted(s) or _first_significant_word(s) or "invariant"
             actions.append(f'Ж [ASSERT] rule="{constraint}"')
+        elif any(w in s_lower for w in profile.summary_words):
+            topic = _extract_quoted(s) or s.strip()
+            actions.append(f'SUMMARY "{topic}"')
+        elif any(w in s_lower for w in profile.source_words):
+            path = _extract_path(s, language=language) or _extract_quoted(s) or s.strip()
+            actions.append(f'SOURCE path="{path}"')
+        elif any(w in s_lower for w in profile.branch_words):
+            actions.append("⊎ [BRANCH]")
+        elif any(w in s_lower for w in profile.spec_words):
+            name = _extract_quoted(s) or _first_significant_word(s) or "default"
+            actions.append(f'SPEC_DEFINE name="{name}"')
         else:
             goal = s[:40].strip().replace('"', "'")
             if language != "en" and goal:

@@ -76,7 +76,7 @@ def _human(node: dict[str, Any]) -> str:
         arg_str = ", ".join(_arg_human(a) for a in args)
         return f"{role}{tag_str}: {arg_str}" if arg_str else f"{role}{tag_str}"
     if kind == "set_stmt":
-        return f"set (immutable) {node.get('name')} = {_val_str(node.get('value'))}"
+        return f"set (immutable) {node.get('name')} = {_expr_str(node.get('value'))}"
     if kind == "assign_stmt":
         return f"assign (mutable) {node.get('name')} = {_expr_str(node.get('expr'))}"
     if kind == "if_block_stmt":
@@ -180,6 +180,9 @@ def _expr_str(e: Any) -> str:
         if kind == "aesthetic_expr":
             mod = e.get("modifier", {})
             return f"{_expr_str(e.get('expr'))} ~ {mod.get('value', '?')}"
+        if kind == "func_call":
+            arg_strs = [_expr_str(a) for a in e.get("arguments", [])]
+            return f"{e.get('name', '?')}({', '.join(arg_strs)})"
         if kind == "list_literal":
             elems = [_expr_str(el) for el in e.get("elements", [])]
             return f"[{', '.join(elems)}]"
@@ -784,6 +787,11 @@ class HLFTransformer(Transformer):
 
     # ── Expression: Exponentiation (^ right-assoc) ───────────────────────────
 
+    def func_call(self, name, *args_and_comma):
+        """Function call expression: MATH_POW(2, 10) or MATH_PI()."""
+        args = [a for a in args_and_comma if not isinstance(a, Token)]
+        return _node("func_call", name=str(name), arguments=args)
+
     def expr_unary(self, child):
         """Pass-through for expr_unary → expr_primary or neg_expr."""
         return child
@@ -995,7 +1003,14 @@ def _pass1_collect_env(statements: list[dict]) -> dict[str, Any]:
             if name in env:
                 raise CompileError(f"Immutable variable '{name}' cannot be reassigned")
             val = node.get("value", {})
-            env[name] = val.get("value") if isinstance(val, dict) else val
+            # Extract literal value if it's a simple value node; expressions → None
+            if isinstance(val, dict):
+                if val.get("kind") == "value":
+                    env[name] = val.get("value")
+                else:
+                    env[name] = None  # Expression — not known at compile time
+            else:
+                env[name] = val
     return env
 
 
@@ -1230,6 +1245,12 @@ class HLFCompiler:
         align_violations = _pass3_align_validate(expanded_stmts, strict=self.strict_align)
 
         gas = _estimate_gas(expanded_stmts)
+        
+        # Encode bytecode
+        from hlf_mcp.hlf.bytecode import HLFBytecode
+        _bytecoder = HLFBytecode()
+        bytecode = _bytecoder.encode(ast)
+        
         result = {
             "ast": ast,
             "version": ast.get("version", "3"),
@@ -1238,6 +1259,7 @@ class HLFCompiler:
             "errors": [],
             "normalization_changes": norm_changes,
             "align_violations": align_violations,
+            "bytecode": bytecode,
         }
 
         # Store in cache (evict oldest entry if over limit).

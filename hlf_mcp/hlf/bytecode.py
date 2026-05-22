@@ -504,7 +504,7 @@ def _emit_stmt(
         instructions.append(_instr(op, idx))
 
     elif kind == "set_stmt":
-        _emit_value(stmt.get("value", {}), instructions, add_const)
+        _emit_expr(stmt.get("value", {}), instructions, pool, add_const)
         idx = add_const(stmt.get("name", ""))
         instructions.append(_instr(Op.STORE_IMMUT, idx))
 
@@ -652,6 +652,17 @@ def _emit_expr(
 
     elif kind == "paren_expr":
         _emit_expr(expr["expr"], instructions, pool, add_const)
+
+    elif kind == "func_call":
+        # Push arguments in order, then emit CALL_BUILTIN with arg count
+        func_args = expr.get("arguments", [])
+        for arg in func_args:
+            _emit_expr(arg, instructions, pool, add_const)
+        # Push arg count as marker for the VM
+        count_idx = add_const(len(func_args))
+        instructions.append(_instr(Op.PUSH_CONST, count_idx))
+        name_idx = add_const(expr.get("name", ""))
+        instructions.append(_instr(Op.CALL_BUILTIN, name_idx))
 
     elif kind == "value":
         vtype = expr.get("type", "")

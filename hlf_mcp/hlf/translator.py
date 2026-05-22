@@ -116,6 +116,7 @@ class LanguageProfile:
     source_words: tuple[str, ...] = ()
     branch_words: tuple[str, ...] = ()
     spec_words: tuple[str, ...] = ()
+    math_words: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -222,6 +223,7 @@ _LANGUAGE_PROFILES: dict[str, LanguageProfile] = {
         source_words=("source", "import", "load"),
         branch_words=("branch", "fork", "split"),
         spec_words=("spec", "specification", "lifecycle", "instinct"),
+        math_words=("calculate", "compute", "math", "eval", "sqrt", "pow", "abs", "min", "max", "floor", "ceil", "round", "pi", "add", "subtract", "multiply", "divide", "sum", "average", "mean"),
         analyze_goal="analyze",
         delegate_goal="execute",
         route_strategy="auto",
@@ -1016,6 +1018,8 @@ def _extract_actions(text: str, *, language: str = "en") -> list[str]:
         elif any(w in s_lower for w in profile.spec_words):
             name = _extract_quoted(s) or _first_significant_word(s) or "default"
             actions.append(f'SPEC_DEFINE name="{name}"')
+        elif any(w in s_lower for w in profile.math_words):
+            actions.append(f'Δ [INTENT] goal="compute" mode="math"')
         else:
             goal = s[:40].strip().replace('"', "'")
             if language != "en" and goal:

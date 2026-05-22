@@ -777,7 +777,13 @@ def _resolve_pointer_argument(
 
             elif op == Op.CALL_BUILTIN:
                 name = pool.get(operand)
-                args = [self.stack.pop()] if self.stack else []
+                # Pop arg count (pushed before CALL_BUILTIN), then pop that many args
+                arg_count_raw = self.stack.pop() if self.stack else 0
+                arg_count = int(arg_count_raw) if isinstance(arg_count_raw, (int, float)) else 0
+                args: list[Any] = []
+                for _ in range(arg_count):
+                    if self.stack:
+                        args.insert(0, self.stack.pop())
                 self.stack.append(_dispatch_builtin(name, args))
 
             elif op == Op.CALL_HOST:
@@ -2188,7 +2194,13 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
                 continue
         elif op == Op.CALL_BUILTIN:
             name = pool.get(operand)
-            args = [self.stack.pop()] if self.stack else []
+            # Pop arg count (pushed before CALL_BUILTIN), then pop that many args
+            arg_count_raw = self.stack.pop() if self.stack else 0
+            arg_count = int(arg_count_raw) if isinstance(arg_count_raw, (int, float)) else 0
+            args: list[Any] = []
+            for _ in range(arg_count):
+                if self.stack:
+                    args.insert(0, self.stack.pop())
             self.stack.append(_dispatch_builtin(name, args))
         elif op == Op.CALL_HOST:
             fn_key: str = pool.get(operand) or ""

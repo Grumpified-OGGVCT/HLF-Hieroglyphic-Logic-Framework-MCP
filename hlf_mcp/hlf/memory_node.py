@@ -1062,12 +1062,16 @@ def resolve_supersession_chain(
         if not match:
             break
         chain.append(current)
-        # Walk forward: find the row that supersedes the current one
-        next_hash = ""
-        for row in fact_rows:
-            if row.get("supersedes_sha256", "") == current or row.get("superseded_by_sha256", "") == current:
-                next_hash = row.get("sha256", row.get("content_hash", ""))
-                break
+        # Walk forward: find the row that supersedes the current one.
+        # "superseded_by_sha256" lives on the matched row and points to its
+        # replacement.  "supersedes_sha256" lives on a child row and points
+        # back to what it replaces.
+        next_hash = match.get("superseded_by_sha256", "") or ""
+        if not next_hash:
+            for row in fact_rows:
+                if row.get("supersedes_sha256", "") == current:
+                    next_hash = row.get("sha256", row.get("content_hash", ""))
+                    break
         current = next_hash
         depth += 1
 

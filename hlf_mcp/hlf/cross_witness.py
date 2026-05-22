@@ -569,6 +569,7 @@ class CrossWitnessProver:
             report = self._resolver.resolve(witnesses, policy, agent_proficiencies)
             resolution_report = report.to_dict()
 
+        now = time.time()
         proof_payload = {
             "total_witnesses": total,
             "agreeing_witnesses": agreeing,
@@ -579,7 +580,7 @@ class CrossWitnessProver:
             "byzantine_tolerance": max_f,
             "byzantine_faults_detected": byzantine_count,
             "agreement_reached": agreement_reached,
-            "timestamp": time.time(),
+            "timestamp": now,
         }
 
         return CrossWitnessProof(
@@ -595,6 +596,7 @@ class CrossWitnessProver:
             byzantine_faults_detected=byzantine_count,
             proof_hash=self._compute_proof_hash(proof_payload),
             resolution_report=resolution_report,
+            generated_at=now,
         )
 
     def prove_multi_claim(

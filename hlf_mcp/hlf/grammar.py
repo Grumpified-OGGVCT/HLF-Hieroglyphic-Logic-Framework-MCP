@@ -164,8 +164,8 @@ validate_annot: KW_VALIDATE "(" validate_arg ("," validate_arg)* ")"
 validate_arg: IDENT "=" value -> kv_arg
 
 // ── Declaration statements ────────────────────────────────────────────────────
-// Immutable binding — SET name = value
-set_stmt:    KW_SET    IDENT "=" value
+// Immutable binding — SET name = expr
+set_stmt:    KW_SET    IDENT "=" expr
 // Mutable binding — ASSIGN name = expr  (also bare name = expr via assign_stmt)
 assign_stmt: KW_ASSIGN IDENT "=" expr
 
@@ -258,6 +258,10 @@ expr_unary: MINUS expr_primary -> neg_expr
              | "(" expr ")"   -> paren_expr
              | list_literal
              | match_expr
+             | func_call
+
+// ── Function call expression ──────────────────────────────────────────────────
+func_call: IDENT "(" (expr ("," expr)*)? ")"
 
 ADDOP: "+"
 MULOP: "*" | "/" | "%"

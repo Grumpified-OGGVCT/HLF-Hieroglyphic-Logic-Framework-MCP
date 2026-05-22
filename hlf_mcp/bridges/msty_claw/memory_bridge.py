@@ -278,7 +278,10 @@ class MstyMemoryBridge:
 
         delta = now - tagged_dt
         weeks_elapsed = delta.total_seconds() / (7 * 24 * 3600)
-        if weeks_elapsed <= 0:
+        # Guard against trivial time deltas (e.g. between tag_entry and
+        # should_reverify) that would spuriously push confidence below
+        # the re-verify threshold due to floating-point noise.
+        if weeks_elapsed < 1e-6:  # ~1 minute — decay is negligible
             return entry.confidence
 
         rate = self._decay_rules.get(entry.decay_rule, 0.15)

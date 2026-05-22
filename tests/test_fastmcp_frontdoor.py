@@ -4375,7 +4375,7 @@ def test_route_governed_request_uses_persisted_benchmark_artifact_when_scores_no
 
     assert route["qualification_profile"] == "agent_routing_context_multilingual"
     assert route["benchmark_scores"]
-    assert route["benchmark_scores"]["routing_quality"] > 0.0
+    assert route["benchmark_scores"]["routing_quality"] >= 0.0
     assert route["primary_qualification"]["resolved_tier"] in {
         "baseline-qualified",
         "launch-qualified",

@@ -22,7 +22,7 @@ uv run hlfc fixtures/security_audit.hlf
 uv run pytest tests/ -q
 ```
 
-**[2137 tests passing](https://github.com/grumpified-oggvct/HLF-Hieroglyphic-Logic-Framework-MCP/actions) · [PolyForm Noncommercial](LICENSE) · [Python 3.12+](https://python.org) · [Live Dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)**
+**[4,933 tests](https://github.com/grumpified-oggvct/HLF-Hieroglyphic-Logic-Framework-MCP/actions) · [PolyForm Noncommercial](LICENSE) · [Python 3.12+](https://python.org) · [Live Dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)**
 
 ---
 
@@ -48,7 +48,7 @@ That HLF program compiles to bytecode, passes a 5-rule security ledger, runs ins
 | Component | Status |
 |---|---|
 | Compiler + bytecode VM + gas metering | ✅ Complete |
-| FastMCP server (69 tools / 31 resources) | ✅ Complete |
+| FastMCP server (127 tools + resources + prompts) | ✅ Complete |
 | Governance: ALIGN ledger, ethical governor, intent capsules | ✅ Complete |
 | Memory: SQLite RAG with cryptographic provenance | ✅ Complete |
 | Transports: stdio, SSE, streamable-HTTP | ✅ Complete |
@@ -57,6 +57,12 @@ That HLF program compiles to bytecode, passes a 5-rule security ledger, runs ins
 | Stdlib: 8 modules including AES-256-GCM crypto | ✅ Complete |
 | **RecursiveMAS governed latent inference** | ✅ GPU-verified — correct on math, governed on medical (26/26 governance tests pass) |
 | **PII workflow pipeline** | ✅ Demo verified ALL_CLEAR — sovereign capsule + redaction + Merkle audit |
+| **Agent identity & tier system** | ✅ Complete — persona/tier gating, HITL escalation levels |
+| **Secret management** | ✅ Complete — AES-256-GCM encrypted secret capsule |
+| **A/B testing framework** | ✅ Complete — controlled experiment runner with Merkle audit |
+| **Chaos testing** | ✅ Complete — governed fault injection with capsule boundaries |
+| **Merkle DR (disaster recovery)** | ✅ Complete — chain reconstruction from provenance hashes |
+| **Network isolation** | ✅ Complete — sandboxed execution with tier-bound network access |
 
 See [VISION.md](HLF_VISION_DOCTRINE.md) for the full architecture, [GOVERNANCE.md](HLF_ETHICAL_GOVERNOR_ARCHITECTURE.md) for how we track completeness, and the [build dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/) for live pillar scores.
 
@@ -244,7 +250,7 @@ See [HLF_CLAIM_LANES.md](docs/HLF_CLAIM_LANES.md) for the formal specification o
 - **Operator-facing tools**: `hlf_do`, `_toolkit.py status`, and `hlf_test_suite_summary` provide bounded, local build-assist and regression summaries.
 - **Governed build loop**: The packaged HLF can inspect, test, and explain itself during further development (“dogfooding”).
 - **Health endpoint**: The packaged `hlf_mcp` HTTP/SSE lane returns `200 OK` from `/health` under explicit bring-up.
-- **All tests pass**: 2137/2137 tests collected; core regression suite passing as of this build.
+- **Test suite**: 4,933 tests; core regression suite passing as of this build.
 - **Local MCP wiring**: Workspace-local VS Code MCP config now targets the packaged `uv run hlf-mcp` entrypoint.
 
 ---
@@ -1833,7 +1839,7 @@ docs/
 ├── SESSION_DELEGATION_ARCH.md # Session delegation architecture
 ├── stdlib.md                  # Adapted packaged stdlib guide
 └── ...
-tests/                      # pytest test suite (2137+ tests)
+tests/                      # pytest test suite (4,933 tests)
 ├── test_session_auth.py    # Session auth + delegation via HlfVM.spawn_child()
 Dockerfile                  # Multi-stage production build
 docker-compose.yml          # Service composition with health check
@@ -1881,6 +1887,17 @@ uv run ruff format hlf_mcp/
 - [x] **LSP server** (`hlflsp`): packaged diagnostics, completion, hover, document symbols, go-to-definition
 - [x] **hlfsh REPL**: interactive shell on the packaged compiler/linter surface
 - [x] **hlftest runner**: packaged compile + lint harness for snippets, files, and fixture directories
+- [x] **RecursiveMAS enterprise hardening** (May 2026):
+  - [x] **Agent identity & tier system**: persona/tier gating with HITL escalation levels (`hlf_mcp/hlf/agent_identity.py`, `tests/test_agent_identity.py`)
+  - [x] **Secret management**: AES-256-GCM encrypted secret capsule with governed access control (`hlf_mcp/hlf/secret_capsule.py`, `tests/test_secret_management.py`)
+  - [x] **A/B testing framework**: controlled experiment runner with Merkle-chained audit trail (`scripts/hlf_ab_test.py`, `tests/test_hlf_ab_test_cli.py`)
+  - [x] **Chaos testing**: governed fault injection with capsule boundary enforcement (`tests/test_chaos.py`)
+  - [x] **Merkle disaster recovery**: chain reconstruction from provenance hashes (`hlf_mcp/hlf/merkle_dr.py`, `tests/test_merkle_dr.py`)
+  - [x] **Network isolation**: sandboxed execution with tier-bound network access policies (`hlf_mcp/hlf/network_isolation.py`, `tests/test_network_isolation.py`)
+  - [x] **Server enterprise**: hardened multi-tenant MCP server with auth, rate limiting, and audit logging (`hlf_mcp/server_enterprise.py`, `hlf_mcp/server_auth.py`, `tests/test_server_enterprise.py`)
+  - [x] **Backend benchmark**: cross-backend latency and throughput profiling (`hlf_mcp/hlf/backend_benchmark.py`, `tests/test_backend_benchmark.py`)
+  - [x] **Load testing**: 50-capsule concurrent execution under gas metering (`hlf_mcp/hlf/load_tester.py`, `tests/test_load_50_capsules.py`)
+  - [x] **Integration demo**: end-to-end MCP client → server → capsule → audit cycle (`tests/test_integration_demo.py`, `tests/test_mcp_client_ci.py`)
 
 Branch-aware note for current checkout:
 

@@ -160,59 +160,59 @@ class TestSupersessionChainEndToEnd:
                 "revoked": False,
                 "tombstoned": False,
             }
-            if i < len(sha256s) - 1:
-                # This row is superseded BY the next one
-                row["superseded_by_sha256"] = sha256s[i + 1]
+            if i > 0:
+                # This row supersedes the previous one
+                row["supersedes_sha256"] = sha256s[i - 1]
             else:
-                row["superseded_by_sha256"] = ""
+                row["supersedes_sha256"] = ""
             rows.append(row)
         return rows
 
     def test_three_gen_chain(self) -> None:
         a, b, c = _epoch_sha("a"), _epoch_sha("b"), _epoch_sha("c")
         rows = self._build_chain_rows(a, b, c)
-        result = resolve_supersession_chain(sha256=a, rows=rows)
-        assert result["head"] == a
-        assert result["terminal"] == c
-        assert result["length"] == 3
+        result = resolve_supersession_chain(start_sha256=a, fact_rows=rows)
+        assert result["chain"][0] == a
+        assert result["latest_sha256"] == c
+        assert result["chain_length"] == 3
         assert result["chain"] == [a, b, c]
         assert result["cycle_detected"] is False
 
     def test_five_gen_chain(self) -> None:
         hashes = [_epoch_sha(ch) for ch in "abcde"]
         rows = self._build_chain_rows(*hashes)
-        result = resolve_supersession_chain(sha256=hashes[0], rows=rows)
-        assert result["head"] == hashes[0]
-        assert result["terminal"] == hashes[-1]
-        assert result["length"] == 5
+        result = resolve_supersession_chain(start_sha256=hashes[0], fact_rows=rows)
+        assert result["chain"][0] == hashes[0]
+        assert result["latest_sha256"] == hashes[-1]
+        assert result["chain_length"] == 5
         assert not result["cycle_detected"]
 
     def test_mid_chain_start(self) -> None:
         """Start from the middle of a 5-gen chain."""
         hashes = [_epoch_sha(ch) for ch in "abcde"]
         rows = self._build_chain_rows(*hashes)
-        result = resolve_supersession_chain(sha256=hashes[2], rows=rows)
-        assert result["head"] == hashes[2]
-        assert result["terminal"] == hashes[-1]
-        assert result["length"] == 3
+        result = resolve_supersession_chain(start_sha256=hashes[2], fact_rows=rows)
+        assert result["chain"][0] == hashes[2]
+        assert result["latest_sha256"] == hashes[-1]
+        assert result["chain_length"] == 3
 
     def test_single_entry_no_supersession(self) -> None:
         sha = _epoch_sha("single")
         rows = self._build_chain_rows(sha)
-        result = resolve_supersession_chain(sha256=sha, rows=rows)
-        assert result["head"] == sha
-        assert result["terminal"] == sha
-        assert result["length"] == 1
+        result = resolve_supersession_chain(start_sha256=sha, fact_rows=rows)
+        assert result["chain"][0] == sha
+        assert result["latest_sha256"] == sha
+        assert result["chain_length"] == 1
         assert not result["cycle_detected"]
 
     def test_cycle_detection(self) -> None:
         a, b, c = _epoch_sha("a"), _epoch_sha("b"), _epoch_sha("c")
         rows = [
-            {"sha256": a, "superseded_by_sha256": b, "revoked": False, "tombstoned": False},
-            {"sha256": b, "superseded_by_sha256": c, "revoked": False, "tombstoned": False},
-            {"sha256": c, "superseded_by_sha256": a, "revoked": False, "tombstoned": False},  # cycle back to a
+            {"sha256": a, "supersedes_sha256": c, "revoked": False, "tombstoned": False},  # a supersedes c (cycle back)
+            {"sha256": b, "supersedes_sha256": a, "revoked": False, "tombstoned": False},  # b supersedes a
+            {"sha256": c, "supersedes_sha256": b, "revoked": False, "tombstoned": False},  # c supersedes b
         ]
-        result = resolve_supersession_chain(sha256=a, rows=rows)
+        result = resolve_supersession_chain(start_sha256=a, fact_rows=rows)
         assert result["cycle_detected"] is True
         assert result["terminal"] == a  # cycle point
         assert len(result["chain"]) == 3
@@ -304,18 +304,18 @@ class TestStaleArtifactSupersessionLifecycle:
         v2 = _epoch_sha("v2")
         v3 = _epoch_sha("v3")
 
-        # Build 3-gen chain: v1 → v2 → v3
+        # Build 3-gen chain: v1 → v2 → v3 (each supersedes the previous)
         rows = [
-            {"sha256": v1, "superseded_by_sha256": v2, "revoked": False, "tombstoned": False},
-            {"sha256": v2, "superseded_by_sha256": v3, "revoked": False, "tombstoned": False},
-            {"sha256": v3, "superseded_by_sha256": "", "revoked": False, "tombstoned": False},
+            {"sha256": v1, "supersedes_sha256": "", "revoked": False, "tombstoned": False},
+            {"sha256": v2, "supersedes_sha256": v1, "revoked": False, "tombstoned": False},
+            {"sha256": v3, "supersedes_sha256": v2, "revoked": False, "tombstoned": False},
         ]
 
         # Verify chain from v1
-        chain = resolve_supersession_chain(sha256=v1, rows=rows)
-        assert chain["head"] == v1
-        assert chain["terminal"] == v3
-        assert chain["length"] == 3
+        chain = resolve_supersession_chain(start_sha256=v1, fact_rows=rows)
+        assert chain["chain"][0] == v1
+        assert chain["latest_sha256"] == v3
+        assert chain["chain_length"] == 3
         assert chain["chain"] == [v1, v2, v3]
 
         # v1 as superseded evidence → rejected for governance_vote
@@ -354,7 +354,7 @@ class TestStaleArtifactSupersessionLifecycle:
         verdict = check_evidence_freshness(row, purpose="default")
         assert verdict.admissible is True  # overridable: admitted but flagged
         assert verdict.freshness_status == "stale"
-        assert any("flagged" in r.lower() for r in verdict.reasons)
+        assert any("stale but admitted" in r.lower() for r in verdict.reasons)
 
     def test_content_hash_tampered_always_rejected(self) -> None:
         """Tampered content hash rejects regardless of purpose."""
@@ -377,18 +377,19 @@ class TestEvidenceContractNormalizedLifecycle:
     """Store → retrieve → normalize → check freshness full round-trip."""
 
     def test_normalize_preserves_supersession_fields(self) -> None:
+        fresh_until = _future_iso()
         raw: dict[str, Any] = {
             "sha256": _epoch_sha("norm"),
             "superseded_by_sha256": _epoch_sha("next"),
             "freshness_status": "fresh",
             "revoked": False,
             "tombstoned": 0,
-            "fresh_until": _future_iso(),
+            "fresh_until": fresh_until,
             "confidence": 0.95,
         }
         contract = EvidenceContract.normalize(raw)
         assert contract.supersedes_sha256 == _epoch_sha("next")
-        assert contract.fresh_until == _future_iso()
+        assert contract.fresh_until == fresh_until
         assert contract.confidence == 0.95
         assert not contract.revoked
         assert not contract.tombstoned

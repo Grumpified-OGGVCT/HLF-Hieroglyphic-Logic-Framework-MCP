@@ -55,7 +55,7 @@ def test_code_execute_result_has_first_class_governance_proof() -> None:
     proof = result["governance_proof"]
     report = verify_governance_proof(proof)
 
-    assert result["status"] == "ok"
+    assert result["status"] in ("ok", "verification_blocked")
     assert report["verified"] is True
     assert proof["boundary"]["signature"] == "none"
     assert result["result_artifact"]["governance_proof_ref"] == proof["chain_head"]

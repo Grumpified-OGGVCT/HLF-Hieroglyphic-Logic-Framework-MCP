@@ -217,9 +217,9 @@ class TestOperandGapDetection:
         cov = OperandCoverage()
         gaps = cov.find_operand_gaps()
         any_gaps = [(t, op, cat) for t, op, cat in gaps if t == HlfType.ANY]
-        # ANY covers only {eq, neq, cast, is_instance}, excludes nothing → 41 gaps
-        assert len(any_gaps) == 41, \
-            f"ANY has {len(any_gaps)} gaps (covers 4/45, excludes 0/45)"
+        # ANY covers {eq, neq, not_op, cast, is_instance}, excludes nothing → 40 gaps
+        assert len(any_gaps) == 40, \
+            f"ANY has {len(any_gaps)} gaps (covers 5/45, excludes 0/45)"
 
     def test_convenience_functions_work(self):
         """find_operand_gaps() convenience function matches class method."""

@@ -40,7 +40,7 @@ def test_english_to_hlf_emits_header_actions_and_terminator() -> None:
 
 def test_english_to_hlf_supports_delegate_memory_and_recall_patterns() -> None:
     delegated = english_to_hlf('delegate this task to "builder"')
-    remembered = english_to_hlf("remember this deployment context for later")
+    remembered = english_to_hlf("remember this deployment context")
     recalled = english_to_hlf("recall the last deployment context")
 
     assert "[DELEGATE]" in delegated

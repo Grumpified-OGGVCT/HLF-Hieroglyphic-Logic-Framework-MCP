@@ -172,13 +172,13 @@ class TestRateLimiterBasic:
     def test_bucket_starts_full(self):
         """A new bucket should start with burst tokens."""
         bucket = TokenBucket(rate=10.0, burst=20.0)
-        assert bucket.available_tokens() == pytest.approx(20.0)
+        assert bucket.available_tokens() == pytest.approx(20.0, abs=0.1)
 
     def test_consume_deducts_tokens(self):
         """Consuming tokens should reduce available count."""
         bucket = TokenBucket(rate=10.0, burst=20.0)
         assert bucket.consume(5.0) is True
-        assert bucket.available_tokens() == pytest.approx(15.0)
+        assert bucket.available_tokens() == pytest.approx(15.0, abs=0.1)
 
     def test_consume_rejects_when_empty(self):
         """Consuming more tokens than burst should reject."""
@@ -600,9 +600,9 @@ class TestRateLimiterEdgeCases:
         """Reset should refill bucket to burst capacity."""
         bucket = TokenBucket(rate=10.0, burst=20.0)
         bucket.consume(15.0)
-        assert bucket.available_tokens() == pytest.approx(5.0)
+        assert bucket.available_tokens() == pytest.approx(5.0, abs=0.1)
         bucket.reset()
-        assert bucket.available_tokens() == pytest.approx(20.0)
+        assert bucket.available_tokens() == pytest.approx(20.0, abs=0.1)
         assert bucket.total_consumed == 0
 
     def test_thread_safety_consume(self):

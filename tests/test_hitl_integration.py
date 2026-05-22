@@ -52,6 +52,24 @@ def hitl_gate(temp_pending_dir):
 # Mock governed_latent_infer
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _ensure_mock_torch():
+    """Inject a fake torch package into sys.modules so that
+    unittest.mock.patch('torch.cuda.is_available', ...) can resolve
+    the import path without a real PyTorch installation."""
+    import sys
+    import types
+    from unittest.mock import MagicMock
+    if "torch" not in sys.modules:
+        _torch = types.ModuleType("torch")
+        _torch_cuda = types.ModuleType("torch.cuda")
+        _torch.cuda = _torch_cuda
+        _torch_cuda.is_available = MagicMock(return_value=True)
+        _torch_cuda.max_memory_allocated = MagicMock(return_value=500 * 1024 * 1024)
+        sys.modules["torch"] = _torch
+        sys.modules["torch.cuda"] = _torch_cuda
+    return sys.modules["torch"]
+
+
 def _mock_inference_result(
     prompt="test prompt",
     *,
@@ -61,6 +79,9 @@ def _mock_inference_result(
     """Call governed_latent_infer with a mock that returns immediately."""
     from unittest.mock import patch, MagicMock
     import hashlib
+
+    # Ensure torch is resolvable before any patch() calls attempt to import it
+    _ensure_mock_torch()
 
     # We need to mock the whole GPU pipeline
     mock_capsule = MagicMock()

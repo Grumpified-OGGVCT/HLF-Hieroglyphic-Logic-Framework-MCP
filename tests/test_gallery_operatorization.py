@@ -1597,6 +1597,7 @@ class TestGalleryOperatorPillarScore:
         expected_components = {
             "verification_viewer", "manifest_viewer", "provenance_viewer",
             "type_explorer", "operator_dashboard", "feedback_loop",
+            "egl_monitor",
         }
         assert set(result["components"].keys()) == expected_components
         total_weight = sum(comp["weight"] for comp in result["components"].values())

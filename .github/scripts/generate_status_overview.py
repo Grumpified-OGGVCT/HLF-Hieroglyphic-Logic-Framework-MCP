@@ -2138,7 +2138,9 @@ def write_status_surfaces(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
     markdown_changed = _write_if_changed(
         docs_dir / MARKDOWN_OUTPUT.name, render_status_overview_markdown(data)
     )
-    html_changed = _write_if_changed(docs_dir / HTML_OUTPUT.name, render_status_index_html(data))
+    html_changed = _write_if_changed(
+        docs_dir / HTML_OUTPUT.name, render_claims_ledger_html(data, claims_data)
+    )
     merge_html_changed = _write_if_changed(
         docs_dir / MERGE_HTML_OUTPUT.name, render_merge_readiness_html(data, merge_data)
     )
@@ -2166,7 +2168,7 @@ def main(argv: list[str] | None = None) -> int:
         merge_data = _parse_merge_readiness(MERGE_READINESS_DOC, REPO_ROOT)
         claims_data = _parse_claims_ledger(CLAIMS_LEDGER_DOC, REPO_ROOT)
         expected_markdown = render_status_overview_markdown(data)
-        expected_html = render_status_index_html(data)
+        expected_html = render_claims_ledger_html(data, claims_data)
         expected_merge_html = render_merge_readiness_html(data, merge_data)
         expected_claims_html = render_claims_ledger_html(data, claims_data)
         stale: list[str] = []

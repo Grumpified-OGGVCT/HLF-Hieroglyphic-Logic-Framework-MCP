@@ -539,7 +539,31 @@ def governed_latent_infer(
                 "total_wall_time_ms": 0,
             }
 
-        result = session.recursive_infer(prompt)
+        partial_steps: list[dict] = []
+        aborted = False
+        oom_details: dict | None = None
+
+        try:
+            result = session.recursive_infer(prompt)
+        except Exception as exc:
+            # ── Chaos resilience: catch OOM, timeout, and other runtime aborts ──
+            import torch as _torch
+            import traceback as _tb
+            is_oom = isinstance(exc, _torch.cuda.OutOfMemoryError) if hasattr(_torch.cuda, "OutOfMemoryError") else False
+            # Also catch generic CUDA errors that might be OOM variants
+            error_str = str(exc).lower()
+            if not is_oom and ("out of memory" in error_str or "oom" in error_str or "cuda" in error_str):
+                is_oom = True
+
+            aborted = True
+            oom_details = {
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
+                "is_oom": is_oom,
+                "traceback": _tb.format_exc()[-1000:],
+            }
+            # Build a minimal result with whatever partial steps we can infer
+            result = {"final_text": f"[ABORTED: {type(exc).__name__}]", "rounds": 0, "steps": []}
 
         # Capture peak VRAM BEFORE unloading models
         peak_vram_mb = 0
@@ -613,7 +637,7 @@ def governed_latent_infer(
         )
 
         base_result = {
-            "status": "ok",
+            "status": "aborted" if aborted else "ok",
             "final_text": wrapped.final_text,
             "rounds_completed": wrapped.rounds_completed,
             "attestations": [a.to_dict() for a in wrapped.attestations],
@@ -624,9 +648,11 @@ def governed_latent_infer(
             "steps": steps,
             "peak_vram_mb": peak_vram_mb,
         }
+        if oom_details:
+            base_result["oom_details"] = oom_details
 
         # ── HITL Gate: block if human approval required ──────────────────
-        if human_approval_required:
+        if human_approval_required and not aborted:
             try:
                 from hlf_mcp.hlf.hitl_gate import (
                     require_human_approval,

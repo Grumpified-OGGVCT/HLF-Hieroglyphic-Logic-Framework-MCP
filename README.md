@@ -22,7 +22,7 @@ uv run hlfc fixtures/security_audit.hlf
 uv run pytest tests/ -q
 ```
 
-**[2137 tests passing](https://github.com/grumpified-oggvct/HLF-Hieroglyphic-Logic-Framework-MCP/actions) · [MIT License](LICENSE) · [Python 3.12+](https://python.org) · [Live Dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)**
+**[2137 tests passing](https://github.com/grumpified-oggvct/HLF-Hieroglyphic-Logic-Framework-MCP/actions) · [PolyForm Noncommercial](LICENSE) · [Python 3.12+](https://python.org) · [Live Dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)**
 
 ---
 
@@ -59,6 +59,16 @@ That HLF program compiles to bytecode, passes a 5-rule security ledger, runs ins
 | **PII workflow pipeline** | ✅ Demo verified ALL_CLEAR — sovereign capsule + redaction + Merkle audit |
 
 See [VISION.md](HLF_VISION_DOCTRINE.md) for the full architecture, [GOVERNANCE.md](HLF_ETHICAL_GOVERNOR_ARCHITECTURE.md) for how we track completeness, and the [build dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/) for live pillar scores.
+
+---
+
+## 📜 License & Commercial Use
+
+HLF is free for personal, educational, and noncommercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+If you want to use HLF in a commercial product, service, or enterprise deployment, [open a GitHub issue](https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP/issues) and we'll figure it out. I don't have a standard commercial license yet — every conversation helps me figure out what this should cost and what terms make sense.
+
+If you're a solo developer or small team using HLF for your own project: you're almost certainly fine under the noncommercial license. If you're a company with revenue or funding: let's talk.
 
 ---
 
@@ -254,7 +264,7 @@ See `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_OPERATOR_BUILD_NOTES_2026
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![HLF v0.5](https://img.shields.io/badge/HLF-v0.5.0-purple)](governance/bytecode_spec.yaml)
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue)](LICENSE)
 [![Readiness](https://img.shields.io/badge/readiness-64.7%25-orange)](docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md)
 [![Dashboard](https://img.shields.io/badge/dashboard-live-brightgreen)](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)
 

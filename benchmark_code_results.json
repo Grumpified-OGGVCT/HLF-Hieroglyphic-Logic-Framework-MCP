@@ -1,0 +1,116 @@
+{
+  "sieve": {
+    "solo": {
+      "path": "solo",
+      "elapsed_s": 18.6,
+      "raw_output": "{'status': 'ok', 'final_text': '\\nTo implement the Sieve of Eratosthenes algorithm in Python, we need to follow these steps:\\n\\n1. Create a list of boolean values representing numbers from 2 to n, initially setting all of them to True.\\n2. Iterate over the list, starting from the first prime number,",
+      "extracted_code": "\\ndef sieve_of_eratosthenes(n: int) -> list[int]:\\n    if n < 2:\\n        return []\\n    \\n    # Initialize a list of boolean values\\n    is_prime = [True] * (n + 1)\\n    is_prime[0] = is_prime[1] = False\\n    \\n    # Sieve of Eratosthenes\\n    for i in range(2, int(n**0.5) + 1):\\n        if is_prime[i]:\\n            for j in range(i * i, n + 1, i):\\n                is_prime[j] = False\\n    \\n    # Collect all prime numbers\\n    primes = [i for i in range(2, n + 1) if is_prime[i]]\\n    \\n    ret",
+      "code_len": 512,
+      "test": {
+        "compiles": false,
+        "test_results": {},
+        "errors": [
+          "syntax_error: unexpected character after line continuation character (<sieve>, line 1)"
+        ]
+      }
+    },
+    "recursive_mas": {
+      "path": "recursive_mas",
+      "elapsed_s": 33.67,
+      "raw_output": ":\n\nTo solve the problem of generating all prime numbers up to a given number \\( n \\) using the Sieve of Eratosthenes algorithm, we can follow these steps:\n\n1. Create a list of boolean values, initially set to `True`, to represent whether each number is prime.\n2. Iterate through the list, starting fr",
+      "extracted_code": "def sieve_of_eratosthenes(n):\n    if n < 2:\n        return []\n    \n    # Initialize a list to mark prime status of numbers\n    is_prime = [True] * (n + 1)\n    is_prime[0] = is_prime[1] = False  # 0 and 1 are not prime numbers\n    \n    # Sieve of Eratosthenes\n    for i in range(2, int(n**0.5) + 1):\n        if is_prime[i]:\n            for j in range(i * i, n + 1, i):\n                is_prime[j] = False\n    \n    # Collect all prime numbers\n    primes = [i for i in range(n + 1) if is_prime[i]]\n    \n",
+      "code_len": 517,
+      "rounds": 2,
+      "gas": 150,
+      "capsule_id": "0cab1275-7225-4303-8617-992bc7fa6d03",
+      "status": "ok",
+      "test": {
+        "compiles": true,
+        "test_results": {
+          "n=0": "pass",
+          "n=1": "pass",
+          "n=2": "fail: got None",
+          "n=10": "fail: got None",
+          "n=20": "fail: got None",
+          "n=30": "fail: got None"
+        },
+        "errors": [],
+        "all_pass": false
+      }
+    }
+  },
+  "bst": {
+    "solo": {
+      "path": "solo",
+      "elapsed_s": 17.96,
+      "raw_output": "{'status': 'ok', 'final_text': '\\nTo solve this problem, we need to implement a binary search tree (Bst) in Python. A binary search tree is a data structure that allows for efficient searching, inserting, and removing elements. Each node in the tree has at most two child nodes, arranged in a way tha",
+      "extracted_code": "\\nclass Binaryexpression:\\n    class node:\\n        def __init__(self, value):\\n            self(value)\\n            self left = None\\n            self right = None\\n\\n    def insert(value):\\n        node = Binaryexpression node(value)\\n        if node left is None:\\n            node left = node\\n        else:\\n            node left = Binaryexpression node left left\\n        if node right is None:\\n            node right = node\\n        else:\\n            node right = Binaryexpression node right",
+      "code_len": 1423,
+      "test": {
+        "compiles": false,
+        "test_results": {},
+        "errors": [
+          "syntax_error: unexpected character after line continuation character (<bst>, line 1)"
+        ]
+      }
+    },
+    "recursive_mas": {
+      "path": "recursive_mas",
+      "elapsed_s": 37.39,
+      "raw_output": " Python 3.8+ required.\n\nTo solve this problem, we need to implement a binary search tree (Bst) class with the specified methods. Here is the Python code for the Bst class:\n\n```python\nclass Bst:\n    def __init__(self):\n        self nodes = []\n        self.sort()\n\n    def insert(self, value):\n        ",
+      "extracted_code": "class Bst:\n    def __init__(self):\n        self nodes = []\n        self.sort()\n\n    def insert(self, value):\n        if value < self nodes[0][1]:\n            self nodes.append((value, value))\n        else:\n            i = 0\n            while i < len self nodes and self nodes[i][1] < value:\n                i += 1\n            self nodes.append((value, value))\n            self nodes[i][1] = value\n            self.sort()\n\n    def search self, value):\n        for node in self nodes:\n            if no",
+      "code_len": 1153,
+      "rounds": 2,
+      "gas": 150,
+      "capsule_id": "7036f310-4e80-47f0-9244-517e1420d808",
+      "status": "ok",
+      "test": {
+        "compiles": false,
+        "test_results": {},
+        "errors": [
+          "syntax_error: unmatched ')' (<bst>, line 17)"
+        ]
+      }
+    }
+  },
+  "fib": {
+    "solo": {
+      "path": "solo",
+      "elapsed_s": 23.35,
+      "raw_output": "{'status': 'ok', 'final_text': '\\nTo solve the problem of computing the nth Fibonacci number using memoization in Python, we can follow these steps:\\n\\n1. Define a function `fibonacci_memoized(n: int) -> int` that takes an integer `n` as input and returns the nth Fibonacci number.\\n2. Use a dictiona",
+      "extracted_code": "\\ndef fibonacci_memoized(n: int) -> int:\\n    # Create a dictionary to store computed Fibonacci numbers\\n    memo = {0: 0, 1: 1}\\n\\n    def fib(n):\\n        if n in memo:\\n            return memo[n]\\n        else:\\n            # Compute the nth Fibonacci number and store it in the memo dictionary\\n            memo[n] = fib(n-1) + fib(n-2)\\n            return memo[n]\\n\\n    return fib(n)\\n",
+      "code_len": 391,
+      "test": {
+        "compiles": false,
+        "test_results": {},
+        "errors": [
+          "syntax_error: unexpected character after line continuation character (<fib>, line 1)"
+        ]
+      }
+    },
+    "recursive_mas": {
+      "path": "recursive_mas",
+      "elapsed_s": 29.26,
+      "raw_output": " output should look like this:\n\ndef fibonacci_memoized(n: int) -> int:\n    pass\n\nTo solve this problem, we need to implement a memoized version of the Fibonacci sequence. The idea behind memoization is to store the results of expensive function calls and return the results of expensive function call",
+      "extracted_code": "def fibonacci_memoized(n: int) -> int:\n    # Create a dictionary to store the results of the Fibonacci function calls\n    memo = {0: 0, 1: 1}\n    \n    # Define the Fibonacci function with memoization\n    def fibonacci(x):\n        if x not in memo:\n            memo[x] = fibonacci(x - 1) + fibonacci(x - 2)\n        return memo[x]\n    \n    # Return the nth Fibonacci number\n    return fibonacci(n)\n\n# Test the function\nprint(fibonacci_memoized(10))",
+      "code_len": 446,
+      "rounds": 2,
+      "gas": 150,
+      "capsule_id": "96dc47d2-e020-4708-8836-0b740554cc49",
+      "status": "ok",
+      "test": {
+        "compiles": true,
+        "test_results": {
+          "n=0": "pass",
+          "n=1": "pass",
+          "n=2": "pass",
+          "n=5": "pass",
+          "n=10": "pass",
+          "n=20": "pass"
+        },
+        "errors": [],
+        "all_pass": true
+      }
+    }
+  }
+}

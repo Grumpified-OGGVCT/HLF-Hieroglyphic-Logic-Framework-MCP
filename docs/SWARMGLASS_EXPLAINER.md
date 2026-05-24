@@ -8,7 +8,7 @@
 
 ### The 30-Second Pitch
 
-**SwarmGlass is a universal AI governance layer.** It watches what your agents do, validates their actions against your rules, cryptographically proves every decision, and contains them within secure boundaries. It works with any agent framework — LangChain, AutoGen, CrewAI, raw LLM calls. You don't need to learn a new language. Your agents coordinate in natural language. SwarmGlass provides the guardrails, audit trail, and proof that they did the right thing.
+**SwarmGlass is a universal AI governance layer.** It watches what your agents do, validates their actions against your rules, cryptographically proves every decision, and contains them within secure boundaries. It works with any agent framework — LangChain, AutoGen, CrewAI, raw LLM calls. Start with natural language coordination — your agents talk to SwarmGlass in plain English. When you need cryptographic certainty at scale, graduate to the HLF DSL for deterministic execution, formal verification, and 48-61% token compression.
 
 ### The 2-Minute Pitch
 
@@ -626,7 +626,7 @@ The verifier produces typed `VerificationReport` objects with `VerificationStatu
 
 You're building agents with LangChain, AutoGen, CrewAI, or raw LLM calls. Your problem: **how do you prove the agent did the right thing?**
 
-SwarmGlass gives you **drop-in governance.** Add `sg_memory_store` and `sg_audit_event_log` calls to your agent loop. Now every decision is cryptographically provable. Define constraints like "agent X can't access production without approval" — SwarmGlass enforces them. See what all your agents are doing in real time through the witness/overwatch dashboard. You don't need to learn HLF. Use natural language coordination. SwarmGlass governs whatever you already have.
+SwarmGlass gives you **drop-in governance.** Add `sg_memory_store` and `sg_audit_event_log` calls to your agent loop. Now every decision is cryptographically provable. Define constraints like "agent X can't access production without approval" — SwarmGlass enforces them. See what all your agents are doing in real time through the witness/overwatch dashboard. Start with natural language coordination — when your swarm grows past 5 agents, enable the HLF DSL for deterministic execution and zero cross-agent bugs. SwarmGlass governs whatever you already have.
 
 ### For Operators / Platform Teams
 
@@ -724,7 +724,7 @@ Every major agent framework optimizes for capability. None optimize for trust. T
 
 3. **Proven at scale.** Benchmarked across 3–20 agent swarms on real coding tasks. 2,406 tests. 91.9% pass rate. 157/157 Gate 2 verification. This isn't a whitepaper — it's working code.
 
-4. **DSL-optional, not DSL-mandatory.** You don't need to learn HLF. Natural language coordination works. But if you want a formal governance language with 48.6% token compression and zero cross-agent bugs, it's there behind a feature flag.
+4. **Governance-first, DSL-upgradable.** 141 tools always-on for any agent stack. Start with natural language. When your swarm grows beyond 5 agents and you need cryptographic certainty — deterministic execution, zero cross-agent bugs, 48.6% token compression — the HLF DSL is there behind a feature flag.
 
 5. **Recursive, not linear.** The governance system helps build itself. Each completed surface makes the next one easier. The build process is product evidence.
 

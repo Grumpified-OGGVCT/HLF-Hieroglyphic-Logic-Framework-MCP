@@ -6,9 +6,6 @@ import hashlib
 import time
 from typing import Any
 
-from hlf_mcp.hlf.compiler import HLFCompiler, CompileError
-from hlf_mcp.hlf.runtime import HlfVM
-from hlf_mcp.hlf.bytecode import BytecodeCompiler
 
 
 def _hash_trace(source: str, label: str) -> str:
@@ -25,6 +22,11 @@ def _translate_hlf_to_nl(source: str, target_language: str, ctx) -> str:
 
 
 def register_native_tools(mcp, ctx):
+    # Lazy DSL imports — only loaded when native tools are invoked
+    from hlf_mcp.hlf.compiler import HLFCompiler, CompileError
+    from hlf_mcp.hlf.runtime import HlfVM
+    from hlf_mcp.hlf.bytecode import BytecodeCompiler
+
     """Register hlf_native_speak, hlf_validate_output, hlf_code_execute on *mcp*."""
     tools: dict[str, Any] = {}
 

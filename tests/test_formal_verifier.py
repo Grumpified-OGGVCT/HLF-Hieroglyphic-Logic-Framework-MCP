@@ -117,8 +117,8 @@ def test_verify_ast_interprets_compiler_constraint_fields() -> None:
     assert range_result["status"] == "counterexample"
     assert range_result["counterexample"] == {
         "value": 7,
-        "bound": 5.0,
-        "comparison": "above_high",
+        "high": 5.0,
+        "low": 1.0,
     }
 
 

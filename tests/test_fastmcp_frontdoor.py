@@ -1,6 +1,10 @@
 import json
+import os
 import uuid
 from pathlib import Path
+
+# SwarmGlass: capsule/host tools require DSL — gate behind EXP=1
+os.environ["SWARMGLASS_EXPERIMENTAL"] = "1"
 
 from mcp.server.fastmcp import FastMCP
 from starlette.testclient import TestClient
@@ -628,9 +632,11 @@ def test_hlf_weekly_evidence_summary_reads_history(tmp_path) -> None:
 def test_server_instruction_summary_tracks_registered_surface() -> None:
     exported_tools = {
         name for name in dir(server)
-        if (name.startswith("hlf_") or name.startswith("janus_"))
+        if (name.startswith(("hlf_", "janus_", "sg_")))
         and callable(getattr(server, name))
     }
+    # Custom HTTP routes (not MCP tools) — excluded from surface count
+    exported_tools.discard("hlf_stream_route")
 
     assert len(server.REGISTERED_TOOLS) == len(exported_tools)
     assert len(server.REGISTERED_TOOLS) > 0
@@ -641,6 +647,23 @@ def test_server_instruction_summary_tracks_registered_surface() -> None:
         assert name in server.mcp.instructions
     for uri in server.REGISTERED_RESOURCES:
         assert uri in server.mcp.instructions
+
+
+def test_deprecation_warnings_fire_for_hlf_aliases() -> None:
+    """Verify that hlf_* tools with sg_* equivalents emit DeprecationWarning."""
+    import pytest
+
+    # ── instinct tools ──────────────────────────────────────────────────────
+    with pytest.warns(DeprecationWarning, match=r"hlf_instinct_list is deprecated, use sg_coordinate_instinct_list instead"):
+        server.hlf_instinct_list()
+
+    # ── memory tools ────────────────────────────────────────────────────────
+    with pytest.warns(DeprecationWarning, match=r"hlf_memory_stats is deprecated, use sg_memory_stats instead"):
+        server.hlf_memory_stats()
+
+    # ── governance tools ────────────────────────────────────────────────────
+    with pytest.warns(DeprecationWarning, match=r"hlf_witness_list is deprecated, use sg_audit_witness_list instead"):
+        server.hlf_witness_list()
 
 
 def test_server_instructions_require_internal_hlf_loop() -> None:

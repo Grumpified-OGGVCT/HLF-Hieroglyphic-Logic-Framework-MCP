@@ -8,13 +8,6 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from hlf_mcp.hlf import audit_symbolic_surface, compile_symbolic_surface
-from hlf_mcp.hlf.code_execution import execute_code_bearing_hlf
-from hlf_mcp.hlf.compiler import CompileError
-from hlf_mcp.hlf.governance_proofs import render_proof_markdown, verify_governance_proof
-from hlf_mcp.hlf.swarm_mechanics import build_swarm_mechanics_artifact
-from hlf_mcp.hlf.rag_integrations import JanusIntegration
-from hlf_mcp.hlf.latent_model_interface import build_latent_session, is_latent_available
 from hlf_mcp.ingress_support import (
     build_ingress_denial_reasons,
     persist_runtime_execution_admission,
@@ -22,6 +15,7 @@ from hlf_mcp.ingress_support import (
 )
 from hlf_mcp.server_context import ServerContext
 from hlf_mcp.test_runner import DEFAULT_METRICS_DIR, LATEST_SUMMARY_FILE
+from hlf_mcp.hlf.swarm_mechanics import build_swarm_mechanics_artifact
 
 _log = logging.getLogger(__name__)
 
@@ -114,6 +108,15 @@ def run_hlf_swarm_mechanics(
 
 
 def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
+    # Lazy DSL imports — only loaded when core tools are invoked
+    from hlf_mcp.hlf import audit_symbolic_surface, compile_symbolic_surface
+    from hlf_mcp.hlf.code_execution import execute_code_bearing_hlf
+    from hlf_mcp.hlf.compiler import CompileError
+    from hlf_mcp.hlf.governance_proofs import render_proof_markdown, verify_governance_proof
+    from hlf_mcp.hlf.swarm_mechanics import build_swarm_mechanics_artifact
+    from hlf_mcp.hlf.rag_integrations import JanusIntegration
+    from hlf_mcp.hlf.latent_model_interface import build_latent_session, is_latent_available
+
     @mcp.tool()
     def hlf_compile(source: str) -> dict[str, Any]:
         """Compile HLF source code to a JSON AST and bytecode."""

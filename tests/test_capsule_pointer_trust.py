@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
+
+# SwarmGlass: capsule tools require DSL (compiler/runtime) — gate behind EXP=1
+os.environ["SWARMGLASS_EXPERIMENTAL"] = "1"
 
 from hlf_mcp import server
 from hlf_mcp.hlf.align_governor import AlignVerdict

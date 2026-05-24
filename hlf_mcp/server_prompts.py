@@ -6,6 +6,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.agent_prompt import build_hlf_native_system_prompt
+import warnings
 
 
 def register_agent_prompts(mcp: FastMCP) -> dict[str, Any]:
@@ -17,6 +18,7 @@ def register_agent_prompts(mcp: FastMCP) -> dict[str, Any]:
         swarm_mode: bool = False,
     ) -> str:
         """HLF-native agent prompt enforcing NLP→HLF→gates→execution/coordination→NLP."""
+        warnings.warn("hlf_native_agent is deprecated, use sg_prompt_native_agent instead", DeprecationWarning, stacklevel=2)
         return build_hlf_native_system_prompt(
             tier=tier,
             language=language,
@@ -27,14 +29,16 @@ def register_agent_prompts(mcp: FastMCP) -> dict[str, Any]:
     @mcp.prompt()
     def hlf_onboarding() -> str:
         """What is HLF and how to use it — onboarding prompt for new agents."""
+        warnings.warn("hlf_onboarding is deprecated, use sg_prompt_onboarding instead", DeprecationWarning, stacklevel=2)
         return textwrap.dedent("""\
-            # HLF Onboarding — Hieroglyphic Logic Framework
+            # SwarmGlass Onboarding
 
-            HLF is a **structured intent language** for AI agents. It compresses
+            SwarmGlass is a **governance framework for AI agents**, built on HLF
+            (Hieroglyphic Logic Framework) — a structured intent language that compresses
             natural-language instructions into deterministic, typed, gas-metered
             glyphs that compile to bytecode and execute in a sandboxed VM.
 
-            ## Why HLF?
+            ## Why SwarmGlass + HLF?
 
             - **Deterministic**: Same input → same output, every time.
             - **Compressed**: 12–30% fewer tokens than prose for complex intents.
@@ -82,6 +86,7 @@ def register_agent_prompts(mcp: FastMCP) -> dict[str, Any]:
     @mcp.prompt()
     def hlf_swarm_agent() -> str:
         """How to use HLF for multi-agent swarm coordination."""
+        warnings.warn("hlf_swarm_agent is deprecated, use sg_prompt_swarm_agent instead", DeprecationWarning, stacklevel=2)
         return textwrap.dedent("""\
             # HLF Swarm Coordination Guide
 
@@ -135,6 +140,7 @@ def register_agent_prompts(mcp: FastMCP) -> dict[str, Any]:
     @mcp.prompt()
     def hlf_feedback_guide() -> str:
         """How to submit feedback to the HLF repository."""
+        warnings.warn("hlf_feedback_guide is deprecated, use sg_prompt_feedback instead", DeprecationWarning, stacklevel=2)
         return textwrap.dedent("""\
             # HLF Feedback Guide
 
@@ -176,9 +182,33 @@ def register_agent_prompts(mcp: FastMCP) -> dict[str, Any]:
             - The user must have push access to create issues (or the repo must be public).
         """)
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ prompts."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.prompt(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_prompt_native_agent": hlf_native_agent,
+        "sg_prompt_onboarding": hlf_onboarding,
+        "sg_prompt_swarm_agent": hlf_swarm_agent,
+        "sg_prompt_feedback": hlf_feedback_guide,
+    })
+
     return {
         "hlf_native_agent": hlf_native_agent,
         "hlf_onboarding": hlf_onboarding,
         "hlf_swarm_agent": hlf_swarm_agent,
         "hlf_feedback_guide": hlf_feedback_guide,
+        "sg_prompt_native_agent": hlf_native_agent,
+        "sg_prompt_onboarding": hlf_onboarding,
+        "sg_prompt_swarm_agent": hlf_swarm_agent,
+        "sg_prompt_feedback": hlf_feedback_guide,
     }

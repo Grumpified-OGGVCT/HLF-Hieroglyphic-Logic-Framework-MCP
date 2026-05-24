@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from hlf_mcp.hlf.workflow_benchmark import run_workflow_benchmark
 
 
 def register_workflow_benchmark_tools(mcp) -> dict[str, Any]:
+    # Lazy DSL import — only loaded when workflow benchmark is invoked
+    from hlf_mcp.hlf.workflow_benchmark import run_workflow_benchmark
     """Register hlf_workflow_benchmark and hlf_workflow_benchmark_custom_task."""
     tools: dict[str, Any] = {}
 

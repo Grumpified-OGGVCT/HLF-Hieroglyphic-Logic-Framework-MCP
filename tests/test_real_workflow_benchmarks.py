@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+
+# SwarmGlass: benchmark tools require DSL — gate behind EXP=1
+os.environ["SWARMGLASS_EXPERIMENTAL"] = "1"
 
 from hlf_mcp import server
 from hlf_mcp.hlf.benchmark import HLFBenchmark

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import warnings
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 from typing import Any
@@ -386,6 +387,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         canonicalized: bool | None = None,
     ) -> dict[str, Any]:
         """Store a fact in the Infinite RAG memory."""
+        warnings.warn("hlf_memory_store is deprecated, use sg_memory_store instead", DeprecationWarning, stacklevel=2)
         metadata = {
             "artifact_form": artifact_form,
             "artifact_kind": artifact_kind or "fact",
@@ -506,6 +508,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         purpose: str | None = None,
     ) -> dict[str, Any]:
         """Query the Infinite RAG memory by semantic similarity."""
+        warnings.warn("hlf_memory_query is deprecated, use sg_memory_query instead", DeprecationWarning, stacklevel=2)
         return ctx.memory_store.query(
             query,
             top_k=top_k,
@@ -544,6 +547,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         agent_id: str = "",
     ) -> dict[str, Any]:
         """Capture a validated HKS exemplar for future governed recall."""
+        warnings.warn("hlf_hks_capture is deprecated, use sg_memory_hks_capture instead", DeprecationWarning, stacklevel=2)
         result = ctx.capture_validated_solution(
             problem=problem,
             validated_solution=validated_solution,
@@ -602,6 +606,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         include_archive: bool = False,
     ) -> dict[str, Any]:
         """Recall validated HKS exemplars filtered by domain and solution pattern."""
+        warnings.warn("hlf_hks_recall is deprecated, use sg_memory_hks_recall instead", DeprecationWarning, stacklevel=2)
         recalled = ctx.memory_store.query(
             query,
             top_k=top_k,
@@ -682,6 +687,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         purpose: str | None = None,
     ) -> dict[str, Any]:
         """Recall governed evidence across weekly artifacts, HKS exemplars, and witness memory."""
+        warnings.warn("hlf_governed_recall is deprecated, use sg_memory_governed_recall instead", DeprecationWarning, stacklevel=2)
         return ctx.recall_governed_evidence(
             query,
             top_k=top_k,
@@ -710,6 +716,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         enabled: bool | None = None,
     ) -> dict[str, Any]:
         """Produce a quarantined advisory comparison between local HKS recall and optional external comparator results."""
+        warnings.warn("hlf_hks_external_compare is deprecated, use sg_memory_hks_compare instead", DeprecationWarning, stacklevel=2)
         effective_enabled = enabled
         if effective_enabled is None:
             effective_enabled = str(os.environ.get("HLF_ENABLE_HKS_EXTERNAL_COMPARATOR", "")).strip().lower() in {
@@ -824,6 +831,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         stale_after_days: int = 7,
     ) -> dict[str, Any]:
         """Analyze weekly HKS drift and queue bridge-lane revalidation or re-research actions."""
+        warnings.warn("hlf_hks_weekly_refresh is deprecated, use sg_memory_hks_weekly instead", DeprecationWarning, stacklevel=2)
         return ctx.analyze_hks_weekly_refresh(
             metrics_dir=metrics_dir,
             stale_after_days=stale_after_days,
@@ -848,6 +856,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         metrics_dir: str | None = None,
     ) -> dict[str, Any]:
         """Run a bounded repo-self-use governed recall loop and persist it as a reviewable internal workflow contract."""
+        warnings.warn("hlf_internal_governed_recall_workflow is deprecated, use sg_memory_governed_recall_workflow instead", DeprecationWarning, stacklevel=2)
         effective_query = str(query or problem).strip()
         capture_result = hlf_hks_capture(
             problem=problem,
@@ -904,6 +913,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_memory_stats() -> dict[str, Any]:
         """Return Infinite RAG memory store statistics."""
+        warnings.warn("hlf_memory_stats is deprecated, use sg_memory_stats instead", DeprecationWarning, stacklevel=2)
         stats = ctx.memory_store.stats()
         memory_strata = dict(stats.get("memory_strata") or {})
         storage_tiers = dict(stats.get("storage_tiers") or {})
@@ -937,6 +947,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         require_provenance: bool = False,
     ) -> dict[str, Any]:
         """Resolve a governed memory pointer against the packaged HKS / Infinite RAG substrate."""
+        warnings.warn("hlf_memory_resolve is deprecated, use sg_memory_resolve instead", DeprecationWarning, stacklevel=2)
         return ctx.resolve_memory_pointer(
             pointer,
             purpose=purpose,
@@ -961,6 +972,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         source: str = "server_memory.hlf_memory_govern",
     ) -> dict[str, Any]:
         """Apply a governed memory intervention such as revoke, tombstone, or reinstate."""
+        warnings.warn("hlf_memory_govern is deprecated, use sg_memory_govern instead", DeprecationWarning, stacklevel=2)
         return apply_memory_governance(
             ctx,
             action=action,
@@ -991,6 +1003,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         negative: bool = True,
     ) -> dict[str, Any]:
         """Record a structured witness observation and compute the subject's packaged trust state."""
+        warnings.warn("hlf_witness_record is deprecated, use sg_audit_witness_record instead", DeprecationWarning, stacklevel=2)
         return ctx.record_witness_observation(
             subject_agent_id=subject_agent_id,
             category=category,
@@ -1010,6 +1023,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_witness_status(subject_agent_id: str | None = None) -> dict[str, Any]:
         """Return the current packaged witness-governance trust state for a subject or the global summary."""
+        warnings.warn("hlf_witness_status is deprecated, use sg_audit_witness_status instead", DeprecationWarning, stacklevel=2)
         status = ctx.get_witness_status(subject_agent_id=subject_agent_id)
         if status is None:
             return {"status": "not_found", "subject_agent_id": subject_agent_id}
@@ -1018,6 +1032,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_witness_list(trust_state: str | None = None) -> dict[str, Any]:
         """List subjects tracked by witness governance, optionally filtered by trust state."""
+        warnings.warn("hlf_witness_list is deprecated, use sg_audit_witness_list instead", DeprecationWarning, stacklevel=2)
         listing = ctx.list_witness_subjects(trust_state=trust_state)
         return {"status": "ok", **listing}
 
@@ -1029,6 +1044,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         media_evidence: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Run a bounded governed dream cycle over recent evidence and return advisory findings."""
+        warnings.warn("hlf_dream_cycle_run is deprecated, use sg_memory_dream_run instead", DeprecationWarning, stacklevel=2)
         return ctx.run_dream_cycle(
             metrics_dir=metrics_dir,
             max_artifacts=max_artifacts,
@@ -1043,6 +1059,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         min_confidence: float = 0.0,
     ) -> dict[str, Any]:
         """List advisory dream findings produced during bounded dream-cycle runs."""
+        warnings.warn("hlf_dream_findings_list is deprecated, use sg_memory_dream_findings instead", DeprecationWarning, stacklevel=2)
         return {
             "status": "ok",
             **ctx.list_dream_findings(
@@ -1055,6 +1072,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_dream_findings_get(finding_id: str) -> dict[str, Any]:
         """Return a specific advisory dream finding by ID."""
+        warnings.warn("hlf_dream_findings_get is deprecated, use sg_memory_dream_finding_get instead", DeprecationWarning, stacklevel=2)
         finding = ctx.get_dream_finding(finding_id)
         if finding is None:
             return {"status": "not_found", "finding_id": finding_id}
@@ -1063,11 +1081,13 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_media_evidence_list(media_type: str | None = None) -> dict[str, Any]:
         """List normalized shared media evidence records admitted into governed memory."""
+        warnings.warn("hlf_media_evidence_list is deprecated, use sg_memory_media_list instead", DeprecationWarning, stacklevel=2)
         return {"status": "ok", **ctx.list_media_evidence(media_type=media_type)}
 
     @mcp.tool()
     def hlf_media_evidence_get(artifact_id: str) -> dict[str, Any]:
         """Return a specific shared media evidence record by artifact ID."""
+        warnings.warn("hlf_media_evidence_get is deprecated, use sg_memory_media_get instead", DeprecationWarning, stacklevel=2)
         evidence = ctx.get_media_evidence(artifact_id)
         if evidence is None:
             return {"status": "not_found", "artifact_id": artifact_id}
@@ -1083,6 +1103,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         verification_plan: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create an advisory dream proposal with explicit observe-propose-verify-promote citation gates."""
+        warnings.warn("hlf_dream_proposal_create is deprecated, use sg_memory_dream_proposal instead", DeprecationWarning, stacklevel=2)
         return ctx.create_dream_proposal(
             finding_ids=finding_ids,
             title=title,
@@ -1095,11 +1116,13 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     @mcp.tool()
     def hlf_dream_proposals_list(lane: str | None = None) -> dict[str, Any]:
         """List advisory dream proposals staged for a governed implementation lane."""
+        warnings.warn("hlf_dream_proposals_list is deprecated, use sg_memory_dream_proposals instead", DeprecationWarning, stacklevel=2)
         return {"status": "ok", **ctx.list_dream_proposals(lane=lane)}
 
     @mcp.tool()
     def hlf_dream_proposals_get(proposal_id: str) -> dict[str, Any]:
         """Return a specific advisory dream proposal by ID."""
+        warnings.warn("hlf_dream_proposals_get is deprecated, use sg_memory_dream_proposal_get instead", DeprecationWarning, stacklevel=2)
         proposal = ctx.get_dream_proposal(proposal_id)
         if proposal is None:
             return {"status": "not_found", "proposal_id": proposal_id}
@@ -1131,6 +1154,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
                    external (third-party reference),
                    draft (unvalidated working material).
         """
+        warnings.warn("hlf_knowledge_ingest is deprecated, use sg_memory_ingest instead", DeprecationWarning, stacklevel=2)
         ingester = DocumentIngester(ctx.memory_store)
         report = ingester.ingest_text(
             content,
@@ -1175,6 +1199,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
 
         Returns a summary across all processed files.
         """
+        warnings.warn("hlf_knowledge_ingest_directory is deprecated, use sg_memory_ingest_dir instead", DeprecationWarning, stacklevel=2)
         ingester = DocumentIngester(ctx.memory_store)
         reports = ingester.ingest_directory(
             dir_path,
@@ -1243,6 +1268,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             IngestionReport with stored/deduped/error counts, SHA256 of source,
             and per-chunk IDs for provenance tracking.
         """
+        warnings.warn("hlf_knowledge_ingest_url is deprecated, use sg_memory_ingest_url instead", DeprecationWarning, stacklevel=2)
         ingester = DocumentIngester(ctx.memory_store)
         report = ingester.ingest_url(
             url,
@@ -1277,6 +1303,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         {found: false} if the content is new.  Use this BEFORE generating
         expensive embeddings to avoid redundant computation.
         """
+        warnings.warn("hlf_memory_dedup_check is deprecated, use sg_memory_dedup instead", DeprecationWarning, stacklevel=2)
         if not content:
             return {"found": False, "error": "empty_content"}
         store = ctx.memory_store
@@ -1293,10 +1320,54 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         the vec_facts virtual table for fast KNN cosine-similarity search.
         Safe to run on every startup — existing entries are replaced.
         """
+        warnings.warn("hlf_memory_index_embeddings is deprecated, use sg_memory_index instead", DeprecationWarning, stacklevel=2)
         store = ctx.memory_store
         if store is None:
             return {"indexed": 0, "error": "no_memory_store"}
         return store.index_embeddings(batch_size=batch_size)
+
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_memory_store": hlf_memory_store,
+        "sg_memory_query": hlf_memory_query,
+        "sg_memory_hks_capture": hlf_hks_capture,
+        "sg_memory_hks_recall": hlf_hks_recall,
+        "sg_memory_governed_recall": hlf_governed_recall,
+        "sg_memory_hks_compare": hlf_hks_external_compare,
+        "sg_memory_hks_weekly": hlf_hks_weekly_refresh,
+        "sg_memory_governed_recall_workflow": hlf_internal_governed_recall_workflow,
+        "sg_memory_stats": hlf_memory_stats,
+        "sg_memory_resolve": hlf_memory_resolve,
+        "sg_memory_govern": hlf_memory_govern,
+        "sg_audit_witness_record": hlf_witness_record,
+        "sg_audit_witness_status": hlf_witness_status,
+        "sg_audit_witness_list": hlf_witness_list,
+        "sg_memory_dream_run": hlf_dream_cycle_run,
+        "sg_memory_dream_findings": hlf_dream_findings_list,
+        "sg_memory_dream_finding_get": hlf_dream_findings_get,
+        "sg_memory_media_list": hlf_media_evidence_list,
+        "sg_memory_media_get": hlf_media_evidence_get,
+        "sg_memory_dream_proposal": hlf_dream_proposal_create,
+        "sg_memory_dream_proposals": hlf_dream_proposals_list,
+        "sg_memory_dream_proposal_get": hlf_dream_proposals_get,
+        "sg_memory_ingest": hlf_knowledge_ingest,
+        "sg_memory_ingest_dir": hlf_knowledge_ingest_directory,
+        "sg_memory_ingest_url": hlf_knowledge_ingest_url,
+        "sg_memory_dedup": hlf_memory_dedup_check,
+        "sg_memory_index": hlf_memory_index_embeddings,
+    })
 
     return {
         "hlf_memory_store": hlf_memory_store,
@@ -1326,4 +1397,31 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_knowledge_ingest_url": hlf_knowledge_ingest_url,
         "hlf_memory_dedup_check": hlf_memory_dedup_check,
         "hlf_memory_index_embeddings": hlf_memory_index_embeddings,
+        "sg_memory_store": hlf_memory_store,
+        "sg_memory_query": hlf_memory_query,
+        "sg_memory_hks_capture": hlf_hks_capture,
+        "sg_memory_hks_recall": hlf_hks_recall,
+        "sg_memory_governed_recall": hlf_governed_recall,
+        "sg_memory_hks_compare": hlf_hks_external_compare,
+        "sg_memory_hks_weekly": hlf_hks_weekly_refresh,
+        "sg_memory_governed_recall_workflow": hlf_internal_governed_recall_workflow,
+        "sg_memory_stats": hlf_memory_stats,
+        "sg_memory_resolve": hlf_memory_resolve,
+        "sg_memory_govern": hlf_memory_govern,
+        "sg_audit_witness_record": hlf_witness_record,
+        "sg_audit_witness_status": hlf_witness_status,
+        "sg_audit_witness_list": hlf_witness_list,
+        "sg_memory_dream_run": hlf_dream_cycle_run,
+        "sg_memory_dream_findings": hlf_dream_findings_list,
+        "sg_memory_dream_finding_get": hlf_dream_findings_get,
+        "sg_memory_media_list": hlf_media_evidence_list,
+        "sg_memory_media_get": hlf_media_evidence_get,
+        "sg_memory_dream_proposal": hlf_dream_proposal_create,
+        "sg_memory_dream_proposals": hlf_dream_proposals_list,
+        "sg_memory_dream_proposal_get": hlf_dream_proposals_get,
+        "sg_memory_ingest": hlf_knowledge_ingest,
+        "sg_memory_ingest_dir": hlf_knowledge_ingest_directory,
+        "sg_memory_ingest_url": hlf_knowledge_ingest_url,
+        "sg_memory_dedup": hlf_memory_dedup_check,
+        "sg_memory_index": hlf_memory_index_embeddings,
     }

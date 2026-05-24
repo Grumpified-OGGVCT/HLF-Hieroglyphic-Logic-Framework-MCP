@@ -1,330 +1,278 @@
 """Canonical public HLF surface for the packaged product."""
 
-from hlf_mcp.hlf.authority import (
-    AUTHORITY_SURFACES,
-    BRIDGE_RECOVERY_MATERIAL,
-    FULL_ORIGINAL_HLF_AUTHORITY_TARGET,
-    INVALID_MISTAKEN_CHECKOUT_ARTIFACTS,
-    PRESENT_PACKAGED_CURRENT_TRUTH,
-    AuthoritySurface,
-    DownstreamTask,
-    authority_matrix,
-    downstream_guidance,
-)
-from hlf_mcp.hlf.benchmark import HLFBenchmark
-from hlf_mcp.hlf.bytecode import HLFBytecode
-from hlf_mcp.hlf.capability_manifest import (
-    CapabilityManifest,
-    CrossManifestConsistency,
-    ManifestIntegrityProof,
-    check_cross_manifest_consistency,
-    prove_manifest_integrity,
-)
-from hlf_mcp.hlf.codegen import HLFCodeGenerator
-from hlf_mcp.hlf.compiler import HLFCompiler
-from hlf_mcp.hlf.effect_extractor import (
-    EffectCompositionProof,
-    EffectExtractor,
-    prove_conditional_composition,
-    prove_parallel_composition,
-    prove_sequential_composition,
-)
-from hlf_mcp.hlf.embodied import (
-    EmbodiedContractAssessment,
-    assess_embodied_host_call,
-    build_embodied_action_envelope,
-    build_simulated_embodied_result,
-    is_embodied_policy_trace,
-)
-from hlf_mcp.hlf.formatter import HLFFormatter
-from hlf_mcp.hlf.linter import HLFLinter
-from hlf_mcp.hlf.operand_coverage import (
-    CANONICAL_OPERATORS,
-    OperandCoverage,
-    OperandMatrix,
-    Operator,
-    OperatorFamily,
-    find_operand_gaps,
-    generate_coverage_report,
-    prove_operand_completeness,
-)
-from hlf_mcp.hlf.parametric_proofs import (
-    ParametricProofResult,
-    ParametricProver,
-    RefinementProofResult,
-    prove_list_invariance,
-    prove_map_key_uniqueness,
-    prove_refinement_soundness,
-    prove_set_uniqueness,
-)
-from hlf_mcp.hlf.runtime import HLFRuntime
-from hlf_mcp.hlf.two_channel_executor import (
-    ProvenanceChain,
-    InstructionChannel,
-    DataChannel,
-    ExecutionResult,
-    TwoChannelExecutor,
-    build_instruction_channel,
-    build_data_channel,
-)
-from hlf_mcp.hlf.swarm_mechanics import (
-    SWARM_ARTIFACT_KIND,
-    build_swarm_mechanics_artifact,
-    materialize_swarm_hlf,
-)
-
-# Phase 7: Distributed Routing Fabric
-from hlf_mcp.hlf.routing.node_registry import NodeRegistry, RegisteredNode
-from hlf_mcp.hlf.routing.capability_router import CapabilityRouter, RouteMatch, WorkRequest
-from hlf_mcp.hlf.routing.load_balancer import LoadBalancer
-from hlf_mcp.hlf.routing.failover import CircuitBreaker, FailoverManager, NodeFailureEvent
-from hlf_mcp.hlf.routing.stress_testing import StressScenario, StressResult, RoutingStressTest
-from hlf_mcp.hlf.routing.edge_cases import (
-    EdgeCaseResult,
-    RoutingEdgeCase,
-    run_all_edge_cases,
-    test_capability_mismatch,
-    test_empty_registry,
-    test_failover_cascade,
-    test_health_check_flapping,
-    test_load_balancer_starvation,
-    test_race_condition_register_unregister,
-    test_single_node_failure,
-)
-
-# Phase 7: Knowledge Memory Contracts
-from hlf_mcp.hlf.knowledge.freshness_guarantee import FreshnessGuarantee, FreshnessGuaranteeChecker
-from hlf_mcp.hlf.knowledge.consistency_proof import ConsistencyProof, ConsistencyProofResult
-from hlf_mcp.hlf.knowledge.memory_lease import LeaseManager, LeaseViolationError, MemoryLease
-
-# Phase 11: Knowledge Substrate Hardening
-from hlf_mcp.hlf.entropy_anchor import (
-    DriftDetector,
-    DriftReport,
-    DriftSeverity,
-    EntropyAnchor,
-    ReAnchorDecision,
-    ReAnchoringProtocol,
-)
-from hlf_mcp.hlf.cross_witness import (
-    CrossWitnessProof,
-    CrossWitnessProver,
-    DisagreementReport,
-    DisagreementResolver,
-    QuorumPolicy,
-    ResolutionStrategy,
-)
-from hlf_mcp.hlf.memory_lease_hardening import (
-    EvictionResult,
-    LeaseAuditRecord,
-    LeaseAuditor,
-    LeaseMigration,
-    LeaseNegotiator,
-    LeasePriority,
-    MemoryPressureHandler,
-    MemoryTier,
-    MigrationPlan,
-    NegotiatedLease,
-)
-from hlf_mcp.hlf.knowledge_provenance import (
-    DerivationKind,
-    GapReport,
-    ProvenanceChain as KnowledgeProvenanceChain,
-    ProvenanceGapDetector,
-    ProvenanceNode,
-    ProvenanceVerification,
-    ProvenanceVerifier,
-    TrustRoot,
-    TrustRootRegistry,
-)
-
 # Phase 8: Orchestration Lifecycle Hardening — plan_versioning is
-# safe to import eagerly; checkpoint_executor creates a circular
-# dependency via multi_phase_executor → hlf.__init__, so we expose
-# it through a lazy accessor.
-from hlf_mcp.hlf.plan_versioning import PlanVersion, PlanHistory
+# safe to import eagerly; it has no DSL dependency.
+from hlf_mcp.hlf.plan_versioning import PlanVersion, PlanHistory  # noqa: E402
 
-
-def _get_checkpoint_types() -> tuple:
-    """Lazy-load checkpoint executor types to avoid circular imports."""
-    from hlf_mcp.hlf.checkpoint_executor import (  # noqa: PLC0415
-        Checkpoint,
-        CheckpointManager,
-        CheckpointableExecutor,
-        CheckpointedExecutionResult,
-    )
-    return Checkpoint, CheckpointManager, CheckpointableExecutor, CheckpointedExecutionResult
+_LAZY_ATTRS: dict[str, tuple[str, str]] = {
+    # -- authority ---------------------------------------------------
+    "AUTHORITY_SURFACES": ("hlf_mcp.hlf.authority", "AUTHORITY_SURFACES"),
+    "BRIDGE_RECOVERY_MATERIAL": ("hlf_mcp.hlf.authority", "BRIDGE_RECOVERY_MATERIAL"),
+    "FULL_ORIGINAL_HLF_AUTHORITY_TARGET": ("hlf_mcp.hlf.authority", "FULL_ORIGINAL_HLF_AUTHORITY_TARGET"),
+    "INVALID_MISTAKEN_CHECKOUT_ARTIFACTS": ("hlf_mcp.hlf.authority", "INVALID_MISTAKEN_CHECKOUT_ARTIFACTS"),
+    "PRESENT_PACKAGED_CURRENT_TRUTH": ("hlf_mcp.hlf.authority", "PRESENT_PACKAGED_CURRENT_TRUTH"),
+    "AuthoritySurface": ("hlf_mcp.hlf.authority", "AuthoritySurface"),
+    "DownstreamTask": ("hlf_mcp.hlf.authority", "DownstreamTask"),
+    "authority_matrix": ("hlf_mcp.hlf.authority", "authority_matrix"),
+    "downstream_guidance": ("hlf_mcp.hlf.authority", "downstream_guidance"),
+    # -- benchmark ---------------------------------------------------
+    "HLFBenchmark": ("hlf_mcp.hlf.benchmark", "HLFBenchmark"),
+    # -- bytecode ----------------------------------------------------
+    "HLFBytecode": ("hlf_mcp.hlf.bytecode", "HLFBytecode"),
+    # -- capability_manifest -----------------------------------------
+    "CapabilityManifest": ("hlf_mcp.hlf.capability_manifest", "CapabilityManifest"),
+    "CrossManifestConsistency": ("hlf_mcp.hlf.capability_manifest", "CrossManifestConsistency"),
+    "ManifestIntegrityProof": ("hlf_mcp.hlf.capability_manifest", "ManifestIntegrityProof"),
+    "check_cross_manifest_consistency": ("hlf_mcp.hlf.capability_manifest", "check_cross_manifest_consistency"),
+    "prove_manifest_integrity": ("hlf_mcp.hlf.capability_manifest", "prove_manifest_integrity"),
+    # -- codegen -----------------------------------------------------
+    "HLFCodeGenerator": ("hlf_mcp.hlf.codegen", "HLFCodeGenerator"),
+    # -- compiler ----------------------------------------------------
+    "HLFCompiler": ("hlf_mcp.hlf.compiler", "HLFCompiler"),
+    # -- effect_extractor --------------------------------------------
+    "EffectCompositionProof": ("hlf_mcp.hlf.effect_extractor", "EffectCompositionProof"),
+    "EffectExtractor": ("hlf_mcp.hlf.effect_extractor", "EffectExtractor"),
+    "prove_conditional_composition": ("hlf_mcp.hlf.effect_extractor", "prove_conditional_composition"),
+    "prove_parallel_composition": ("hlf_mcp.hlf.effect_extractor", "prove_parallel_composition"),
+    "prove_sequential_composition": ("hlf_mcp.hlf.effect_extractor", "prove_sequential_composition"),
+    # -- embodied ----------------------------------------------------
+    "EmbodiedContractAssessment": ("hlf_mcp.hlf.embodied", "EmbodiedContractAssessment"),
+    "assess_embodied_host_call": ("hlf_mcp.hlf.embodied", "assess_embodied_host_call"),
+    "build_embodied_action_envelope": ("hlf_mcp.hlf.embodied", "build_embodied_action_envelope"),
+    "build_simulated_embodied_result": ("hlf_mcp.hlf.embodied", "build_simulated_embodied_result"),
+    "is_embodied_policy_trace": ("hlf_mcp.hlf.embodied", "is_embodied_policy_trace"),
+    # -- formatter ---------------------------------------------------
+    "HLFFormatter": ("hlf_mcp.hlf.formatter", "HLFFormatter"),
+    # -- linter ------------------------------------------------------
+    "HLFLinter": ("hlf_mcp.hlf.linter", "HLFLinter"),
+    # -- operand_coverage --------------------------------------------
+    "CANONICAL_OPERATORS": ("hlf_mcp.hlf.operand_coverage", "CANONICAL_OPERATORS"),
+    "OperandCoverage": ("hlf_mcp.hlf.operand_coverage", "OperandCoverage"),
+    "OperandMatrix": ("hlf_mcp.hlf.operand_coverage", "OperandMatrix"),
+    "Operator": ("hlf_mcp.hlf.operand_coverage", "Operator"),
+    "OperatorFamily": ("hlf_mcp.hlf.operand_coverage", "OperatorFamily"),
+    "find_operand_gaps": ("hlf_mcp.hlf.operand_coverage", "find_operand_gaps"),
+    "generate_coverage_report": ("hlf_mcp.hlf.operand_coverage", "generate_coverage_report"),
+    "prove_operand_completeness": ("hlf_mcp.hlf.operand_coverage", "prove_operand_completeness"),
+    # -- parametric_proofs -------------------------------------------
+    "ParametricProofResult": ("hlf_mcp.hlf.parametric_proofs", "ParametricProofResult"),
+    "ParametricProver": ("hlf_mcp.hlf.parametric_proofs", "ParametricProver"),
+    "RefinementProofResult": ("hlf_mcp.hlf.parametric_proofs", "RefinementProofResult"),
+    "prove_list_invariance": ("hlf_mcp.hlf.parametric_proofs", "prove_list_invariance"),
+    "prove_map_key_uniqueness": ("hlf_mcp.hlf.parametric_proofs", "prove_map_key_uniqueness"),
+    "prove_refinement_soundness": ("hlf_mcp.hlf.parametric_proofs", "prove_refinement_soundness"),
+    "prove_set_uniqueness": ("hlf_mcp.hlf.parametric_proofs", "prove_set_uniqueness"),
+    # -- runtime -----------------------------------------------------
+    "HLFRuntime": ("hlf_mcp.hlf.runtime", "HLFRuntime"),
+    # -- two_channel_executor ----------------------------------------
+    "ProvenanceChain": ("hlf_mcp.hlf.two_channel_executor", "ProvenanceChain"),
+    "InstructionChannel": ("hlf_mcp.hlf.two_channel_executor", "InstructionChannel"),
+    "DataChannel": ("hlf_mcp.hlf.two_channel_executor", "DataChannel"),
+    "ExecutionResult": ("hlf_mcp.hlf.two_channel_executor", "ExecutionResult"),
+    "TwoChannelExecutor": ("hlf_mcp.hlf.two_channel_executor", "TwoChannelExecutor"),
+    "build_instruction_channel": ("hlf_mcp.hlf.two_channel_executor", "build_instruction_channel"),
+    "build_data_channel": ("hlf_mcp.hlf.two_channel_executor", "build_data_channel"),
+    # -- swarm_mechanics ---------------------------------------------
+    "SWARM_ARTIFACT_KIND": ("hlf_mcp.hlf.swarm_mechanics", "SWARM_ARTIFACT_KIND"),
+    "build_swarm_mechanics_artifact": ("hlf_mcp.hlf.swarm_mechanics", "build_swarm_mechanics_artifact"),
+    "materialize_swarm_hlf": ("hlf_mcp.hlf.swarm_mechanics", "materialize_swarm_hlf"),
+    # Phase 7: Distributed Routing Fabric ----------------------------
+    "NodeRegistry": ("hlf_mcp.hlf.routing.node_registry", "NodeRegistry"),
+    "RegisteredNode": ("hlf_mcp.hlf.routing.node_registry", "RegisteredNode"),
+    "CapabilityRouter": ("hlf_mcp.hlf.routing.capability_router", "CapabilityRouter"),
+    "RouteMatch": ("hlf_mcp.hlf.routing.capability_router", "RouteMatch"),
+    "WorkRequest": ("hlf_mcp.hlf.routing.capability_router", "WorkRequest"),
+    "LoadBalancer": ("hlf_mcp.hlf.routing.load_balancer", "LoadBalancer"),
+    "FailoverManager": ("hlf_mcp.hlf.routing.failover", "FailoverManager"),
+    "NodeFailureEvent": ("hlf_mcp.hlf.routing.failover", "NodeFailureEvent"),
+    "CircuitBreaker": ("hlf_mcp.hlf.routing.failover", "CircuitBreaker"),
+    # Phase 7b: Routing Stress Testing & Edge Cases -----------------
+    "StressScenario": ("hlf_mcp.hlf.routing.stress_testing", "StressScenario"),
+    "StressResult": ("hlf_mcp.hlf.routing.stress_testing", "StressResult"),
+    "RoutingStressTest": ("hlf_mcp.hlf.routing.stress_testing", "RoutingStressTest"),
+    "RoutingEdgeCase": ("hlf_mcp.hlf.routing.edge_cases", "RoutingEdgeCase"),
+    "EdgeCaseResult": ("hlf_mcp.hlf.routing.edge_cases", "EdgeCaseResult"),
+    "test_empty_registry": ("hlf_mcp.hlf.routing.edge_cases", "test_empty_registry"),
+    "test_single_node_failure": ("hlf_mcp.hlf.routing.edge_cases", "test_single_node_failure"),
+    "test_capability_mismatch": ("hlf_mcp.hlf.routing.edge_cases", "test_capability_mismatch"),
+    "test_race_condition_register_unregister": ("hlf_mcp.hlf.routing.edge_cases", "test_race_condition_register_unregister"),
+    "test_load_balancer_starvation": ("hlf_mcp.hlf.routing.edge_cases", "test_load_balancer_starvation"),
+    "test_failover_cascade": ("hlf_mcp.hlf.routing.edge_cases", "test_failover_cascade"),
+    "test_health_check_flapping": ("hlf_mcp.hlf.routing.edge_cases", "test_health_check_flapping"),
+    "run_all_edge_cases": ("hlf_mcp.hlf.routing.edge_cases", "run_all_edge_cases"),
+    # Phase 7: Knowledge Memory Contracts ----------------------------
+    "FreshnessGuarantee": ("hlf_mcp.hlf.knowledge.freshness_guarantee", "FreshnessGuarantee"),
+    "FreshnessGuaranteeChecker": ("hlf_mcp.hlf.knowledge.freshness_guarantee", "FreshnessGuaranteeChecker"),
+    "ConsistencyProof": ("hlf_mcp.hlf.knowledge.consistency_proof", "ConsistencyProof"),
+    "ConsistencyProofResult": ("hlf_mcp.hlf.knowledge.consistency_proof", "ConsistencyProofResult"),
+    "LeaseManager": ("hlf_mcp.hlf.knowledge.memory_lease", "LeaseManager"),
+    "LeaseViolationError": ("hlf_mcp.hlf.knowledge.memory_lease", "LeaseViolationError"),
+    "MemoryLease": ("hlf_mcp.hlf.knowledge.memory_lease", "MemoryLease"),
+    # Phase 8: Orchestration Lifecycle Hardening — checkpoint types --
+    "Checkpoint": ("hlf_mcp.hlf.checkpoint_executor", "Checkpoint"),
+    "CheckpointManager": ("hlf_mcp.hlf.checkpoint_executor", "CheckpointManager"),
+    "CheckpointableExecutor": ("hlf_mcp.hlf.checkpoint_executor", "CheckpointableExecutor"),
+    "CheckpointedExecutionResult": ("hlf_mcp.hlf.checkpoint_executor", "CheckpointedExecutionResult"),
+    # Phase 9: Audit & Trust Layer -----------------------------------
+    "AuditEvent": ("hlf_mcp.hlf.audit_trail", "AuditEvent"),
+    "AuditTrail": ("hlf_mcp.hlf.audit_trail", "AuditTrail"),
+    "generate_execution_audit": ("hlf_mcp.hlf.audit_trail", "generate_execution_audit"),
+    "summarize_audit": ("hlf_mcp.hlf.audit_trail", "summarize_audit"),
+    "audit_to_html": ("hlf_mcp.hlf.audit_trail", "audit_to_html"),
+    "TrustEdge": ("hlf_mcp.hlf.trust_surface", "TrustEdge"),
+    "TrustSurface": ("hlf_mcp.hlf.trust_surface", "TrustSurface"),
+    "build_default_trust_surface": ("hlf_mcp.hlf.trust_surface", "build_default_trust_surface"),
+    "validate_trust_against_constitution": ("hlf_mcp.hlf.trust_surface", "validate_trust_against_constitution"),
+    "ReviewRecord": ("hlf_mcp.hlf.review_proof", "ReviewRecord"),
+    "ReviewProof": ("hlf_mcp.hlf.review_proof", "ReviewProof"),
+    "prove_review_completeness": ("hlf_mcp.hlf.review_proof", "prove_review_completeness"),
+    "generate_review_checklist": ("hlf_mcp.hlf.review_proof", "generate_review_checklist"),
+    "audit_review_gaps": ("hlf_mcp.hlf.review_proof", "audit_review_gaps"),
+    "generate_review_proof_markdown": ("hlf_mcp.hlf.review_proof", "generate_review_proof_markdown"),
+    # Phase 9b: Audit & Trust Hardening — Diff, Debt, Remediation, Trending
+    "DiffOperation": ("hlf_mcp.hlf.audit_diff", "DiffOperation"),
+    "AuditDiffEntry": ("hlf_mcp.hlf.audit_diff", "AuditDiffEntry"),
+    "AuditDiff": ("hlf_mcp.hlf.audit_diff", "AuditDiff"),
+    "DebtItem": ("hlf_mcp.hlf.trust_debt", "DebtItem"),
+    "TrustDebtQuantifier": ("hlf_mcp.hlf.trust_debt", "TrustDebtQuantifier"),
+    "RemediationPriority": ("hlf_mcp.hlf.remediation_planner", "RemediationPriority"),
+    "RemediationStatus": ("hlf_mcp.hlf.remediation_planner", "RemediationStatus"),
+    "RemediationTask": ("hlf_mcp.hlf.remediation_planner", "RemediationTask"),
+    "RemediationPlan": ("hlf_mcp.hlf.remediation_planner", "RemediationPlan"),
+    "RemediationPlanner": ("hlf_mcp.hlf.remediation_planner", "RemediationPlanner"),
+    "TrendDirection": ("hlf_mcp.hlf.trust_trending", "TrendDirection"),
+    "AlertLevel": ("hlf_mcp.hlf.trust_trending", "AlertLevel"),
+    "TrustSnapshot": ("hlf_mcp.hlf.trust_trending", "TrustSnapshot"),
+    "TrendReport": ("hlf_mcp.hlf.trust_trending", "TrendReport"),
+    "TrendAlert": ("hlf_mcp.hlf.trust_trending", "TrendAlert"),
+    "TrustTrending": ("hlf_mcp.hlf.trust_trending", "TrustTrending"),
+    # Phase 10: Formal Verification Proof Depth Hardening ------------
+    "ConstraintKind": ("hlf_mcp.hlf.formal_verifier", "ConstraintKind"),
+    "FormalVerifier": ("hlf_mcp.hlf.formal_verifier", "FormalVerifier"),
+    "GateDecision": ("hlf_mcp.hlf.formal_verifier", "GateDecision"),
+    "VerificationBlockedError": ("hlf_mcp.hlf.formal_verifier", "VerificationBlockedError"),
+    "VerificationGate": ("hlf_mcp.hlf.formal_verifier", "VerificationGate"),
+    "VerificationReport": ("hlf_mcp.hlf.formal_verifier", "VerificationReport"),
+    "VerificationResult": ("hlf_mcp.hlf.formal_verifier", "VerificationResult"),
+    "VerificationStatus": ("hlf_mcp.hlf.formal_verifier", "VerificationStatus"),
+    "z3_available": ("hlf_mcp.hlf.formal_verifier", "z3_available"),
+    "Counterexample": ("hlf_mcp.hlf.counterexample_quality", "Counterexample"),
+    "CounterexampleGenerator": ("hlf_mcp.hlf.counterexample_quality", "CounterexampleGenerator"),
+    "compare_counterexamples": ("hlf_mcp.hlf.counterexample_quality", "compare_counterexamples"),
+    "explain_counterexample": ("hlf_mcp.hlf.counterexample_quality", "explain_counterexample"),
+    "generate_minimal_counterexample": ("hlf_mcp.hlf.counterexample_quality", "generate_minimal_counterexample"),
+    "suggest_fix": ("hlf_mcp.hlf.counterexample_quality", "suggest_fix"),
+    "ProofDepth": ("hlf_mcp.hlf.proof_depth", "ProofDepth"),
+    "ProofObligation": ("hlf_mcp.hlf.proof_depth", "ProofObligation"),
+    "deepen_proof": ("hlf_mcp.hlf.proof_depth", "deepen_proof"),
+    "generate_proof_obligations": ("hlf_mcp.hlf.proof_depth", "generate_proof_obligations"),
+    "measure_proof_depth": ("hlf_mcp.hlf.proof_depth", "measure_proof_depth"),
+    "rank_obligations_by_impact": ("hlf_mcp.hlf.proof_depth", "rank_obligations_by_impact"),
+    # -- symbolic_surfaces -------------------------------------------
+    "audit_symbolic_surface": ("hlf_mcp.hlf.symbolic_surfaces", "audit_symbolic_surface"),
+    "compile_symbolic_surface": ("hlf_mcp.hlf.symbolic_surfaces", "compile_symbolic_surface"),
+    "explain_relation_edges": ("hlf_mcp.hlf.symbolic_surfaces", "explain_relation_edges"),
+    "extract_relation_edges": ("hlf_mcp.hlf.symbolic_surfaces", "extract_relation_edges"),
+    "project_relation_edges": ("hlf_mcp.hlf.symbolic_surfaces", "project_relation_edges"),
+    # -- translator --------------------------------------------------
+    "Tone": ("hlf_mcp.hlf.translator", "Tone"),
+    "TranslationRepairPlan": ("hlf_mcp.hlf.translator", "TranslationRepairPlan"),
+    "build_translation_repair_plan": ("hlf_mcp.hlf.translator", "build_translation_repair_plan"),
+    "canonicalize_translation_text": ("hlf_mcp.hlf.translator", "canonicalize_translation_text"),
+    "chinese_to_hlf": ("hlf_mcp.hlf.translator", "chinese_to_hlf"),
+    "detect_input_language": ("hlf_mcp.hlf.translator", "detect_input_language"),
+    "detect_system_language": ("hlf_mcp.hlf.translator", "detect_system_language"),
+    "detect_tone": ("hlf_mcp.hlf.translator", "detect_tone"),
+    "english_to_hlf": ("hlf_mcp.hlf.translator", "english_to_hlf"),
+    "hlf_source_to_english": ("hlf_mcp.hlf.translator", "hlf_source_to_english"),
+    "hlf_source_to_language": ("hlf_mcp.hlf.translator", "hlf_source_to_language"),
+    "hlf_to_english": ("hlf_mcp.hlf.translator", "hlf_to_english"),
+    "hlf_to_language": ("hlf_mcp.hlf.translator", "hlf_to_language"),
+    "language_to_hlf": ("hlf_mcp.hlf.translator", "language_to_hlf"),
+    "resolve_language": ("hlf_mcp.hlf.translator", "resolve_language"),
+    "translation_diagnostics": ("hlf_mcp.hlf.translator", "translation_diagnostics"),
+    # Phase 11: Knowledge Substrate Hardening — Entropy Anchor Drift -
+    "DriftDetector": ("hlf_mcp.hlf.entropy_anchor", "DriftDetector"),
+    "DriftReport": ("hlf_mcp.hlf.entropy_anchor", "DriftReport"),
+    "DriftSeverity": ("hlf_mcp.hlf.entropy_anchor", "DriftSeverity"),
+    "EntropyAnchor": ("hlf_mcp.hlf.entropy_anchor", "EntropyAnchor"),
+    "ReAnchoringProtocol": ("hlf_mcp.hlf.entropy_anchor", "ReAnchoringProtocol"),
+    "ReAnchorDecision": ("hlf_mcp.hlf.entropy_anchor", "ReAnchorDecision"),
+    # Phase 11: Knowledge Substrate Hardening — Cross-Witness -------
+    "CrossWitnessProof": ("hlf_mcp.hlf.cross_witness", "CrossWitnessProof"),
+    "CrossWitnessProver": ("hlf_mcp.hlf.cross_witness", "CrossWitnessProver"),
+    "DisagreementReport": ("hlf_mcp.hlf.cross_witness", "DisagreementReport"),
+    "DisagreementResolver": ("hlf_mcp.hlf.cross_witness", "DisagreementResolver"),
+    "QuorumPolicy": ("hlf_mcp.hlf.cross_witness", "QuorumPolicy"),
+    "ResolutionStrategy": ("hlf_mcp.hlf.cross_witness", "ResolutionStrategy"),
+    # Phase 11: Knowledge Substrate Hardening — Memory Lease ---------
+    "EvictionResult": ("hlf_mcp.hlf.memory_lease_hardening", "EvictionResult"),
+    "LeaseAuditRecord": ("hlf_mcp.hlf.memory_lease_hardening", "LeaseAuditRecord"),
+    "LeaseAuditor": ("hlf_mcp.hlf.memory_lease_hardening", "LeaseAuditor"),
+    "LeaseMigration": ("hlf_mcp.hlf.memory_lease_hardening", "LeaseMigration"),
+    "LeaseNegotiator": ("hlf_mcp.hlf.memory_lease_hardening", "LeaseNegotiator"),
+    "LeasePriority": ("hlf_mcp.hlf.memory_lease_hardening", "LeasePriority"),
+    "MemoryPressureHandler": ("hlf_mcp.hlf.memory_lease_hardening", "MemoryPressureHandler"),
+    "MemoryTier": ("hlf_mcp.hlf.memory_lease_hardening", "MemoryTier"),
+    "MigrationPlan": ("hlf_mcp.hlf.memory_lease_hardening", "MigrationPlan"),
+    "NegotiatedLease": ("hlf_mcp.hlf.memory_lease_hardening", "NegotiatedLease"),
+    # Phase 11: Knowledge Substrate Hardening — Knowledge Provenance -
+    "DerivationKind": ("hlf_mcp.hlf.knowledge_provenance", "DerivationKind"),
+    "GapReport": ("hlf_mcp.hlf.knowledge_provenance", "GapReport"),
+    "KnowledgeProvenanceChain": ("hlf_mcp.hlf.knowledge_provenance", "ProvenanceChain"),
+    "ProvenanceGapDetector": ("hlf_mcp.hlf.knowledge_provenance", "ProvenanceGapDetector"),
+    "ProvenanceNode": ("hlf_mcp.hlf.knowledge_provenance", "ProvenanceNode"),
+    "ProvenanceVerification": ("hlf_mcp.hlf.knowledge_provenance", "ProvenanceVerification"),
+    "ProvenanceVerifier": ("hlf_mcp.hlf.knowledge_provenance", "ProvenanceVerifier"),
+    "TrustRoot": ("hlf_mcp.hlf.knowledge_provenance", "TrustRoot"),
+    "TrustRootRegistry": ("hlf_mcp.hlf.knowledge_provenance", "TrustRootRegistry"),
+    # Phase 12: Real-Code Bridge Hardening — HLF↔Python equivalence -
+    "CoercionSafety": ("hlf_mcp.hlf.python_type_coercion", "CoercionSafety"),
+    "CoercionRule": ("hlf_mcp.hlf.python_type_coercion", "CoercionRule"),
+    "CoercionResult": ("hlf_mcp.hlf.python_type_coercion", "CoercionResult"),
+    "TypeCoercionContract": ("hlf_mcp.hlf.python_type_coercion", "TypeCoercionContract"),
+    "CapabilityTier": ("hlf_mcp.hlf.import_whitelist", "CapabilityTier"),
+    "ImportRule": ("hlf_mcp.hlf.import_whitelist", "ImportRule"),
+    "ImportCheck": ("hlf_mcp.hlf.import_whitelist", "ImportCheck"),
+    "ImportWhitelist": ("hlf_mcp.hlf.import_whitelist", "ImportWhitelist"),
+    "SandboxResult": ("hlf_mcp.hlf.sandbox_executor", "SandboxResult"),
+    "SandboxConfig": ("hlf_mcp.hlf.sandbox_executor", "SandboxConfig"),
+    "SandboxExecution": ("hlf_mcp.hlf.sandbox_executor", "SandboxExecution"),
+    "GasMeter": ("hlf_mcp.hlf.sandbox_executor", "GasMeter"),
+    "SandboxExecutor": ("hlf_mcp.hlf.sandbox_executor", "SandboxExecutor"),
+    "ViolationCategory": ("hlf_mcp.hlf.error_translation", "ViolationCategory"),
+    "TranslatedViolation": ("hlf_mcp.hlf.error_translation", "TranslatedViolation"),
+    "PythonExceptionMapping": ("hlf_mcp.hlf.error_translation", "PythonExceptionMapping"),
+    "ErrorTranslator": ("hlf_mcp.hlf.error_translation", "ErrorTranslator"),
+    # Phase 8b: Orchestration Failure Recovery & Rebalancing ---------
+    "VectorClock": ("hlf_mcp.hlf.orchestration_failure_recovery", "VectorClock"),
+    "SwarmLeaderElection": ("hlf_mcp.hlf.orchestration_failure_recovery", "SwarmLeaderElection"),
+    "ElectionResult": ("hlf_mcp.hlf.orchestration_failure_recovery", "ElectionResult"),
+    "SplitBrainDetector": ("hlf_mcp.hlf.orchestration_failure_recovery", "SplitBrainDetector"),
+    "SplitBrainReport": ("hlf_mcp.hlf.orchestration_failure_recovery", "SplitBrainReport"),
+    "StalePlanCache": ("hlf_mcp.hlf.orchestration_failure_recovery", "StalePlanCache"),
+    "CacheEntry": ("hlf_mcp.hlf.orchestration_failure_recovery", "CacheEntry"),
+    "CrashRecovery": ("hlf_mcp.hlf.orchestration_failure_recovery", "CrashRecovery"),
+    "RecoveryResult": ("hlf_mcp.hlf.orchestration_failure_recovery", "RecoveryResult"),
+    "PlanRebalancer": ("hlf_mcp.hlf.plan_rebalancing", "PlanRebalancer"),
+    "RebalanceResult": ("hlf_mcp.hlf.plan_rebalancing", "RebalanceResult"),
+    "TaskAffinityMap": ("hlf_mcp.hlf.plan_rebalancing", "TaskAffinityMap"),
+    "SwarmHandoffContract": ("hlf_mcp.hlf.swarm_handoff", "SwarmHandoffContract"),
+    "SwarmHandoffManager": ("hlf_mcp.hlf.swarm_handoff", "SwarmHandoffManager"),
+    "HandoffReceipt": ("hlf_mcp.hlf.swarm_handoff", "HandoffReceipt"),
+    "CapabilityAttestation": ("hlf_mcp.hlf.swarm_handoff", "CapabilityAttestation"),
+    "HandoffStatus": ("hlf_mcp.hlf.swarm_handoff", "HandoffStatus"),
+}
 
 
 def __getattr__(name: str):
-    """Deferred attribute access for checkpoint types."""
-    _checkpoint_attrs = {
-        "Checkpoint",
-        "CheckpointManager",
-        "CheckpointableExecutor",
-        "CheckpointedExecutionResult",
-    }
-    if name in _checkpoint_attrs:
-        idx = {
-            "Checkpoint": 0,
-            "CheckpointManager": 1,
-            "CheckpointableExecutor": 2,
-            "CheckpointedExecutionResult": 3,
-        }[name]
-        return _get_checkpoint_types()[idx]
+    """Lazy-load all hlf exports via _LAZY_ATTRS mapping."""
+    if name in _LAZY_ATTRS:
+        import importlib
+        mod_path, attr = _LAZY_ATTRS[name]
+        mod = importlib.import_module(mod_path)
+        return getattr(mod, attr)
     raise AttributeError(f"module 'hlf_mcp.hlf' has no attribute '{name}'")
-# Phase 9: Audit & Trust Layer
-from hlf_mcp.hlf.audit_trail import (
-    AuditEvent,
-    AuditTrail,
-    generate_execution_audit,
-    summarize_audit,
-    audit_to_html,
-)
-from hlf_mcp.hlf.trust_surface import (
-    TrustEdge,
-    TrustSurface,
-    build_default_trust_surface,
-    validate_trust_against_constitution,
-)
-from hlf_mcp.hlf.review_proof import (
-    ReviewRecord,
-    ReviewProof,
-    prove_review_completeness,
-    generate_review_checklist,
-    audit_review_gaps,
-    generate_review_proof_markdown,
-)
-# Phase 9b: Audit & Trust Layer Hardening — Diff, Debt, Remediation, Trending
-from hlf_mcp.hlf.audit_diff import (
-    DiffOperation,
-    AuditDiffEntry,
-    AuditDiff,
-)
-from hlf_mcp.hlf.trust_debt import (
-    DebtItem,
-    TrustDebtQuantifier,
-)
-from hlf_mcp.hlf.remediation_planner import (
-    RemediationPriority,
-    RemediationStatus,
-    RemediationTask,
-    RemediationPlan,
-    RemediationPlanner,
-)
-from hlf_mcp.hlf.trust_trending import (
-    TrendDirection,
-    AlertLevel,
-    TrustSnapshot,
-    TrendReport,
-    TrendAlert,
-    TrustTrending,
-)
-# Phase 10: Formal Verification Proof Depth Hardening
-from hlf_mcp.hlf.formal_verifier import (
-    ConstraintKind,
-    FormalVerifier,
-    GateDecision,
-    VerificationBlockedError,
-    VerificationGate,
-    VerificationReport,
-    VerificationResult,
-    VerificationStatus,
-    z3_available,
-)
-from hlf_mcp.hlf.counterexample_quality import (
-    Counterexample,
-    CounterexampleGenerator,
-    compare_counterexamples,
-    explain_counterexample,
-    generate_minimal_counterexample,
-    suggest_fix,
-)
-from hlf_mcp.hlf.proof_depth import (
-    ProofDepth,
-    ProofObligation,
-    deepen_proof,
-    generate_proof_obligations,
-    measure_proof_depth,
-    rank_obligations_by_impact,
-)
-from hlf_mcp.hlf.symbolic_surfaces import (
-    audit_symbolic_surface,
-    compile_symbolic_surface,
-    explain_relation_edges,
-    extract_relation_edges,
-    project_relation_edges,
-)
-from hlf_mcp.hlf.translator import (
-    Tone,
-    TranslationRepairPlan,
-    build_translation_repair_plan,
-    canonicalize_translation_text,
-    chinese_to_hlf,
-    detect_input_language,
-    detect_system_language,
-    detect_tone,
-    english_to_hlf,
-    hlf_source_to_english,
-    hlf_source_to_language,
-    hlf_to_english,
-    hlf_to_language,
-    language_to_hlf,
-    resolve_language,
-    translation_diagnostics,
-)
-
-# Phase 12: Real-Code Bridge Hardening — HLF↔Python equivalence
-from hlf_mcp.hlf.python_type_coercion import (
-    CoercionSafety,
-    CoercionRule,
-    CoercionResult,
-    TypeCoercionContract,
-)
-from hlf_mcp.hlf.import_whitelist import (
-    CapabilityTier,
-    ImportRule,
-    ImportCheck,
-    ImportWhitelist,
-)
-from hlf_mcp.hlf.sandbox_executor import (
-    SandboxResult,
-    SandboxConfig,
-    SandboxExecution,
-    GasMeter,
-    SandboxExecutor,
-)
-from hlf_mcp.hlf.error_translation import (
-    ViolationCategory,
-    TranslatedViolation,
-    PythonExceptionMapping,
-    ErrorTranslator,
-)
-
-# Phase 8b: Orchestration Failure Recovery & Rebalancing
-from hlf_mcp.hlf.orchestration_failure_recovery import (
-    VectorClock,
-    SwarmLeaderElection,
-    ElectionResult,
-    SplitBrainDetector,
-    SplitBrainReport,
-    StalePlanCache,
-    CacheEntry,
-    CrashRecovery,
-    RecoveryResult,
-)
-from hlf_mcp.hlf.plan_rebalancing import (
-    PlanRebalancer,
-    RebalanceResult,
-    TaskAffinityMap,
-)
-from hlf_mcp.hlf.swarm_handoff import (
-    SwarmHandoffContract,
-    SwarmHandoffManager,
-    HandoffReceipt,
-    CapabilityAttestation,
-    HandoffStatus,
-)
 
 __all__ = [
     "HLFBenchmark",

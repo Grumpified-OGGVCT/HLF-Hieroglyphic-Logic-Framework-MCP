@@ -26,6 +26,7 @@ from hlf_mcp.hlf.swarm_orchestrator import SwarmOrchestrator
 from hlf_mcp.hlf.witness_governance import WitnessGovernance
 from hlf_mcp.hlf.exceptions import HLFToolError
 from hlf_mcp.hlf import HLFCompiler
+import warnings
 
 _log = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ def register_swarm_tools(mcp_instance: Any) -> dict[str, Any]:  # noqa: C901
             JSON with swarm_id, phases, final_hlf, final_nl, trust_scores,
             compile_success, and verification diagnostics.
         """
+        warnings.warn("hlf_swarm_run is deprecated, use sg_coordinate_swarm_run instead", DeprecationWarning, stacklevel=2)
         result = _orchestrator.run(goal, language=language)
         return json.dumps({
             "swarm_id": result.swarm_id,
@@ -131,6 +133,7 @@ def register_swarm_tools(mcp_instance: Any) -> dict[str, Any]:  # noqa: C901
         Returns:
             JSON with event_type, agent_id, role, message, timestamp per event.
         """
+        warnings.warn("hlf_swarm_progress is deprecated, use sg_observe_swarm instead", DeprecationWarning, stacklevel=2)
         if swarm_id:
             entries = _observer.latest_for(swarm_id)
         else:
@@ -163,6 +166,7 @@ def register_swarm_tools(mcp_instance: Any) -> dict[str, Any]:  # noqa: C901
         Returns:
             JSON with agent_id, trust_score, and any degradation info.
         """
+        warnings.warn("hlf_swarm_witness is deprecated, use sg_audit_swarm_witness instead", DeprecationWarning, stacklevel=2)
         snapshot = _governance.get_snapshot(agent_id)
         return json.dumps(snapshot.to_dict() if snapshot else {"agent_id": agent_id, "trust": None})
 
@@ -192,6 +196,7 @@ def register_swarm_tools(mcp_instance: Any) -> dict[str, Any]:  # noqa: C901
             JSON with verification results including severity, category,
             message, and location for each finding.
         """
+        warnings.warn("hlf_swarm_verify is deprecated, use sg_validate_swarm instead", DeprecationWarning, stacklevel=2)
         try:
             ast_result = _compiler.compile(hlf_source)
             ast = ast_result.get("ast", ast_result) if ast_result else {}
@@ -201,5 +206,30 @@ def register_swarm_tools(mcp_instance: Any) -> dict[str, Any]:  # noqa: C901
             raise HLFToolError(str(exc))
 
     registered["hlf_swarm_verify"] = hlf_swarm_verify
+
+    def _register_sg_aliases(mcp, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp_instance, {
+        "sg_coordinate_swarm_run": hlf_swarm_run,
+        "sg_observe_swarm": hlf_swarm_progress,
+        "sg_audit_swarm_witness": hlf_swarm_witness,
+        "sg_validate_swarm": hlf_swarm_verify,
+    })
+
+    registered["sg_coordinate_swarm_run"] = hlf_swarm_run
+    registered["sg_observe_swarm"] = hlf_swarm_progress
+    registered["sg_audit_swarm_witness"] = hlf_swarm_witness
+    registered["sg_validate_swarm"] = hlf_swarm_verify
 
     return registered

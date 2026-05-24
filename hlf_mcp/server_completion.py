@@ -111,4 +111,21 @@ def register_completion_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any
             out["agent_id"] = agent_id
         return out
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_completion": hlf_governed_complete,
+    })
+
     return {"hlf_governed_complete": hlf_governed_complete}

@@ -9,11 +9,6 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from hlf_mcp.hlf.agent_prompt import build_hlf_native_system_prompt
-from hlf_mcp.hlf.bytecode import OPCODES, HLFBytecode
-from hlf_mcp.hlf.compiler import HLFCompiler
-from hlf_mcp.hlf.governance_proofs import render_proof_markdown, verify_governance_proof
-from hlf_mcp.hlf.symbolic_surfaces import compile_symbolic_surface
 from hlf_mcp.ingress_support import normalize_ingress_status, summarize_ingress_status
 from hlf_mcp.instinct.orchestration import build_orchestration_contract
 from hlf_mcp.server_profiles import (
@@ -28,6 +23,8 @@ from hlf_mcp.weekly_artifacts import (
 )
 from hlf_mcp.persona_contract import load_persona_matrix
 from hlf_mcp.persona_runtime import load_persona_runtime_catalog
+from hlf_mcp.hlf.agent_prompt import build_hlf_native_system_prompt
+from hlf_mcp.hlf.governance_proofs import render_proof_markdown, verify_governance_proof
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _GOVERNANCE_DIR = _PACKAGE_DIR.parent / "governance"
@@ -770,6 +767,8 @@ def _render_daemon_transparency_markdown(ctx: object | None) -> str:
 
 
 def _build_symbolic_surface_sample() -> dict[str, object]:
+    from hlf_mcp.hlf.symbolic_surfaces import compile_symbolic_surface
+
     source = "\n".join(
         [
             "[HLF-v3]",
@@ -1583,6 +1582,9 @@ def _get_fixture_dir() -> Path | None:
 
 
 def _build_fixture_gallery_report(ctx: object | None) -> dict[str, object]:
+    from hlf_mcp.hlf.bytecode import HLFBytecode
+    from hlf_mcp.hlf.compiler import HLFCompiler
+
     fixture_dir = _get_fixture_dir()
     symbolic_sidecar = _build_fixture_gallery_symbolic_sidecar(ctx)
     if fixture_dir is None:
@@ -6046,6 +6048,17 @@ def render_resource_uri(ctx: object | None, resource_uri: str) -> str:
 
 
 def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, object]:
+    import os as _os
+    # Only load DSL-dependent resources when experimental mode is explicitly enabled
+    if _os.environ.get("SWARMGLASS_EXPERIMENTAL", "0") != "1":
+        return {}
+    # Lazy DSL imports — only loaded when resources are registered
+    from hlf_mcp.hlf.agent_prompt import build_hlf_native_system_prompt  # noqa: F811
+    from hlf_mcp.hlf.bytecode import OPCODES, HLFBytecode  # noqa: F811
+    from hlf_mcp.hlf.compiler import HLFCompiler  # noqa: F811
+    from hlf_mcp.hlf.governance_proofs import render_proof_markdown, verify_governance_proof  # noqa: F811
+    from hlf_mcp.hlf.symbolic_surfaces import compile_symbolic_surface  # noqa: F811
+
     @mcp.resource("hlf://status/benchmark_artifacts")
     def get_benchmark_artifacts() -> str:
         """Operator-facing: List all persisted benchmark artifacts."""

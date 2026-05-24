@@ -7,6 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.server_context import ServerContext
+import warnings
 
 
 def register_governance_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
@@ -25,6 +26,7 @@ def register_governance_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any
             severity: Optional filter by severity (e.g. "warning", "critical").
             summaries_only: If True, return operator-readable summaries instead of full dicts.
         """
+        warnings.warn("hlf_governance_event_log is deprecated, use sg_audit_event_log instead", DeprecationWarning, stacklevel=2)
         if ctx.governance_event_log is None:
             return {"status": "error", "error": "Governance event log is not initialized"}
 
@@ -63,6 +65,7 @@ def register_governance_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any
     @mcp.tool()
     def hlf_governance_event_log_verify(limit: int = 1000) -> dict[str, Any]:
         """Verify content-hash integrity of the most recent log entries."""
+        warnings.warn("hlf_governance_event_log_verify is deprecated, use sg_audit_event_log_verify instead", DeprecationWarning, stacklevel=2)
         if ctx.governance_event_log is None:
             return {"status": "error", "error": "Governance event log is not initialized"}
         return ctx.governance_event_log.verify_integrity(limit=limit)
@@ -70,6 +73,7 @@ def register_governance_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any
     @mcp.tool()
     def hlf_governance_event_log_get(trace_ref: str = "", content_hash: str = "") -> dict[str, Any]:
         """Retrieve a single log entry by trace reference or content hash."""
+        warnings.warn("hlf_governance_event_log_get is deprecated, use sg_audit_event_log_get instead", DeprecationWarning, stacklevel=2)
         if ctx.governance_event_log is None:
             return {"status": "error", "error": "Governance event log is not initialized"}
         if trace_ref:
@@ -84,8 +88,30 @@ def register_governance_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any
             return {"status": "ok", "entry": entry}
         return {"status": "error", "error": "Provide either trace_ref or content_hash"}
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_audit_event_log": hlf_governance_event_log,
+        "sg_audit_event_log_verify": hlf_governance_event_log_verify,
+        "sg_audit_event_log_get": hlf_governance_event_log_get,
+    })
+
     return {
         "hlf_governance_event_log": hlf_governance_event_log,
         "hlf_governance_event_log_verify": hlf_governance_event_log_verify,
         "hlf_governance_event_log_get": hlf_governance_event_log_get,
+        "sg_audit_event_log": hlf_governance_event_log,
+        "sg_audit_event_log_verify": hlf_governance_event_log_verify,
+        "sg_audit_event_log_get": hlf_governance_event_log_get,
     }

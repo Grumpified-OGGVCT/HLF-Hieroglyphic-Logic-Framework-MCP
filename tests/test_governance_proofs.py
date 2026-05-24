@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
+import pytest
+
+# hlf_swarm_mechanics and hlf_governance_proof_verify are registered
+# via register_core_tools(), which is gated behind SWARMGLASS_EXPERIMENTAL=1.
+# Set the env var before importing server so the tools are available.
+os.environ["SWARMGLASS_EXPERIMENTAL"] = "1"
 
 from hlf_mcp import server
 from hlf_mcp.hlf.audit_chain import AuditChain

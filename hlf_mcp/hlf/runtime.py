@@ -19,7 +19,7 @@ import struct
 import uuid
 import sys
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from hlf_mcp.hlf.bytecode import (
     _CODE_TO_OP,
@@ -369,6 +369,7 @@ class HlfVM:
         self._result_code = 0
         self._result_message = "ok"
         self._side_effects: list[dict[str, Any]] = []
+        self._step_callback: Callable[[dict[str, Any]], None] | None = None
 
     def spawn_child(self, tier: str | None = None, max_gas: int | None = None) -> "HlfVM":
         """Spawn a child VM that inherits this VM's session auth.
@@ -644,6 +645,9 @@ def _resolve_pointer_argument(
             self.gas_used += cost
 
             trace_entry: dict[str, Any] = {"pc": pc, "op": op.name, "gas": self.gas_used}
+
+            if self._step_callback is not None:
+                self._step_callback(trace_entry)
 
             # ── Dispatch ────────────────────────────────────────────────────────
             if op == Op.NOP:
@@ -2085,6 +2089,9 @@ def _hlfvm_execute_code_bound(self: HlfVM, code: bytes, pool: ConstantPool) -> N
         self.gas_used += cost
 
         trace_entry: dict[str, Any] = {"pc": pc, "op": op.name, "gas": self.gas_used}
+
+        if self._step_callback is not None:
+            self._step_callback(trace_entry)
 
         if op == Op.NOP:
             pass

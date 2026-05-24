@@ -1,0 +1,26 @@
+# OVERWATCH Sentinel — watchdog container for HLF agent lifecycle monitoring
+# Build:  docker build -f Dockerfile.overwatch -t hlf-overwatch .
+# Run:    docker run -e HLF_PORT=8000 --network hlf-net hlf-overwatch
+#
+# Zero pip dependencies — pure Python stdlib. The overwatch module is loaded
+# via importlib.util to bypass the hlf_mcp package __init__.py (which eagerly
+# imports the DSL compiler/runtime).
+
+FROM python:3.12-slim
+
+LABEL org.opencontainers.image.title="HLF OVERWATCH Sentinel"
+LABEL org.opencontainers.image.description="Process-level watchdog for HLF agent lifecycle — scan, alert, auto-recover"
+
+WORKDIR /app
+
+# Copy only the overwatch source files (no package install needed — stdlib only)
+COPY hlf_mcp/hlf/overwatch.py ./overwatch.py
+COPY hlf_mcp/hlf/overwatch_daemon.py ./overwatch_daemon.py
+COPY hlf_mcp/hlf/overwatch_config.json ./overwatch_config.json
+
+ENV HLF_PORT=8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "import json; json.load(open('overwatch_config.json')); print('config ok')" || exit 1
+
+CMD ["python", "-u", "overwatch_daemon.py"]

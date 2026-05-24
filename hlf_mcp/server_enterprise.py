@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any
+import warnings
 
 _log = logging.getLogger(__name__)
 
@@ -121,6 +122,7 @@ def _register_evidence_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
         Returns:
             dict with keys: status, capsule_id, rendered (text), raw (dict).
         """
+        warnings.warn("hlf_evidence_show is deprecated, use sg_audit_evidence_show instead", DeprecationWarning, stacklevel=2)
         try:
             from scripts.hlf_evidence import _find_trace, _render_trace
 
@@ -154,6 +156,7 @@ def _register_evidence_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
         Returns:
             dict with keys: status, count, traces (list of summary dicts).
         """
+        warnings.warn("hlf_evidence_list is deprecated, use sg_audit_evidence_list instead", DeprecationWarning, stacklevel=2)
         try:
             from scripts.hlf_evidence import _load_traces
 
@@ -196,6 +199,7 @@ def _register_evidence_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
         Returns:
             dict with keys: status, valid, depth, root, tamper_detected.
         """
+        warnings.warn("hlf_evidence_verify is deprecated, use sg_audit_evidence_verify instead", DeprecationWarning, stacklevel=2)
         try:
             from scripts.hlf_evidence import _find_trace
             import hashlib
@@ -278,6 +282,7 @@ def _register_merkle_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
             dict with keys: status, manifest (chain metadata, Merkle roots,
             entry counts, signatures).
         """
+        warnings.warn("hlf_merkle_export is deprecated, use sg_audit_merkle_export instead", DeprecationWarning, stacklevel=2)
         try:
             from hlf_mcp.hlf.merkle_dr import export_merkle_backup, MerkleBackupError
 
@@ -317,6 +322,7 @@ def _register_merkle_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
         Returns:
             dict with keys: status, valid, errors (list), manifest.
         """
+        warnings.warn("hlf_merkle_verify is deprecated, use sg_audit_merkle_verify instead", DeprecationWarning, stacklevel=2)
         try:
             from hlf_mcp.hlf.merkle_dr import verify_merkle_backup
 
@@ -344,6 +350,7 @@ def _register_merkle_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
         Returns:
             dict with keys: status, chains (name -> root hash, entry count).
         """
+        warnings.warn("hlf_merkle_chain_status is deprecated, use sg_audit_merkle_chain_status instead", DeprecationWarning, stacklevel=2)
         try:
             from hlf_mcp.hlf.merkle_dr import _compute_chain_root
 
@@ -411,6 +418,7 @@ def _register_secret_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
         Returns:
             dict with keys: status, secret_name, ciphertext_hash (SHA-256).
         """
+        warnings.warn("hlf_secret_store is deprecated, use sg_secure_secret_store instead", DeprecationWarning, stacklevel=2)
         try:
             from hlf_mcp.hlf.secret_capsule import compute_secret_hash
 
@@ -443,6 +451,7 @@ def _register_secret_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
             dict with keys: status, secret_name, value (plaintext),
             ciphertext_hash (SHA-256 for audit trail).
         """
+        warnings.warn("hlf_secret_retrieve is deprecated, use sg_secure_secret_retrieve instead", DeprecationWarning, stacklevel=2)
         try:
             from hlf_mcp.hlf.secret_capsule import SecretNotFoundError
 
@@ -483,6 +492,7 @@ def _register_secret_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
         Returns:
             dict with keys: status, secret_name, old_hash, new_hash.
         """
+        warnings.warn("hlf_secret_rotate is deprecated, use sg_secure_secret_rotate instead", DeprecationWarning, stacklevel=2)
         try:
             from hlf_mcp.hlf.secret_capsule import SecretNotFoundError
 
@@ -1047,6 +1057,7 @@ def _register_model_version_tools(mcp: Any, ctx: Any) -> dict[str, Any]:
             dict with keys: status, results (list of model_name, match,
             expected_digest, actual_digest, error).
         """
+        warnings.warn("hlf_model_version_check is deprecated, use sg_model_version_check instead", DeprecationWarning, stacklevel=2)
         try:
             from hlf_mcp.hlf.model_version import verify_model_versions, ModelVersionResult
             from hlf_mcp.hlf.capability_manifest import CapabilityManifest
@@ -1214,4 +1225,42 @@ def register_enterprise_tools(mcp: Any, ctx: Any, agent_tier: str | None = None)
         sum(len(v) for v in visible.values()), tier,
         sum(len(n) for n in all_category_names.values()),
     )
+
+    # ── Register sg_* aliases for tools that are visible at this tier ─────
+    _HLF_TO_SG_MAP: dict[str, str] = {
+        "hlf_evidence_show": "sg_audit_evidence_show",
+        "hlf_evidence_list": "sg_audit_evidence_list",
+        "hlf_evidence_verify": "sg_audit_evidence_verify",
+        "hlf_merkle_export": "sg_audit_merkle_export",
+        "hlf_merkle_verify": "sg_audit_merkle_verify",
+        "hlf_merkle_chain_status": "sg_audit_merkle_chain_status",
+        "hlf_secret_store": "sg_secure_secret_store",
+        "hlf_secret_retrieve": "sg_secure_secret_retrieve",
+        "hlf_secret_rotate": "sg_secure_secret_rotate",
+        "hlf_model_version_check": "sg_model_version_check",
+    }
+
+    def _register_sg_aliases(mcp: Any, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    # Only alias tools that are visible at this tier
+    sg_aliases = {
+        sg_name: tools[hlf_name]
+        for hlf_name, sg_name in _HLF_TO_SG_MAP.items()
+        if hlf_name in tools
+    }
+    _register_sg_aliases(mcp, sg_aliases)
+    for sg_name, hlf_func in sg_aliases.items():
+        tools[sg_name] = hlf_func
+
     return tools

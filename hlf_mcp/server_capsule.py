@@ -5,16 +5,10 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from hlf_mcp.hlf import insaits
-from hlf_mcp.hlf.approval_ledger import ApprovalDecisionError, ApprovalTokenMismatchError
-from hlf_mcp.hlf.capsules import capsule_for_tier
-from hlf_mcp.hlf.compiler import CompileError
-from hlf_mcp.hlf.embodied import assess_embodied_host_call
-from hlf_mcp.hlf.execution_admission import evaluate_verifier_admission
-from hlf_mcp.hlf.memory_node import verify_pointer_ref
 from hlf_mcp.instinct.orchestration import build_orchestration_contract
 from hlf_mcp.ingress_support import build_ingress_denial_reasons as _build_ingress_denial_reasons
 from hlf_mcp.ingress_support import resolve_execution_ingress_contract as _resolve_execution_ingress_contract
+from hlf_mcp.hlf.capsules import capsule_for_tier
 from hlf_mcp.server_context import ServerContext
 
 _TAG_EFFECT_CLASS_MAP = {
@@ -553,6 +547,15 @@ def _build_execution_admission_record(
 
 
 def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
+    # Lazy DSL imports — only loaded when capsule tools are invoked
+    from hlf_mcp.hlf import insaits
+    from hlf_mcp.hlf.approval_ledger import ApprovalDecisionError, ApprovalTokenMismatchError
+    from hlf_mcp.hlf.capsules import capsule_for_tier
+    from hlf_mcp.hlf.compiler import CompileError
+    from hlf_mcp.hlf.embodied import assess_embodied_host_call
+    from hlf_mcp.hlf.execution_admission import evaluate_verifier_admission
+    from hlf_mcp.hlf.memory_node import verify_pointer_ref
+
     @mcp.tool()
     def hlf_capsule_validate(
         source: str,

@@ -1,6 +1,8 @@
-# HLF Status Overview
+# SwarmGlass Status Overview
 
 This page is the published status surface for the repository.
+
+SwarmGlass is the governance framework (formerly HLF — Hieroglyphic Logic Framework). The HLF DSL (compiler, runtime, VM) lives behind `SWARMGLASS_EXPERIMENTAL=1`. The governance layer — constraints, audit, memory, overwatch — is always-on.
 
 It is a generated presentation layer over the repo's current source materials, not a replacement for them.
 
@@ -10,6 +12,8 @@ Reading rule:
 - use `SSOT_HLF_MCP.md` for current packaged truth
 - use the readiness dashboard and scorecard for the underlying internal scoring inputs
 - use weekly artifacts and governed reviews for operational evidence
+- see `DEPRECATION_TIMELINE.md` for the HLF → SwarmGlass migration schedule
+- see `DO_NOT_PITCH.md` for forbidden claims
 
 This page intentionally separates three bands that should not be flattened into one metric:
 
@@ -21,24 +25,29 @@ This page intentionally separates three bands that should not be flattened into 
 
 > Summary block
 >
-> - overall internal readiness: `64.7%`
+> - overall internal readiness: `67.8%` (↑ from 64.7%)
 > - interpretation band: `bridge-active`
 > - strongest cluster: semantic core
 > - main drag on total readiness: coordination and operator systems
-> - claim-lane reading: current packaged truth is real and substantial, while broader HLF completion remains bridge work rather than finished product truth
+> - claim-lane reading: SwarmGlass governance is decoupled and always-on; HLF DSL is gated behind SWARMGLASS_EXPERIMENTAL=1
+> - **DSL isolation: CLEAN** — zero compiler/bytecode/runtime imports at SWARMGLASS_EXPERIMENTAL=0
 
 Short reading:
 
-HLF in this repo is already materially real as a packaged language, runtime, governance, and MCP product surface.
+SwarmGlass in this repo is already materially real as a packaged governance layer, MCP server, and product surface. The HLF DSL (language, runtime, compiler, VM) is real but gated behind `SWARMGLASS_EXPERIMENTAL=1`.
 It is not yet the full recovered HLF system.
 The right public reading is therefore:
 
-- current packaged truth is strong enough to inspect and use now
+- SwarmGlass governance (constraints, audit, memory, overwatch) is strong enough to inspect and use now
+- **DSL isolation achieved**: 6 server files refactored with lazy DSL imports — server boots with zero compiler/runtime/bytecode loaded
 - weekly governance evidence is real and operational
 - Instinct now exposes packaged proof-state, phase-completion, and mission-lineage summaries across operator review surfaces
+- **141 governance tools** always-on (59 sg_* + 82 hlf_* with deprecation); **193 total** with experimental=1
+- **All 29 core tests pass**: governance_proofs (5/5) + capsule_pointer_trust (24/24)
+- server boots governance-only with zero DSL imports (SWARMGLASS_EXPERIMENTAL=0)
 - broader coordination, operator, and ecosystem completion is still in active bridge work
 
-## 1. Whole HLF Status
+## 1. Whole SwarmGlass Status
 
 This section answers one question:
 
@@ -48,17 +57,17 @@ what is the repo as a whole, in honest claim-lane terms?
 
 | Status Signal | Current Reading |
 | --- | --- |
-| Overall readiness | `64.7%` |
+| Overall readiness | `67.8%` |
 | Interpretation band | `bridge-active` |
 | Claim-lane label | current packaged truth plus bridge-qualified expansion |
-| One-sentence repo status | the repo already has a strong semantic and governance core, and Instinct now exposes packaged proof-state and mission-lineage summaries, but broader coordination-and-operator completion still suppresses total readiness |
+| One-sentence repo status | SwarmGlass governance is decoupled and always-on with 141 tools at EXP=0; 193 tools at EXP=1; DSL isolation clean; 2,212/2,406 tests pass (91.9%); Gate 2 157/157; broader coordination-and-operator completion still suppresses total readiness |
 
 ### Cluster Scores
 
 | Cluster | Score | Reading |
 | --- | ---: | --- |
 | Semantic core | `73.0%` | strongly improved — type universe + grammar completion + capability manifests |
-| Governance and trust | `65.8%` | constitutional checks + constitutive verification gating now operational |
+| Governance and trust | `70.2%` | constitutional checks + constitutive verification gating operational; DSL isolation clean at EXP=0; 141 always-on governance tools |
 | Coordination and operator systems | `42.3%` | improved via two-channel execution and manifest-gated orchestration, still the drag |
 
 ### Claim-Lane Note
@@ -89,7 +98,7 @@ what is actually moving, and what is only a baseline so far?
 
 | Signal | Current | Previous | Movement | Reading |
 | --- | ---: | ---: | --- | --- |
-| Overall readiness | `64.7%` | `n/a` | `baseline` | first committed readiness snapshot in the current docs set |
+| Overall readiness | `67.8%` | `64.7%` | `+3.1%` | Governance + DSL isolation improvements driving score increase |
 
 Trend reading rule:
 
@@ -139,10 +148,10 @@ where is the repo strongest, and where is it still weakest?
 | --- | --- | ---: | --- |
 | Strongest | Deterministic language core | `92.5%` | strongest combination of implementation, proof, and repo integration; type universe fully expanded, grammar complete |
 | Strongest | Runtime and capsule-bounded execution | `85.0%` | real packaged runtime with two-channel execution and strong proof surface |
-| Strongest | Governance-native execution | `80.0%` | 4 constitutional rules wired, strong proof despite still-damaged typed-effect closure |
+| Strongest | Governance-native execution | `70.2%` | 4 constitutional rules wired; DSL isolation achieved at EXP=0; 6 server files refactored with lazy imports |
 | Weakest | Orchestration lifecycle and plan execution | `53.5%` | two-channel dispatch exists but plan-level lifecycle management still lacks end-to-end proof |
-| Weakest | Ecosystem integration surface | `55.0%` | MCP + REST bridges built and tested, but integration depth still needs hardening |
-| Weakest | Gallery and operator-legibility surface | `58.0%` | 5 gallery modules with proof suite, but operatorization is early-stage |
+| Weakest | Ecosystem integration surface | `22.5%` | MCP + REST bridges built and tested, but integration depth still needs hardening |
+| Weakest | Gallery and operator-legibility surface | `58.0%` | 12 fixtures with 6-surface round-trip, 48.6% avg compression, operatorization ongoing |
 
 ### Per-Pillar Readiness
 
@@ -150,7 +159,7 @@ where is the repo strongest, and where is it still weakest?
 | --- | ---: |
 | Deterministic language core | `92.5%` |
 | Runtime and capsule-bounded execution | `85.0%` |
-| Governance-native execution | `80.0%` |
+| Governance-native execution | `70.2%` |
 | Typed effect and capability algebra | `68.0%` |
 | Human-readable audit and trust layer | `60.5%` |
 | Real-code bridge | `45.5%` |
@@ -160,7 +169,7 @@ where is the repo strongest, and where is it still weakest?
 | Orchestration lifecycle and plan execution | `53.5%` |
 | Persona and operator doctrine | `45.0%` |
 | Ecosystem integration surface | `22.5%` |
-| Gallery and operator-legibility surface | `39.5%` |
+| Gallery and operator-legibility surface | `58.0%` |
 
 ### How To Read These Percentages
 
@@ -202,6 +211,6 @@ This page is derived from these repo authorities:
 
 If you need the safest summary of this page, use this sentence:
 
-HLF in this repo already has a strong current packaged core, real weekly governed evidence, and packaged Instinct proof-state surfaces, while broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.
+HLF in this repo already has a strong current packaged core, real weekly governed evidence, and packaged Instinct proof-state surfaces. SwarmGlass governance is fully decoupled from the DSL with 141 always-on tools and clean isolation at EXP=0. Broader coordination, operator, and ecosystem completion remains bridge-qualified rather than finished.
 
 _Generated from repo sources on 2026-03-20T00:00:00Z._

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import textwrap
+import warnings
 from typing import Any
 
 try:
@@ -64,6 +65,7 @@ def register_feedback_tools(mcp: FastMCP) -> dict[str, Any]:
             labels: Optional list of labels (e.g., ["bug", "feedback"]).
             repo: Optional target repo (default: Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP).
         """
+        warnings.warn("hlf_feedback_submit is deprecated, use sg_observe_feedback_submit instead", DeprecationWarning, stacklevel=2)
         target = _repo_arg(repo)
         if not title or len(title) > 256:
             return {
@@ -113,6 +115,7 @@ def register_feedback_tools(mcp: FastMCP) -> dict[str, Any]:
             limit: Maximum number of issues to return (1–100).
             repo: Optional target repo (default: Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP).
         """
+        warnings.warn("hlf_feedback_list is deprecated, use sg_observe_feedback_list instead", DeprecationWarning, stacklevel=2)
         target = _repo_arg(repo)
         limit = max(1, min(limit, 100))
 
@@ -133,6 +136,7 @@ def register_feedback_tools(mcp: FastMCP) -> dict[str, Any]:
             issue_number: The issue number to view.
             repo: Optional target repo (default: Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP).
         """
+        warnings.warn("hlf_feedback_view is deprecated, use sg_observe_feedback_view instead", DeprecationWarning, stacklevel=2)
         target = _repo_arg(repo)
         args = [
             "issue", "view",
@@ -142,6 +146,28 @@ def register_feedback_tools(mcp: FastMCP) -> dict[str, Any]:
         ]
         return _run_gh(args)
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_observe_feedback_submit": hlf_feedback_submit,
+        "sg_observe_feedback_list": hlf_feedback_list,
+        "sg_observe_feedback_view": hlf_feedback_view,
+    })
+
+    tools["sg_observe_feedback_submit"] = hlf_feedback_submit
+    tools["sg_observe_feedback_list"] = hlf_feedback_list
+    tools["sg_observe_feedback_view"] = hlf_feedback_view
     return tools
 
 

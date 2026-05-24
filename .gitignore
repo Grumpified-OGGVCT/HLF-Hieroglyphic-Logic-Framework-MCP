@@ -163,6 +163,11 @@ _toolkit_report.md
 tk-*.bat
 __redhat_probe.py
 
+# ── Temporary debug/onboarding scripts (keep out of VCS) ──────────────────────
+_agent*.py
+_debug*.py
+_rw*.py
+
 # ── Local discussion notes and packaged extension outputs ─────────────────────
 Cogito_Discussion.md
 artifacts/*.vsix

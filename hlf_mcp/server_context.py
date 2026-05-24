@@ -12,18 +12,24 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+from hlf_mcp.env_migration import get_env
+
+if TYPE_CHECKING:
+    from hlf_mcp.hlf.benchmark import HLFBenchmark
+    from hlf_mcp.hlf.bytecode import HLFBytecode
+    from hlf_mcp.hlf.compiler import HLFCompiler
+    from hlf_mcp.hlf.formal_verifier import FormalVerifier
+    from hlf_mcp.hlf.formatter import HLFFormatter
+    from hlf_mcp.hlf.linter import HLFLinter
+    from hlf_mcp.hlf.runtime import HLFRuntime
 
 from hlf_mcp.dream_cycle import DreamCycleReport, build_dream_findings
 from hlf_mcp.hlf.align_governor import AlignGovernor
 from hlf_mcp.hlf.approval_ledger import ApprovalLedger
 from hlf_mcp.hlf.audit_chain import AuditChain
-from hlf_mcp.hlf.benchmark import HLFBenchmark
-from hlf_mcp.hlf.bytecode import HLFBytecode
-from hlf_mcp.hlf.compiler import HLFCompiler
 from hlf_mcp.hlf.daemon_manager import DaemonManager
-from hlf_mcp.hlf.formal_verifier import FormalVerifier
-from hlf_mcp.hlf.formatter import HLFFormatter
 from hlf_mcp.hlf.governance_events import (
     GovernanceEvent,
     GovernanceEventKind,
@@ -41,10 +47,8 @@ from hlf_mcp.hlf.governance_proofs import (
 )
 from hlf_mcp.hlf.governed_ingress import GovernedIngressController
 from hlf_mcp.hlf.intent_normalizer import IntentNormalizer
-from hlf_mcp.hlf.linter import HLFLinter
 from hlf_mcp.hlf.memory_node import build_pointer_ref
 from hlf_mcp.hlf.registry import HostFunctionRegistry
-from hlf_mcp.hlf.runtime import HLFRuntime
 from hlf_mcp.hlf.tool_dispatch import ToolRegistry
 from hlf_mcp.hlf.witness_governance import (
     WitnessGovernance,
@@ -281,18 +285,11 @@ def _build_governed_recall_summary(
 
 @dataclass(slots=True)
 class ServerContext:
-    compiler: HLFCompiler
-    formatter: HLFFormatter
-    linter: HLFLinter
-    runtime: HLFRuntime
-    bytecoder: HLFBytecode
-    benchmark: HLFBenchmark
     memory_store: RAGMemory
     instinct_mgr: InstinctLifecycle
     host_registry: HostFunctionRegistry
     tool_registry: ToolRegistry
     align_governor: AlignGovernor
-    formal_verifier: FormalVerifier
     ingress_controller: GovernedIngressController
     session_profiles: dict[str, dict[str, Any]]
     session_model_catalogs: dict[str, dict[str, Any]]
@@ -315,6 +312,15 @@ class ServerContext:
     approval_ledger: ApprovalLedger
     audit_chain: AuditChain
     daemon_manager: DaemonManager
+    # DSL components — None when SWARMGLASS_EXPERIMENTAL=0
+    compiler: HLFCompiler | None = None
+    formatter: HLFFormatter | None = None
+    linter: HLFLinter | None = None
+    runtime: HLFRuntime | None = None
+    bytecoder: HLFBytecode | None = None
+    benchmark: HLFBenchmark | None = None
+    formal_verifier: FormalVerifier | None = None
+    # Fields with defaults
     intent_normalizer: IntentNormalizer = field(default_factory=IntentNormalizer)
     governance_events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=250))
     handoff_events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=1000))
@@ -3419,20 +3425,19 @@ def _resolve_memory_db_path() -> str:
 
 def build_server_context() -> ServerContext:
     align_governor = AlignGovernor()
-    return ServerContext(
-        compiler=HLFCompiler(),
-        formatter=HLFFormatter(),
-        linter=HLFLinter(),
-        runtime=HLFRuntime(),
-        bytecoder=HLFBytecode(),
-        benchmark=HLFBenchmark(),
+    ctx = ServerContext(
+        # Governance core — always instantiated
         memory_store=RAGMemory(_resolve_memory_db_path(), embed_fn=_build_ollama_embed_fn()),
         instinct_mgr=InstinctLifecycle(),
         host_registry=HostFunctionRegistry(),
         tool_registry=ToolRegistry(),
         align_governor=align_governor,
-        formal_verifier=FormalVerifier(),
         ingress_controller=GovernedIngressController(align_governor=align_governor),
+        witness_governance=WitnessGovernance(),
+        approval_ledger=ApprovalLedger(),
+        audit_chain=AuditChain(),
+        daemon_manager=DaemonManager(),
+        # Session dicts — always present
         session_profiles={},
         session_model_catalogs={},
         session_benchmark_artifacts={},
@@ -3450,12 +3455,28 @@ def build_server_context() -> ServerContext:
         session_dream_cycles={},
         session_dream_findings={},
         session_dream_proposals={},
-        witness_governance=WitnessGovernance(),
-        approval_ledger=ApprovalLedger(),
-        audit_chain=AuditChain(),
-        daemon_manager=DaemonManager(),
         governance_events=deque(maxlen=250),
     )
+
+    # DSL components — only when explicitly enabled
+    if get_env("SWARMGLASS_EXPERIMENTAL", "0") == "1":
+        from hlf_mcp.hlf.compiler import HLFCompiler  # noqa: PLC0415
+        from hlf_mcp.hlf.runtime import HLFRuntime    # noqa: PLC0415
+        from hlf_mcp.hlf.bytecode import HLFBytecode  # noqa: PLC0415
+        from hlf_mcp.hlf.formatter import HLFFormatter # noqa: PLC0415
+        from hlf_mcp.hlf.linter import HLFLinter       # noqa: PLC0415
+        from hlf_mcp.hlf.benchmark import HLFBenchmark # noqa: PLC0415
+        from hlf_mcp.hlf.formal_verifier import FormalVerifier  # noqa: PLC0415
+
+        ctx.compiler = HLFCompiler()
+        ctx.formatter = HLFFormatter()
+        ctx.linter = HLFLinter()
+        ctx.runtime = HLFRuntime()
+        ctx.bytecoder = HLFBytecode()
+        ctx.benchmark = HLFBenchmark()
+        ctx.formal_verifier = FormalVerifier()
+
+    return ctx
 
 
 def check_governance_manifest(logger: logging.Logger) -> None:

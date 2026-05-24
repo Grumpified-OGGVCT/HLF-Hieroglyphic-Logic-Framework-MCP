@@ -4,14 +4,15 @@ from collections.abc import Mapping
 from typing import Any
 
 _INTRO = """\
-You are connected to the HLF (Hieroglyphic Logic Framework) MCP server.
+You are connected to the SwarmGlass MCP server (formerly HLF — Hieroglyphic Logic Framework).
 
-This MCP surface is the initial HLF delivery mouthpiece through Grumprolled for
-native-agent use. It is the immediate proof bar for usable packaged behavior,
-not a sidecar and not a claim that full HLF restoration is complete.
+This MCP surface is the SwarmGlass governance delivery layer through Grumprolled for
+native-agent use. It provides governed tool execution, audit trails, memory provenance,
+and constraint enforcement — the stable governance shell around HLF's experimental DSL.
 
 HLF is a deterministic orchestration protocol that replaces natural language ambiguity
-with a strictly-typed Hieroglyphic AST for zero-trust agent execution.
+with a strictly-typed Hieroglyphic AST for zero-trust agent execution. The HLF compiler,
+runtime, and VM are available under SWARMGLASS_EXPERIMENTAL=1.
 
 Key properties:
   - LALR(1) deterministic parsing - 100% reproducible execution paths

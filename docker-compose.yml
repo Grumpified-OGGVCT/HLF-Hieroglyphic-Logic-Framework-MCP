@@ -79,6 +79,33 @@ services:
     networks:
       - hlf-net
 
+  # ── OVERWATCH Sentinel (--profile overwatch) ──────────────────────────────
+  # Monitors HLF MCP server health and auto-recovers on failure.
+  # Run: docker compose --profile overwatch up -d
+  overwatch:
+    build:
+      context: .
+      dockerfile: Dockerfile.overwatch
+    image: hlf-overwatch:latest
+    container_name: hlf-overwatch
+    profiles:
+      - overwatch
+      - full
+    restart: unless-stopped
+    environment:
+      HLF_PORT: "${HLF_PORT:-8000}"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import json; json.load(open('overwatch_config.json')); print('config ok')\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    depends_on:
+      hlf-mcp:
+        condition: service_healthy
+    networks:
+      - hlf-net
+
 # ── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
   hlf-data:

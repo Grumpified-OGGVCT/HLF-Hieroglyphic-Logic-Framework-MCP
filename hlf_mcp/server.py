@@ -1,5 +1,5 @@
 """
-HLF MCP Server — Hieroglyphic Logic Framework Model Context Protocol Server.
+SwarmGlass MCP Server — Governance Framework Model Context Protocol Server.
 
 Provides the complete HLF toolchain as MCP tools accessible via:
   - stdio     (Claude Desktop, local agents)
@@ -48,8 +48,11 @@ from hlf_mcp.server_resources import register_resources
 from hlf_mcp.server_translation import register_translation_tools
 from hlf_mcp.server_verifier import register_verifier_tools
 from hlf_mcp.server_workflow_benchmark import register_workflow_benchmark_tools
+from hlf_mcp.env_migration import get_env
 from hlf_mcp.server_auth import auth_middleware, HLF_API_TOKEN
 from hlf_mcp.server_enterprise import register_enterprise_tools
+from hlf_mcp.server_overwatch import register_overwatch_tools
+import warnings
 
 _log = logging.getLogger(__name__)
 
@@ -61,7 +64,7 @@ _HOST = os.environ.get("HLF_HOST", "0.0.0.0")
 _PORT = int(os.environ["HLF_PORT"]) if os.environ.get("HLF_PORT") else 0
 
 mcp = FastMCP(
-    name="HLF Hieroglyphic Logic Framework",
+    name="SwarmGlass Governance Framework",
     instructions="HLF MCP server loading...",
     host=_HOST,
     port=_PORT,
@@ -70,12 +73,12 @@ mcp = FastMCP(
 # ── Module-level singletons ────────────────────────────────────────────────────
 
 _ctx = build_server_context()
-compiler = _ctx.compiler
-formatter = _ctx.formatter
-linter = _ctx.linter
-_runtime = _ctx.runtime
-bytecoder = _ctx.bytecoder
-_benchmark = _ctx.benchmark
+compiler = _ctx.compiler        # may be None when SWARMGLASS_EXPERIMENTAL=0
+formatter = _ctx.formatter      # may be None when SWARMGLASS_EXPERIMENTAL=0
+linter = _ctx.linter            # may be None when SWARMGLASS_EXPERIMENTAL=0
+_runtime = _ctx.runtime         # may be None when SWARMGLASS_EXPERIMENTAL=0
+bytecoder = _ctx.bytecoder      # may be None when SWARMGLASS_EXPERIMENTAL=0
+_benchmark = _ctx.benchmark     # may be None when SWARMGLASS_EXPERIMENTAL=0
 memory_store = _ctx.memory_store
 instinct_mgr = _ctx.instinct_mgr
 host_registry = _ctx.host_registry
@@ -96,20 +99,26 @@ _instinct = instinct_mgr
 
 # ── Tools ──────────────────────────────────────────────────────────────────────
 REGISTERED_TOOLS: dict[str, Any] = {}
-REGISTERED_TOOLS.update(register_core_tools(mcp, _ctx))
-REGISTERED_TOOLS.update(register_translation_tools(mcp, _ctx))
+
+# Always register governance tools (DSL-free)
+REGISTERED_TOOLS.update(register_governance_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_memory_tools(mcp, _ctx))
+REGISTERED_TOOLS.update(register_handoff_tools(mcp, _ctx))
+REGISTERED_TOOLS.update(register_feedback_tools(mcp))
 REGISTERED_TOOLS.update(register_profile_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_instinct_tools(mcp, _ctx))
-REGISTERED_TOOLS.update(register_verifier_tools(mcp, _ctx))
-REGISTERED_TOOLS.update(register_capsule_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_completion_tools(mcp, _ctx))
-REGISTERED_TOOLS.update(register_native_tools(mcp, _ctx))
-REGISTERED_TOOLS.update(register_workflow_benchmark_tools(mcp))
-REGISTERED_TOOLS.update(register_governance_tools(mcp, _ctx))
-REGISTERED_TOOLS.update(register_feedback_tools(mcp))
-REGISTERED_TOOLS.update(register_handoff_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_enterprise_tools(mcp, _ctx))
+REGISTERED_TOOLS.update(register_overwatch_tools(mcp, _ctx))
+
+# DSL-dependent tools — only when experimental mode is explicitly enabled
+if get_env("SWARMGLASS_EXPERIMENTAL", "0") == "1":
+    REGISTERED_TOOLS.update(register_core_tools(mcp, _ctx))
+    REGISTERED_TOOLS.update(register_translation_tools(mcp, _ctx))
+    REGISTERED_TOOLS.update(register_verifier_tools(mcp, _ctx))
+    REGISTERED_TOOLS.update(register_capsule_tools(mcp, _ctx))
+    REGISTERED_TOOLS.update(register_native_tools(mcp, _ctx))
+    REGISTERED_TOOLS.update(register_workflow_benchmark_tools(mcp))
 
 
 @mcp.tool()
@@ -121,6 +130,9 @@ def hlf_entropy_anchor(
     subject_agent_id: str = "",
 ) -> dict[str, Any]:
     """Evaluate semantic drift between packaged HLF meaning and an operator-readable intent baseline."""
+    warnings.warn("hlf_entropy_anchor is deprecated, use sg_observe_drift instead", DeprecationWarning, stacklevel=2)
+    if _ctx.compiler is None:
+        return {"status": "unavailable", "reason": "SWARMGLASS_EXPERIMENTAL=0, compiler not loaded"}
     try:
         result = _ctx.compiler.compile(source)
         anchor = evaluate_entropy_anchor(
@@ -205,6 +217,8 @@ def hlf_entropy_anchor(
 
 
 REGISTERED_TOOLS["hlf_entropy_anchor"] = hlf_entropy_anchor
+# sg alias
+mcp.tool(name="sg_observe_drift")(hlf_entropy_anchor)
 install_mcp_enforcement(mcp, _ctx)
 globals().update(REGISTERED_TOOLS)
 
@@ -212,6 +226,8 @@ globals().update(REGISTERED_TOOLS)
 REGISTERED_PROMPTS = register_agent_prompts(mcp)
 REGISTERED_RESOURCES = register_resources(mcp, _ctx)
 _generated_instructions = build_server_instructions(REGISTERED_TOOLS, REGISTERED_RESOURCES)
+if get_env("SWARMGLASS_EXPERIMENTAL", "0") != "1":
+    _generated_instructions += "\n\n⚠️  Running in governance-only mode (SWARMGLASS_EXPERIMENTAL=0). HLF compilation/runtime/verification tools are not available."
 # FastMCP exposes instructions as a read-only property; the wrapped low-level
 # MCP server owns the writable field that initialize responses actually use.
 mcp._mcp_server.instructions = _generated_instructions
@@ -259,6 +275,53 @@ async def hitl_status_route(request: Any) -> Any:
 
     pending = _ctx.tool_registry.get_pending_tools()
     return JSONResponse({"pending_count": len(pending), "tools": pending})
+
+
+# ── HLF Streaming endpoint (OpenAI-compatible SSE) ──────────────────────────
+
+
+@mcp.custom_route("/v1/hlf/stream", methods=["POST"], include_in_schema=False)
+async def hlf_stream_route(request: Any) -> Any:
+    """Stream HLF compilation + execution as OpenAI-compatible SSE.
+
+    POST body: {"source": "<HLF program>", "tier": "hearth", "max_gas": 100, "session_id": "..."}
+
+    Returns ``text/event-stream`` with ``data:`` lines that any
+    OpenAI-compatible chat client can render as a real-time trace.
+    """
+    from starlette.responses import StreamingResponse
+
+    from hlf_mcp.hlf.compiler import HLFCompiler
+    from hlf_mcp.hlf.runtime import HLFRuntime
+    from hlf_mcp.hlf.streaming import generate_hlf_stream
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+
+    source = body.get("source", "")
+    if not source:
+        return JSONResponse({"error": "missing_source"}, status_code=400)
+
+    tier = body.get("tier", "hearth")
+    max_gas = body.get("max_gas", 100)
+    session_id = body.get("session_id")
+
+    compiler = HLFCompiler()
+    runtime = HLFRuntime()
+
+    return StreamingResponse(
+        generate_hlf_stream(source, compiler, runtime,
+                           session_id=session_id, tier=tier, max_gas=max_gas),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 
 
 

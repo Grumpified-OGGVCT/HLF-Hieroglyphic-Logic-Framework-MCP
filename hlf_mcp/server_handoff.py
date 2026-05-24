@@ -19,6 +19,7 @@ from hlf_mcp.instinct.orchestration import (
     summarize_execution_trace,
 )
 from hlf_mcp.server_context import ServerContext
+import warnings
 
 
 def _build_persona_lineage_graph(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -88,6 +89,7 @@ def register_handoff_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         persist: bool = True,
     ) -> dict[str, Any]:
         """Record a conformant JSON handoff event primitive with hashes and bounds."""
+        warnings.warn("hlf_record_handoff_event is deprecated, use sg_coordinate_handoff_record instead", DeprecationWarning, stacklevel=2)
         parent_lineage_hash = ""
         if parent_event_hash and hasattr(ctx, "get_handoff_event"):
             parent = ctx.get_handoff_event(parent_event_hash)
@@ -139,6 +141,7 @@ def register_handoff_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
     )
     def hlf_handoff_chain(event_hash: str = "") -> dict[str, Any]:
         """Return the latest or selected linear handoff chain and verification summary."""
+        warnings.warn("hlf_handoff_chain is deprecated, use sg_coordinate_handoff_chain instead", DeprecationWarning, stacklevel=2)
         chain = ctx.get_handoff_chain(event_hash=event_hash or None)
         if not isinstance(chain, dict):
             return {
@@ -173,6 +176,7 @@ def register_handoff_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         execution_trace: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Normalize a JSON plan DAG and return the DAG-to-execution contract surface."""
+        warnings.warn("hlf_orchestration_contract is deprecated, use sg_coordinate_orchestration_contract instead", DeprecationWarning, stacklevel=2)
         normalized_dag = normalize_task_dag(task_dag or [])
         normalized_trace = normalize_execution_trace(
             execution_trace or [],
@@ -216,6 +220,7 @@ def register_handoff_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         lifecycle_phase: str = "verify",
     ) -> dict[str, Any]:
         """Return JSON handoff event composition templates for delegation/vote/dissent/review-board flows."""
+        warnings.warn("hlf_handoff_contract_template is deprecated, use sg_coordinate_contract_template instead", DeprecationWarning, stacklevel=2)
         return build_handoff_contract_template(
             template=template,
             scope=scope,
@@ -238,6 +243,7 @@ def register_handoff_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         threshold: float = 0.55,
     ) -> dict[str, Any]:
         """Check semantic drift between delegation intent and delegate result without HLF compilation."""
+        warnings.warn("hlf_handoff_semantic_drift_check is deprecated, use sg_coordinate_drift_check instead", DeprecationWarning, stacklevel=2)
         return {
             "status": "ok",
             "semantic_drift": evaluate_semantic_drift(
@@ -247,10 +253,36 @@ def register_handoff_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             ),
         }
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_coordinate_handoff_record": hlf_record_handoff_event,
+        "sg_coordinate_handoff_chain": hlf_handoff_chain,
+        "sg_coordinate_orchestration_contract": hlf_orchestration_contract,
+        "sg_coordinate_contract_template": hlf_handoff_contract_template,
+        "sg_coordinate_drift_check": hlf_handoff_semantic_drift_check,
+    })
+
     return {
         "hlf_record_handoff_event": hlf_record_handoff_event,
         "hlf_handoff_chain": hlf_handoff_chain,
         "hlf_orchestration_contract": hlf_orchestration_contract,
         "hlf_handoff_contract_template": hlf_handoff_contract_template,
         "hlf_handoff_semantic_drift_check": hlf_handoff_semantic_drift_check,
+        "sg_coordinate_handoff_record": hlf_record_handoff_event,
+        "sg_coordinate_handoff_chain": hlf_handoff_chain,
+        "sg_coordinate_orchestration_contract": hlf_orchestration_contract,
+        "sg_coordinate_contract_template": hlf_handoff_contract_template,
+        "sg_coordinate_drift_check": hlf_handoff_semantic_drift_check,
     }

@@ -1,0 +1,55 @@
+Metric,Value
+Total files scanned,14731
+Files with hlf_mcp imports,333
+Files without hlf_mcp imports (KEEP),14398
+
+Classification,Count
+KEEP,14398
+KEEP_WITH_WORK,94
+LEAVE,83
+TEST,148
+INIT_REEXPORT,8
+
+Rank,Module,Import Count
+1,hlf_mcp.hlf.compiler.HLFCompiler,56
+2,hlf_mcp.server,26
+3,hlf_mcp.hlf.compiler.CompileError,25
+4,hlf_mcp.hlf.formal_verifier.FormalVerifier,24
+5,hlf_mcp.hlf.capability_manifest.CapabilityManifest,21
+6,hlf_mcp.hlf.typed_contracts.HlfType,21
+7,hlf_mcp.hlf.typed_contracts.OutputContract,19
+8,hlf_mcp.hlf.bytecode.HLFBytecode,18
+9,hlf_mcp.hlf.typed_contracts.InputContract,18
+10,hlf_mcp.hlf.formal_verifier.VerificationReport,17
+11,hlf_mcp.hlf.typed_contracts.TypeContract,17
+12,hlf_mcp.hlf.formal_verifier.ConstraintKind,16
+13,hlf_mcp.hlf.formal_verifier.VerificationResult,16
+14,hlf_mcp.hlf.formal_verifier.VerificationStatus,16
+15,hlf_mcp.hlf.typed_contracts.TypedEffectDeclaration,16
+16,hlf_mcp.rag.memory.RAGMemory,14
+17,hlf_mcp.hlf.linter.HLFLinter,13
+18,hlf_mcp.hlf.typed_contracts.EffectClass,13
+19,hlf_mcp.hlf.formal_verifier.GateDecision,12
+20,hlf_mcp.server_context.ServerContext,11
+
+Rank,File,Import Count
+1,hlf_mcp/hlf/__init__.py,229
+2,tests/test_ecosystem_hardening.py,45
+3,tests/test_orchestration_lifecycle.py,45
+4,hlf_mcp/hlf/runtime.py,43
+5,hlf_mcp/server_context.py,42
+6,tests/test_audit_trust_layer.py,42
+7,hlf_mcp/ecosystem/__init__.py,41
+8,hlf_mcp/gallery/__init__.py,40
+9,tests/test_typed_effect_hardening.py,40
+10,tests/test_knowledge_substrate_hardening.py,36
+11,tests/test_typed_effect_algebra.py,36
+12,tests/test_verification_deepening.py,32
+13,hlf_mcp/gallery/operator_dashboard.py,31
+14,tests/test_routing_stress.py,31
+15,hlf_mcp/server.py,30
+16,hlf_mcp/hlf/routing/__init__.py,29
+17,tests/test_ecosystem_mcp_bridge.py,28
+18,tests/test_gallery_operatorization.py,28
+19,hlf_mcp/server_core.py,26
+20,hlf_mcp/instinct/lifecycle.py,24

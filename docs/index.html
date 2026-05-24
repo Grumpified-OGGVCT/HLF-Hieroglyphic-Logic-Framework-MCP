@@ -3,30 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HLF Status Surface</title>
-  <meta name="description" content="Compact public-safe status surface for HLF current truth, weekly evidence, and bridge readiness.">
+  <title>SwarmGlass Status Surface</title>
+  <meta name="description" content="Compact public-safe status surface for SwarmGlass current truth, weekly evidence, and bridge readiness.">
   <link rel="stylesheet" href="assets/status-site.css">
 </head>
 <body class="page-status">
   <div class="site-shell">
     <header class="site-header">
-      <div class="eyebrow">HLF Status Surface</div>
+      <div class="eyebrow">SwarmGlass Status Surface</div>
       <div class="header-row">
         <div>
-          <h1>Current truth, weekly evidence, and bridge readiness without flattening the repo.</h1>
-          <p class="lede">This front door is presentation-only. It summarizes the packaged system, the latest governed weekly lanes, and the internal readiness baseline while keeping vision, current truth, and bridge work distinct.</p>
+          <h1>SwarmGlass governance framework — current truth, weekly evidence, and bridge readiness.</h1>
+          <p class="lede">This front door is presentation-only. SwarmGlass is the governance layer (formerly HLF). The HLF DSL is gated behind SWARMGLASS_EXPERIMENTAL=1. 141 governance tools always-on (59 sg_* + 82 hlf_*), 193 total with experimental=1. DSL isolation verified — zero compiler/runtime/bytecode loaded in governance mode.</p>
         </div>
         <div class="hero-card hero-card-status">
           <div class="hero-label">Overall readiness</div>
-          <div class="hero-value">64.7%</div>
+          <div class="hero-value">67.8%</div>
           <div class="hero-meta">bridge-active</div>
-          <p class="hero-text">Strongest cluster: semantic core. Main drag: coordination and operator systems.</p>
+          <p class="hero-text">Strongest cluster: semantic core. DSL isolation: CLEAN. Main drag: coordination and operator systems.</p>
         </div>
       </div>
       <nav class="top-nav">
         <a class="top-link" href="index.html">Status Overview</a>
 <a class="top-link" href="merge-readiness.html">Merge Readiness</a>
 <a class="top-link" href="claims-ledger.html">Claims Ledger</a>
+<a class="top-link" href="SWARMGLASS_EXPLAINER.md">SwarmGlass Explained</a>
 <a class="top-link" href="HLF_VISION_PLAIN_LANGUAGE.md">Vision</a>
 <a class="top-link" href="HLF_MCP_POSITIONING.md">MCP Positioning</a>
       </nav>
@@ -77,7 +78,7 @@
 
     <section class="panel span-8 panel-proof">
         <div class="panel-heading">
-          <h2>Whole HLF Status</h2>
+          <h2>Whole SwarmGlass Status</h2>
           <span class="panel-kicker">Current repo posture</span>
         </div>
         <div class="metric-grid">
@@ -92,8 +93,8 @@
             </article>
 <article class="metric-card metric-card-scored metric-bridge">
               <div class="metric-label">Governance and trust</div>
-              <div class="metric-value">65.8%</div>
-              <div class="readiness-strip" style="--score:65.8%">
+              <div class="metric-value">70.2%</div>
+              <div class="readiness-strip" style="--score:70.2%">
                 <div class="readiness-strip-fill"></div>
                 <div class="readiness-strip-marker"></div>
               </div>
@@ -198,8 +199,8 @@
 <tr>
           <td>Strongest</td>
           <td>Governance-native execution</td>
-          <td>80.0%</td>
-          <td>4 constitutional rules wired, strong proof despite still-damaged typed-effect closure</td>
+          <td>70.2%</td>
+          <td>4 constitutional rules wired; DSL isolation clean at EXP=0; 141 always-on governance tools</td>
         </tr>
               <tr>
           <td>Weakest</td>
@@ -210,14 +211,14 @@
 <tr>
           <td>Weakest</td>
           <td>Ecosystem integration surface</td>
-          <td>55.0%</td>
+          <td>22.5%</td>
           <td>MCP + REST bridges built and tested, but integration depth still needs hardening</td>
         </tr>
 <tr>
           <td>Weakest</td>
           <td>Gallery and operator-legibility surface</td>
           <td>58.0%</td>
-          <td>5 gallery modules with proof suite, but operatorization is early-stage</td>
+          <td>12 fixtures with 6-surface round-trip, 48.6% avg compression, operatorization ongoing</td>
         </tr>
             </tbody>
           </table>
@@ -252,10 +253,10 @@
               </div>
               <div class="strip-reading">Runtime and capsule-bounded execution</div>
             </article>
-<article class="strip-row strip-strong" style="--score:80.0%">
+<article class="strip-row strip-bridge" style="--score:70.2%">
               <div class="strip-header">
                 <div class="strip-title">Governance-native execution</div>
-                <div class="strip-value">80.0%</div>
+                <div class="strip-value">70.2%</div>
               </div>
               <div class="readiness-strip">
                 <div class="readiness-strip-fill"></div>
@@ -362,10 +363,10 @@
               </div>
               <div class="strip-reading">Ecosystem integration surface</div>
             </article>
-<article class="strip-row strip-open" style="--score:39.5%">
+<article class="strip-row strip-bridge" style="--score:58.0%">
               <div class="strip-header">
                 <div class="strip-title">Gallery and operator-legibility surface</div>
-                <div class="strip-value">39.5%</div>
+                <div class="strip-value">58.0%</div>
               </div>
               <div class="readiness-strip">
                 <div class="readiness-strip-fill"></div>
@@ -388,7 +389,7 @@
                         <div class="metric-label">What is real now</div>
                         <span class="verdict-chip verdict-current chip-subtle">current-true</span>
                     </div>
-                    <h3>Packaged HLF core is inspectable and usable now.</h3>
+                    <h3>SwarmGlass governance core is inspectable and usable now.</h3>
                     <p class="metric-text">strongly improved — type universe + grammar completion + capability manifests</p>
                 </article>
 <article class="decision-card decision-bridge">

@@ -1,25 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import warnings
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from hlf_mcp.hlf import insaits
-from hlf_mcp.hlf.capsules import capsule_for_tier
-from hlf_mcp.hlf.compiler import CompileError
-from hlf_mcp.hlf.ethics.constitution import evaluate_constitution as _evaluate_constitution
-from hlf_mcp.hlf.hlf_llm_bridge import HLFLLMBridge
-from hlf_mcp.hlf.translator import (
-    build_translation_repair_plan,
-    hlf_to_english,
-    hlf_to_language,
-    language_to_hlf,
-    normalize_cognitive_lane_policy,
-    resolve_language,
-    resolve_language_with_policy,
-    translation_diagnostics,
-)
 from hlf_mcp.ingress_support import (
     build_ingress_denial_reasons,
     persist_runtime_execution_admission,
@@ -27,7 +13,6 @@ from hlf_mcp.ingress_support import (
 )
 from hlf_mcp.mcp_enforcement import build_mcp_call_binding
 from hlf_mcp.server_context import ServerContext
-from hlf_mcp.server_core import run_hlf_swarm_mechanics
 
 
 def _build_translation_contract(
@@ -46,6 +31,7 @@ def _build_translation_contract(
     english_audit: str,
     benchmark: dict[str, Any],
 ) -> dict[str, Any]:
+    from hlf_mcp.hlf import insaits  # lazy — only loaded when translation contract is built
     ast = compile_result["ast"]
     bytecode = ctx.bytecoder.encode(ast)
     validation = ctx.compiler.validate(source)
@@ -366,6 +352,23 @@ def run_hlf_do(
     handoff_mode: str = "operator",
 ) -> dict[str, Any]:
     """Execute the packaged governed natural-language front door outside the MCP server."""
+    # Lazy DSL imports — only loaded when translation is actually invoked
+    from hlf_mcp.hlf import insaits
+    from hlf_mcp.hlf.capsules import capsule_for_tier
+    from hlf_mcp.hlf.compiler import CompileError
+    from hlf_mcp.hlf.ethics.constitution import evaluate_constitution as _evaluate_constitution
+    from hlf_mcp.hlf.hlf_llm_bridge import HLFLLMBridge
+    from hlf_mcp.hlf.translator import (
+        build_translation_repair_plan,
+        hlf_to_english,
+        hlf_to_language,
+        language_to_hlf,
+        normalize_cognitive_lane_policy,
+        resolve_language,
+        resolve_language_with_policy,
+        translation_diagnostics,
+    )
+    from hlf_mcp.server_core import run_hlf_swarm_mechanics
     normalized_intent = intent.strip()
     normalized_tier = tier.lower().strip()
     normalized_handoff_mode = _normalize_handoff_mode(handoff_mode)
@@ -1033,6 +1036,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         cognitive_lane_policy: str = "benchmark_gated",
     ) -> dict[str, Any]:
         """Bootstrap a target-bound HLF contract and materialize swarm mechanics safely."""
+        warnings.warn("hlf_governed_swarm_mechanics is deprecated, use sg_coordinate_swarm_mechanics instead", DeprecationWarning, stacklevel=2)
         try:
             normalized_handoff = handoff if isinstance(handoff, dict) else None
             raw_hlf_source = source or str((normalized_handoff or {}).get("raw_hlf_source") or "")
@@ -1515,6 +1519,23 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         except Exception as exc:
             return {"status": "error", "error": str(exc)}
 
+    def _register_sg_aliases(mcp, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_coordinate_swarm_mechanics": hlf_governed_swarm_mechanics,
+    })
+
     return {
         "hlf_do": hlf_do,
         "hlf_benchmark_matrix": hlf_benchmark_matrix,
@@ -1528,4 +1549,5 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         "hlf_translate_to_english": hlf_translate_to_english,
         "hlf_decompile_ast": hlf_decompile_ast,
         "hlf_decompile_bytecode": hlf_decompile_bytecode,
+        "sg_coordinate_swarm_mechanics": hlf_governed_swarm_mechanics,
     }

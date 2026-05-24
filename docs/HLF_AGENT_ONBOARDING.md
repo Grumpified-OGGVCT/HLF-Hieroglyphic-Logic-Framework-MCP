@@ -197,6 +197,97 @@ when another agent needs raw HLF, AST/bytecode proof, or a handoff contract.
 For sub-agent or swarm handoff, raw HLF plus validation/compile proof is the
 authoritative payload; prose is only an explanation.
 
+## SwarmGlass: Governance-Only Mode (Default)
+
+Since May 2026, HLF MCP boots in **governance-only mode** by default. The full DSL
+compiler/runtime/bytecode stack is lazy-loaded only when explicitly requested via
+environment variable.
+
+This means agents can use the governance layer — audit trails, memory provenance,
+constraint validation, evidence reporting — without importing the DSL at all.
+
+### Two operating modes
+
+| Mode | Env | What loads | Use case |
+|------|-----|-----------|----------|
+| **Governance-only** (default) | `SWARMGLASS_EXPERIMENTAL=0` | Audit, memory, constraints, evidence, witness, profiles | Lightweight agent onboarding, audit-only tasks, constraint checking |
+| **Full DSL** | `SWARMGLASS_EXPERIMENTAL=1` | Governance + compiler, runtime, bytecode, translator, formatter, linter, formal verifier | Full HLF compilation/execution, swarm coordination, capsules |
+
+### Tool alias changes
+
+When operating in governance-only mode, use the `sg_*` tool prefix:
+
+| Legacy name (EXP=1) | Governance alias (EXP=0) |
+|---------------------|--------------------------|
+| `hlf_audit_event_log` | `sg_audit_event_log` |
+| `hlf_memory_store` | `sg_memory_store` |
+| `hlf_memory_query` | `sg_memory_query` |
+| `hlf_memory_govern` | `sg_memory_govern` |
+| `hlf_memory_stats` | `sg_memory_stats` |
+| `hlf_memory_resolve` | `sg_memory_resolve` |
+| `hlf_coordinate_*` | `sg_coordinate_*` |
+| `hlf_observe_feedback_*` | `sg_observe_feedback_*` |
+| `hlf_audit_evidence_*` | `sg_audit_evidence_*` |
+| `hlf_secure_secret_*` | `sg_secure_secret_*` |
+| `hlf_prompt_*` | `sg_prompt_*` |
+| `hlf_completion` | `sg_completion` |
+
+Full mapping: see `docs/SHIM_DESIGN.md`
+
+### Governance-only workflow
+
+```text
+NL intent
+  -> classify_task (intent classification)
+  -> observe → validate constraints (5 constraint bridges)
+  -> audit event log (Merkle-chained evidence)
+  -> memory store (provenance-tracked facts)
+  -> evidence report (compact governance summary)
+```
+
+This loop runs with **zero DSL imports** — only Python stdlib and governance primitives.
+
+### swarmglass.core namespace
+
+For direct programmatic access without triggering any `hlf_mcp` package init:
+
+```python
+# Zero DSL, zero hlf_mcp/__init__.py trigger
+from swarmglass.core.governance import GovernanceContext
+
+gov = GovernanceContext()
+gov.audit_chain.record_event(...)
+gov.align_governor.validate(...)
+```
+
+The `swarmglass/` package lives outside the `hlf_mcp/` tree and uses `importlib`
+to bypass `hlf_mcp/__init__.py` entirely.
+
+### Enabling full DSL mode
+
+```bash
+# Environment variable
+set SWARMGLASS_EXPERIMENTAL=1  # Windows
+export SWARMGLASS_EXPERIMENTAL=1  # Unix
+
+# Or in MCP client config:
+{
+  "mcpServers": {
+    "hlf-mcp": {
+      "command": "python",
+      "args": ["-m", "hlf_mcp.server"],
+      "env": {
+        "HLF_TRANSPORT": "stdio",
+        "SWARMGLASS_EXPERIMENTAL": "1"
+      }
+    }
+  }
+}
+```
+
+With EXP=1, all legacy `hlf_*` tools (compile, translate, lint, verify, swarm,
+capsules, benchmarks) register alongside the governance tools.
+
 ## What Not To Confuse
 
 ### Do not confuse product truth with preserved ambition

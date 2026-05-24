@@ -61,7 +61,7 @@ Natural language coordination between agents has five structural problems:
 | **Fragility** | Weaker models hallucinate coordination failures that stronger models mask |
 | **Opacity** | Humans cannot inspect intent chains without reading walls of prose |
 
-The vision was that a compact, typed, governed semantic layer would fix all five simultaneously. A 7B local model speaking HLF through a governed pipeline would be more reliable than a 70B model improvising in English.
+The vision was that a compact, typed, governed semantic layer would fix all five simultaneously. The hypothesis: a 7B local model speaking HLF through a governed pipeline could be more reliable than a 70B model improvising in English (not yet empirically tested — all benchmarks used the same model, and cross-model comparison remains a TODO).
 
 ### The Full Architecture (What Was Planned)
 
@@ -648,7 +648,7 @@ SwarmGlass gives you full execution traces with cryptographic provenance. Memory
 
 ### For the Model Spectrum
 
-The benchmark results prove a critical insight: **structure is leverage.** A 7B local model speaking HLF through a governed pipeline is more reliable than a 70B model improvising in English. HLF-structured coordination reduces ambiguity failures across the entire model spectrum. The governance layer ensures weaker models can't exceed their authority, while stronger models get the guardrails they need for production deployment.
+The benchmark results suggest a critical hypothesis: **structure is leverage.** The 3-20 agent battery proved that NL coordination is inherently ambiguous — even the same model interpreted the same prose differently depending on context, producing 1-3 cross-agent bugs per test. HLF eliminated those bugs entirely by removing ambiguity at the coordination layer. This suggests that a weaker model equipped with HLF's deterministic coordination could potentially outperform a stronger model improvising in English — but this specific cross-model claim has not yet been empirically tested (all benchmarks used deepseek-v4-pro:cloud). What we have proven is that HLF-structured coordination reduces ambiguity failures at any given model tier. The governance layer ensures weaker models can't exceed their authority, while stronger models get the guardrails they need for production deployment.
 
 ---
 

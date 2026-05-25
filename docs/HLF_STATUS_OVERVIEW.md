@@ -39,10 +39,10 @@ It is not yet the full recovered HLF system.
 The right public reading is therefore:
 
 - SwarmGlass governance (constraints, audit, memory, overwatch) is strong enough to inspect and use now
-- **DSL isolation achieved**: 6 server files refactored with lazy DSL imports — server boots with zero compiler/runtime/bytecode loaded
+- **DSL isolation achieved**: All server files refactored with lazy DSL imports — server boots with zero compiler/runtime/bytecode loaded. All FastMCP-decorated tool functions now carry their own lazy imports for DSL symbols (CompileError, translator, capsules, constitution, swarm mechanics). Verified clean at EXP=0.
 - weekly governance evidence is real and operational
 - Instinct now exposes packaged proof-state, phase-completion, and mission-lineage summaries across operator review surfaces
-- **141 governance tools** always-on (59 sg_* + 82 hlf_* with deprecation); **193 total** with experimental=1
+- **136 governance tools** always-on (57 sg_* + 79 hlf_* with deprecation); **193 total** with experimental=1
 - **All 29 core tests pass**: governance_proofs (5/5) + capsule_pointer_trust (24/24)
 - server boots governance-only with zero DSL imports (SWARMGLASS_EXPERIMENTAL=0)
 - broader coordination, operator, and ecosystem completion is still in active bridge work

@@ -16,7 +16,7 @@ The AI agent ecosystem has a governance problem. When you deploy autonomous agen
 
 SwarmGlass answers all three questions. It emerged from a larger project — the Hieroglyphic Logic Framework (HLF), which was a governance-first programming language with its own compiler, VM, and formal verifier. The problem: every governance tool required loading a ~200MB DSL stack. You couldn't validate a constraint or check an audit trail without booting the full compiler.
 
-The pivot decoupled governance from the DSL. Now SwarmGlass runs with **zero compiler/bytecode/runtime loaded** — 141 governance tools are always-on. The HLF DSL lives behind a feature flag for those who want a formal governance language. The result: a governance layer that works with ANY agent toolchain, not just HLF-compiled programs.
+The pivot decoupled governance from the DSL. Now SwarmGlass runs with **zero compiler/bytecode/runtime loaded** — 136 governance tools are always-on. The HLF DSL lives behind a feature flag for those who want a formal governance language. The result: a governance layer that works with ANY agent toolchain, not just HLF-compiled programs.
 
 The benchmarks prove the value. In real swarm coordination tests across 3–20 agents, HLF-structured coordination saved **58.8% tokens** on average vs natural language, with **zero cross-agent bugs** (vs 1–3 bugs per NL test). The governance layer catches violations before they become incidents. The audit trail provides cryptographic proof of every decision.
 

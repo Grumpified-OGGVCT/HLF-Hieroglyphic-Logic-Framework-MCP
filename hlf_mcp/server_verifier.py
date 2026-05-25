@@ -6,9 +6,6 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from hlf_mcp.hlf.execution_admission import evaluate_verification_report_admission
-from hlf_mcp.hlf.execution_admission import summarize_execution_effects
-from hlf_mcp.hlf.formal_verifier import VerificationReport
 from hlf_mcp.server_context import ServerContext
 
 
@@ -161,6 +158,8 @@ def register_verifier_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         mode: str = "enforce",
     ) -> dict[str, Any]:
         """Run packaged formal verification over an HLF AST or source, covering type invariants, gas bounds, and extracted spec gates."""
+        from hlf_mcp.hlf.execution_admission import evaluate_verification_report_admission, summarize_execution_effects  # lazy
+        from hlf_mcp.hlf.formal_verifier import VerificationReport  # lazy
         effective_ast = ast
         if effective_ast is None:
             if not source:
@@ -292,6 +291,8 @@ def register_verifier_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         mode: str = "enforce",
     ) -> dict[str, Any]:
         """Prove or refute that a deterministic gas budget covers the supplied task costs."""
+        from hlf_mcp.hlf.execution_admission import evaluate_verification_report_admission  # lazy
+        from hlf_mcp.hlf.formal_verifier import VerificationReport  # lazy
         result = ctx.formal_verifier.verify_gas_budget(
             task_costs, budget, property_name=property_name
         )

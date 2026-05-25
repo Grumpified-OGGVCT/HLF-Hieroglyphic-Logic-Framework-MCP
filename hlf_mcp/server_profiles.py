@@ -14,7 +14,6 @@ from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.hlf.governed_ingress import RateLimitRule
 from hlf_mcp.hlf.governed_routing import build_governed_route
-from hlf_mcp.hlf.translator import normalize_cognitive_lane_policy, resolve_language_with_policy
 from hlf_mcp.hlf.model_catalog import (
     build_lane_trace_context,
     evaluate_model_against_profile,
@@ -1038,6 +1037,7 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         normalized_latency = latency_priority.lower().strip()
         if normalized_latency not in {"speed", "balanced", "quality"}:
             normalized_latency = "balanced"
+        from hlf_mcp.hlf.translator import normalize_cognitive_lane_policy  # lazy
         normalized_cognitive_lane_policy = normalize_cognitive_lane_policy(
             cognitive_lane_policy
         )
@@ -1291,6 +1291,7 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         persist: bool = True,
     ) -> dict[str, Any]:
         """Produce a packaged governed-routing verdict by combining ALIGN, hardware, runtime, and policy posture."""
+        from hlf_mcp.hlf.translator import normalize_cognitive_lane_policy, resolve_language_with_policy  # lazy
         normalized_cognitive_lane_policy = normalize_cognitive_lane_policy(cognitive_lane_policy)
         language_policy = resolve_language_with_policy(
             "auto",

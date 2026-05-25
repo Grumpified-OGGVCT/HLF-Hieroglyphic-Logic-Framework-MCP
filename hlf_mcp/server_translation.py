@@ -817,6 +817,18 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
     ) -> dict[str, Any]:
         """Convert natural language instructions to HLF source code."""
         try:
+            # Lazy DSL imports — only loaded when translation is actually invoked
+            from hlf_mcp.hlf.compiler import CompileError
+            from hlf_mcp.hlf.hlf_llm_bridge import HLFLLMBridge
+            from hlf_mcp.hlf.translator import (
+                hlf_to_english,
+                hlf_to_language,
+                language_to_hlf,
+                normalize_cognitive_lane_policy,
+                resolve_language_with_policy,
+                translation_diagnostics,
+            )
+
             _gate = _apply_normalization_gate(ctx, text, skip_normalization=skip_normalization)
             if _gate["rejected"]:
                 return {
@@ -1037,6 +1049,15 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
     ) -> dict[str, Any]:
         """Bootstrap a target-bound HLF contract and materialize swarm mechanics safely."""
         warnings.warn("hlf_governed_swarm_mechanics is deprecated, use sg_coordinate_swarm_mechanics instead", DeprecationWarning, stacklevel=2)
+        from hlf_mcp.hlf.translator import (  # lazy
+            hlf_to_english,
+            hlf_to_language,
+            normalize_cognitive_lane_policy,
+            resolve_language,
+            resolve_language_with_policy,
+            translation_diagnostics,
+        )
+        from hlf_mcp.server_core import run_hlf_swarm_mechanics  # lazy
         try:
             normalized_handoff = handoff if isinstance(handoff, dict) else None
             raw_hlf_source = source or str((normalized_handoff or {}).get("raw_hlf_source") or "")
@@ -1176,6 +1197,7 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
         skip_normalization: bool = False,
     ) -> dict[str, Any]:
         """Build a deterministic next-step repair request for failed translation flows."""
+        from hlf_mcp.hlf.translator import build_translation_repair_plan  # lazy
         _gate = _apply_normalization_gate(ctx, text, skip_normalization=skip_normalization)
         working_text = _gate["text"]
         plan = build_translation_repair_plan(
@@ -1246,6 +1268,10 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
     ) -> dict[str, Any]:
         """Translate with deterministic retries, fallbacks, and fail-closed exits."""
         # ── Constitutional pre-screen: block provably illegal content ─────────
+        from hlf_mcp.hlf.capsules import capsule_for_tier  # lazy
+        from hlf_mcp.hlf.compiler import CompileError  # lazy
+        from hlf_mcp.hlf.ethics.constitution import evaluate_constitution as _evaluate_constitution  # lazy
+        from hlf_mcp.hlf.translator import hlf_to_english, hlf_to_language  # lazy
         constitutional_violations = _evaluate_constitution(
             ast=None, env={}, source=text, tier=tier
         )
@@ -1465,6 +1491,9 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
     def hlf_translate_to_english(source: str, language: str = "en") -> dict[str, Any]:
         """Convert HLF source code to a human-readable summary."""
         try:
+            from hlf_mcp.hlf import insaits  # lazy
+            from hlf_mcp.hlf.compiler import CompileError  # lazy
+            from hlf_mcp.hlf.translator import hlf_to_language, resolve_language  # lazy
             result = ctx.compiler.compile(source)
             resolved_language = resolve_language(language)
             summary = (
@@ -1485,6 +1514,9 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
     def hlf_decompile_ast(source: str, language: str = "en") -> dict[str, Any]:
         """Compile HLF source and return AST documentation."""
         try:
+            from hlf_mcp.hlf import insaits  # lazy
+            from hlf_mcp.hlf.compiler import CompileError  # lazy
+            from hlf_mcp.hlf.translator import hlf_to_language, resolve_language  # lazy
             result = ctx.compiler.compile(source)
             resolved_language = resolve_language(language)
             docs = (
@@ -1510,6 +1542,8 @@ def register_translation_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, An
     def hlf_decompile_bytecode(source: str) -> dict[str, Any]:
         """Compile HLF source → encode to bytecode → disassemble → produce English docs."""
         try:
+            from hlf_mcp.hlf import insaits  # lazy
+            from hlf_mcp.hlf.compiler import CompileError  # lazy
             result = ctx.compiler.compile(source)
             bc = ctx.bytecoder.encode(result["ast"])
             docs = insaits.decompile_bytecode(bc)

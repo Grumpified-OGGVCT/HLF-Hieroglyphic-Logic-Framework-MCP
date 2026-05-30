@@ -30,7 +30,7 @@ dependencies = [
 hot  = ["valkey>=6.0.0"]
 # Full tier — hot + beartype for strict host-function type enforcement at runtime
 # Install:  uv sync --extra full  |   pip install "hlf-mcp[full]"
-full = ["valkey>=6.0.0", "beartype>=0.18.0", "z3-solver>=4.8.0"]
+full = ["valkey>=6.0.0", "beartype>=0.18.0", "z3-solver>=4.16.0.0"]
 recursivemas = ["torch>=2.0.0", "transformers>=4.45.0", "peft>=0.12.0", "bitsandbytes>=0.43.0", "accelerate>=0.30.0", "datasets>=2.0.0", "trl>=0.10.0"]
 dev = [
     "pytest>=9.0.3",

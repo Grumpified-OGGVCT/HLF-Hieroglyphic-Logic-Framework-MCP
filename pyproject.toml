@@ -35,7 +35,7 @@ recursivemas = ["torch>=2.0.0", "transformers>=4.45.0", "peft>=0.12.0", "bitsand
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
-    "ruff>=0.15.13",
+    "ruff>=0.15.14",
 ]
 
 [project.scripts]

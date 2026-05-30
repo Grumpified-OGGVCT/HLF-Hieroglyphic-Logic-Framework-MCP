@@ -1,6 +1,6 @@
 {
-  "dashboard_id": "4c4bf4003ece319c",
-  "generated_at": "2026-05-23T19:29:28Z",
+  "dashboard_id": "b4ba40f0d7a6070e",
+  "generated_at": "2026-05-30T14:59:53Z",
   "overall_status": "degraded",
   "pillar_score": {
     "pillar": "gallery-operator-legibility",
@@ -36,7 +36,7 @@
   },
   "pillar_scores": {
     "typed_effect_algebra": {
-      "score_pct": 89.5,
+      "score_pct": 59.5,
       "components": {
         "cross_type_coercion": {
           "score_pct": 81.2,
@@ -44,9 +44,10 @@
           "weight": 0.4
         },
         "heterogeneous_composition": {
-          "score_pct": 100.0,
-          "detail": "3/3 composition types hold (100.0%)",
-          "weight": 0.3
+          "score_pct": 0.0,
+          "detail": "SWARMGLASS_HLF_ENABLED=0; heterogeneous composition requires DSL",
+          "weight": 0.3,
+          "source": "requires_dsl"
         },
         "test_coverage": {
           "score_pct": 85.0,
@@ -59,7 +60,8 @@
           "weight": 0.1
         }
       },
-      "status": "healthy"
+      "status": "requires_dsl",
+      "source": "requires_dsl"
     },
     "formal_verification": {
       "score_pct": 94.2,
@@ -71,12 +73,13 @@
         },
         "inductive_proof_automation": {
           "score_pct": 100.0,
-          "detail": "4/4 induction patterns yield complete proof chains (100.0%)",
-          "weight": 0.3
+          "detail": "4/4 synthetic induction patterns yield complete proof chains (100.0%) [source: no_verification_data]",
+          "weight": 0.3,
+          "source": "no_verification_data"
         },
         "proof_depth": {
           "score_pct": 85.0,
-          "detail": "Proof depth rating: 'deep' (85.0%); 3 total depth",
+          "detail": "Proof depth rating: 'deep' (85.0%); 2 total depth",
           "weight": 0.15
         },
         "test_coverage": {
@@ -85,11 +88,12 @@
           "weight": 0.2
         }
       },
-      "status": "healthy",
+      "status": "no_verification_data",
+      "source": "no_verification_data",
       "proof_surface": "\u001b[1mHLF Proof Surface — Compact View\u001b[0m\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m\n  \u001b[32m\u001b[1m \u001b[1mboolean           \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mcontainer         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1meffect            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mgas               \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mnumeric           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mrational          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mset               \u001b[0m [L:0] admitted       0%\n  \u001b[32m\u001b[1m \u001b[1mspatial           \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mspec_gate         \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mstring            \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtemporal          \u001b[0m [L:0] admitted     100%\n  \u001b[32m\u001b[1m \u001b[1mtype_system       \u001b[0m [L:0] admitted     100%\n\u001b[2m──────────────────────────────────────────────────────────────────────\u001b[0m"
     },
     "gallery_operator_legibility": {
-      "score_pct": 82.8,
+      "score_pct": 79.5,
       "components": {
         "verification_viewer": {
           "score_pct": 75.0,
@@ -117,8 +121,8 @@
           "weight": 0.16
         },
         "feedback_loop": {
-          "score_pct": 82.2,
-          "detail": "SNR=0.78, MTTR=120.0s, FPR=10.0% → score=82.2%",
+          "score_pct": 60.0,
+          "detail": "SNR=0.00, MTTR=0.0s, FPR=0.0% → score=60.0%",
           "weight": 0.15
         },
         "egl_monitor": {
@@ -127,18 +131,19 @@
           "weight": 0.15
         }
       },
-      "status": "healthy"
+      "status": "healthy",
+      "source": "simulated"
     }
   },
   "full_scorecard": {
     "pillars": [
       {
         "name": "Typed Effect Algebra",
-        "score_pct": 89.5,
+        "score_pct": 59.5,
         "weight": 8,
-        "status": "healthy",
+        "status": "requires_dsl",
         "target_pct": 80.0,
-        "gap_pct": -9.5,
+        "gap_pct": 20.5,
         "components": {
           "cross_type_coercion": {
             "score_pct": 81.2,
@@ -146,9 +151,10 @@
             "weight": 0.4
           },
           "heterogeneous_composition": {
-            "score_pct": 100.0,
-            "detail": "3/3 composition types hold (100.0%)",
-            "weight": 0.3
+            "score_pct": 0.0,
+            "detail": "SWARMGLASS_HLF_ENABLED=0; heterogeneous composition requires DSL",
+            "weight": 0.3,
+            "source": "requires_dsl"
           },
           "test_coverage": {
             "score_pct": 85.0,
@@ -166,7 +172,7 @@
         "name": "Formal Verification",
         "score_pct": 94.2,
         "weight": 7,
-        "status": "healthy",
+        "status": "no_verification_data",
         "target_pct": 80.0,
         "gap_pct": -14.2,
         "components": {
@@ -177,12 +183,13 @@
           },
           "inductive_proof_automation": {
             "score_pct": 100.0,
-            "detail": "4/4 induction patterns yield complete proof chains (100.0%)",
-            "weight": 0.3
+            "detail": "4/4 synthetic induction patterns yield complete proof chains (100.0%) [source: no_verification_data]",
+            "weight": 0.3,
+            "source": "no_verification_data"
           },
           "proof_depth": {
             "score_pct": 85.0,
-            "detail": "Proof depth rating: 'deep' (85.0%); 3 total depth",
+            "detail": "Proof depth rating: 'deep' (85.0%); 2 total depth",
             "weight": 0.15
           },
           "test_coverage": {
@@ -194,11 +201,11 @@
       },
       {
         "name": "Gallery Operator Legibility",
-        "score_pct": 82.8,
+        "score_pct": 79.5,
         "weight": 4,
         "status": "healthy",
         "target_pct": 75.0,
-        "gap_pct": -7.8,
+        "gap_pct": -4.5,
         "components": {
           "verification_viewer": {
             "score_pct": 75.0,
@@ -226,8 +233,8 @@
             "weight": 0.16
           },
           "feedback_loop": {
-            "score_pct": 82.2,
-            "detail": "SNR=0.78, MTTR=120.0s, FPR=10.0% → score=82.2%",
+            "score_pct": 60.0,
+            "detail": "SNR=0.00, MTTR=0.0s, FPR=0.0% → score=60.0%",
             "weight": 0.15
           },
           "egl_monitor": {
@@ -238,11 +245,13 @@
         }
       }
     ],
-    "overall_score_pct": 89.8,
-    "overall_status": "healthy",
-    "gap_analysis": [],
-    "generated_at": "2026-05-23T19:29:28Z",
-    "scorecard_id": "scorecard-1a6df7c3ad5f"
+    "overall_score_pct": 76.5,
+    "overall_status": "degraded",
+    "gap_analysis": [
+      "Typed Effect Algebra: gap of +20.5% to target 80.0% — improve cross-type coercion coverage and heterogeneous composition"
+    ],
+    "generated_at": "2026-05-30T14:59:53Z",
+    "scorecard_id": "scorecard-467ba2fe3411"
   },
   "swarm": {
     "source": "simulated",
@@ -255,7 +264,7 @@
         "role": "compiler",
         "event_type": "complete",
         "message": "Compiled 12 fixtures successfully",
-        "timestamp_ns": 1779564563371818752
+        "timestamp_ns": 1780153188622971392
       },
       {
         "swarm_id": "swarm-001",
@@ -264,7 +273,7 @@
         "role": "verifier",
         "event_type": "progress",
         "message": "Verifying 8 properties...",
-        "timestamp_ns": 1779564565371818752
+        "timestamp_ns": 1780153190622971392
       },
       {
         "swarm_id": "swarm-001",
@@ -273,7 +282,7 @@
         "role": "governor",
         "event_type": "started",
         "message": "Constitutional check in progress",
-        "timestamp_ns": 1779564567371818752
+        "timestamp_ns": 1780153192622971392
       }
     ],
     "active_agents": 3,
@@ -287,28 +296,28 @@
         "decision": "PROCEED",
         "checks_passed": 5,
         "checks_total": 5,
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       },
       {
         "program": "security_audit.hlf",
         "decision": "PROCEED",
         "checks_passed": 6,
         "checks_total": 6,
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       },
       {
         "program": "db_migration.hlf",
         "decision": "PROCEED",
         "checks_passed": 7,
         "checks_total": 7,
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       },
       {
         "program": "delegation.hlf",
         "decision": "WARN",
         "checks_passed": 4,
         "checks_total": 5,
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       }
     ],
     "summary": {
@@ -328,7 +337,7 @@
         "location": "network_output",
         "detail": "Unsanitized data egress detected without explicit capability declaration",
         "severity": "high",
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       },
       {
         "rule_id": "R-2",
@@ -336,7 +345,7 @@
         "location": "http_request",
         "detail": "Network effect in untrusted code path",
         "severity": "medium",
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       }
     ],
     "summary": {
@@ -359,7 +368,7 @@
         ],
         "approved": true,
         "signature": "sha256:aaa111bbb222",
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       },
       {
         "program": "security_audit.hlf",
@@ -371,7 +380,7 @@
         ],
         "approved": true,
         "signature": "sha256:abc123def456",
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       },
       {
         "program": "db_migration.hlf",
@@ -383,7 +392,7 @@
         ],
         "approved": true,
         "signature": "sha256:def789ghi012",
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       },
       {
         "program": "agent_delegation.hlf",
@@ -397,7 +406,7 @@
         "approved": false,
         "signature": "sha256:jkl345mno678",
         "rejection_reason": "AI_INFER requires sovereign tier approval gate",
-        "timestamp": "2026-05-23T19:29:28Z"
+        "timestamp": "2026-05-30T14:59:53Z"
       }
     ],
     "summary": {

@@ -162,7 +162,7 @@ def register_agent_prompts(mcp: FastMCP) -> dict[str, Any]:
             - **title** — Required, max 256 characters.
             - **body** — Detailed description. Markdown supported.
             - **labels** — Optional list (e.g., ["bug"], ["feature"], ["feedback"]).
-            - **repo** — Optional override (default: Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP).
+            - **repo** — Optional override (default: Grumpified-OGGVCT/SwarmGlass-MCP).
 
             ## Listing Issues
 

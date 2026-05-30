@@ -871,6 +871,11 @@ class InductiveProver:
         Returns:
             True if the measure appears well-founded.
         """
+        # Syntactic pre-check: must contain decreasing patterns
+        decreasing_keywords = ("-", "dec", "decr", "decreasing", "pred", "prev", "sub")
+        if not any(kw in measure_expr.lower() for kw in decreasing_keywords):
+            return False
+
         if self.z3_available:
             try:
                 ctx = self._z3_ctx
@@ -878,7 +883,6 @@ class InductiveProver:
                 n = z3.Int("n", ctx=ctx)
                 # A well-founded measure must be non-negative and decreasing
                 s.add(n >= 0)
-                s.add(n <= n + 1)  # Trivially true; real check is on the expression
                 # Check: does there exist a value where n strictly decreases?
                 m = z3.Int("m", ctx=ctx)
                 s.add(m == n - 1)
@@ -890,9 +894,7 @@ class InductiveProver:
             except Exception:
                 return False
         else:
-            # Syntactic checks for decreasing patterns
-            decreasing_keywords = ("-", "dec", "decr", "decreasing", "pred", "prev", "sub")
-            return any(kw in measure_expr.lower() for kw in decreasing_keywords)
+            return True
 
     def infer_termination_measure(
         self,

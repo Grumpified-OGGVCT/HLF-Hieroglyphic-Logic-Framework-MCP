@@ -90,8 +90,64 @@ openrouter_max_models = 200
 # ─────────────────────────────────────────────────────────────────────────────
 # These are populated by auto-discovery OR manually overridden here.
 # Set enabled = false to exclude a discovered model.
+#
+# coding_tier: 1=elite, 2=strong, 3=capable, 4=fallback
+# Tiers consider: coding score, reasoning score, BenchLM, hallucination rate,
+# safety, context window, tool-use/agentic capability — NOT just coding_score.
+# T1: Best overall coding capability (high BenchLM + coding + reasoning)
+# T2: Strong coders with trade-offs (great at one thing, weaker elsewhere)
+# T3: Capable but not top-tier for generation quality
+# T4: Budget/fallback only
 
-[ollama_cloud_models.nemotron-3-super]
+[ollama_cloud_models."deepseek-v4-pro:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "planning", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "agentic", "rag", "long-context"]
+languages = ["en", "zh"]
+context_k = 1024
+supports_think = false
+coding_tier = 1
+coding_score = 88.0
+description = "DeepSeek V4 Pro (Max) — BenchLM 88.0 (#1 available), 1M ctx, elite"
+
+[ollama_cloud_models."deepseek-v4-flash:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "doer", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "agentic", "rag", "long-context"]
+languages = ["en", "zh"]
+context_k = 1024
+supports_think = false
+coding_tier = 1
+coding_score = 80.6
+description = "DeepSeek V4 Flash — Coding 80.6, Safety 95.8%, 4.2% hallucination (lowest risk), 1M ctx"
+
+[ollama_cloud_models."deepseek-v3.2:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "analysis", "ethics", "coding", "universal"]
+capabilities = ["reasoning", "adversarial-analysis", "efficiency", "safety-backstop", "coding"]
+languages = ["en", "zh"]
+context_k = 160
+supports_think = true
+coding_tier = 1
+coding_score = 80.8
+description = "DeepSeek V3.2 671B — Coding 80.8, Reasoning 81.7, proven workhorse"
+
+[ollama_cloud_models."glm-5.1:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "planning", "doer", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "agentic", "multilingual", "long-context"]
+languages = ["en", "zh"]
+context_k = 256
+supports_think = false
+coding_tier = 1
+coding_score = 78.5
+description = "GLM-5.1 (Zhipu AI) 32B — Coding 78.5, Reasoning 86.8, strong reasoning backs coding"
+
+[ollama_cloud_models."nemotron-3-super:cloud"]
 enabled = true
 family = "reasoning"
 lanes = ["reasoning", "planning", "doer", "coding", "analysis", "universal"]
@@ -99,17 +155,343 @@ capabilities = ["reasoning", "tool-use", "agentic", "coding"]
 languages = ["en"]
 context_k = 256
 supports_think = false
-description = "NVIDIA 120B LatentMoE — broad agentic fallback"
+coding_tier = 1
+coding_score = 81.2
+description = "NVIDIA Nemotron-3-Super 120B — Coding 81.2, Reasoning 88.9, Math 88.9"
+
+[ollama_cloud_models."kimi-k2.5:cloud"]
+enabled = true
+family = "multimodal"
+lanes = ["planning", "analysis", "multimodal", "coding", "universal"]
+capabilities = ["planning", "multimodal", "tool-use", "ui-synthesis", "coding"]
+languages = ["en"]
+context_k = 256
+supports_think = false
+coding_tier = 2
+coding_score = 79.8
+description = "Moonshot K2.5 — Coding 79.8 but Reasoning 47.0 (weak); great templates, poor logic"
+
+[ollama_cloud_models."qwen3.5:397b-cloud"]
+enabled = true
+family = "multimodal"
+lanes = ["reasoning", "coding", "analysis", "multimodal", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "agentic", "multimodal", "vision"]
+languages = ["en", "zh"]
+context_k = 262
+supports_think = false
+coding_tier = 2
+coding_score = 72.8
+description = "Qwen 3.5 397B — Coding 72.8, strong multimodal agent"
+
+[ollama_cloud_models."devstral-2:123b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer", "verifier"]
+capabilities = ["coding", "review", "tool-use", "repository-navigation"]
+languages = ["en"]
+context_k = 256
+supports_think = false
+coding_tier = 2
+coding_score = 72.2
+description = "Mistral Devstral 2 123B — Coding 72.2, repo-scale editing"
+
+[ollama_cloud_models."kimi-k2.6:cloud"]
+enabled = true
+family = "multimodal"
+lanes = ["reasoning", "analysis", "multimodal", "coding", "planning", "universal"]
+capabilities = ["reasoning", "multimodal", "tool-use", "vision", "coding", "planning"]
+languages = ["en"]
+context_k = 256
+supports_think = false
+coding_tier = 2
+coding_score = 82.0
+description = "Kimi K2.6 — BenchLM 85.0 (#5 overall), Vision Coding 76.7; default model, elite generalist. Composite effective coding score reflects BenchLM dominance."
+
+[ollama_cloud_models."qwen3-coder-next:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer", "analysis"]
+capabilities = ["coding", "tool-use", "repository-navigation", "efficiency"]
+languages = ["en", "zh"]
+context_k = 256
+supports_think = false
+coding_tier = 3
+coding_score = 72.0
+description = "Alibaba Qwen3-Coder-Next 80B/3B — efficient repo-scale coding specialist"
+
+[ollama_cloud_models."glm-4.6:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "multilingual", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "multilingual"]
+languages = ["en", "zh"]
+context_k = 128
+supports_think = false
+coding_tier = 3
+coding_score = 68.3
+description = "GLM-4.6 32B — Coding 68.3, Reasoning 80.5, solid multilingual"
+
+[ollama_cloud_models."minimax-m2.7:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["doer", "coding", "universal"]
+capabilities = ["coding", "execution", "agentic", "productivity"]
+languages = ["en"]
+context_k = 200
+supports_think = false
+coding_tier = 4
+coding_score = 56.6
+description = "MiniMax M2.7 — Coding 56.6, budget execution SWE"
+
+[ollama_cloud_models."glm-4.7:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "multilingual", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "multilingual"]
+languages = ["en", "zh"]
+context_k = 128
+supports_think = false
+coding_tier = 2
+coding_score = 72.0
+description = "GLM-4.7 32B — Coding 72.0, Reasoning 83.3, strong multilingual"
+
+[ollama_cloud_models."deepseek-v3.1:671b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "long-context"]
+languages = ["en", "zh"]
+context_k = 128
+supports_think = false
+coding_tier = 2
+coding_score = 75.0
+description = "DeepSeek V3.1 671B — predecessor to V3.2 (Coding 80.8), solid generalist"
+
+[ollama_cloud_models."mistral-large-3:675b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "doer", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "structured-output"]
+languages = ["en", "fr", "es", "de"]
+context_k = 128
+supports_think = false
+coding_tier = 2
+coding_score = 68.0
+description = "Mistral Large 3 675B — frontier reasoning and coding"
+
+[ollama_cloud_models."devstral-small-2:24b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer"]
+capabilities = ["coding", "tool-use", "repository-navigation", "efficiency"]
+languages = ["en"]
+context_k = 128
+supports_think = false
+coding_tier = 3
+coding_score = 72.2
+description = "Mistral Devstral Small 2 24B — efficient coding specialist"
+
+[ollama_cloud_models."nemotron-3-nano:30b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "agentic"]
+languages = ["en"]
+context_k = 128
+supports_think = false
+coding_tier = 3
+             coding_score = 55.0
+description = "NVIDIA Nemotron 3 Nano 30B — lightweight agentic coder"
+
+[ollama_cloud_models."gpt-oss:120b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "tool-use"]
+languages = ["en"]
+context_k = 128
+supports_think = false
+coding_tier = 2
+             coding_score = 62.0
+description = "GPT-OSS 120B — open-weight frontier coding model"
+
+[ollama_cloud_models."gpt-oss:20b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "doer", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "efficiency"]
+languages = ["en"]
+context_k = 128
+supports_think = false
+coding_tier = 3
+             coding_score = 48.0
+description = "GPT-OSS 20B — lightweight open-weight coder"
+
+[ollama_cloud_models."gemma4:31b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "tool-use", "structured-output"]
+languages = ["en", "fr", "es", "de", "zh", "ja"]
+context_k = 128
+supports_think = false
+coding_tier = 2
+             coding_score = 58.0
+description = "Google Gemma 4 31B — strong open-weight reasoning+coding"
+
+[ollama_cloud_models."gemma3:12b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "universal"]
+capabilities = ["reasoning", "coding", "efficiency"]
+languages = ["en", "fr", "es", "de", "zh", "ja"]
+context_k = 128
+supports_think = false
+coding_tier = 3
+             coding_score = 45.0
+description = "Google Gemma 3 12B — lightweight coding workhorse"
+
+[ollama_cloud_models."gemma3:27b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "coding", "structured-output"]
+languages = ["en", "fr", "es", "de", "zh", "ja"]
+context_k = 128
+supports_think = false
+coding_tier = 2
+             coding_score = 55.0
+description = "Google Gemma 3 27B — strong open-weight workhorse"
+
+[ollama_cloud_models."ministral-3:14b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer"]
+capabilities = ["coding", "tool-use", "repository-navigation"]
+languages = ["en"]
+context_k = 128
+supports_think = false
+coding_tier = 3
+             coding_score = 50.0
+description = "Mistral Ministral 3 14B — efficient coding specialist"
+
+[ollama_cloud_models."ministral-3:8b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer"]
+capabilities = ["coding", "tool-use", "efficiency"]
+languages = ["en"]
+context_k = 128
+supports_think = false
+coding_tier = 4
+             coding_score = 40.0
+description = "Mistral Ministral 3 8B — lightweight coding"
+
+[ollama_cloud_models."ministral-3:3b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["coding", "doer"]
+capabilities = ["coding", "efficiency"]
+languages = ["en"]
+context_k = 128
+supports_think = false
+coding_tier = 4
+             coding_score = 30.0
+description = "Mistral Ministral 3 3B — ultra-lightweight coding"
+
+[ollama_cloud_models."minimax-m2.5:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["doer", "coding", "universal"]
+capabilities = ["coding", "execution", "agentic"]
+languages = ["en"]
+context_k = 200
+supports_think = false
+coding_tier = 3
+             coding_score = 52.0
+description = "MiniMax M2.5 — solid execution SWE"
+
+[ollama_cloud_models."minimax-m2.1:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["doer", "coding", "universal"]
+capabilities = ["coding", "execution", "agentic"]
+languages = ["en"]
+context_k = 200
+supports_think = false
+coding_tier = 3
+             coding_score = 48.0
+description = "MiniMax M2.1 — capable execution SWE"
+
+[ollama_cloud_models."minimax-m2:cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["doer", "coding", "universal"]
+capabilities = ["coding", "execution"]
+languages = ["en"]
+context_k = 200
+supports_think = false
+coding_tier = 4
+             coding_score = 42.0
+description = "MiniMax M2 — budget execution SWE"
+
+[ollama_cloud_models."rnj-1:8b-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "coding", "doer"]
+capabilities = ["reasoning", "coding", "efficiency"]
+languages = ["en"]
+context_k = 128
+supports_think = false
+coding_tier = 4
+             coding_score = 30.0
+description = "RNJ-1 8B — lightweight reasoning+coding"
+
+[ollama_cloud_models."kimi-k2:1t-cloud"]
+enabled = true
+family = "reasoning"
+lanes = ["reasoning", "planning", "analysis", "coding", "universal"]
+capabilities = ["reasoning", "planning", "long-context", "coding"]
+languages = ["en"]
+context_k = 256
+supports_think = true
+coding_tier = 2
+             coding_score = 58.0
+description = "Kimi K2 1T — massive reasoning model with coding capability"
+
+[ollama_cloud_models."qwen3-vl:235b-cloud"]
+enabled = true
+family = "multimodal"
+lanes = ["reasoning", "multimodal", "coding", "analysis", "universal"]
+capabilities = ["reasoning", "multimodal", "vision", "coding", "tool-use"]
+languages = ["en", "zh", "ja", "ko", "fr", "es", "de", "ar"]
+context_k = 128
+supports_think = false
+coding_tier = 2
+             coding_score = 60.0
+description = "Qwen3-VL 235B MoE — vision+coding multimodal powerhouse"
+
+[ollama_cloud_models."qwen3-vl:235b-instruct-cloud"]
+enabled = true
+family = "multimodal"
+lanes = ["reasoning", "multimodal", "analysis", "universal"]
+capabilities = ["reasoning", "multimodal", "vision", "instruction-following"]
+languages = ["en", "zh", "ja", "ko", "fr", "es", "de", "ar"]
+context_k = 128
+supports_think = false
+description = "Qwen3-VL 235B Instruct — vision instruction specialist"
 
 [ollama_cloud_models."glm-5:cloud"]
 enabled = true
 family = "reasoning"
-lanes = ["reasoning", "planning", "analysis", "universal"]
-capabilities = ["reasoning", "systems-engineering", "long-context"]
+lanes = ["reasoning", "planning", "analysis", "coding", "universal"]
+capabilities = ["reasoning", "systems-engineering", "long-context", "coding"]
 languages = ["en", "zh"]
 context_k = 198
 supports_think = false
-description = "Z.ai 744B/40B active MoE — strong reasoning and systems engineering"
+coding_tier = 3
+coding_score = 61.2
+description = "Z.ai GLM-5 744B/40B MoE — Coding 61.2, strong reasoning and systems engineering"
 
 [ollama_cloud_models."cogito-2.1:671b-cloud"]
 enabled = true
@@ -131,46 +513,6 @@ context_k = 256
 supports_think = true
 description = "Moonshot thinking specialist — long-horizon planning"
 
-[ollama_cloud_models."kimi-k2.5:cloud"]
-enabled = true
-family = "multimodal"
-lanes = ["planning", "analysis", "multimodal", "universal"]
-capabilities = ["planning", "multimodal", "tool-use", "ui-synthesis"]
-languages = ["en"]
-context_k = 256
-supports_think = false
-description = "Moonshot multimodal — planning and UI synthesis"
-
-[ollama_cloud_models."minimax-m2.7:cloud"]
-enabled = true
-family = "reasoning"
-lanes = ["doer", "coding", "universal"]
-capabilities = ["coding", "execution", "agentic", "productivity"]
-languages = ["en"]
-context_k = 200
-supports_think = false
-description = "MiniMax — execution-focused SWE specialist"
-
-[ollama_cloud_models."devstral-2:123b-cloud"]
-enabled = true
-family = "reasoning"
-lanes = ["coding", "doer", "verifier"]
-capabilities = ["coding", "review", "tool-use", "repository-navigation"]
-languages = ["en"]
-context_k = 256
-supports_think = false
-description = "Mistral 123B — coding and repo-scale editing"
-
-[ollama_cloud_models."qwen3-coder-next:cloud"]
-enabled = true
-family = "reasoning"
-lanes = ["coding", "doer", "analysis"]
-capabilities = ["coding", "tool-use", "repository-navigation", "efficiency"]
-languages = ["en", "zh"]
-context_k = 256
-supports_think = false
-description = "Alibaba 80B/3B active — efficient repo-scale coder"
-
 [ollama_cloud_models."qwen3.5:cloud"]
 enabled = true
 family = "multimodal"
@@ -181,15 +523,41 @@ context_k = 256
 supports_think = false
 description = "Alibaba multimodal — universal structured-output fallback"
 
-[ollama_cloud_models."deepseek-v3.2:cloud"]
+[ollama_cloud_models."gemini-3-flash-preview:cloud"]
+enabled = true
+family = "multimodal"
+lanes = ["reasoning", "coding", "analysis", "multimodal", "universal"]
+capabilities = ["reasoning", "coding", "multimodal", "vision", "long-context"]
+languages = ["en", "fr", "es", "de", "zh", "ja", "ko"]
+context_k = 1048
+supports_think = false
+coding_tier = 2
+             coding_score = 52.0
+description = "Google Gemini 3 Flash — fast multimodal, strong coding proxy"
+
+[ollama_cloud_models."qwen3-next:80b-cloud"]
 enabled = true
 family = "reasoning"
-lanes = ["reasoning", "analysis", "ethics", "universal"]
-capabilities = ["reasoning", "adversarial-analysis", "efficiency", "safety-backstop"]
-languages = ["en", "zh"]
-context_k = 160
+lanes = ["reasoning", "coding", "analysis", "multilingual", "universal"]
+capabilities = ["reasoning", "coding", "thinking", "multilingual"]
+languages = ["en", "zh", "ja", "ko", "fr", "es", "de", "ar"]
+context_k = 262
 supports_think = true
-description = "DeepSeek — adversarial backstop with strong efficiency"
+coding_tier = 2
+             coding_score = 62.0
+description = "Qwen3-Next 80B MoE — strong multilingual reasoning+coding"
+
+[ollama_cloud_models."qwen3-coder:480b-cloud"]
+enabled = true
+family = "coding"
+lanes = ["coding", "reasoning", "doer"]
+capabilities = ["coding", "reasoning", "thinking", "tool-use"]
+languages = ["en", "zh", "ja", "ko", "fr", "es", "de", "ar"]
+context_k = 262
+supports_think = true
+coding_tier = 2
+             coding_score = 75.0
+description = "Qwen3-Coder 480B — massive dedicated coding model"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OpenRouter Models — Default Registry
@@ -357,10 +725,39 @@ description = "Mistral Medium 3 — balanced reasoning and coding"
 # Ollama Cloud models use their native names: "nemotron-3-super"
 
 # [chain_overrides.reasoning]
-# models = ["nemotron-3-super", "cogito-2.1:671b-cloud", "openrouter:deepseek/deepseek-r1"]
+# models = ["nemotron-3-super:cloud", "cogito-2.1:671b-cloud", "openrouter:deepseek/deepseek-r1"]
 
-# [chain_overrides.coding]
-# models = ["devstral-2:123b-cloud", "qwen3-coder-next:cloud", "openrouter:anthropic/claude-sonnet-4"]
+[chain_overrides.coding]
+# Tiers based on critical thinking, not mechanical sort:
+#   T1 = high BenchLM + strong coding + good reasoning (generates correct, complex code)
+#   T2 = strong coding but notable trade-off (e.g., great coding/weak reasoning, or great agent/tools)
+#   T3 = capable, lower generation quality
+#   T4 = budget fallback
+models = [
+    # Tier 1: Elite — high BenchLM AND coding AND reasoning
+    "deepseek-v4-pro:cloud",       # BenchLM 88.0 (#1 available), 1M ctx — best overall
+    "deepseek-v4-flash:cloud",     # Coding 80.6, Safety 95.8%, 4.2% hallucination — safest
+    "deepseek-v3.2:cloud",         # Coding 80.8, Reasoning 81.7 — proven workhorse
+    "glm-5.1:cloud",               # Coding 78.5, Reasoning 86.8 — reasoning backs coding
+    "nemotron-3-super:cloud",      # Coding 81.2, Reasoning 88.9 — elite scores, low confidence
+    # Tier 2: Strong — good at one dimension, weaker elsewhere
+    "qwen3.5:397b-cloud",          # Coding 72.8, Reasoning 89.4, Tool Use 86.7, Agent Swarm 86.7 — best agentic
+    "kimi-k2.6:cloud",             # BenchLM 85.0 (#5 overall), Vision Coding 76.7 — elite generalist, default model
+    "kimi-k2.5:cloud",             # Coding 79.8 but Reasoning 47.0 — great templates, weak logic
+    "devstral-2:123b-cloud",       # Coding 72.2 — repo-scale editing specialist
+    "qwen3-coder:480b-cloud",      # Dedicated massive coding model
+    "gemini-3-flash-preview:cloud",# Fast multimodal with coding capability
+    "qwen3-next:80b-cloud",        # Strong multilingual reasoning+coding
+    # Tier 3: Capable — solid for simpler tasks
+    "qwen3-coder-next:cloud",      # Efficient repo-scale coder
+    "glm-4.6:cloud",               # Coding 68.3, Reasoning 80.5 — solid multilingual
+    "glm-4.7:cloud",               # Coding 72.0, Reasoning 83.3 — solid
+    # Tier 4: Fallback — budget/execution only
+    "minimax-m2.7:cloud",          # Coding 56.6 — budget option
+    # OpenRouter fallbacks
+    "openrouter:anthropic/claude-sonnet-4",
+    "openrouter:qwen/qwen3-coder:free",
+]
 
 # [chain_overrides.analysis]
 # models = ["deepseek-v3.2:cloud", "openrouter:google/gemini-2.5-flash"]

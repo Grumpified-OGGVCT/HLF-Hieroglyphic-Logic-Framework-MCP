@@ -47,4 +47,24 @@ def register_workflow_benchmark_tools(mcp) -> dict[str, Any]:
 
     tools["hlf_workflow_benchmark"] = hlf_workflow_benchmark
     tools["hlf_workflow_benchmark_custom_task"] = hlf_workflow_benchmark_custom_task
+
+    def _register_sg_aliases(mcp, aliases: dict):
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_bench_workflow": hlf_workflow_benchmark,
+        "sg_bench_workflow_custom": hlf_workflow_benchmark_custom_task,
+    })
+
+    tools["sg_bench_workflow"] = hlf_workflow_benchmark
+    tools["sg_bench_workflow_custom"] = hlf_workflow_benchmark_custom_task
     return tools

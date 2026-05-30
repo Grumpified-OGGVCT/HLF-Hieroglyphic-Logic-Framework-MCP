@@ -147,7 +147,7 @@ These ship second, after core governance. Get aliases with a slightly lower depr
 
 ### 1.3 Experimental DSL Tools → `hlf_` Only (Phase 4, gated)
 
-These tools keep their `hlf_*` names and are ONLY registered when `SWARMGLASS_EXPERIMENTAL=1`. No `sg_` aliases.
+These tools keep their `hlf_*` names and are ONLY registered when `SWARMGLASS_HLF_ENABLED=1`. No `sg_` aliases.
 
 | hlf_ name | Category | Server file |
 |-----------|----------|-------------|
@@ -246,7 +246,7 @@ HLF_MCP/                          # repo root (renamed to SwarmGlass post-Phase 
 │   │   ├── coordinate.py         # sg_coordinate_* tool functions
 │   │   ├── memory.py             # sg_memory_* tool functions
 │   │   └── models.py             # sg_model_* tool functions
-│   └── experimental/             # Layer 3: gated behind SWARMGLASS_EXPERIMENTAL=1
+│   └── experimental/             # Layer 3: gated behind SWARMGLASS_HLF_ENABLED=1
 │       ├── __init__.py           # Raises ImportError if env var not set
 │       ├── dsl.py                # hlf_compile, hlf_format, hlf_lint, hlf_run, ...
 │       ├── translation.py        # hlf_translate_to_hlf, hlf_translate_to_english, ...
@@ -365,11 +365,11 @@ def build_core_context():
     return CoreContext(...)
 
 def build_hlf_context(core_ctx: CoreContext):
-    """Load the DSL stack on top of core. Requires SWARMGLASS_EXPERIMENTAL=1."""
+    """Load the DSL stack on top of core. Requires SWARMGLASS_HLF_ENABLED=1."""
     import os
-    if os.environ.get("SWARMGLASS_EXPERIMENTAL") != "1":
+    if os.environ.get("SWARMGLASS_HLF_ENABLED") != "1":
         raise RuntimeError(
-            "HLF DSL stack requires SWARMGLASS_EXPERIMENTAL=1. "
+            "HLF DSL stack requires SWARMGLASS_HLF_ENABLED=1. "
             "Use build_core_context() for governance-only boot."
         )
     from hlf_mcp.hlf.compiler import HLFCompiler
@@ -436,13 +436,13 @@ def register_experimental_gated(
     func: Callable[..., Any],
     description: str = "",
 ) -> None:
-    """Register a tool under its hlf_* name ONLY if SWARMGLASS_EXPERIMENTAL=1.
+    """Register a tool under its hlf_* name ONLY if SWARMGLASS_HLF_ENABLED=1.
 
     Used for DSL/VM tools that have no sg_ equivalent.
     """
     import os
-    if os.environ.get("SWARMGLASS_EXPERIMENTAL") != "1":
-        _log.debug("Skipping experimental tool %s (SWARMGLASS_EXPERIMENTAL != 1)", hlf_name)
+    if os.environ.get("SWARMGLASS_HLF_ENABLED") != "1":
+        _log.debug("Skipping experimental tool %s (SWARMGLASS_HLF_ENABLED != 1)", hlf_name)
         return
     desc = description or (func.__doc__ or "").strip()
     mcp.tool(name=hlf_name, description=desc)(func)
@@ -622,7 +622,7 @@ def get_env_required(name: str) -> str:
 | `HLF_API_TOKEN` | `SG_API_TOKEN` | Yes, with warning | server_auth.py |
 | `HLF_HKS_EXTERNAL_COMPARATOR_SCRIPT` | `SG_HKS_EXTERNAL_COMPARATOR_SCRIPT` | Yes, with warning | server_memory.py |
 | `HLF_HKS_EXTERNAL_COMPARATOR_TIMEOUT` | `SG_HKS_EXTERNAL_COMPARATOR_TIMEOUT` | Yes, with warning | server_memory.py |
-| `SWARMGLASS_EXPERIMENTAL` | *(new)* | No fallback | All experimental gate sites |
+| `SWARMGLASS_HLF_ENABLED` | *(new)* | No fallback | All experimental gate sites |
 
 ### 5.3 Server Boot Logic Change
 
@@ -643,7 +643,7 @@ mcp = FastMCP(
 _ctx = build_core_context()
 
 # Conditional experimental stack
-if os.environ.get("SWARMGLASS_EXPERIMENTAL") == "1":
+if os.environ.get("SWARMGLASS_HLF_ENABLED") == "1":
     _hlf_ctx = build_hlf_context(_ctx)
     register_experimental_tools(mcp, _hlf_ctx)
 ```
@@ -660,7 +660,7 @@ if os.environ.get("SWARMGLASS_EXPERIMENTAL") == "1":
 |----------|----------|
 | `hlf_*` governance tools | Work normally + emit `DeprecationWarning` on each call |
 | `sg_*` governance tools | Work normally (canonical names) |
-| `hlf_*` DSL tools | Work normally when `SWARMGLASS_EXPERIMENTAL=1` |
+| `hlf_*` DSL tools | Work normally when `SWARMGLASS_HLF_ENABLED=1` |
 | `HLF_*` env vars | Work, emit `DeprecationWarning` if `SG_*` not set |
 | `from hlf_mcp import HLFCompiler` | Works (lazy import triggers DSL load) |
 | `import swarmglass` | Works — zero DSL imports |
@@ -674,7 +674,7 @@ if os.environ.get("SWARMGLASS_EXPERIMENTAL") == "1":
 |----------|----------|
 | `hlf_*` governance tools | Still work but emit `FutureWarning` (stronger than DeprecationWarning) |
 | `sg_*` tools | Only names shown in `sg_observe_tools` (alias list) — `hlf_*` hidden from listing |
-| `hlf_*` experimental tools | Gated behind `SWARMGLASS_EXPERIMENTAL=1` — no change |
+| `hlf_*` experimental tools | Gated behind `SWARMGLASS_HLF_ENABLED=1` — no change |
 | `HLF_*` env vars | Still work but emit `FutureWarning` |
 | Docs | All references use `sg_*` names. `hlf_*` names footnoted as "legacy alias" |
 | CI guard | New CI test: fails if any `register_*_tools()` function registers a governance tool under ONLY `hlf_*` name |
@@ -686,7 +686,7 @@ if os.environ.get("SWARMGLASS_EXPERIMENTAL") == "1":
 | Artifact | Behavior |
 |----------|----------|
 | `hlf_*` governance tool aliases | **REMOVED** — only `sg_*` names work for governance tools |
-| `hlf_*` DSL tools | Still work under `SWARMGLASS_EXPERIMENTAL=1` — never removed |
+| `hlf_*` DSL tools | Still work under `SWARMGLASS_HLF_ENABLED=1` — never removed |
 | `HLF_*` env vars | **REMOVED** — only `SG_*` names resolved |
 | `hlf_mcp/__init__.py` | DSL re-exports removed from `__all__` — only `__version__` remains public |
 | Package rename | `hlf-mcp` → `swarmglass` on PyPI (old name kept as empty shim with deprecation notice) |
@@ -694,7 +694,7 @@ if os.environ.get("SWARMGLASS_EXPERIMENTAL") == "1":
 
 ### Permanent: Experimental Lane
 
-The `hlf_*` DSL tools (compiler, runtime, translator, bytecode, benchmarks) are **never removed**. They live behind `SWARMGLASS_EXPERIMENTAL=1` permanently:
+The `hlf_*` DSL tools (compiler, runtime, translator, bytecode, benchmarks) are **never removed**. They live behind `SWARMGLASS_HLF_ENABLED=1` permanently:
 
 - Not advertised in default tool listings
 - Not documented in main README (only in `docs/HLF_EXPERIMENTAL.md`)
@@ -712,13 +712,13 @@ The `hlf_*` DSL tools (compiler, runtime, translator, bytecode, benchmarks) are 
 - [ ] **G3.** Create `swarmglass/` package with `__init__.py`, `_shim.py`, `_env.py`
 - [ ] **G4.** Create `swarmglass/core/` with domain stubs (observe.py, validate.py, audit.py, secure.py)
 - [ ] **G5.** Add `register_aliased()` calls in all governance `register_*_tools()` functions
-- [ ] **G6.** Gate all DSL-only `@mcp.tool()` registrations behind `SWARMGLASS_EXPERIMENTAL=1`
+- [ ] **G6.** Gate all DSL-only `@mcp.tool()` registrations behind `SWARMGLASS_HLF_ENABLED=1`
 - [ ] **G7.** Replace all `os.environ.get("HLF_*")` with `get_env("SG_*")` in server code
 - [ ] **G8.** Update `server.py` to boot core context by default, experimental on flag
 - [ ] **G9.** Create `tests/test_shim_migration.py`:
   - Verify `import swarmglass` does not load `hlf_mcp.hlf.compiler` into `sys.modules`
   - Verify all governance `hlf_*` tools have corresponding `sg_*` aliases
-  - Verify `SWARMGLASS_EXPERIMENTAL=0` suppresses DSL tools
+  - Verify `SWARMGLASS_HLF_ENABLED=0` suppresses DSL tools
   - Verify `hlf_*` governance tools emit `DeprecationWarning`
   - Verify `HLF_*` env vars fall back correctly with warning
 

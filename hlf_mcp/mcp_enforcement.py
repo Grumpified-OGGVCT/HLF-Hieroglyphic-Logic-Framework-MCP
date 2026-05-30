@@ -13,6 +13,7 @@ ENFORCEMENT_STATUS = "mcp_enforcement_rejected"
 SAFE_BOOTSTRAP_TOOLS: frozenset[str] = frozenset(
     {
         "hlf_do",
+        "sg_orchestrate",
         "hlf_translate_to_hlf",
         "hlf_governed_swarm_mechanics",
         "hlf_translate_repair",
@@ -44,6 +45,36 @@ SAFE_BOOTSTRAP_TOOLS: frozenset[str] = frozenset(
         "hlf_swarm_progress",
         "hlf_swarm_witness",
         "hlf_swarm_verify",
+        # ── SwarmGlass governance tools (sg_* variants) ──────────────────
+        # These ARE the governance framework. Requiring a governance proof
+        # to call governance tools would be a bootstrap deadlock.
+        # Memory
+        "sg_memory_store",
+        "sg_memory_governed_recall",
+        "sg_memory_query",
+        "sg_memory_dream_run",
+        "sg_memory_register_evidence_bundle",
+        "sg_memory_hks_research",
+        # Overwatch
+        "sg_overwatch_scan",
+        "sg_overwatch_health",
+        "sg_overwatch_status",
+        "sg_overwatch_terminate",
+        # Secure
+        "sg_secure_secret_store",
+        "sg_secure_secret_retrieve",
+        "sg_secure_secret_rotate",
+        # Coordinate
+        "sg_coordinate_orchestration_contract",
+        "sg_coordinate_handoff_chain",
+        # Audit
+        "sg_audit_event_log",
+        "sg_audit_merkle_verify",
+        "sg_audit_evidence_show",
+        # Model
+        "sg_model_version_check",
+        # Observe
+        "sg_observe_drift",
     }
 )
 

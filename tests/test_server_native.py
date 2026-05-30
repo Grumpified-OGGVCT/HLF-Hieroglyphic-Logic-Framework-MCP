@@ -30,7 +30,7 @@ class FakeMcp:
     """Minimal fake MCP whose tool decorator is a no-op passthrough."""
 
     @staticmethod
-    def tool():
+    def tool(**kwargs):
         def decorator(fn):
             return fn
         return decorator

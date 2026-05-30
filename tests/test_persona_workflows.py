@@ -81,7 +81,13 @@ def test_planner_has_defined_permissions() -> None:
     meta = resolve_persona_runtime_metadata("strategist")
     assert meta is not None
     assert meta["persona"] == "strategist"
-    assert meta["runtime_authority"] is False
+    assert meta["runtime_authority"] is True  # sovereign tier default
+    assert meta["authority_model"] == "tier_gated"
+
+    # Hearth tier should have no runtime authority
+    advisory = resolve_persona_runtime_metadata("strategist", active_tier="hearth")
+    assert advisory is not None
+    assert advisory["runtime_authority"] is False
 
     from hlf_mcp.instinct.lifecycle import _task_type_to_role
     assert _task_type_to_role("analyze") == "strategist"
@@ -129,18 +135,26 @@ def test_scribe_has_defined_permissions() -> None:
 
 
 def test_operator_is_only_authoritative_role() -> None:
-    """Operator is the only persona with runtime_authority; all others are advisory."""
+    """Persona runtime authority is tier-gated: authoritative at sovereign, advisory at hearth/forge."""
     from hlf_mcp.persona_runtime import resolve_persona_runtime_metadata
 
-    # All personas in the runtime catalog have runtime_authority=False
+    # At hearth tier, all personas are advisory (no runtime authority)
     for role in ["strategist", "steward", "sentinel", "herald",
                  "chronicler", "cove"]:
-        meta = resolve_persona_runtime_metadata(role)
+        meta = resolve_persona_runtime_metadata(role, active_tier="hearth")
         if meta:
-            assert meta["runtime_authority"] is False, f"{role} should not have runtime authority"
+            assert meta["runtime_authority"] is False, f"{role} should be advisory at hearth"
+            assert meta["authority_level"] == "advisory", f"{role} should be advisory at hearth"
 
-    # Operator is not in the runtime catalog (it's the human gate),
-    # but is recognized by persona_contract
+    # At sovereign tier, personas have runtime authority
+    for role in ["strategist", "steward", "sentinel", "herald",
+                 "chronicler", "cove"]:
+        meta = resolve_persona_runtime_metadata(role, active_tier="sovereign")
+        if meta:
+            assert meta["runtime_authority"] is True, f"{role} should be authoritative at sovereign"
+            assert meta["authority_level"] == "authoritative", f"{role} should be authoritative at sovereign"
+
+    # Operator (human gate) is not in the runtime catalog
     from hlf_mcp.persona_contract import load_persona_matrix
     matrix = load_persona_matrix()
     valid_personas = set(matrix.get("personas", {})) | {"operator"}
@@ -373,10 +387,12 @@ def test_build_persona_doctrine_report_has_roles() -> None:
 
     personas = report.get("personas") if isinstance(report.get("personas"), list) else []
     assert len(personas) > 0
-    # Check that the authority_boundary confirms operator is the only authoritative role
+    # Check that the authority_boundary reflects tier-gated model
     boundary = report.get("authority_boundary")
     assert isinstance(boundary, dict)
-    assert boundary.get("operator_promotion_required") is True
+    assert isinstance(boundary.get("live_packaged_runtime_authority"), bool)
+    assert "active_tier" in boundary
+    assert "authority_level" in boundary
     # Operator may not be in persona catalog (it's the human gate), but the doctrine
     # report should have governance personas like strategist, sentinel, cove, etc.
     persona_names = {p.get("persona") for p in personas if isinstance(p, dict)}
@@ -468,11 +484,12 @@ def test_gallery_markdown_references_persona_doctrine() -> None:
 
 
 def test_persona_doctrine_authority_boundary_present() -> None:
-    """Persona doctrine report includes authority boundary."""
+    """Persona doctrine report includes tier-gated authority boundary."""
     from hlf_mcp.server_resources import _build_persona_doctrine_report
 
     report = _build_persona_doctrine_report(None)
     boundary = report.get("authority_boundary")
     assert isinstance(boundary, dict), "Missing authority_boundary"
-    assert boundary.get("live_packaged_runtime_authority") is False
-    assert boundary.get("operator_promotion_required") is True
+    assert isinstance(boundary.get("live_packaged_runtime_authority"), bool)
+    assert "authority_level" in boundary
+    assert "active_tier" in boundary

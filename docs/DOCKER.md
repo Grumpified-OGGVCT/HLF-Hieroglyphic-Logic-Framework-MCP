@@ -178,8 +178,8 @@ docker run --rm -p 8000:8000 \
 ## Building From Source
 
 ```bash
-git clone https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP.git
-cd HLF-Hieroglyphic-Logic-Framework-MCP
+git clone https://github.com/Grumpified-OGGVCT/SwarmGlass-MCP.git
+cd SwarmGlass-MCP
 docker build -t hlf-mcp:latest .
 ```
 

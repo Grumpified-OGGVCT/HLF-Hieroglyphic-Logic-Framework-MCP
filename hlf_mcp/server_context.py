@@ -312,7 +312,7 @@ class ServerContext:
     approval_ledger: ApprovalLedger
     audit_chain: AuditChain
     daemon_manager: DaemonManager
-    # DSL components — None when SWARMGLASS_EXPERIMENTAL=0
+    # DSL components — None when SWARMGLASS_HLF_ENABLED=0
     compiler: HLFCompiler | None = None
     formatter: HLFFormatter | None = None
     linter: HLFLinter | None = None
@@ -2495,6 +2495,9 @@ class ServerContext:
             allowed_entry_kinds.add("witness_observation")
         if include_weekly_artifacts:
             allowed_entry_kinds.add("weekly_artifact")
+        # Always include general-purpose facts — the most common entry kind.
+        # Without this, facts stored via sg_memory_store are invisible to governed recall.
+        allowed_entry_kinds.add("fact")
 
         recalled = self.memory_store.query(
             query,
@@ -3459,7 +3462,7 @@ def build_server_context() -> ServerContext:
     )
 
     # DSL components — only when explicitly enabled
-    if get_env("SWARMGLASS_EXPERIMENTAL", "0") == "1":
+    if get_env("SWARMGLASS_HLF_ENABLED", "0") == "1":
         from hlf_mcp.hlf.compiler import HLFCompiler  # noqa: PLC0415
         from hlf_mcp.hlf.runtime import HLFRuntime    # noqa: PLC0415
         from hlf_mcp.hlf.bytecode import HLFBytecode  # noqa: PLC0415

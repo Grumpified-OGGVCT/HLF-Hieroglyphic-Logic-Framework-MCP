@@ -1,6 +1,8 @@
 """
 Hybrid RAG Pipeline — BM25 + Vector + Cross-Encoder Reranker.
 
+Canonical implementation (794 lines) used by RAGService.
+
 Provides:
 - BM25 index: TF-IDF BM25 keyword search via rank_bm25 (or internal fallback)
 - Vector store: ChromaDB semantic search (or in-memory fallback)
@@ -9,6 +11,10 @@ Provides:
 - Index management: add, remove, clear with thread safety
 
 Thread-safe with RWLock.
+
+Note: A smaller parallel implementation (487 lines) exists at
+hlf_mcp/rag/hybrid_rag.py, preserved for potential future use in the rag/
+subpackage. That file is not currently imported by any production code.
 """
 
 from __future__ import annotations

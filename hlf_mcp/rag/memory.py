@@ -308,6 +308,12 @@ HKS_DOMAINS = {
     "frontend",
     "backend",
     "infrastructure",
+    "recursivemas",
+    "governance",
+    "memory",
+    "architecture",
+    "orchestration",
+    "persona",
 }
 HKS_MEMORY_STRATA = {"working", "episodic", "semantic", "provenance", "archive"}
 HKS_STORAGE_TIERS = {"hot", "warm", "cold"}
@@ -323,6 +329,7 @@ _EPISODIC_ENTRY_KINDS = {
     "witness_observation",
     "dream_finding",
     "dream_cycle",
+    "hks_research_task",
 }
 _PROVENANCE_ENTRY_KINDS = {
     "weekly_artifact",

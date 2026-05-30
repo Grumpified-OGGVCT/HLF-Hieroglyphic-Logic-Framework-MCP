@@ -18,6 +18,7 @@ __all__ = [
     "run_provenance_viewer_demo",
     "run_operator_dashboard_demo",
     "generate_dashboard_json",
+    "build_dashboard_data_live",
     "TelemetryCollector",
     "TelemetrySnapshot",
     "create_default_collector",
@@ -60,6 +61,7 @@ from hlf_mcp.gallery.manifest_viewer import demo as run_manifest_viewer_demo
 from hlf_mcp.gallery.provenance_viewer import demo as run_provenance_viewer_demo
 from hlf_mcp.gallery.operator_dashboard import demo as run_operator_dashboard_demo
 from hlf_mcp.gallery.operator_dashboard import generate_dashboard_json
+from hlf_mcp.gallery.operator_dashboard import build_dashboard_data_live
 from hlf_mcp.gallery.operator_dashboard import (
     compute_alert_threshold,
     compute_alert_color,

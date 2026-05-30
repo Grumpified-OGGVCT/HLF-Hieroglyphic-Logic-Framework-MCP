@@ -5,10 +5,14 @@ Provides backward-compatible env var resolution: old HLF_* names still work
 but emit DeprecationWarning, steering users toward new SWARMGLASS_* names.
 Mappings are derived from SHIM_DESIGN.md section 5.2.
 
+On import, automatically loads .env from the project root and sets both
+SWARMGLASS_* and HLF_* equivalents so all internal code (which reads HLF_*)
+and external config (.env uses SWARMGLASS_*) work seamlessly.
+
 Usage:
     from hlf_mcp.env_migration import get_env
 
-    experimental = get_env("SWARMGLASS_EXPERIMENTAL", "0")
+    experimental = get_env("SWARMGLASS_HLF_ENABLED", "0")
     transport    = get_env("SWARMGLASS_TRANSPORT", "stdio")
 """
 
@@ -17,6 +21,7 @@ from __future__ import annotations
 import logging
 import os
 import warnings
+from pathlib import Path
 
 _log = logging.getLogger(__name__)
 
@@ -47,9 +52,84 @@ ENV_VAR_MIGRATIONS: dict[str, str] = {
     "HLF_HKS_EXTERNAL_COMPARATOR_SCRIPT":       "SWARMGLASS_HKS_EXTERNAL_COMPARATOR_SCRIPT",
     "HLF_HKS_EXTERNAL_COMPARATOR_TIMEOUT":      "SWARMGLASS_HKS_EXTERNAL_COMPARATOR_TIMEOUT",
     # Experimental mode (with HLF_EXP shorthand)
-    "HLF_EXPERIMENTAL_MODE":                    "SWARMGLASS_EXPERIMENTAL",
-    "HLF_EXP":                                  "SWARMGLASS_EXPERIMENTAL",
+    "HLF_EXPERIMENTAL_MODE":                    "SWARMGLASS_HLF_ENABLED",
+    "HLF_EXP":                                  "SWARMGLASS_HLF_ENABLED",
 }
+
+# ── Reverse mapping: NEW → OLD (for auto-populating HLF_* from SWARMGLASS_*) ─
+_NEW_TO_OLD: dict[str, list[str]] = {}
+for _old, _new in ENV_VAR_MIGRATIONS.items():
+    _NEW_TO_OLD.setdefault(_new, []).append(_old)
+
+
+def _find_project_root() -> Path | None:
+    """Walk up from this file looking for a .env or setup_wizard.py."""
+    candidate = Path(__file__).resolve().parent.parent
+    for _ in range(6):
+        if (candidate / ".env").is_file() or (candidate / "setup_wizard.py").is_file():
+            return candidate
+        parent = candidate.parent
+        if parent == candidate:
+            break
+        candidate = parent
+    return None
+
+
+def _parse_dotenv(path: Path) -> dict[str, str]:
+    """Parse a .env file (simple KEY=VALUE parser, handles quotes and comments)."""
+    result: dict[str, str] = {}
+    if not path.is_file():
+        return result
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        # Strip surrounding quotes
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        if key and value:
+            result[key] = value
+    return result
+
+
+def _load_env_file() -> None:
+    """Load .env into os.environ, setting both SWARMGLASS_* and HLF_* equivalents.
+
+    Called automatically at module import time. Safe to call multiple times —
+    only sets vars that aren't already in the environment (env vars take priority
+    over .env, per 12-factor convention).
+    """
+    root = _find_project_root()
+    if root is None:
+        return
+    env_path = root / ".env"
+    if not env_path.is_file():
+        return
+
+    dotenv_vars = _parse_dotenv(env_path)
+    if not dotenv_vars:
+        return
+
+    for key, value in dotenv_vars.items():
+        # Only set if not already in the real environment
+        if key not in os.environ:
+            os.environ[key] = value
+
+        # Auto-populate HLF_* equivalents for SWARMGLASS_* vars
+        if key.startswith("SWARMGLASS_"):
+            old_names = _NEW_TO_OLD.get(key, [])
+            for old_name in old_names:
+                if old_name not in os.environ:
+                    os.environ[old_name] = value
+
+
+# ── Auto-load .env at import time ───────────────────────────────────────────
+_load_env_file()
 
 
 def get_env(var_name: str, default: str = "") -> str:
@@ -87,7 +167,10 @@ def get_env(var_name: str, default: str = "") -> str:
     if new_value is not None:
         if old_values:
             # Both new and old set -- new wins, warn about ignored old values
+            # EXCEPT when they're identical (auto-populated from .env loading)
             for old_name, old_val in old_values.items():
+                if old_val == new_value:
+                    continue  # identical values — silent, .env auto-population
                 warnings.warn(
                     f"Both {var_name} and {old_name} are set. "
                     f"Using {var_name}={new_value!r} "

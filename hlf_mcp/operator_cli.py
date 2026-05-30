@@ -15,10 +15,13 @@ from hlf_mcp.hlf.formal_verifier import FormalVerifier
 from hlf_mcp.hlf.compiler import HLFCompiler
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(
+    prog: str = "hlf-operator",
+    description: str = "Operator-facing packaged HLF actions for local shells and extension bridges.",
+) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="hlf-operator",
-        description="Operator-facing packaged HLF actions for local shells and extension bridges.",
+        prog=prog,
+        description=description,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -455,8 +458,15 @@ def _resource_command(args: argparse.Namespace) -> int:
     return _render_json_resource(ctx, args.uri, as_json=bool(args.json))
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = _build_parser()
+def main(
+    argv: list[str] | None = None,
+    prog: str | None = None,
+    description: str | None = None,
+) -> int:
+    parser = _build_parser(
+        prog=prog or "hlf-operator",
+        description=description or "Operator-facing packaged HLF actions for local shells and extension bridges.",
+    )
     args = parser.parse_args(argv)
     if args.command == "memory-govern" and args.fact_id is None and not args.sha256:
         parser.error("memory-govern requires --fact-id or --sha256")
@@ -508,6 +518,11 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.error(f"unknown command: {args.command}")
     return 2
+
+
+def sg_main(argv: list[str] | None = None) -> int:
+    """SwarmGlass operator entry point — delegates to main() with sg-operator branding."""
+    return main(argv=argv, prog="sg-operator", description="SwarmGlass Operator CLI")
 
 
 if __name__ == "__main__":

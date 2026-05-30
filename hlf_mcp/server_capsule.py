@@ -1428,6 +1428,31 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         except Exception as exc:
             return {"status": "error", "error": str(exc)}
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_coordinate_capsule_validate": hlf_capsule_validate,
+        "sg_coordinate_capsule_run": hlf_capsule_run,
+        "sg_validate_pointer": hlf_pointer_validate,
+        "sg_memory_host_functions": hlf_host_functions,
+        "sg_coordinate_host_call": hlf_host_call,
+        "sg_coordinate_capsule_review_queue": hlf_capsule_review_queue,
+        "sg_coordinate_capsule_review_decide": hlf_capsule_review_decide,
+        "sg_coordinate_tool_list": hlf_tool_list,
+        "sg_validate_similarity_gate": hlf_similarity_gate,
+    })
+
     return {
         "hlf_capsule_validate": hlf_capsule_validate,
         "hlf_capsule_run": hlf_capsule_run,
@@ -1438,4 +1463,13 @@ def register_capsule_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_host_call": hlf_host_call,
         "hlf_tool_list": hlf_tool_list,
         "hlf_similarity_gate": hlf_similarity_gate,
+        "sg_coordinate_capsule_validate": hlf_capsule_validate,
+        "sg_coordinate_capsule_run": hlf_capsule_run,
+        "sg_validate_pointer": hlf_pointer_validate,
+        "sg_memory_host_functions": hlf_host_functions,
+        "sg_coordinate_host_call": hlf_host_call,
+        "sg_coordinate_capsule_review_queue": hlf_capsule_review_queue,
+        "sg_coordinate_capsule_review_decide": hlf_capsule_review_decide,
+        "sg_coordinate_tool_list": hlf_tool_list,
+        "sg_validate_similarity_gate": hlf_similarity_gate,
     }

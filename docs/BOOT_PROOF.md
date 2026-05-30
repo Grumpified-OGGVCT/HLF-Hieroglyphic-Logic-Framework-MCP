@@ -104,7 +104,7 @@ def build_server_context() -> ServerContext:
 
 ---
 
-## 3. What SWARMGLASS_EXPERIMENTAL=0 Boot Looks Like
+## 3. What SWARMGLASS_HLF_ENABLED=0 Boot Looks Like
 
 ### Available Tools (Experimental Disabled)
 
@@ -242,7 +242,7 @@ class CoreContext:
 ```python
 @dataclass
 class ServerContext(CoreContext):
-    """Full context including DSL/VM when SWARMGLASS_EXPERIMENTAL=1."""
+    """Full context including DSL/VM when SWARMGLASS_HLF_ENABLED=1."""
     compiler: Any = None       # HLFCompiler — only when experimental
     formatter: Any = None
     linter: Any = None
@@ -256,7 +256,7 @@ class ServerContext(CoreContext):
 
 ```python
 def build_server_context() -> ServerContext:
-    """Build context. DSL components only when SWARMGLASS_EXPERIMENTAL=1."""
+    """Build context. DSL components only when SWARMGLASS_HLF_ENABLED=1."""
     align_governor = AlignGovernor()
     
     ctx = ServerContext(
@@ -274,7 +274,7 @@ def build_server_context() -> ServerContext:
         # ... session dicts ...
     )
     
-    if os.environ.get("SWARMGLASS_EXPERIMENTAL", "0") == "1":
+    if os.environ.get("SWARMGLASS_HLF_ENABLED", "0") == "1":
         # Lazy — only imports DSL when explicitly enabled
         from hlf_mcp.hlf.compiler import HLFCompiler
         from hlf_mcp.hlf.runtime import HLFRuntime
@@ -310,7 +310,7 @@ REGISTERED_TOOLS.update(register_prompts_tools(mcp))
 REGISTERED_TOOLS.update(register_enterprise_tools(mcp, _ctx))
 
 # DSL-dependent tools — only when experimental
-if os.environ.get("SWARMGLASS_EXPERIMENTAL", "0") == "1":
+if os.environ.get("SWARMGLASS_HLF_ENABLED", "0") == "1":
     REGISTERED_TOOLS.update(register_core_tools(mcp, _ctx))
     REGISTERED_TOOLS.update(register_translation_tools(mcp, _ctx))
     REGISTERED_TOOLS.update(register_verifier_tools(mcp, _ctx))
@@ -343,7 +343,7 @@ if os.environ.get("SWARMGLASS_EXPERIMENTAL", "0") == "1":
 
 ### Minimal Viable Phase 2 Fix
 
-The **smallest change** that enables `SWARMGLASS_EXPERIMENTAL=0` boot is:
+The **smallest change** that enables `SWARMGLASS_HLF_ENABLED=0` boot is:
 
 1. Make `build_server_context()` conditional (server_context.py line 3420)
 2. Make tool registration conditional (server.py lines 97–112)

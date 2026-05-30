@@ -3,7 +3,7 @@
 Boot Path Proof Script — Gate 1, Artifact 7.
 
 Verifies that the HLF_MCP server CAN boot without importing the
-HLF DSL/VM/compiler stack when SWARMGLASS_EXPERIMENTAL=0.
+HLF DSL/VM/compiler stack when SWARMGLASS_HLF_ENABLED=0.
 
 Part A:  Documents the CURRENT state (all imports eager — DSL leaks).
 Part B:  Shows that even direct submodule imports trigger package init pollution.
@@ -30,7 +30,7 @@ if str(_REPO_ROOT) not in sys.path:
 # Configuration
 # ══════════════════════════════════════════════════════════════════════════════
 
-os.environ["SWARMGLASS_EXPERIMENTAL"] = "0"
+os.environ["SWARMGLASS_HLF_ENABLED"] = "0"
 
 # The DSL modules we want to prove are NOT loaded.
 DSL_MODULES = frozenset({
@@ -447,9 +447,9 @@ def part_d_dsl_check():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def main() -> int:
-    print(bold("HLF_MCP Boot Path Proof — SWARMGLASS_EXPERIMENTAL=0"))
+    print(bold("HLF_MCP Boot Path Proof — SWARMGLASS_HLF_ENABLED=0"))
     print(f"  Repo root: {_REPO_ROOT}")
-    print(f"  SWARMGLASS_EXPERIMENTAL={os.environ.get('SWARMGLASS_EXPERIMENTAL', 'unset')}")
+    print(f"  SWARMGLASS_HLF_ENABLED={os.environ.get('SWARMGLASS_HLF_ENABLED', 'unset')}")
     print()
 
     # Part A: Document current pollution via ServerContext import
@@ -484,7 +484,7 @@ def main() -> int:
         print(green(bold("  ✓ VERDICT: Governance source code is DSL-free.")))
         print(green("    The pollution comes ONLY from package __init__.py files."))
         print(green("    Refactoring plan in docs/BOOT_PROOF.md is sound."))
-        print(green("    SWARMGLASS_EXPERIMENTAL=0 boot is VIABLE within Phase 2."))
+        print(green("    SWARMGLASS_HLF_ENABLED=0 boot is VIABLE within Phase 2."))
         return 0
     elif dirty_count > 0:
         print(yellow(bold(f"  ⚠ {dirty_count} governance files import DSL modules.")))

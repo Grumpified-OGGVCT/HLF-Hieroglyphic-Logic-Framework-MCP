@@ -95,5 +95,5 @@ The vertical slice proof (`docs/swarmglass_vertical_slice.py`) works around this
 
 **Mitigation path:** 
 1. Refactor `hlf_mcp/__init__.py` to use lazy imports (Phase 2)
-2. Split `ServerContext` into `CoreContext` (governance/audit/memory only) and `HlfContext` (adds compiler/runtime/benchmark) gated behind `SWARMGLASS_EXPERIMENTAL=1`
+2. Split `ServerContext` into `CoreContext` (governance/audit/memory only) and `HlfContext` (adds compiler/runtime/benchmark) gated behind `SWARMGLASS_HLF_ENABLED=1`
 3. Move bridge modules to a separate `swarmglass/` namespace that doesn't trigger `hlf_mcp/__init__.py`

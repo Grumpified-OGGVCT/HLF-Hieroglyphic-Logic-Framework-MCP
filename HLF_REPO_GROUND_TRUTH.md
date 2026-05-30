@@ -41,7 +41,7 @@ HLF (Hieroglyphic Logic Framework) is a **deterministic LALR(1) parsed language*
 | Repo | Role | Branch |
 |------|------|--------|
 | `Sovereign_Agentic_OS_with_HLF` | **Upstream source authority** — original full architecture | `main` |
-| `HLF-Hieroglyphic-Logic-Framework-MCP` | **Packaged MCP extraction** — this repo | `rescue/governed-review-recovery-2026-03-21` |
+| `SwarmGlass-MCP` | **Packaged MCP extraction** — this repo | `rescue/governed-review-recovery-2026-03-21` |
 
 Source material from the upstream repo lives in `hlf_source/` within this checkout. Some constitutive features were never ported (e.g., `CapsuleInterpreter` from `hlf_source/hlf/intent_capsule.py`). **Always check `hlf_source/` before declaring something "not in the design."**
 

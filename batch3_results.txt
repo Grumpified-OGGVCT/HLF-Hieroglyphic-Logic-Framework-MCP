@@ -1,0 +1,47 @@
+................FFFFFFFF................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 15%]
+........................................................................ [ 18%]
+........................................................................ [ 22%]
+........................................................................ [ 26%]
+........................................................................ [ 30%]
+........................................................................ [ 34%]
+........................................................................ [ 37%]
+......................................FFF............................... [ 41%]
+........................................................................ [ 45%]
+........................................................................ [ 49%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 60%]
+...............FF....................................................... [ 64%]
+........................................................................ [ 68%]
+........................................................................ [ 72%]
+.................FF..............F...................................... [ 75%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+......................................................................F. [ 87%]
+........................................................................ [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 98%]
+........................                                                 [100%]Running teardown with pytest sessionfinish...
+
+=========================== short test summary info ===========================
+FAILED tests/test_mcp_client_ci.py::TestStdioMCPClient::test_list_tools_and_compile_and_run
+FAILED tests/test_mcp_client_ci.py::TestStdioMCPClient::test_server_responds_within_timeout
+FAILED tests/test_mcp_client_ci.py::TestHTTPMCPClient::test_auth_and_list_tools_and_call_tool
+FAILED tests/test_mcp_client_ci.py::TestHTTPMCPClient::test_unauthorized_without_token
+FAILED tests/test_mcp_client_ci.py::TestHTTPMCPClient::test_unauthorized_with_wrong_token
+FAILED tests/test_mcp_client_ci.py::TestEnterpriseToolsVisibility::test_hearth_tier_listtools_works
+FAILED tests/test_mcp_client_ci.py::TestEnterpriseToolsVisibility::test_sovereign_tier_includes_sovereign_tools
+FAILED tests/test_mcp_client_ci.py::TestEnterpriseToolsVisibility::test_forge_tier_includes_forge_but_not_sovereign
+FAILED tests/test_native_onboarding.py::test_native_agent_prompt_and_first_contact_resources_are_registered
+FAILED tests/test_native_onboarding.py::test_native_agent_loop_is_discoverable_without_source_edits
+FAILED tests/test_native_onboarding.py::test_hlf_native_agent_prompt_content_or_resource_fallback_is_non_empty
+FAILED tests/test_p1_risk_surfaces.py::TestServerCoreCompileErrorShaping::test_hlf_compile_shapes_compile_error
+FAILED tests/test_p1_risk_surfaces.py::TestServerCoreCompileErrorShaping::test_hlf_compile_shapes_generic_exception
+FAILED tests/test_proof_artifacts.py::test_verify_inductive_base_case_arithmetic
+FAILED tests/test_proof_artifacts.py::test_verify_inductive_step_case_arithmetic
+FAILED tests/test_proof_artifacts.py::test_inductive_proof_depth_greater_than_lemma
+FAILED tests/test_real_workflow_benchmarks.py::test_real_workflow_benchmark_tool_persists_report_resource
+17 failed, 1879 passed in 541.08s (0:09:01)

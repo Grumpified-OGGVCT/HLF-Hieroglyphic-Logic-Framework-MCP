@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use the RecursiveMAS framework in this project, please cite the paper below."
+title: "Recursive Multi-Agent Systems"
+authors:
+  - family-names: Yang
+    given-names: Xiyuan
+  - family-names: Zou
+    given-names: Jiaru
+  - family-names: Pan
+    given-names: Rui
+  - family-names: Qiu
+    given-names: Ruizhong
+  - family-names: Lu
+    given-names: Pan
+  - family-names: Diao
+    given-names: Shizhe
+  - family-names: Jiang
+    given-names: Jindong
+  - family-names: Tong
+    given-names: Hanghang
+  - family-names: Zhang
+    given-names: Tong
+  - family-names: Buehler
+    given-names: Markus J.
+  - family-names: He
+    given-names: Jingrui
+  - family-names: Zou
+    given-names: James
+year: 2026
+eprint: "2604.25917"
+archive-prefix: arXiv
+primary-class: cs.AI
+url: "https://arxiv.org/abs/2604.25917"
+repository-code: "https://github.com/RecursiveMAS/RecursiveMAS"

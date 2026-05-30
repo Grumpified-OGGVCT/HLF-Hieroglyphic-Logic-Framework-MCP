@@ -84,6 +84,8 @@ def _server_env(**overrides: str) -> dict[str, str]:
     env.setdefault("PYTHONPATH", str(_REPO_ROOT))
     # Skip the ~16-120 s doc self-index at startup — CI tests don't need it
     env.setdefault("HLF_SKIP_SELF_INDEX", "1")
+    # Enable HLF core tools (compile, run, etc.) — required for CI tests
+    env["SWARMGLASS_HLF_ENABLED"] = "1"
     env.update(overrides)
     return env
 

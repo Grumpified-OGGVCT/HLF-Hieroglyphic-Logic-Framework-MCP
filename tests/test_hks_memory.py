@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
+
+# Prevent .env auto-loading from setting HLF_MEMORY_DB=db/hlf_memory.db,
+# which would make all RAGMemory() instances share a single file-backed DB
+# and leak state between tests.  Must be set BEFORE importing server.
+os.environ["HLF_MEMORY_DB"] = ":memory:"
+os.environ["SWARMGLASS_MEMORY_DB"] = ":memory:"
 
 import pytest
 
@@ -1203,3 +1210,98 @@ def test_hks_external_compare_returns_quarantined_bridge_contract() -> None:
     assert result["requires_local_recheck"] is True
     assert result["admission_authority"] == "local_hks_only"
     assert result["comparator_results"][0]["authority"] == "external_comparator"
+
+
+def test_hks_research_recalls_existing_governed_exemplar() -> None:
+    unique = uuid.uuid4().hex
+
+    server.hlf_hks_capture(
+        problem=f"persona authority tier gating {unique}",
+        validated_solution="Use three-tier authority gating with persona roles.",
+        domain="persona",
+        solution_kind="architecture-pattern",
+        tags=[unique],
+        tests=[{"name": "pytest", "passed": True, "exit_code": 0, "counts": {"passed": 1}}],
+    )
+
+    result = server.sg_memory_hks_research(
+        problem=f"persona authority tier gating {unique}",
+        domain="persona",
+        solution_kind="architecture-pattern",
+    )
+
+    assert result["status"] == "ok"
+    assert result["research_phase"] == "recalled"
+    assert result["result_count"] >= 1
+    assert result["results"][0]["domain"] == "persona"
+    assert "governed result" in result["operator_summary"]
+
+
+def test_hks_research_creates_task_when_nothing_known() -> None:
+    unique = uuid.uuid4().hex
+
+    result = server.sg_memory_hks_research(
+        problem=f"unknown quantum flux capacitor design {unique}",
+        domain="governance",
+        solution_kind="research-inquiry",
+        tags=[unique],
+    )
+
+    assert result["status"] == "ok"
+    assert result["research_phase"] == "task_created"
+    assert result["recall_result_count"] == 0
+    assert result["task_entry_kind"] == "hks_research_task"
+    assert result["task_fact_id"] is not None
+    assert result["task_sha256"] is not None
+    assert result["task_pointer"].startswith("&hks_research_tasks-")
+    assert result["fresh_until"] is not None
+    assert result["queryable_via"] == 'sg_memory_query(entry_kind="hks_research_task")'
+    assert "hks_research_task" in result["operator_summary"]
+    assert "no governed results" in result["operator_summary"].lower()
+
+
+def test_hks_research_task_is_queryable() -> None:
+    unique = uuid.uuid4().hex
+
+    server.sg_memory_hks_research(
+        problem=f"governance recall strategy {unique}",
+        domain="governance",
+        solution_kind="research-inquiry",
+    )
+
+    queried = server.hlf_memory_query(
+        query=f"governance recall strategy {unique}",
+        entry_kind="hks_research_task",
+        include_stale=True,
+    )
+
+    assert queried["count"] >= 1
+    assert any(
+        result["entry_kind"] == "hks_research_task" and result["domain"] == "governance"
+        for result in queried["results"]
+    )
+
+
+def test_hks_research_new_domains_accepted() -> None:
+    for domain in ("governance", "memory", "architecture", "orchestration", "persona"):
+        from hlf_mcp.rag.memory import HKSValidatedExemplar, HKSProvenance
+
+        exemplar = HKSValidatedExemplar(
+            problem=f"Test {domain} domain acceptance",
+            validated_solution=f"Validated solution in {domain} domain.",
+            domain=domain,
+            solution_kind="repair-pattern",
+            provenance=HKSProvenance(
+                source_type="test",
+                source="tests.test_hks_memory",
+                collector="pytest",
+                collected_at="2026-05-30T00:00:00+00:00",
+            ),
+            evaluation={
+                "authority": "local_hks",
+                "promotion_eligible": True,
+            },
+        )
+        content = exemplar.to_content()
+        assert domain in content
+        assert exemplar.domain == domain

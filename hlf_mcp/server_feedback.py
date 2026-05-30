@@ -18,7 +18,7 @@ except Exception:  # pragma: no cover
     FastMCP = None  # type: ignore[misc,assignment]
 
 # Default repo — can be overridden via env or parameter
-DEFAULT_REPO = "Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP"
+DEFAULT_REPO = "Grumpified-OGGVCT/SwarmGlass-MCP"
 
 
 def _run_gh(args: list[str]) -> dict[str, Any]:
@@ -63,7 +63,7 @@ def register_feedback_tools(mcp: FastMCP) -> dict[str, Any]:
             title: Issue title (required, max 256 chars).
             body: Detailed description of the feedback, bug, or feature request.
             labels: Optional list of labels (e.g., ["bug", "feedback"]).
-            repo: Optional target repo (default: Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP).
+            repo: Optional target repo (default: Grumpified-OGGVCT/SwarmGlass-MCP).
         """
         warnings.warn("hlf_feedback_submit is deprecated, use sg_observe_feedback_submit instead", DeprecationWarning, stacklevel=2)
         target = _repo_arg(repo)
@@ -113,7 +113,7 @@ def register_feedback_tools(mcp: FastMCP) -> dict[str, Any]:
         Args:
             state: Filter by state — "open", "closed", or "all".
             limit: Maximum number of issues to return (1–100).
-            repo: Optional target repo (default: Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP).
+            repo: Optional target repo (default: Grumpified-OGGVCT/SwarmGlass-MCP).
         """
         warnings.warn("hlf_feedback_list is deprecated, use sg_observe_feedback_list instead", DeprecationWarning, stacklevel=2)
         target = _repo_arg(repo)
@@ -134,7 +134,7 @@ def register_feedback_tools(mcp: FastMCP) -> dict[str, Any]:
 
         Args:
             issue_number: The issue number to view.
-            repo: Optional target repo (default: Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP).
+            repo: Optional target repo (default: Grumpified-OGGVCT/SwarmGlass-MCP).
         """
         warnings.warn("hlf_feedback_view is deprecated, use sg_observe_feedback_view instead", DeprecationWarning, stacklevel=2)
         target = _repo_arg(repo)

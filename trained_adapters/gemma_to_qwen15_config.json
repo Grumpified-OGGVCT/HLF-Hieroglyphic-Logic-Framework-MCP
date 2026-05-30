@@ -1,0 +1,13 @@
+{
+  "adapter_type": "outer_ln_res_adapter",
+  "source_model": "google/gemma-3-1b-it",
+  "target_model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+  "in_dim": 1152,
+  "out_dim": 1536,
+  "source_hidden_dim": 1152,
+  "target_hidden_dim": 1536,
+  "loss_fn": "mse+cosine_similarity",
+  "training_steps": 200,
+  "corpus_size": 199,
+  "final_loss": 0.48636535853147506
+}

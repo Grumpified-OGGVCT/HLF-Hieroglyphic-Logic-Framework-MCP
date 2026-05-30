@@ -4,7 +4,7 @@ import os
 import uuid
 
 # SwarmGlass: entropy_anchor requires compiler — gate behind EXP=1
-os.environ["SWARMGLASS_EXPERIMENTAL"] = "1"
+os.environ["SWARMGLASS_HLF_ENABLED"] = "1"
 
 from hlf_mcp import server
 from hlf_mcp.hlf.compiler import HLFCompiler

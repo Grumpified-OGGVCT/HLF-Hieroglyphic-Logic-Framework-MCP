@@ -1,3 +1,6 @@
 [submodule "hlf_source"]
 	path = hlf_source
 	url = https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF
+[submodule "recursivemas"]
+	path = recursivemas
+	url = https://github.com/RecursiveMAS/RecursiveMAS.git

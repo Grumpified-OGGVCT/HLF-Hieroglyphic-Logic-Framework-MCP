@@ -14,7 +14,7 @@ tool descriptions, or public communication until independently benchmarked with 
 | 2 | "Saves tokens by default" | Only true in specific benchmarked scenarios, not general case. | "Token efficiency varies by workload. See benchmarks." |
 | 3 | "Solves multi-agent orchestration" | Overreach. Governance ≠ orchestration. | "SwarmGlass observes, validates, and audits agent swarms." |
 | 4 | "Self-governing AI operating system" | Hallucinated ambition. Not remotely true. | "SwarmGlass is an MCP server that provides governance tools." |
-| 5 | "Recursive MAS" (Multi-Agent System) | Experimental research lane, not a product feature. | "Experimental recursive coordination patterns available gated behind SWARMGLASS_EXPERIMENTAL=1." |
+| 5 | "Recursive MAS" (Multi-Agent System) | Experimental research lane, not a product feature. | "Experimental recursive coordination patterns available gated behind SWARMGLASS_HLF_ENABLED=1." |
 | 6 | "Universal agent runtime" | HLF VM is experimental. Governance doesn't require a custom runtime. | "SwarmGlass provides governance primitives callable from any MCP-compatible agent." |
 
 ## Enforcement

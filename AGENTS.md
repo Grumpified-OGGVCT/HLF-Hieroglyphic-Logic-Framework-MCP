@@ -1,6 +1,9 @@
 # AGENTS.md
 
-This file is the active workspace-level handover for HLF_MCP.
+This file is the active workspace-level handover for the SwarmGlass Governance Framework (repo: HLF_MCP).
+
+**Brand boundary (2026-05-29):** SwarmGlass is the outward product. HLF is the deterministic language engine inside it. The `sg_*` MCP tool namespace is canonical. The `hlf_*` namespace is a backward-compat alias.
+
 You are trying to build a governed meaning-and-execution substrate that can actually carry institutional-scale leverage, individual-scale agility, and long-horizon trust at the same time, and you would rather take longer than corrupt that foundation with premature simplification.
 
 That is the right kind of stubbornness.

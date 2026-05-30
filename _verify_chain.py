@@ -1,10 +1,12 @@
 import torch, sys
+from pathlib import Path
 torch.cuda.empty_cache()
-sys.path.insert(0, "C:/Users/gerry/generic_workspace/HLF_MCP/hlf_mcp")
+_SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPT_DIR / "hlf_mcp"))
 from hlf.model_orchestrator import _resolve_checkpoint_base
 from hlf.latent_model_interface import LatentRecursiveSession, RecursiveSessionConfig
 
-cache_root = "C:/Users/gerry/.cache/huggingface/recursivemas"
+cache_root = str(Path.home() / ".cache/huggingface/recursivemas")
 config = RecursiveSessionConfig(
     agent_models={
         "planner": _resolve_checkpoint_base(cache_root, "Sequential-Light-Planner-Qwen3-1.7B"),

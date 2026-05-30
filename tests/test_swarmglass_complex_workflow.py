@@ -15,7 +15,7 @@ import time
 import threading
 
 # Ensure governance-only mode from the start
-os.environ["SWARMGLASS_EXPERIMENTAL"] = "0"
+os.environ["SWARMGLASS_HLF_ENABLED"] = "0"
 
 from hlf_mcp import server
 from hlf_mcp.server_context import build_server_context
@@ -369,7 +369,7 @@ def test_dsl_tools_absent_exp0() -> None:
     tools = server.REGISTERED_TOOLS
 
     dsl = [
-        "hlf_do", "hlf_translate_to_hlf", "hlf_compile",
+        "hlf_translate_to_hlf", "hlf_compile",
         "hlf_capsule_run", "hlf_swarm_mechanics",
         "hlf_capsule_validate", "hlf_pointer_validate",
         "hlf_host_call", "hlf_workflow_benchmark",

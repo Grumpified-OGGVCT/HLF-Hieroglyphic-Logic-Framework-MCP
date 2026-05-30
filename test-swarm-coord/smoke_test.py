@@ -1,5 +1,8 @@
 import sys
-sys.path.insert(0, 'C:/Users/gerry/generic_workspace/HLF_MCP_WORKING')
+import sys
+from pathlib import Path
+_SCRIPT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_SCRIPT_DIR))
 from hlf_mcp.hlf.agent_spawner import AgentSpawner
 
 spawner = AgentSpawner(backend='subprocess', model='deepseek-v4-pro:cloud')

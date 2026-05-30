@@ -4,6 +4,20 @@ Complete blueprint for the full MCP 2024-2025 integration with self-evolving gra
 
 ---
 
+## 2026-05-29: SwarmGlass Rebrand + sg_* Namespace Consolidation
+
+- [x] Rebrand README, AGENTS.md, SSOT, BUILD_GUIDE.md, pyproject.toml from HLF-first to SwarmGlass-first
+- [x] Register sg_* aliases across all server files: verifier, native, workflow_benchmark, profiles, capsule, core (112 unique aliases)
+- [x] Add brand boundary section to SSOT_HLF_MCP.md
+- [ ] Complete Phase 4: Test stabilization (194 failures)
+- [ ] Complete Phase 5: Coordination — persona authority + handoff contracts + persona workflow tests
+- [ ] Complete Phase 6: Deduplicate HybridRAG, document recursive build loop, final SSOT refresh
+- [ ] Register sg_memory_register_evidence_bundle (in SAFE_BOOTSTRAP_TOOLS but never created)
+
+See plan/architecture-swarmglass-recovery-1.md for full execution plan.
+
+---
+
 ## 2026-03-19 Normalized Reconstruction Backlog
 
 This section is the active constitutive-pillar backlog.
@@ -37,15 +51,15 @@ It sharpens what should move next because those pillars are both weak and proof-
 
 ### Priority B: Orchestration lifecycle and execution admission
 
-- [ ] Add packaged delegation, dissent, escalation, and handoff-lineage contracts
-- [ ] Add deterministic orchestration trace proofs covering allowed, denied, and escalated steps
+- [x] Add packaged delegation, dissent, escalation, and handoff-lineage contracts — **verified 2026-05-29: `PlanStepContract` has delegation/escalation/dissent fields, `build_orchestration_contract()` tracks all, `handoff_events.py` has full contract templates**
+- [x] Add deterministic orchestration trace proofs covering allowed, denied, and escalated steps — **verified 2026-05-29: `_classify_orchestration_decision()` + `summarize_execution_trace()` produce deterministic proofs**
 - [x] Join verifier output, route evidence, and orchestration state into one execution-admission artifact
 
 ### Priority C: Persona/runtime proof
 
 - [ ] Add persona-tagged workflow tests beyond weekly-doc-accuracy and weekly-test-health
 - [ ] Prove persona handoff fields survive artifact normalization, evidence query, and operator rendering intact
-- [ ] Define the runtime boundary where persona doctrine is advisory versus authoritative
+- [x] Define the runtime boundary where persona doctrine is advisory versus authoritative — **verified 2026-05-29: tier-gated model in `persona_runtime.py` (advisory at hearth/forge, authoritative at sovereign)**
 
 ### Priority D: Ecosystem integration discipline
 

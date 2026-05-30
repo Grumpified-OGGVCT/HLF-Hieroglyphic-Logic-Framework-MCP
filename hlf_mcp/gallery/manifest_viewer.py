@@ -243,15 +243,92 @@ def display_manifest(manifest_data: dict[str, Any]) -> None:
                 print(f"    [{icon}] {p.get('name', '?')} — {p.get('description', '')}")
 
 
-def demo() -> None:
+def _build_live_manifest(ctx: object) -> dict[str, Any]:
+    """Build manifest data from live instinct lifecycle missions."""
+    missions: list[dict[str, Any]] = []
+    try:
+        if hasattr(ctx, "instinct_mgr"):
+            missions = ctx.instinct_mgr.list_missions()
+    except Exception:
+        pass
+
+    effects: list[dict[str, Any]] = []
+    capabilities: set[str] = set()
+    for m in missions:
+        topic = str(m.get("topic", "") or "")
+        phase = str(m.get("current_phase", "unknown"))
+        effect_name = topic[:40] if topic else f"mission_{str(m.get('mission_id', ''))[:8]}"
+        category = {
+            "planning": "PURE",
+            "execution": "READ",
+            "verification": "AUDIT",
+            "realign": "HUMAN_APPROVAL",
+        }.get(phase, "READ")
+        effects.append({
+            "name": effect_name,
+            "category": category,
+            "description": f"Mission in {phase} phase (nodes={m.get('plan_nodes', 0)})",
+            "direction": "internal",
+            "deterministic": m.get("sealed", False),
+        })
+        if m.get("sealed"):
+            capabilities.add("AUDIT")
+        capabilities.add("READ")
+        capabilities.add(category)
+
+    return {
+        "program_id": f"live-{len(missions)}-missions",
+        "trust_tier": "hearth",
+        "compiled_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "compiler_version": "v3",
+        "effects": effects,
+        "required_capabilities": sorted(capabilities),
+        "input_contracts": [],
+        "output_contracts": [],
+        "proof_surfaces": [],
+        "source": "live",
+    }
+
+
+def live(ctx: object) -> dict[str, Any]:
+    """Return live manifest data from the instinct lifecycle (no demo fallback).
+
+    Args:
+        ctx: ServerContext with instinct_mgr attribute.
+
+    Returns:
+        Manifest dict suitable for display_manifest(), with ``source`` = ``"live"``.
+    """
+    return _build_live_manifest(ctx)
+
+
+def demo(ctx: object | None = None) -> None:
     """Run the manifest viewer demonstration.
 
-    Builds sample manifest data and displays it with categorized effect visualization
-    suitable for pre-deployment audit.
+    When *ctx* is a ServerContext, queries the live instinct lifecycle.
+    When *ctx* is None (backward compatible), uses hardcoded sample data
+    tagged with ``"source": "demo"``.
+
+    Args:
+        ctx: Optional ServerContext for live manifest queries.
     """
+    if ctx is not None:
+        try:
+            manifest = _build_live_manifest(ctx)
+            if manifest.get("effects"):
+                display_manifest(manifest)
+                return
+        except Exception:
+            pass
     manifest = build_sample_manifest()
+    manifest["source"] = "demo"
     display_manifest(manifest)
 
 
 if __name__ == "__main__":
-    demo()
+    try:
+        from hlf_mcp.server_context import build_server_context
+        ctx = build_server_context()
+    except Exception:
+        ctx = None
+    demo(ctx)

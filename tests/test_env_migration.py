@@ -24,13 +24,13 @@ from hlf_mcp.env_migration import ENV_VAR_MIGRATIONS, get_env
 
 def test_new_name_works(monkeypatch: pytest.MonkeyPatch) -> None:
     """New SWARMGLASS_* name returns its value cleanly."""
-    monkeypatch.setenv("SWARMGLASS_EXPERIMENTAL", "1")
+    monkeypatch.setenv("SWARMGLASS_HLF_ENABLED", "1")
     monkeypatch.delenv("HLF_EXPERIMENTAL_MODE", raising=False)
     monkeypatch.delenv("HLF_EXP", raising=False)
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        result = get_env("SWARMGLASS_EXPERIMENTAL", "0")
+        result = get_env("SWARMGLASS_HLF_ENABLED", "0")
 
     assert result == "1"
     assert len(w) == 0, f"Expected no warnings, got {[str(x.message) for x in w]}"
@@ -38,28 +38,29 @@ def test_new_name_works(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_old_name_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
     """Old HLF_EXPERIMENTAL_MODE still resolves and emits DeprecationWarning."""
-    monkeypatch.delenv("SWARMGLASS_EXPERIMENTAL", raising=False)
+    monkeypatch.delenv("SWARMGLASS_HLF_ENABLED", raising=False)
     monkeypatch.setenv("HLF_EXPERIMENTAL_MODE", "1")
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        result = get_env("SWARMGLASS_EXPERIMENTAL", "0")
+        result = get_env("SWARMGLASS_HLF_ENABLED", "0")
 
     assert result == "1"
     assert len(w) == 1
     assert issubclass(w[0].category, DeprecationWarning)
     assert "HLF_EXPERIMENTAL_MODE" in str(w[0].message)
-    assert "SWARMGLASS_EXPERIMENTAL" in str(w[0].message)
+    assert "SWARMGLASS_HLF_ENABLED" in str(w[0].message)
 
 
 def test_hlf_exp_alias_works(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HLF_EXP shorthand alias also resolves to SWARMGLASS_EXPERIMENTAL."""
-    monkeypatch.delenv("SWARMGLASS_EXPERIMENTAL", raising=False)
+    """HLF_EXP shorthand alias also resolves to SWARMGLASS_HLF_ENABLED."""
+    monkeypatch.delenv("SWARMGLASS_HLF_ENABLED", raising=False)
+    monkeypatch.delenv("HLF_EXPERIMENTAL_MODE", raising=False)
     monkeypatch.setenv("HLF_EXP", "1")
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        result = get_env("SWARMGLASS_EXPERIMENTAL", "0")
+        result = get_env("SWARMGLASS_HLF_ENABLED", "0")
 
     assert result == "1"
     assert len(w) == 1
@@ -69,12 +70,13 @@ def test_hlf_exp_alias_works(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_new_takes_precedence_over_old(monkeypatch: pytest.MonkeyPatch) -> None:
     """When both old and new are set, new name wins."""
-    monkeypatch.setenv("SWARMGLASS_EXPERIMENTAL", "new-value")
+    monkeypatch.setenv("SWARMGLASS_HLF_ENABLED", "new-value")
+    monkeypatch.delenv("HLF_EXP", raising=False)
     monkeypatch.setenv("HLF_EXPERIMENTAL_MODE", "old-value")
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        result = get_env("SWARMGLASS_EXPERIMENTAL", "0")
+        result = get_env("SWARMGLASS_HLF_ENABLED", "0")
 
     assert result == "new-value"
     assert len(w) == 1
@@ -84,13 +86,13 @@ def test_new_takes_precedence_over_old(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_default_value_when_nothing_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """When neither old nor new is set, default is returned."""
-    monkeypatch.delenv("SWARMGLASS_EXPERIMENTAL", raising=False)
+    monkeypatch.delenv("SWARMGLASS_HLF_ENABLED", raising=False)
     monkeypatch.delenv("HLF_EXPERIMENTAL_MODE", raising=False)
     monkeypatch.delenv("HLF_EXP", raising=False)
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        result = get_env("SWARMGLASS_EXPERIMENTAL", "0")
+        result = get_env("SWARMGLASS_HLF_ENABLED", "0")
 
     assert result == "0"
     assert len(w) == 0
@@ -98,10 +100,11 @@ def test_default_value_when_nothing_set(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_default_string_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default parameter respects the passed value (empty string)."""
-    monkeypatch.delenv("SWARMGLASS_EXPERIMENTAL", raising=False)
+    monkeypatch.delenv("SWARMGLASS_HLF_ENABLED", raising=False)
     monkeypatch.delenv("HLF_EXPERIMENTAL_MODE", raising=False)
+    monkeypatch.delenv("HLF_EXP", raising=False)
 
-    result = get_env("SWARMGLASS_EXPERIMENTAL", "")
+    result = get_env("SWARMGLASS_HLF_ENABLED", "")
     assert result == ""
 
 
@@ -146,13 +149,13 @@ def test_old_name_warns_for_transport(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_both_old_aliases_conflict_with_new(monkeypatch: pytest.MonkeyPatch) -> None:
     """When both HLF_EXP and HLF_EXPERIMENTAL_MODE are set alongside the new name,
     new wins and both old values are reported as ignored."""
-    monkeypatch.setenv("SWARMGLASS_EXPERIMENTAL", "canonical")
+    monkeypatch.setenv("SWARMGLASS_HLF_ENABLED", "canonical")
     monkeypatch.setenv("HLF_EXPERIMENTAL_MODE", "mode-val")
     monkeypatch.setenv("HLF_EXP", "exp-val")
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        result = get_env("SWARMGLASS_EXPERIMENTAL", "0")
+        result = get_env("SWARMGLASS_HLF_ENABLED", "0")
 
     assert result == "canonical"
     # One warning per conflicting old var
@@ -176,8 +179,8 @@ def test_all_mapped_new_names_are_valid() -> None:
 
 def test_experimental_mappings_share_target() -> None:
     """HLF_EXPERIMENTAL_MODE and HLF_EXP both map to the same target."""
-    assert ENV_VAR_MIGRATIONS["HLF_EXPERIMENTAL_MODE"] == "SWARMGLASS_EXPERIMENTAL"
-    assert ENV_VAR_MIGRATIONS["HLF_EXP"] == "SWARMGLASS_EXPERIMENTAL"
+    assert ENV_VAR_MIGRATIONS["HLF_EXPERIMENTAL_MODE"] == "SWARMGLASS_HLF_ENABLED"
+    assert ENV_VAR_MIGRATIONS["HLF_EXP"] == "SWARMGLASS_HLF_ENABLED"
 
 
 def test_no_duplicate_old_names() -> None:

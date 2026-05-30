@@ -74,6 +74,8 @@ class CloudModelEntry:
     description: str = ""
     supports_think: bool = False
     is_free: bool = False
+    coding_tier: int = 0   # 0=unknown, 1=elite, 2=strong, 3=capable, 4=fallback
+    coding_score: float | None = None  # from model-trust-scorecard benchmark
 
 
 @dataclass(slots=True, frozen=True)
@@ -205,6 +207,8 @@ def _parse_model(key: str, raw: dict[str, Any], provider: str) -> CloudModelEntr
         description=str(raw.get("description", "")),
         supports_think=bool(raw.get("supports_think", False)),
         is_free=bool(raw.get("is_free", False)),
+        coding_tier=int(raw.get("coding_tier", 0)),
+        coding_score=float(raw["coding_score"]) if "coding_score" in raw else None,
     )
 
 
@@ -499,3 +503,36 @@ def escalation_chain_for_lane(
             if name in expanded and expanded[name].enabled
         ]
     return enabled_models_for_lane(config, lane)
+
+
+def coding_models_ranked(
+    config: ModelSubstrateConfig,
+) -> list[CloudModelEntry]:
+    """Return coding-lane models ranked by coding_tier then coding_score.
+
+    Sorts by:
+    1. coding_tier ascending (1=elite first, 0=unknown last)
+    2. coding_score descending within the same tier
+    3. Provider priority as final tiebreaker
+
+    This allows the build pillar to try the best coding model first,
+    falling back through tiers if needed.
+    """
+    ollama_prio = config.providers.get("ollama_cloud")
+    or_prio = config.providers.get("openrouter")
+    provider_prio = {
+        "ollama_cloud": ollama_prio.priority if ollama_prio else 99,
+        "openrouter": or_prio.priority if or_prio else 99,
+    }
+
+    def _sort_key(model: CloudModelEntry) -> tuple[int, float, int]:
+        # tier 0 (unknown) sorts after known tiers
+        tier = model.coding_tier if model.coding_tier > 0 else 99
+        # negate score so higher scores sort first
+        score = -(model.coding_score or 0.0)
+        prio = provider_prio.get(model.provider, 99)
+        return (tier, score, prio)
+
+    coding = enabled_models_for_lane(config, "coding")
+    coding.sort(key=_sort_key)
+    return coding

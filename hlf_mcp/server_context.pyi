@@ -2,7 +2,7 @@
 Type stubs for hlf_mcp.server_context.ServerContext.
 
 IDE support: marks DSL-dependent fields as Optional because they are
-None in governance-only mode (SWARMGLASS_EXPERIMENTAL=0).
+None in governance-only mode (SWARMGLASS_HLF_ENABLED=0).
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 class ServerContext:
     """Governance + DSL server context.
 
-    In governance-only mode (SWARMGLASS_EXPERIMENTAL=0), DSL fields are None.
+    In governance-only mode (SWARMGLASS_HLF_ENABLED=0), DSL fields are None.
     Use ``if ctx.compiler is not None:`` guards before accessing DSL methods.
     """
 
@@ -64,5 +64,5 @@ class ServerContext:
 
 
 def build_server_context() -> ServerContext:
-    """Build a ServerContext. DSL fields are None when SWARMGLASS_EXPERIMENTAL=0."""
+    """Build a ServerContext. DSL fields are None when SWARMGLASS_HLF_ENABLED=0."""
     ...

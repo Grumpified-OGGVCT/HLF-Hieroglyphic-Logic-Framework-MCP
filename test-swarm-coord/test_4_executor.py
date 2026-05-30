@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import Any
 
 # Ensure HLF_MCP is on path
-sys.path.insert(0, "C:\\Users\\gerry\\generic_workspace\\HLF_MCP")
+_SCRIPT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_SCRIPT_DIR))
 
 from hlf_mcp.hlf.agent_spawner import AgentSpawner
 from hlf_mcp.hlf.swarm_compiler import compile_swarm

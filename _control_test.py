@@ -3,13 +3,15 @@ Head-to-head: Single model vs RecursiveMAS on identical prompts.
 Tests whether latent recursion produces better output than standalone models.
 """
 import torch, time, sys
+from pathlib import Path
 torch.cuda.empty_cache()
-sys.path.insert(0, "C:/Users/gerry/generic_workspace/HLF_MCP/hlf_mcp")
+_SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPT_DIR / "hlf_mcp"))
 from hlf.model_orchestrator import _resolve_checkpoint_base
 from hlf.latent_model_interface import LatentRecursiveSession, RecursiveSessionConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-cache_root = "C:/Users/gerry/.cache/huggingface/recursivemas"
+cache_root = str(Path.home() / ".cache/huggingface/recursivemas")
 
 PROMPTS = [
     ("MATH", "Find all real solutions to: sqrt(x+3) + sqrt(x) = 3. Show all steps including domain and verification."),

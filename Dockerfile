@@ -1,17 +1,6 @@
-# HLF MCP Server — official image
-# Build:  docker build -t hlf-mcp .
-# Run:    docker run -e HLF_TRANSPORT=sse -e HLF_PORT=8000 -p 8000:8000 hlf-mcp
-#
-# With hot tier (Valkey):
-#   docker compose --profile hot up
-#
-# With full tier (Valkey + runtime extras):
-#   docker compose --profile full up
-
-FROM python:3.12-slim
-
-LABEL org.opencontainers.image.title="HLF MCP Server"
-LABEL org.opencontainers.image.description="Hieroglyphic Logic Framework — MCP server for deterministic agent orchestration"
+# SwarmGlass MCP Server — official image
+LABEL org.opencontainers.image.title="SwarmGlass Governance Framework MCP Server"
+LABEL org.opencontainers.image.description="SwarmGlass — governed execution and coordination framework for agentic systems (HLF language engine included)"
 LABEL org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app

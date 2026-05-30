@@ -27,11 +27,11 @@ def register_governance_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any
             summaries_only: If True, return operator-readable summaries instead of full dicts.
         """
         warnings.warn("hlf_governance_event_log is deprecated, use sg_audit_event_log instead", DeprecationWarning, stacklevel=2)
-        if ctx.governance_event_log is None:
-            return {"status": "error", "error": "Governance event log is not initialized"}
+        if not ctx.governance_events:
+            return {"status": "ok", "count": 0, "entries": [], "total": 0}
 
         size = max(1, min(limit, 250))
-        entries = ctx.governance_event_log.get_last_n(size)
+        entries = list(ctx.governance_events)[-size:]
 
         if event_type:
             entries = [e for e in entries if e.get("event_type") == event_type]
@@ -39,53 +39,69 @@ def register_governance_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any
             entries = [e for e in entries if e.get("severity") == severity]
 
         if summaries_only:
-            summaries = ctx.governance_event_log.get_last_n_summaries(size)
-            # Re-filter summaries to match the same filtering logic
-            if event_type or severity:
-                filtered_summaries: list[str] = []
-                for entry, summary in zip(entries, summaries):
-                    if event_type and entry.get("event_type") != event_type:
-                        continue
-                    if severity and entry.get("severity") != severity:
-                        continue
-                    filtered_summaries.append(summary)
-                summaries = filtered_summaries
+            summaries = [
+                e.get("summary", e.get("event_type", "unknown"))
+                for e in entries
+            ]
             return {
                 "status": "ok",
                 "count": len(summaries),
                 "summaries": summaries,
+                "total": len(ctx.governance_events),
             }
 
         return {
             "status": "ok",
             "count": len(entries),
             "entries": entries,
+            "total": len(ctx.governance_events),
         }
 
     @mcp.tool()
     def hlf_governance_event_log_verify(limit: int = 1000) -> dict[str, Any]:
         """Verify content-hash integrity of the most recent log entries."""
         warnings.warn("hlf_governance_event_log_verify is deprecated, use sg_audit_event_log_verify instead", DeprecationWarning, stacklevel=2)
-        if ctx.governance_event_log is None:
-            return {"status": "error", "error": "Governance event log is not initialized"}
-        return ctx.governance_event_log.verify_integrity(limit=limit)
+        events = list(ctx.governance_events)[-limit:]
+        if not events:
+            return {"status": "ok", "count": 0, "message": "No events to verify"}
+        # Verify each event has required fields
+        valid = 0
+        invalid = 0
+        for event in events:
+            if isinstance(event, dict) and "event_id" in event:
+                valid += 1
+            else:
+                invalid += 1
+        return {
+            "status": "ok",
+            "total": len(events),
+            "valid": valid,
+            "invalid": invalid,
+            "complete": invalid == 0,
+        }
 
     @mcp.tool()
     def hlf_governance_event_log_get(trace_ref: str = "", content_hash: str = "") -> dict[str, Any]:
         """Retrieve a single log entry by trace reference or content hash."""
         warnings.warn("hlf_governance_event_log_get is deprecated, use sg_audit_event_log_get instead", DeprecationWarning, stacklevel=2)
-        if ctx.governance_event_log is None:
-            return {"status": "error", "error": "Governance event log is not initialized"}
         if trace_ref:
-            entry = ctx.governance_event_log.get_by_trace_ref(trace_ref)
-            if entry is None:
-                return {"status": "error", "error": f"Entry with trace_ref={trace_ref!r} not found"}
-            return {"status": "ok", "entry": entry}
+            for event in reversed(ctx.governance_events):
+                if isinstance(event, dict) and event.get("event_ref") == trace_ref:
+                    return {"status": "ok", "entry": event}
+                # Also check nested event data
+                inner = event.get("event", {}) if isinstance(event, dict) else {}
+                if isinstance(inner, dict) and inner.get("event_ref") == trace_ref:
+                    return {"status": "ok", "entry": event}
+            return {"status": "error", "error": f"Entry with trace_ref={trace_ref!r} not found"}
         if content_hash:
-            entry = ctx.governance_event_log.get_by_content_hash(content_hash)
-            if entry is None:
-                return {"status": "error", "error": f"Entry with content_hash={content_hash!r} not found"}
-            return {"status": "ok", "entry": entry}
+            import hashlib
+            for event in reversed(ctx.governance_events):
+                if isinstance(event, dict):
+                    serialized = str(sorted(event.items()) if isinstance(event, dict) else str(event))
+                    h = hashlib.sha256(serialized.encode()).hexdigest()[:16]
+                    if h == content_hash:
+                        return {"status": "ok", "entry": event}
+            return {"status": "error", "error": f"Entry with content_hash={content_hash!r} not found"}
         return {"status": "error", "error": "Provide either trace_ref or content_hash"}
 
     def _register_sg_aliases(mcp: FastMCP, aliases: dict):

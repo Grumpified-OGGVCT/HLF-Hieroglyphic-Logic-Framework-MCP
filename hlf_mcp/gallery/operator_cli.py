@@ -18,9 +18,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import shutil
+import subprocess
 import sys
+import textwrap
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ── Windows console encoding fix ────────────────────────────────────────────────
 if sys.platform == "win32":
@@ -52,6 +58,7 @@ from hlf_mcp.gallery.telemetry import (
 )
 from hlf_mcp.gallery.operator_dashboard import (
     build_dashboard_data,
+    build_dashboard_data_live,
     display_dashboard,
     generate_dashboard_json,
     compute_feedback_metrics,
@@ -223,6 +230,19 @@ def _render_live_dashboard(console: Console, collector: TelemetryCollector) -> N
 
 # ── CLI Handlers ─────────────────────────────────────────────────────────────────
 
+_CTX = None
+
+def _get_ctx():
+    """Lazy-load ServerContext for live gallery data. Returns None if unavailable."""
+    global _CTX
+    if _CTX is None:
+        try:
+            from hlf_mcp.server_context import build_server_context
+            _CTX = build_server_context()
+        except Exception:
+            pass
+    return _CTX
+
 
 def _cmd_dashboard(args: argparse.Namespace) -> int:
     """Handle --dashboard: start live telemetry dashboard."""
@@ -231,7 +251,8 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
         print("Install with: pip install rich", file=sys.stderr)
         return 1
 
-    collector = create_default_collector(interval=args.interval)
+    ctx = _get_ctx()
+    collector = create_default_collector(interval=args.interval, ctx=ctx)
     console = Console()
 
     try:
@@ -254,7 +275,8 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
 
 def _cmd_snapshot(args: argparse.Namespace) -> int:
     """Handle --snapshot: one-shot readiness snapshot to stdout."""
-    collector = create_default_collector()
+    ctx = _get_ctx()
+    collector = create_default_collector(ctx=ctx)
     snap = collector.snapshot()
 
     if args.json_output:
@@ -267,7 +289,8 @@ def _cmd_snapshot(args: argparse.Namespace) -> int:
 
 def _cmd_watch(args: argparse.Namespace) -> int:
     """Handle --watch: repeated snapshots with configurable refresh."""
-    collector = create_default_collector(interval=args.interval)
+    ctx = _get_ctx()
+    collector = create_default_collector(interval=args.interval, ctx=ctx)
     console = Console() if _RICH else None
 
     try:
@@ -311,7 +334,12 @@ def _cmd_watch(args: argparse.Namespace) -> int:
 
 def _cmd_status(args: argparse.Namespace) -> int:
     """Handle 'status' subcommand: current status summary."""
-    dashboard = build_dashboard_data()
+    try:
+        from hlf_mcp.server_context import build_server_context
+        ctx = build_server_context()
+        dashboard = build_dashboard_data_live(ctx)
+    except Exception:
+        dashboard = build_dashboard_data()
     overall = dashboard["overall_status"]
     pillar = dashboard["pillar_score"]
 
@@ -338,7 +366,12 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
 def _cmd_pillars(args: argparse.Namespace) -> int:
     """Handle 'pillars' subcommand: per-pillar scores."""
-    dashboard = build_dashboard_data()
+    try:
+        from hlf_mcp.server_context import build_server_context
+        ctx = build_server_context()
+        dashboard = build_dashboard_data_live(ctx)
+    except Exception:
+        dashboard = build_dashboard_data()
     components = dashboard["pillar_score"].get("components", {})
 
     if _RICH:
@@ -371,7 +404,8 @@ def _cmd_pillars(args: argparse.Namespace) -> int:
 def _cmd_violations(args: argparse.Namespace) -> int:
     """Handle 'violations' subcommand: constitutional violations."""
     from hlf_mcp.gallery.operator_dashboard import collect_constitutional_violations
-    const = collect_constitutional_violations()
+    ctx = _get_ctx()
+    const = collect_constitutional_violations(ctx=ctx)
     summary = const["summary"]
     violations = const["violations"]
 
@@ -412,7 +446,8 @@ def _cmd_violations(args: argparse.Namespace) -> int:
 def _cmd_audit(args: argparse.Namespace) -> int:
     """Handle 'audit' subcommand: manifest audit trail."""
     from hlf_mcp.gallery.operator_dashboard import collect_manifest_audit_trail
-    man = collect_manifest_audit_trail()
+    ctx = _get_ctx()
+    man = collect_manifest_audit_trail(ctx=ctx)
     summary = man["summary"]
     deployments = man["deployments"]
 
@@ -492,14 +527,12 @@ def _cmd_missions(args: argparse.Namespace) -> int:
     """Handle 'missions' subcommand: mission statuses."""
     from hlf_mcp.gallery.operator_dashboard import (
         render_mission_panel,
-        _get_lifecycle,
     )
-
-    lifecycle = _get_lifecycle()
+    ctx = _get_ctx()
     missions: list[dict[str, Any]] = []
-    if lifecycle:
+    if ctx is not None:
         try:
-            missions = lifecycle.list_missions() or []
+            missions = ctx.instinct_mgr.list_missions() or []
         except Exception:
             pass
 
@@ -522,7 +555,7 @@ def _cmd_missions(args: argparse.Namespace) -> int:
                 matched.append(m)
         missions = matched
 
-    panel = render_mission_panel(missions=missions, use_live_data=False, max_display=args.limit)
+    panel = render_mission_panel(missions=missions, use_live_data=True, max_display=args.limit)
     if panel:
         if _RICH:
             Console().print(panel)
@@ -574,6 +607,60 @@ def _cmd_export(args: argparse.Namespace) -> int:
 # Module-level feedback collector singleton for CLI usage
 _feedback_collector: FeedbackCollector | None = None
 
+# Whether the gh CLI is available on this system
+_GH_AVAILABLE = shutil.which("gh") is not None
+
+# Default repo for GitHub issue creation
+_DEFAULT_FEEDBACK_REPO = "Grumpified-OGGVCT/SwarmGlass-MCP"
+
+
+def _gh_submit_issue(title: str, body: str, labels: list[str] | None = None, repo: str | None = None) -> dict[str, Any]:
+    """Create a GitHub issue via the gh CLI and return structured result.
+
+    Args:
+        title: Issue title (max 256 chars, required).
+        body: Issue body (free-form text).
+        labels: Optional list of label strings.
+        repo: Optional target repo (default: DEFAULT_FEEDBACK_REPO).
+
+    Returns:
+        Dict with 'success' (bool) and either 'issue_url' or 'error'.
+    """
+    if not _GH_AVAILABLE:
+        return {"success": False, "error": "gh CLI not found on PATH"}
+
+    target = repo or _DEFAULT_FEEDBACK_REPO
+    if not title or len(title) > 256:
+        return {"success": False, "error": "Title is required and must be ≤256 characters"}
+
+    normalized_body = textwrap.dedent(body).strip()
+    normalized_body += (
+        "\n\n---\n"
+        "*This issue was created via the HLF Gallery Operator CLI.*\n"
+        f"*Repository: {target}*"
+    )
+
+    args = [
+        "gh", "issue", "create",
+        "--repo", target,
+        "--title", title,
+        "--body", normalized_body,
+    ]
+    if labels:
+        for label in labels:
+            args.extend(["--label", label])
+
+    try:
+        result = subprocess.run(args, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return {"success": False, "error": result.stderr.strip()}
+        url = result.stdout.strip()
+        return {"success": True, "issue_url": url}
+    except FileNotFoundError:
+        return {"success": False, "error": "gh CLI not found"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "gh CLI command timed out after 30s"}
+
 
 def _get_feedback_collector() -> FeedbackCollector:
     """Get or create the module-level FeedbackCollector singleton."""
@@ -581,6 +668,45 @@ def _get_feedback_collector() -> FeedbackCollector:
     if _feedback_collector is None:
         _feedback_collector = create_default_feedback_collector()
     return _feedback_collector
+
+
+def _gh_submit_feedback_event(event: Any, severity: int = 50) -> None:
+    """Submit a feedback event as a GitHub issue (best-effort, never raises).
+
+    Args:
+        event: An AlertFeedback event from the local FeedbackCollector.
+        severity: Alert severity 0-100 for the issue label.
+    """
+    feedback_type = event.feedback_type.upper()
+    title = f"[HLF Feedback:{feedback_type}] Alert {event.alert_id} — {event.operator_id}"
+
+    body_lines = [
+        f"**Feedback Type:** {feedback_type}",
+        f"**Alert ID:** `{event.alert_id}`",
+        f"**Operator:** {event.operator_id}",
+        f"**Timestamp:** {event.timestamp}",
+        f"**Feedback ID:** `{event.feedback_id}`",
+    ]
+    if event.details:
+        body_lines.append(f"**Details:** {event.details}")
+    if event.meta:
+        body_lines.append(f"**Metadata:** {json.dumps(event.meta)}")
+    body = "\n".join(body_lines)
+
+    labels = ["hlf-feedback", f"severity-{max(0, min(severity // 10 * 10, 100))}"]
+
+    result = _gh_submit_issue(title=title, body=body, labels=labels)
+    if result.get("success"):
+        if _RICH:
+            Console().print(f"[dim]GitHub issue created: {result.get('issue_url', '')}[/dim]")
+        else:
+            print(f"GitHub issue created: {result.get('issue_url', '')}")
+    else:
+        logger.warning("Failed to create GitHub issue: %s", result.get("error", "unknown"))
+        if _RICH:
+            Console().print(f"[dim yellow]GitHub issue skipped (gh not available)[/dim yellow]")
+        else:
+            print(f"GitHub issue skipped: {result.get('error', 'unknown')}")
 
 
 def _cmd_feedback_ack(args: argparse.Namespace) -> int:
@@ -602,6 +728,9 @@ def _cmd_feedback_ack(args: argparse.Namespace) -> int:
         ))
     else:
         print(f"ACK: alert={args.alert_id} operator={args.operator} feedback_id={event.feedback_id}")
+
+    if args.github:
+        _gh_submit_feedback_event(event, severity=args.severity)
     return 0
 
 
@@ -624,6 +753,9 @@ def _cmd_feedback_resolve(args: argparse.Namespace) -> int:
         ))
     else:
         print(f"RESOLVE: alert={args.alert_id} operator={args.operator} feedback_id={event.feedback_id}")
+
+    if args.github:
+        _gh_submit_feedback_event(event, severity=args.severity)
     return 0
 
 
@@ -645,6 +777,9 @@ def _cmd_feedback_dismiss(args: argparse.Namespace) -> int:
         ))
     else:
         print(f"DISMISS: alert={args.alert_id} operator={args.operator} reason={args.reason}")
+
+    if args.github:
+        _gh_submit_feedback_event(event, severity=args.severity)
     return 0
 
 
@@ -667,6 +802,9 @@ def _cmd_feedback_escalate(args: argparse.Namespace) -> int:
         ))
     else:
         print(f"ESCALATE: alert={args.alert_id} operator={args.operator} tier={args.tier}")
+
+    if args.github:
+        _gh_submit_feedback_event(event, severity=args.severity)
     return 0
 
 
@@ -689,6 +827,9 @@ def _cmd_feedback_snooze(args: argparse.Namespace) -> int:
         ))
     else:
         print(f"SNOOZE: alert={args.alert_id} operator={args.operator} duration={args.duration}s")
+
+    if args.github:
+        _gh_submit_feedback_event(event, severity=args.severity)
     return 0
 
 
@@ -881,6 +1022,11 @@ def build_parser() -> argparse.ArgumentParser:
     ack_parser.add_argument("--details", "-d", default="", help="Acknowledgement notes")
     ack_parser.add_argument("--severity", "-s", type=int, default=50,
                             help="Alert severity 0-100 (default: 50)")
+    ack_parser.add_argument("--github", dest="github", action="store_true",
+                            default=_GH_AVAILABLE,
+                            help=f"Submit as GitHub issue (default: {'on' if _GH_AVAILABLE else 'off'})")
+    ack_parser.add_argument("--no-github", dest="github", action="store_false",
+                            help="Do not submit as GitHub issue")
 
     # feedback resolve
     resolve_parser = feedback_sub.add_parser("resolve", help="Resolve an alert")
@@ -891,6 +1037,11 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_parser.add_argument("--note", "-n", default="", help="Additional resolution note")
     resolve_parser.add_argument("--severity", "-s", type=int, default=50,
                                 help="Alert severity 0-100 (default: 50)")
+    resolve_parser.add_argument("--github", dest="github", action="store_true",
+                                default=_GH_AVAILABLE,
+                                help=f"Submit as GitHub issue (default: {'on' if _GH_AVAILABLE else 'off'})")
+    resolve_parser.add_argument("--no-github", dest="github", action="store_false",
+                                help="Do not submit as GitHub issue")
 
     # feedback dismiss
     dismiss_parser = feedback_sub.add_parser("dismiss", help="Dismiss an alert as false positive")
@@ -900,6 +1051,11 @@ def build_parser() -> argparse.ArgumentParser:
     dismiss_parser.add_argument("--reason", "-r", default="", help="Dismissal reason")
     dismiss_parser.add_argument("--severity", "-s", type=int, default=50,
                                 help="Alert severity 0-100 (default: 50)")
+    dismiss_parser.add_argument("--github", dest="github", action="store_true",
+                                default=_GH_AVAILABLE,
+                                help=f"Submit as GitHub issue (default: {'on' if _GH_AVAILABLE else 'off'})")
+    dismiss_parser.add_argument("--no-github", dest="github", action="store_false",
+                                help="Do not submit as GitHub issue")
 
     # feedback escalate
     escalate_parser = feedback_sub.add_parser("escalate", help="Escalate an alert to higher tier")
@@ -911,6 +1067,11 @@ def build_parser() -> argparse.ArgumentParser:
     escalate_parser.add_argument("--details", "-d", default="", help="Escalation notes")
     escalate_parser.add_argument("--severity", "-s", type=int, default=50,
                                 help="Alert severity 0-100 (default: 50)")
+    escalate_parser.add_argument("--github", dest="github", action="store_true",
+                                 default=_GH_AVAILABLE,
+                                 help=f"Submit as GitHub issue (default: {'on' if _GH_AVAILABLE else 'off'})")
+    escalate_parser.add_argument("--no-github", dest="github", action="store_false",
+                                 help="Do not submit as GitHub issue")
 
     # feedback snooze
     snooze_parser = feedback_sub.add_parser("snooze", help="Snooze an alert")
@@ -922,6 +1083,11 @@ def build_parser() -> argparse.ArgumentParser:
     snooze_parser.add_argument("--details", "-d", default="", help="Snooze notes")
     snooze_parser.add_argument("--severity", "-s", type=int, default=50,
                                help="Alert severity 0-100 (default: 50)")
+    snooze_parser.add_argument("--github", dest="github", action="store_true",
+                               default=_GH_AVAILABLE,
+                               help=f"Submit as GitHub issue (default: {'on' if _GH_AVAILABLE else 'off'})")
+    snooze_parser.add_argument("--no-github", dest="github", action="store_false",
+                               help="Do not submit as GitHub issue")
 
     # feedback stats
     feedback_sub.add_parser("stats", help="Show operator feedback loop statistics")
@@ -935,8 +1101,9 @@ def build_parser() -> argparse.ArgumentParser:
 def _cmd_scorecard(args: argparse.Namespace) -> int:
     """Handle 'scorecard' subcommand: full 3-pillar weighted scorecard."""
     from hlf_mcp.gallery.operator_dashboard import build_full_scorecard
-
-    scorecard = build_full_scorecard()
+    ctx = _get_ctx()
+    dashboard = build_dashboard_data_live(ctx) if ctx is not None else build_dashboard_data()
+    scorecard = build_full_scorecard(dashboard_data=dashboard)
 
     if getattr(args, 'scorecard_json', False):
         print(json.dumps(scorecard, indent=2))

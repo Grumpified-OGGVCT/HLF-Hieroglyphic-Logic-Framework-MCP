@@ -1,8 +1,8 @@
-# 📜 HLF — Deterministic Agent Runtime
+# SwarmGlass — Governed Execution Framework for Agentic Systems
 
-**Run AI agent tools with cryptographically-governed execution, provable audit trails, and zero ambiguous natural language.**
+**Intent classification → governance validation → coordinated execution → Merkle-audited response — all through one MCP server surface.**
 
-> HLF compiles strict, typed intent into bytecode, runs it in a gas-metered VM, and exposes it as an MCP server — so your agents can't "misunderstand" a prompt and delete a database.
+> SwarmGlass is the outward brand. **HLF** (Hieroglyphic Logic Framework) is the deterministic language engine that SwarmGlass uses for compilation, bytecode execution, and formal verification when experimental mode is enabled. HLF is the engine, not the product.
 
 ---
 
@@ -22,13 +22,15 @@ uv run hlfc fixtures/security_audit.hlf
 uv run pytest tests/ -q
 ```
 
-**[4,933 tests](https://github.com/grumpified-oggvct/HLF-Hieroglyphic-Logic-Framework-MCP/actions) · [PolyForm Noncommercial](LICENSE) · [Python 3.12+](https://python.org) · [Live Dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)**
+**[4,933 tests](https://github.com/grumpified-oggvct/SwarmGlass-MCP/actions) · [PolyForm Noncommercial](LICENSE) · [Python 3.12+](https://python.org) · [Live Dashboard](https://grumpified-oggvct.github.io/SwarmGlass-MCP/)**
 
 ---
 
 ## 💡 Why This Exists
 
-Natural language between agents is lossy. HLF replaces prose with a strictly-typed hieroglyphic AST: zero ambiguity, compressed tokens, and deterministic execution bounded by cryptographic governance.
+Agents need more than tool calling — they need governed coordination. SwarmGlass provides a single MCP surface where natural-language intent flows through: intent classification (40 regex patterns, 10 categories), ALIGN governance (regex rule engine, 5 actions), DAG planning (persona routing + gas bounds), capsule execution (tier-bound, gas-metered), and Merkle audit — all before any action is taken.
+
+When experimental mode is enabled, HLF provides the deterministic language layer: strictly-typed hieroglyphic AST, zero ambiguity, compressed tokens, and bytecode execution bounded by cryptographic governance.
 
 ```hlf
 [HLF-v3]
@@ -64,7 +66,7 @@ That HLF program compiles to bytecode, passes a 5-rule security ledger, runs ins
 | **Merkle DR (disaster recovery)** | ✅ Complete — chain reconstruction from provenance hashes |
 | **Network isolation** | ✅ Complete — sandboxed execution with tier-bound network access |
 
-See [VISION.md](HLF_VISION_DOCTRINE.md) for the full architecture, [GOVERNANCE.md](HLF_ETHICAL_GOVERNOR_ARCHITECTURE.md) for how we track completeness, and the [build dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/) for live pillar scores.
+See [VISION.md](HLF_VISION_DOCTRINE.md) for the full architecture, [GOVERNANCE.md](HLF_ETHICAL_GOVERNOR_ARCHITECTURE.md) for how we track completeness, and the [build dashboard](https://grumpified-oggvct.github.io/SwarmGlass-MCP/) for live pillar scores.
 
 ---
 
@@ -72,7 +74,7 @@ See [VISION.md](HLF_VISION_DOCTRINE.md) for the full architecture, [GOVERNANCE.m
 
 HLF is free for personal, educational, and noncommercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 
-If you want to use HLF in a commercial product, service, or enterprise deployment, [open a GitHub issue](https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP/issues) and we'll figure it out. I don't have a standard commercial license yet — every conversation helps me figure out what this should cost and what terms make sense.
+If you want to use HLF in a commercial product, service, or enterprise deployment, [open a GitHub issue](https://github.com/Grumpified-OGGVCT/SwarmGlass-MCP/issues) and we'll figure it out. I don't have a standard commercial license yet — every conversation helps me figure out what this should cost and what terms make sense.
 
 If you're a solo developer or small team using HLF for your own project: you're almost certainly fine under the noncommercial license. If you're a company with revenue or funding: let's talk.
 
@@ -272,7 +274,7 @@ See `SSOT_HLF_MCP.md`, `BUILD_GUIDE.md`, and `docs/HLF_OPERATOR_BUILD_NOTES_2026
 [![MCP](https://img.shields.io/badge/MCP-1.26%2B-green)](https://modelcontextprotocol.io)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue)](LICENSE)
 [![Readiness](https://img.shields.io/badge/readiness-64.7%25-orange)](docs/HLF_PILLAR_READINESS_SCORECARD_2026-03-20.md)
-[![Dashboard](https://img.shields.io/badge/dashboard-live-brightgreen)](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)
+[![Dashboard](https://img.shields.io/badge/dashboard-live-brightgreen)](https://grumpified-oggvct.github.io/SwarmGlass-MCP/)
 
 ![HLF — Hieroglyphic Logic Framework · MCP Server](docs/social_preview.svg)
 
@@ -2053,7 +2055,7 @@ uv run hlf-evidence list --status promoted
 - **Packaged**: SwarmOrchestrator, FormalVerifier, CapabilityManifest, TwoChannelExecutor
 - **Proof surface**: 57 two-channel tests, 108 manifest tests, 38 gate tests
 - **MCP exposure**: 4 swarm tools via `server_swarm.py`
-- **Dashboard**: [HLF Status Dashboard](https://grumpified-oggvct.github.io/HLF-Hieroglyphic-Logic-Framework-MCP/)
+- **Dashboard**: [SwarmGlass Status Dashboard](https://grumpified-oggvct.github.io/SwarmGlass-MCP/)
 
 See `hlf_mcp/hlf/swarm_orchestrator.py`, `hlf_mcp/hlf/two_channel_executor.py`, `hlf_mcp/hlf/capability_manifest.py`, and `hlf_mcp/server_swarm.py` for implementation details.
 

@@ -835,7 +835,8 @@ class ModelOrchestrator:
 
         # Default agent config — sequential style (light), using local checkpoints
         # Falls back to HF hub IDs if local checkpoints not found
-        _cache_root = "C:/Users/gerry/.cache/huggingface/recursivemas"
+        import os as _os
+        _cache_root = _os.path.expanduser("~/.cache/huggingface/recursivemas")
         _cp = _resolve_checkpoint_base
 
         agent_models = self._config.latent_agent_models if (

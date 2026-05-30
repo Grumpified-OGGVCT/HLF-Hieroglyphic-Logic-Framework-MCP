@@ -166,13 +166,40 @@ def _generate_snapshot_id() -> str:
     return f"snap-{uuid.uuid4().hex[:12]}"
 
 
-def _collect_swarm_health() -> dict[str, Any]:
-    """Collect simulated swarm health metrics.
+def _collect_swarm_health(ctx: object | None = None) -> dict[str, Any]:
+    """Collect swarm health metrics from live InstinctLifecycle or fallback.
 
-    In production, this would connect to a live SwarmObserver.
+    When a ServerContext is provided, queries real mission state.
+    When None, returns simulated data with source label.
     """
+    if ctx is not None:
+        try:
+            missions = ctx.instinct_mgr.list_missions()
+            total = len(missions)
+            sealed = sum(1 for m in missions if m.get("sealed", False))
+            phases = {}
+            for m in missions:
+                p = m.get("current_phase", "unknown")
+                phases[p] = phases.get(p, 0) + 1
+            total_nodes = sum(m.get("plan_nodes", 0) for m in missions)
+            failed = sum(1 for m in missions if m.get("current_phase") in ("execute",) and not m.get("sealed", False))
+            degraded = sum(1 for m in missions if not m.get("sealed", False) and m.get("plan_nodes", 0) > 0)
+            return {
+                "source": "live",
+                "active_missions": total,
+                "sealed_missions": sealed,
+                "total_plan_nodes": total_nodes,
+                "phase_distribution": phases,
+                "healthy_missions": sealed,
+                "degraded_missions": max(0, total - sealed - failed),
+                "failed_missions": failed,
+                "last_event_timestamp": _now_iso(),
+                "uptime_seconds": time.time() - _get_start_time() if hasattr(ctx, '_start_time') else 0.0,
+            }
+        except Exception:
+            pass
     return {
-        "source": "telemetry",
+        "source": "simulated",
         "active_agents": 3,
         "queued_events": 7,
         "healthy_phases": 4,
@@ -183,13 +210,43 @@ def _collect_swarm_health() -> dict[str, Any]:
     }
 
 
-def _collect_verification_gate() -> dict[str, Any]:
-    """Collect simulated verification gate status.
+def _collect_verification_gate(ctx: object | None = None) -> dict[str, Any]:
+    """Collect verification gate status from live mission verdicts or fallback.
 
-    In production, this would query live gate decisions.
+    When a ServerContext is provided, queries real mission verification state.
+    When None, returns simulated data.
     """
+    if ctx is not None:
+        try:
+            missions = ctx.instinct_mgr.list_missions()
+            verified = 0
+            passed = 0
+            warned = 0
+            blocked = 0
+            for m in missions:
+                report = m.get("verification_report")
+                if report and isinstance(report, dict):
+                    verified += 1
+                    status = report.get("status", "")
+                    if status in ("ok", "passed", "success"):
+                        passed += 1
+                    elif status in ("warning",):
+                        warned += 1
+                    elif status in ("blocked", "counterexample", "denied", "failed", "error"):
+                        blocked += 1
+            return {
+                "source": "live",
+                "programs_verified": verified,
+                "programs_passed": passed,
+                "programs_warned": warned,
+                "programs_blocked": blocked,
+                "pass_rate_pct": round(passed / max(verified, 1) * 100, 1),
+                "last_verification_timestamp": _now_iso(),
+            }
+        except Exception:
+            pass
     return {
-        "source": "telemetry",
+        "source": "simulated",
         "programs_verified": 12,
         "programs_passed": 8,
         "programs_warned": 3,
@@ -199,13 +256,45 @@ def _collect_verification_gate() -> dict[str, Any]:
     }
 
 
-def _collect_constitutional_violations() -> dict[str, Any]:
-    """Collect simulated constitutional violation counts.
+def _collect_constitutional_violations(ctx: object | None = None) -> dict[str, Any]:
+    """Collect constitutional violations from governance events or fallback.
 
-    In production, this would query the governance layer.
+    When a ServerContext is provided, scans recent governance events for
+    blocked/warning align verdicts and witness observations.
+    When None, returns simulated data.
     """
+    if ctx is not None:
+        try:
+            high = medium = low = blocked_actions = 0
+            rules = []
+            for event in ctx.governance_events:
+                if isinstance(event, dict):
+                    sev = str(event.get("severity", "")).lower()
+                    if sev == "critical":
+                        high += 1
+                    elif sev == "warning":
+                        medium += 1
+                    elif sev == "info":
+                        low += 1
+                    if str(event.get("status", "")) == "blocked":
+                        blocked_actions += 1
+                    rule = event.get("details", {}).get("rule_id") if isinstance(event.get("details"), dict) else None
+                    if rule and rule not in rules:
+                        rules.append(str(rule))
+            return {
+                "source": "live",
+                "total_violations": high + medium,
+                "high_severity": high,
+                "medium_severity": medium,
+                "low_severity": low,
+                "blocked_actions": blocked_actions,
+                "rules_breached": rules[:10],
+                "last_violation_timestamp": _now_iso(),
+            }
+        except Exception:
+            pass
     return {
-        "source": "telemetry",
+        "source": "simulated",
         "total_violations": 2,
         "high_severity": 1,
         "medium_severity": 1,
@@ -216,13 +305,36 @@ def _collect_constitutional_violations() -> dict[str, Any]:
     }
 
 
-def _collect_manifest_audit() -> dict[str, Any]:
-    """Collect simulated manifest audit metrics.
+def _collect_manifest_audit(ctx: object | None = None) -> dict[str, Any]:
+    """Collect manifest audit metrics from live audit chain or fallback.
 
-    In production, this would query the manifest registry.
+    When a ServerContext is provided, queries real audit chain entries.
+    When None, returns simulated data.
     """
+    if ctx is not None:
+        try:
+            entries = ctx.audit_chain.iter_entries(limit=1000) if hasattr(ctx, 'audit_chain') else []
+            total = len(entries)
+            anomaly_count = sum(1 for e in entries if isinstance(e, dict) and e.get("anomaly_score", 0) > 0.5)
+            tier_counts = {}
+            for e in entries:
+                if isinstance(e, dict):
+                    role = str(e.get("agent_role", "unknown"))
+                    tier_counts[role] = tier_counts.get(role, 0) + 1
+            approved = total - anomaly_count
+            return {
+                "source": "live",
+                "total_entries": total,
+                "approved_entries": approved,
+                "rejected_entries": anomaly_count,
+                "approval_rate_pct": round(approved / max(total, 1) * 100, 1),
+                "roles": tier_counts,
+                "last_audit_timestamp": _now_iso(),
+            }
+        except Exception:
+            pass
     return {
-        "source": "telemetry",
+        "source": "simulated",
         "total_deployments": 15,
         "approved_deployments": 12,
         "rejected_deployments": 3,
@@ -302,6 +414,7 @@ class TelemetryCollector:
         interval: float = 2.0,
         history_size: int = 100,
         collectors: dict[str, Callable[[], dict[str, Any]]] | None = None,
+        ctx: object | None = None,
     ) -> None:
         """Initialize the telemetry collector.
 
@@ -310,7 +423,9 @@ class TelemetryCollector:
             history_size: Max number of snapshots retained for trend analysis.
             collectors: Optional custom collector functions. Keys must be:
                 'swarm_health', 'verification_gate', 'constitutional_violations',
-                'manifest_audit'.
+                'manifest_audit'. When ctx is provided, collectors receive it
+                and query live SwarmGlass state.
+            ctx: Optional ServerContext for live data collection.
         """
         self._interval = interval
         self._history_size = history_size
@@ -319,14 +434,25 @@ class TelemetryCollector:
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._listeners: list[Callable[[TelemetrySnapshot], None]] = []
+        self._ctx = ctx
 
-        # Wire collectors — use defaults if not provided
-        self._collectors = collectors or {
-            "swarm_health": _collect_swarm_health,
-            "verification_gate": _collect_verification_gate,
-            "constitutional_violations": _collect_constitutional_violations,
-            "manifest_audit": _collect_manifest_audit,
-        }
+        # Wire collectors — use defaults if not provided, passing ctx for live data
+        if collectors:
+            self._collectors = collectors
+        elif ctx is not None:
+            self._collectors = {
+                "swarm_health": lambda: _collect_swarm_health(ctx),
+                "verification_gate": lambda: _collect_verification_gate(ctx),
+                "constitutional_violations": lambda: _collect_constitutional_violations(ctx),
+                "manifest_audit": lambda: _collect_manifest_audit(ctx),
+            }
+        else:
+            self._collectors = {
+                "swarm_health": _collect_swarm_health,
+                "verification_gate": _collect_verification_gate,
+                "constitutional_violations": _collect_constitutional_violations,
+                "manifest_audit": _collect_manifest_audit,
+            }
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -1055,16 +1181,24 @@ class FeedbackCollector:
 # ── Convenience Factory ──────────────────────────────────────────────────────────
 
 
-def create_default_collector(interval: float = 2.0) -> TelemetryCollector:
-    """Create a TelemetryCollector with default collector functions.
+def create_default_collector(interval: float = 2.0, ctx: object | None = None) -> TelemetryCollector:
+    """Create a TelemetryCollector with the four default live-or-simulated collectors.
 
     Args:
-        interval: Polling interval in seconds.
-
-    Returns:
-        A ready-to-use TelemetryCollector instance.
+        interval: Seconds between automatic snapshots when running.
+        ctx: Optional ServerContext for live data. When None, collectors
+            return simulated data labeled as 'simulated'.
     """
-    return TelemetryCollector(interval=interval)
+    return TelemetryCollector(
+        interval=interval,
+        collectors={
+            "swarm_health": (lambda: _collect_swarm_health(ctx)) if ctx is not None else _collect_swarm_health,
+            "verification_gate": (lambda: _collect_verification_gate(ctx)) if ctx is not None else _collect_verification_gate,
+            "constitutional_violations": (lambda: _collect_constitutional_violations(ctx)) if ctx is not None else _collect_constitutional_violations,
+            "manifest_audit": (lambda: _collect_manifest_audit(ctx)) if ctx is not None else _collect_manifest_audit,
+        },
+        ctx=ctx,
+    )
 
 
 def create_default_feedback_collector(

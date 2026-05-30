@@ -2,7 +2,7 @@
 
 This page is the published status surface for the repository.
 
-SwarmGlass is the governance framework (formerly HLF — Hieroglyphic Logic Framework). The HLF DSL (compiler, runtime, VM) lives behind `SWARMGLASS_EXPERIMENTAL=1`. The governance layer — constraints, audit, memory, overwatch — is always-on.
+SwarmGlass is the governance framework (formerly HLF — Hieroglyphic Logic Framework). The HLF DSL (compiler, runtime, VM) lives behind `SWARMGLASS_HLF_ENABLED=1`. The governance layer — constraints, audit, memory, overwatch — is always-on.
 
 It is a generated presentation layer over the repo's current source materials, not a replacement for them.
 
@@ -29,12 +29,12 @@ This page intentionally separates three bands that should not be flattened into 
 > - interpretation band: `bridge-active`
 > - strongest cluster: semantic core
 > - main drag on total readiness: coordination and operator systems
-> - claim-lane reading: SwarmGlass governance is decoupled and always-on; HLF DSL is gated behind SWARMGLASS_EXPERIMENTAL=1
-> - **DSL isolation: CLEAN** — zero compiler/bytecode/runtime imports at SWARMGLASS_EXPERIMENTAL=0
+> - claim-lane reading: SwarmGlass governance is decoupled and always-on; HLF DSL is gated behind SWARMGLASS_HLF_ENABLED=1
+> - **DSL isolation: CLEAN** — zero compiler/bytecode/runtime imports at SWARMGLASS_HLF_ENABLED=0
 
 Short reading:
 
-SwarmGlass in this repo is already materially real as a packaged governance layer, MCP server, and product surface. The HLF DSL (language, runtime, compiler, VM) is real but gated behind `SWARMGLASS_EXPERIMENTAL=1`.
+SwarmGlass in this repo is already materially real as a packaged governance layer, MCP server, and product surface. The HLF DSL (language, runtime, compiler, VM) is real but gated behind `SWARMGLASS_HLF_ENABLED=1`.
 It is not yet the full recovered HLF system.
 The right public reading is therefore:
 
@@ -44,7 +44,7 @@ The right public reading is therefore:
 - Instinct now exposes packaged proof-state, phase-completion, and mission-lineage summaries across operator review surfaces
 - **136 governance tools** always-on (57 sg_* + 79 hlf_* with deprecation); **193 total** with experimental=1
 - **All 29 core tests pass**: governance_proofs (5/5) + capsule_pointer_trust (24/24)
-- server boots governance-only with zero DSL imports (SWARMGLASS_EXPERIMENTAL=0)
+- server boots governance-only with zero DSL imports (SWARMGLASS_HLF_ENABLED=0)
 - broader coordination, operator, and ecosystem completion is still in active bridge work
 
 ## 1. Whole SwarmGlass Status

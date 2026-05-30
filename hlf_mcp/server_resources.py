@@ -4222,12 +4222,17 @@ def _persona_doctrine_summary() -> str:
 def _build_persona_doctrine_report(ctx: object | None) -> dict[str, Any]:
     matrix = load_persona_matrix()
     catalog = load_persona_runtime_catalog()
+    from hlf_mcp.persona_runtime import _persona_authority, _resolve_active_tier
+    active_tier = _resolve_active_tier()
+    authority_level = _persona_authority(active_tier)
+    has_runtime_authority = authority_level == "authoritative"
     personas: list[dict[str, Any]] = []
     for name, entry in catalog.items():
         personas.append({
             "persona": name,
             "lane": entry.get("lane", "bridge-true"),
             "runtime_authority": entry.get("runtime_authority", False),
+            "authority_level": entry.get("authority_level", authority_level),
             "internal_role": entry.get("internal_role", ""),
         })
     if not personas:
@@ -4235,7 +4240,8 @@ def _build_persona_doctrine_report(ctx: object | None) -> dict[str, Any]:
             personas.append({
                 "persona": name,
                 "lane": str(matrix.get("lane", "bridge-true")),
-                "runtime_authority": False,
+                "runtime_authority": has_runtime_authority,
+                "authority_level": authority_level,
                 "internal_role": "",
             })
     persona_count = len(personas)
@@ -4244,8 +4250,10 @@ def _build_persona_doctrine_report(ctx: object | None) -> dict[str, Any]:
         "persona_count": persona_count,
         "personas": personas,
         "authority_boundary": {
-            "live_packaged_runtime_authority": False,
-            "operator_promotion_required": True,
+            "live_packaged_runtime_authority": has_runtime_authority,
+            "authority_level": authority_level,
+            "active_tier": active_tier,
+            "operator_promotion_required": not has_runtime_authority,
         },
     }
     verification_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
@@ -5724,7 +5732,19 @@ def _render_real_workflow_benchmark_report(ctx: object | None) -> str:
 
 
 def render_resource_uri(ctx: object | None, resource_uri: str) -> str:
-    """Render a packaged resource URI outside the running MCP server."""
+    """Render a packaged resource URI outside the running MCP server.
+
+    Both ``hlf://`` (legacy) and ``sg://`` (SwarmGlass canonical) URI prefixes are
+    accepted.  ``sg://`` URIs are transparently remapped to ``hlf://`` before the
+    resource routing table is consulted so that every existing route works under
+    either prefix without duplication.
+    """
+    # ------------------------------------------------------------------
+    # SwarmGlass canonical URI alias:  sg://  →  hlf://
+    # Backward-compat: hlf:// URIs continue to work unchanged.
+    # ------------------------------------------------------------------
+    if resource_uri.startswith("sg://"):
+        resource_uri = "hlf://" + resource_uri[5:]
     if resource_uri == "hlf://agent/protocol":
         return _render_agent_protocol(ctx)
 
@@ -6048,10 +6068,15 @@ def render_resource_uri(ctx: object | None, resource_uri: str) -> str:
 
 
 def register_resources(mcp: FastMCP, ctx: object | None = None) -> dict[str, object]:
+    """Register all packaged MCP resources with the FastMCP server.
+
+    All resources are registered under ``hlf://`` URIs (legacy prefix).
+    For SwarmGlass-canonical ``sg://`` URI access, ``render_resource_uri()``
+    transparently remaps the prefix before routing.  MCP-side ``sg://``
+    aliases can be added later by registering a second set of resources or
+    upgrading to FastMCP middleware when the framework supports route aliases.
+    """
     import os as _os
-    # Only load DSL-dependent resources when experimental mode is explicitly enabled
-    if _os.environ.get("SWARMGLASS_EXPERIMENTAL", "0") != "1":
-        return {}
     # Lazy DSL imports — only loaded when resources are registered
     from hlf_mcp.hlf.agent_prompt import build_hlf_native_system_prompt  # noqa: F811
     from hlf_mcp.hlf.bytecode import OPCODES, HLFBytecode  # noqa: F811

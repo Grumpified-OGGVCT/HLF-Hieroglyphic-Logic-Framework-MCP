@@ -1,0 +1,59 @@
+{
+  "model": "deepseek-v4-flash:cloud",
+  "results": {
+    "Level 1 - Single Function": [
+      {
+        "name": "fizzbuzz",
+        "generated_chars": 376,
+        "executable": true,
+        "verify_output": "['1', '2', 'Fizz', '4', 'Buzz', 'Fizz', '7', '8', 'Fizz', 'Buzz', '11', 'Fizz', '13', '14', 'FizzBuzz', '16', '17', 'Fizz', '19', 'Buzz', 'Fizz', '22', '23', 'Fizz', 'Buzz', '26', 'Fizz', '28', '29', 'FizzBuzz']\n",
+        "time_s": 9.180162906646729
+      },
+      {
+        "name": "binary_search",
+        "generated_chars": 442,
+        "executable": true,
+        "verify_output": "3\n-1\n",
+        "time_s": 22.830442905426025
+      }
+    ],
+    "Level 2 - Multi-Function Module": [
+      {
+        "name": "calculator",
+        "generated_chars": 383,
+        "executable": true,
+        "verify_output": "15\n5\n50\n2.0\nError: Division by zero\n",
+        "time_s": 17.02785849571228
+      },
+      {
+        "name": "todo_cli",
+        "generated_chars": 1539,
+        "executable": true,
+        "verify_output": "=== Todo List Manager Demo ===\n\nAdded task: 'Buy groceries'\nAdded task: 'Read a book'\nAdded task: 'Write code'\n\nCurrent tasks:\n  0. [ ] Buy groceries\n  1. [ ] Read a book\n  2. [ ] Write code\n\nMarking task 1 ('Read a book') as done...\n\nCurrent tasks:\n  0. [ ] Buy groceries\n  1. [\u2713] Read a book\n  2. [ ] Write code\n\nRemoved task: 'Buy groceries'\n\nCurrent tasks:\n  0. [\u2713] Read a book\n  1. [ ] Write code\n\n=== End of Demo ===\n",
+        "time_s": 10.478525161743164
+      }
+    ],
+    "Level 3 - Network/File I/O": [
+      {
+        "name": "file_stats",
+        "generated_chars": 1117,
+        "executable": true,
+        "verify_output": "Total lines: 5\nTotal words: 13\nTotal characters: 73\nTop 5 most frequent words (case-insensitive):\n  hello: 3\n  world: 3\n  python: 2\n  of: 1\n  code: 1\n",
+        "time_s": 14.926850080490112
+      },
+      {
+        "name": "simple_server",
+        "generated_chars": 921,
+        "executable": false,
+        "verify_output": "Connection failed: HTTPConnectionPool(host='localhost', port=8999): Max retries exceeded with url: /api/health (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=8999): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\"))",
+        "time_s": 20.81024694442749
+      }
+    ]
+  },
+  "summary": {
+    "passed": 5,
+    "total": 6,
+    "rate": "5/6"
+  },
+  "total_time_s": 101.82061576843262
+}

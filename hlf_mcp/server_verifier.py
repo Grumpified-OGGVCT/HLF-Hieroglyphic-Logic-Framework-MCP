@@ -7,6 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from hlf_mcp.server_context import ServerContext
+import warnings
 
 
 def _verifier_knowledge_query(*, source: str | None, ast: dict[str, Any]) -> str:
@@ -158,6 +159,7 @@ def register_verifier_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         mode: str = "enforce",
     ) -> dict[str, Any]:
         """Run packaged formal verification over an HLF AST or source, covering type invariants, gas bounds, and extracted spec gates."""
+        warnings.warn("hlf_verify_formal_ast is deprecated, use sg_validate_verify_ast instead", DeprecationWarning, stacklevel=2)
         from hlf_mcp.hlf.execution_admission import evaluate_verification_report_admission, summarize_execution_effects  # lazy
         from hlf_mcp.hlf.formal_verifier import VerificationReport  # lazy
         effective_ast = ast
@@ -291,6 +293,7 @@ def register_verifier_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         mode: str = "enforce",
     ) -> dict[str, Any]:
         """Prove or refute that a deterministic gas budget covers the supplied task costs."""
+        warnings.warn("hlf_verify_gas_budget is deprecated, use sg_validate_verify_gas instead", DeprecationWarning, stacklevel=2)
         from hlf_mcp.hlf.execution_admission import evaluate_verification_report_admission  # lazy
         from hlf_mcp.hlf.formal_verifier import VerificationReport  # lazy
         result = ctx.formal_verifier.verify_gas_budget(
@@ -415,7 +418,27 @@ def register_verifier_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             else None,
         }
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_validate_verify_ast": hlf_verify_formal_ast,
+        "sg_validate_verify_gas": hlf_verify_gas_budget,
+    })
+
     return {
         "hlf_verify_formal_ast": hlf_verify_formal_ast,
         "hlf_verify_gas_budget": hlf_verify_gas_budget,
+        "sg_validate_verify_ast": hlf_verify_formal_ast,
+        "sg_validate_verify_gas": hlf_verify_gas_budget,
     }

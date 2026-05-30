@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import warnings
 from typing import Any
 
 
@@ -39,6 +40,7 @@ def register_native_tools(mcp, ctx):
     ) -> dict[str, Any]:
         compiler = HLFCompiler()
         try:
+            warnings.warn("hlf_native_speak is deprecated, use sg_coordinate_native_speak instead", DeprecationWarning, stacklevel=2)
             result = compiler.compile(source)
             hlf_result = result.get("hlf_result", "")
             trace_ref = _hash_trace(source, "ok")
@@ -191,4 +193,26 @@ def register_native_tools(mcp, ctx):
     tools["hlf_native_speak"] = hlf_native_speak
     tools["hlf_validate_output"] = hlf_validate_output
     tools["hlf_code_execute"] = hlf_code_execute
+
+    def _register_sg_aliases(mcp, aliases: dict):
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_coordinate_native_speak": hlf_native_speak,
+        "sg_validate_native_output": hlf_validate_output,
+        "sg_coordinate_native_execute": hlf_code_execute,
+    })
+
+    tools["sg_coordinate_native_speak"] = hlf_native_speak
+    tools["sg_validate_native_output"] = hlf_validate_output
+    tools["sg_coordinate_native_execute"] = hlf_code_execute
     return tools

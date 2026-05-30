@@ -32,8 +32,9 @@ def test_a_tampered_checkpoint() -> dict:
 
     result = {"test": "A", "name": "Tampered Checkpoint Detection", "passed": False, "details": {}}
 
+    import os as _os
     adapter_path = (
-        "C:/Users/gerry/.cache/huggingface/recursivemas/"
+        _os.path.expanduser("~/.cache/huggingface/recursivemas/")
         "models--RecursiveMAS--Sequential-Light-Outerlinks/"
         "snapshots/12420b91249efe1d05cf80b72de7d8007aa85b00/"
         "Planner-Critic-Outerlink(math).pt"

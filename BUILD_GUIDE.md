@@ -1,4 +1,4 @@
-# HLF MCP Build Guide
+# SwarmGlass MCP Server — Build Guide
 
 ## Scope
 
@@ -62,18 +62,61 @@ Current transport stance:
 
 ## 🐕 Recursive Build-Assist (Dogfooding)
 
-The packaged HLF MCP server is now used to help build, test, and explain itself:
+The packaged SwarmGlass MCP server is used to help build, test, and explain itself.
+This is a **working recursive build-assist loop** — not full self-hosting, but real:
+the system inspects its own state, summarizes regressions, preserves audit trails, and
+each new bridge slice is used to assist the next round of work.
 
-- Use `hlf_do`, `_toolkit.py status`, and MCP tools/resources to inspect, test, and explain the system during further development.
-- Operator-facing evidence, audit, and regression surfaces are real and queryable.
-- `/health` endpoint has been verified on the packaged `hlf_mcp` HTTP/SSE lane with `HLF_TRANSPORT=sse`, `HLF_PORT=8011`, and `GET /health -> 200 OK`.
-- This workflow is not full self-hosting, but it is a real recursive build-assist loop: the system is used to help build and verify itself, with each new bridge slice (routing, verification, orchestration, etc.) added and then used to further assist the next round of work.
+### Concrete Walkthrough
 
-- `stdio` is the preferred first transport for this recursive build workflow
-- `sse` and `streamable-http` health endpoints are still useful for transport bring-up
-- do not center the self-build story on remote `streamable-http` until MCP `initialize` succeeds end to end
+**1. Start the server (stdio mode):**
+```bash
+python -m hlf_mcp.server
+# FastMCP starts on stdio. Tools: 112 sg_* aliases registered.
+```
 
-Health is not the same as full MCP readiness.
+**2. Check the repo's health from within the system:**
+```bash
+# These commands work through the MCP tool surface
+hlf-operator test-summary          # Latest pytest pass/fail counts
+hlf-operator weekly-evidence-summary  # Governed weekly artifact status
+hlf-operator provenance-summary    # Memory/governance/witness provenance
+```
+
+**3. Run the full suite and record evidence:**
+```bash
+python -m pytest tests/ -q --tb=line --timeout=45 --timeout-method=thread -p no:cacheprovider
+# → hlf-operator test-summary   # to verify the new result
+# → hlf-operator memory-govern   # to record that the suite passed
+```
+
+**4. Query governed memory for build decisions:**
+```bash
+hlf-operator do --intent "what tests are failing and why"
+# Pipeline: classify → validate → plan → execute → audit → report
+# Returns governed response with Merkle-consistent audit proof
+```
+
+**5. Verify the audit chain after changes:**
+```bash
+hlf-operator governed-route --agent-id <agent>
+hlf-operator witness-status --subject-agent-id <agent>
+hlf-operator persona-review --artifact-id <id>
+```
+
+### What This Proves
+
+The system can:
+- Understand build intent (intent classification, routing)
+- Inspect repo state (test summaries, evidence queries, witness status)
+- Summarize regressions (governed recall of test history)
+- Preserve audit trails (every build action logged to the Merkle chain)
+
+### What This Does NOT Claim
+
+- Full self-hosting (the system doesn't compile its own source yet)
+- Streamable-HTTP readiness (MCP `initialize` not verified end-to-end on HTTP)
+- Autonomous build decisions (operator review still required for promotion)
 
 ## Why Outside Readers Should Care
 

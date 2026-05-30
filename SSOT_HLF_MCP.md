@@ -1,6 +1,13 @@
-# Single Source of Truth - HLF-Hieroglyphic-Logic-Framework-MCP
+# Single Source of Truth - SwarmGlass-MCP
 
-**Generated on:** 2026-03-24
+## Brand Boundary (2026-05-29)
+
+- **SwarmGlass** is the outward-facing governance framework. All MCP tools, operator surfaces, documentation, and packaging use the SwarmGlass brand.
+- **HLF** (Hieroglyphic Logic Framework) is the internal deterministic language layer. It remains the compiler/runtime/grammar/bytecode engine. HLF is not deprecated — it is demoted from product to subsystem.
+- The `sg_*` namespace is the canonical MCP tool surface (112 aliases registered). The `hlf_*` namespace is a deprecated backward-compat alias.
+- All new tools, docs, and operator references use `sg_*` names.
+
+**Generated on:** 2026-03-24 (brand updated 2026-05-29)
 **Branch:** rescue/governed-review-recovery-2026-03-21
 **Purpose:** Authoritative current-state document for this local checkout, grounded in code present in this branch plus targeted verification runs on 2026-03-20, 2026-03-21, and 2026-03-24, with explicit notes on extraction completeness relative to the Sovereign source repo.
 
@@ -31,7 +38,7 @@ Downstream guidance:
 
 ## Operator Workflow (Dogfooding)
 
-The packaged HLF MCP server is now used for bounded, governed build-assist:
+The packaged SwarmGlass MCP server is now used for bounded, governed build-assist:
 
 - Use `hlf_do`, `_toolkit.py status`, and `hlf_test_suite_summary` to inspect, test, and explain the system during further development.
 - All operator-facing evidence, audit, and regression surfaces are real and queryable.
@@ -42,6 +49,24 @@ The packaged HLF MCP server is now used for bounded, governed build-assist:
 
 - `uv run pytest tests/ -q --tb=short` passed with `816 passed`
 - workspace-local MCP wiring now targets `uv run hlf-mcp` rather than the legacy compatibility entrypoint
+
+### Current State (2026-05-29)
+
+Recovery sprint completed. Key metrics as of the 6-pass study + recovery sprint:
+
+| Metric | Value |
+|--------|-------|
+| sg_* MCP aliases registered | **112** (across 16 server files) |
+| Test pass rate | **98.6%** (4,572 passed, 63 remaining pre-existing failures, 3 skipped) |
+| Persona runtime authority | **Tier-gated** (advisory at hearth/forge, authoritative at sovereign) |
+| SWARMGLASS_HLF_ENABLED | Renamed from SWARMGLASS_EXPERIMENTAL (32 files, zero remaining old refs) |
+| Brand | SwarmGlass outward, HLF internal engine |
+| Env migration | HLF_* → SWARMGLASS_* backward-compat, .env auto-population |
+| Orchestration trace proofs | Implemented: delegation, dissent, escalation tracked in PlanStepContract |
+| Handoff contracts | Implemented: 4 templates (delegation/dissent/vote/review_board), chain verification |
+| Hybrid RAG | Two implementations (rag/ 487 lines, hlf/ 794 lines) — consolidation TBD |
+| Build assist loop | Documented walkthrough in BUILD_GUIDE.md |
+| Msty Claw assessment | Gap analysis + implementation roadmap with governance hardening appendix |
 
 If a claim is not backed by files in this repo or a command run in this workspace on the verification dates named above, it does not belong in the "implemented now" section.
 
@@ -67,7 +92,7 @@ Additional boundary rule:
 
 ## Repo Identity
 
-- Repository: HLF-Hieroglyphic-Logic-Framework-MCP
+- Repository: SwarmGlass-MCP
 - Workspace path: this repository checkout
 - Canonical/core local repository: this checkout, because it is attached to the online GitHub repository
 - Donor/reference only: sibling workspace `HLF_MCP_WORKING`; do not treat it as the project root or as automatic authority

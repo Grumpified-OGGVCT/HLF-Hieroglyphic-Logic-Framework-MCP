@@ -8,6 +8,14 @@ reranking into a unified retrieval interface.
 Sources:
   - Janus (conversation history)
   - ChronosGraph (temporal knowledge graph)
+
+Note: This is a parallel implementation preserved for potential future use in the
+rag/ subpackage. The canonical implementation is hlf_mcp/hlf/hybrid_rag.py (794
+lines), which is what RAGService currently imports. This file is kept intact for
+the rag subpackage surface so that future rag-integration work has a starting
+point without modifying the active hlf/ version. No code changes are needed here —
+the sole purpose is to document why two implementations coexist and prevent
+accidental deletion or silent consolidation.
   - BrowserOS_Guides (documentation)
   - HKS exemplars (validated knowledge)
 

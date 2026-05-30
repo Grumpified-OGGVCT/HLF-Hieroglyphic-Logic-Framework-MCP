@@ -12,7 +12,7 @@ and constraint enforcement — the stable governance shell around HLF's experime
 
 HLF is a deterministic orchestration protocol that replaces natural language ambiguity
 with a strictly-typed Hieroglyphic AST for zero-trust agent execution. The HLF compiler,
-runtime, and VM are available under SWARMGLASS_EXPERIMENTAL=1.
+runtime, and VM are available under SWARMGLASS_HLF_ENABLED=1.
 
 Key properties:
   - LALR(1) deterministic parsing - 100% reproducible execution paths

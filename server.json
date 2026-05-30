@@ -3,7 +3,7 @@
   "name": "io.github.grumpified-oggvct/hlf-mcp",
   "version": "0.5.0",
   "description": "HLF Hieroglyphic Logic Framework — MCP server with hierarchical logic validation and ethical governance.",
-  "repository": "https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP",
+  "repository": "https://github.com/Grumpified-OGGVCT/SwarmGlass-MCP",
   "license": "MIT",
   "packages": [
     {

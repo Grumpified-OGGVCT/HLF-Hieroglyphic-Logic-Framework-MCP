@@ -203,3 +203,5 @@ _patch*.py
 # ── Local imported research/playbook drops (review before promoting) ──────────
 Advanced REading and Applications/
 OLLAMA_AGENT_PLAYBOOK.md
+venv_linux/
+*.pt

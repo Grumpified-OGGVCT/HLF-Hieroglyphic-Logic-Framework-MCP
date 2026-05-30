@@ -40,7 +40,7 @@ import pytest
 
 # Modules that swarmglass.core must NEVER import transitively.
 # These form the DSL/VM layer that must remain gated behind
-# SWARMGLASS_EXPERIMENTAL.
+# SWARMGLASS_HLF_ENABLED.
 _FORBIDDEN_DSL_MODULES: FrozenSet[str] = frozenset(
     {
         "hlf_mcp.hlf.compiler",

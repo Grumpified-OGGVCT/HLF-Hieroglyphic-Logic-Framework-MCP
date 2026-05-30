@@ -17,9 +17,9 @@ HLF_MCP is migrating from `hlf_*` tool names to `sg_*` (SwarmGlass) names. This 
 | Area | Behavior |
 |------|----------|
 | Governance tools | Both `hlf_*` and `sg_*` names work. `hlf_*` emits `DeprecationWarning` on each call. |
-| DSL tools | `hlf_*` names only — gated behind `SWARMGLASS_EXPERIMENTAL=1`. No `sg_*` aliases. |
-| Environment variables | `HLF_*` vars work with fallback. `HLF_EXPERIMENTAL_MODE` remapped to `SWARMGLASS_EXPERIMENTAL`. |
-| Server boot | Governance-only by default (`SWARMGLASS_EXPERIMENTAL=0`). Zero DSL imports. |
+| DSL tools | `hlf_*` names only — gated behind `SWARMGLASS_HLF_ENABLED=1`. No `sg_*` aliases. |
+| Environment variables | `HLF_*` vars work with fallback. `HLF_EXPERIMENTAL_MODE` remapped to `SWARMGLASS_HLF_ENABLED`. |
+| Server boot | Governance-only by default (`SWARMGLASS_HLF_ENABLED=0`). Zero DSL imports. |
 | CI | `test_ci_import_guard.py` verifies no DSL leakage from governance tools. |
 
 **Counts:**
@@ -56,7 +56,7 @@ HLF_MCP is migrating from `hlf_*` tool names to `sg_*` (SwarmGlass) names. This 
 | Area | Change |
 |------|--------|
 | Governance `hlf_*` aliases | **REMOVED.** Only `sg_*` names work for governance tools. |
-| DSL tools | **Preserved.** `hlf_*` compiler/runtime/translator remain under `SWARMGLASS_EXPERIMENTAL=1` forever. |
+| DSL tools | **Preserved.** `hlf_*` compiler/runtime/translator remain under `SWARMGLASS_HLF_ENABLED=1` forever. |
 | `HLF_*` env vars | **REMOVED.** Only `SG_*` names resolved. |
 | `hlf_mcp/__init__.py` | DSL re-exports removed from `__all__`. Only `__version__` remains public. |
 | Package name | `hlf-mcp` → `swarmglass` on PyPI. Old name kept as empty shim with deprecation notice. |
@@ -73,7 +73,7 @@ HLF_MCP is migrating from `hlf_*` tool names to `sg_*` (SwarmGlass) names. This 
 
 ## Permanent: Experimental Lane
 
-The `hlf_*` DSL tools (compiler, runtime, translator, bytecode, benchmarks) are **never removed**. They live behind `SWARMGLASS_EXPERIMENTAL=1`:
+The `hlf_*` DSL tools (compiler, runtime, translator, bytecode, benchmarks) are **never removed**. They live behind `SWARMGLASS_HLF_ENABLED=1`:
 
 - Not advertised in default tool listings
 - Not documented in main README
@@ -98,7 +98,7 @@ DeprecationWarning FutureWarning       ImportError          Experimental gate
 
 **Immediately (Phase 2):**
 - Start using `sg_*` tool names. They work now.
-- Replace `HLF_EXPERIMENTAL_MODE` with `SWARMGLASS_EXPERIMENTAL` in your configs.
+- Replace `HLF_EXPERIMENTAL_MODE` with `SWARMGLASS_HLF_ENABLED` in your configs.
 - Check your logs for `DeprecationWarning` messages to find deprecated usages.
 
 **Soon (Phase 3):**

@@ -1,13 +1,13 @@
 {
   "name": "hlf-vscode",
-  "displayName": "HLF MCP Bridge",
-  "description": "VS Code bridge and operator shell scaffold for the packaged HLF MCP server.",
+  "displayName": "SwarmGlass MCP Bridge",
+  "description": "SwarmGlass VS Code bridge and operator shell — HLF language engine inside, sg_* canonical MCP tools outward.",
   "version": "0.1.0",
   "publisher": "grumpified-oggvct",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP"
+    "url": "https://github.com/Grumpified-OGGVCT/SwarmGlass-MCP"
   },
   "engines": {
     "vscode": "^1.95.0"
@@ -240,7 +240,7 @@
       }
     ],
     "configuration": {
-      "title": "HLF MCP Bridge",
+      "title": "SwarmGlass MCP Bridge",
       "properties": {
         "hlf.transport": {
           "type": "string",

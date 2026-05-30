@@ -10,7 +10,7 @@ You are researching against a repository whose current working truth is on a loc
 
 Public GitHub visibility is limited:
 
-- Public repo: `https://github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP`
+- Public repo: `https://github.com/Grumpified-OGGVCT/SwarmGlass-MCP`
 - Related reference repo: `https://github.com/Grumpified-OGGVCT/Sovereign_Agentic_OS_with_HLF`
 - Current working branch in local workspace: `integrate-sovereign`
 - Default public branch: `main`

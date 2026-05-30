@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import urllib.request
 from typing import Any
 
@@ -188,12 +189,13 @@ class TestNetModuleRiskPaths:
 
 class TestServerCoreCompileErrorShaping:
     def test_hlf_compile_shapes_compile_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        os.environ["SWARMGLASS_HLF_ENABLED"] = "1"
         from hlf_mcp.hlf.compiler import CompileError
         from hlf_mcp.server_context import build_server_context
         from hlf_mcp.server_core import register_core_tools
 
         class DummyMCP:
-            def tool(self):
+            def tool(self, **kwargs):
                 return lambda fn: fn
 
         ctx = build_server_context()
@@ -216,7 +218,7 @@ class TestServerCoreCompileErrorShaping:
         from hlf_mcp.server_core import register_core_tools
 
         class DummyMCP:
-            def tool(self):
+            def tool(self, **kwargs):
                 return lambda fn: fn
 
         ctx = build_server_context()

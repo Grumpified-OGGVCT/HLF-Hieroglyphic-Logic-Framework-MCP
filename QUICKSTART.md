@@ -59,10 +59,15 @@ First contact for a non-building agent:
 For packaged HTTP bring-up verification:
 
 ```bash
-# PowerShell
+# Windows (PowerShell)
 $env:HLF_TRANSPORT='sse'
 $env:HLF_PORT='8011'
-uv run hlf-mcp
+python -m hlf_mcp.server
+
+# Mac/Linux (bash/zsh)
+export HLF_TRANSPORT=sse
+export HLF_PORT=8011
+python -m hlf_mcp.server
 
 # In another terminal
 curl http://localhost:8011/health

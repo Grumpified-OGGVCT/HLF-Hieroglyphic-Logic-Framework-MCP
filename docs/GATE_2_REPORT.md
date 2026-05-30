@@ -9,7 +9,7 @@ Status: **COMPLETE** — All Phase 2 + Phase 3 + Hardening items delivered and v
 
 Gate 2 validates that the governance layer is **structurally decoupled** from the HLF DSL/VM/compiler stack. The server can boot in governance-only mode with zero DSL modules loaded, and a new `swarmglass.core` namespace exists permanently outside the `hlf_mcp` package tree.
 
-**Result:** Governance-only boot works. DSL modules enter `sys.modules` only when `SWARMGLASS_EXPERIMENTAL=1`. The `swarmglass.core` namespace provides a permanent import path that never triggers `hlf_mcp/__init__.py`. All 85 `sg_*` aliases from SHIM_DESIGN.md sections 1.1-1.2 are now registered. Live MCP serve test confirms end-to-end governance-only operation.
+**Result:** Governance-only boot works. DSL modules enter `sys.modules` only when `SWARMGLASS_HLF_ENABLED=1`. The `swarmglass.core` namespace provides a permanent import path that never triggers `hlf_mcp/__init__.py`. All 85 `sg_*` aliases from SHIM_DESIGN.md sections 1.1-1.2 are now registered. Live MCP serve test confirms end-to-end governance-only operation.
 
 ---
 
@@ -20,7 +20,7 @@ Gate 2 validates that the governance layer is **structurally decoupled** from th
 | 1 | `hlf_mcp/__init__.py` → `__getattr__` proxy | Zero DSL on `import hlf_mcp` |
 | 2 | `hlf_mcp/hlf/__init__.py` → `_LAZY_ATTRS` dict (229 entries) | Zero DSL on `import hlf_mcp.hlf` |
 | 3 | `ServerContext` → 7 DSL fields `= None` default | Dataclass constructs without DSL |
-| 4 | `build_server_context()` → `SWARMGLASS_EXPERIMENTAL` gate | DSL instantiation only when EXP=1 |
+| 4 | `build_server_context()` → `SWARMGLASS_HLF_ENABLED` gate | DSL instantiation only when EXP=1 |
 | 5 | `server.py` → split tool registration | 10 governance tools always, 6 DSL tools gated |
 | 6 | `test_ci_import_guard.py` → 10 `@skip` removed | 11/11 tests pass, guard active |
 | 7 | 35 initial `sg_*` aliases across 8 server files | `sg_audit_*`, `sg_memory_*`, `sg_observe_*`, etc. |

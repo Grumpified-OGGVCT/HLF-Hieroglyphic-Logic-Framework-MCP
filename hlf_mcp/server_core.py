@@ -851,6 +851,46 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             return {"status": "not_found", "capsule_id": capsule_id}
         return {"status": "ok", "capsule_id": capsule_id, "hitl_status": status}
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_hlf_compile": hlf_compile,
+        "sg_hlf_format": hlf_format,
+        "sg_hlf_lint": hlf_lint,
+        "sg_hlf_run": hlf_run,
+        "sg_hlf_code_execute": hlf_code_execute,
+        "sg_hlf_validate": hlf_validate,
+        "sg_coordinate_swarm_mechanics_ext": hlf_swarm_mechanics,
+        "sg_audit_governance_proof_verify": hlf_governance_proof_verify,
+        "sg_bench_run": hlf_benchmark,
+        "sg_bench_suite": hlf_benchmark_suite,
+        "sg_bench_real_workflow": hlf_real_workflow_benchmark,
+        "sg_hlf_disassemble": hlf_disassemble,
+        "sg_hlf_submit_ast": hlf_submit_ast,
+        "sg_memory_test_summary": hlf_test_suite_summary,
+        "sg_observe_symbolic_surface": hlf_capture_symbolic_surface,
+        "sg_memory_weekly_evidence_summary": hlf_weekly_evidence_summary,
+        "sg_hlf_compile_wasm": hlf_compile_wasm,
+        "sg_coordinate_janus_crawl": janus_crawl,
+        "sg_coordinate_janus_query": janus_query,
+        "sg_coordinate_janus_archive": janus_archive,
+        "sg_bench_latent_infer": hlf_latent_recursive_infer,
+        "sg_memory_resource_report": hlf_resource_report,
+        "sg_coordinate_hitl_list_pending": hlf_hitl_list_pending,
+        "sg_coordinate_hitl_status": hlf_hitl_status,
+    })
+
     return {
         "hlf_compile": hlf_compile,
         "hlf_format": hlf_format,
@@ -876,4 +916,28 @@ def register_core_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_resource_report": hlf_resource_report,
         "hlf_hitl_list_pending": hlf_hitl_list_pending,
         "hlf_hitl_status": hlf_hitl_status,
+        "sg_hlf_compile": hlf_compile,
+        "sg_hlf_format": hlf_format,
+        "sg_hlf_lint": hlf_lint,
+        "sg_hlf_run": hlf_run,
+        "sg_hlf_code_execute": hlf_code_execute,
+        "sg_hlf_validate": hlf_validate,
+        "sg_coordinate_swarm_mechanics_ext": hlf_swarm_mechanics,
+        "sg_audit_governance_proof_verify": hlf_governance_proof_verify,
+        "sg_bench_run": hlf_benchmark,
+        "sg_bench_suite": hlf_benchmark_suite,
+        "sg_bench_real_workflow": hlf_real_workflow_benchmark,
+        "sg_hlf_disassemble": hlf_disassemble,
+        "sg_hlf_submit_ast": hlf_submit_ast,
+        "sg_memory_test_summary": hlf_test_suite_summary,
+        "sg_observe_symbolic_surface": hlf_capture_symbolic_surface,
+        "sg_memory_weekly_evidence_summary": hlf_weekly_evidence_summary,
+        "sg_hlf_compile_wasm": hlf_compile_wasm,
+        "sg_coordinate_janus_crawl": janus_crawl,
+        "sg_coordinate_janus_query": janus_query,
+        "sg_coordinate_janus_archive": janus_archive,
+        "sg_bench_latent_infer": hlf_latent_recursive_infer,
+        "sg_memory_resource_report": hlf_resource_report,
+        "sg_coordinate_hitl_list_pending": hlf_hitl_list_pending,
+        "sg_coordinate_hitl_status": hlf_hitl_status,
     }

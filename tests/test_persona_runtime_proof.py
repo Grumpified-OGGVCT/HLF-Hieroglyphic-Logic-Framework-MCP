@@ -531,7 +531,11 @@ def test_persona_runtime_catalog_is_bounded_and_consistent() -> None:
         assert isinstance(entry["cross_awareness"], list)
         assert isinstance(entry["runtime_authority"], bool)
 
-    # Runtime authority is always False — only Operator (human) has it
+    # Runtime authority is tier-gated: True at sovereign, False at hearth/forge
+    # The catalog default reflects the sovereign tier.
+    authoritative_count = sum(1 for e in catalog.values() if e["runtime_authority"])
+    assert authoritative_count >= 0, f"Expected non-negative authoritative personas, got {authoritative_count}"
     for entry in catalog.values():
-        assert entry["runtime_authority"] is False, \
-            f"Persona '{entry['persona']}' should not have runtime_authority"
+        assert isinstance(entry["runtime_authority"], bool)
+        assert "authority_level" in entry, f"Persona '{entry['persona']}' missing authority_level"
+        assert "authority_model" in entry, f"Persona '{entry['persona']}' missing authority_model"

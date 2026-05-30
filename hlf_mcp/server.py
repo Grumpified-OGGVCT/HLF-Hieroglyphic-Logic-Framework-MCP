@@ -52,6 +52,7 @@ from hlf_mcp.env_migration import get_env
 from hlf_mcp.server_auth import auth_middleware, HLF_API_TOKEN
 from hlf_mcp.server_enterprise import register_enterprise_tools
 from hlf_mcp.server_overwatch import register_overwatch_tools
+from hlf_mcp.server_orchestrator import register_orchestrator_tools
 import warnings
 
 _log = logging.getLogger(__name__)
@@ -73,12 +74,12 @@ mcp = FastMCP(
 # ── Module-level singletons ────────────────────────────────────────────────────
 
 _ctx = build_server_context()
-compiler = _ctx.compiler        # may be None when SWARMGLASS_EXPERIMENTAL=0
-formatter = _ctx.formatter      # may be None when SWARMGLASS_EXPERIMENTAL=0
-linter = _ctx.linter            # may be None when SWARMGLASS_EXPERIMENTAL=0
-_runtime = _ctx.runtime         # may be None when SWARMGLASS_EXPERIMENTAL=0
-bytecoder = _ctx.bytecoder      # may be None when SWARMGLASS_EXPERIMENTAL=0
-_benchmark = _ctx.benchmark     # may be None when SWARMGLASS_EXPERIMENTAL=0
+compiler = _ctx.compiler        # may be None when SWARMGLASS_HLF_ENABLED=0
+formatter = _ctx.formatter      # may be None when SWARMGLASS_HLF_ENABLED=0
+linter = _ctx.linter            # may be None when SWARMGLASS_HLF_ENABLED=0
+_runtime = _ctx.runtime         # may be None when SWARMGLASS_HLF_ENABLED=0
+bytecoder = _ctx.bytecoder      # may be None when SWARMGLASS_HLF_ENABLED=0
+_benchmark = _ctx.benchmark     # may be None when SWARMGLASS_HLF_ENABLED=0
 memory_store = _ctx.memory_store
 instinct_mgr = _ctx.instinct_mgr
 host_registry = _ctx.host_registry
@@ -110,9 +111,10 @@ REGISTERED_TOOLS.update(register_instinct_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_completion_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_enterprise_tools(mcp, _ctx))
 REGISTERED_TOOLS.update(register_overwatch_tools(mcp, _ctx))
+REGISTERED_TOOLS.update(register_orchestrator_tools(mcp, _ctx))
 
 # DSL-dependent tools — only when experimental mode is explicitly enabled
-if get_env("SWARMGLASS_EXPERIMENTAL", "0") == "1":
+if get_env("SWARMGLASS_HLF_ENABLED", "0") == "1":
     REGISTERED_TOOLS.update(register_core_tools(mcp, _ctx))
     REGISTERED_TOOLS.update(register_translation_tools(mcp, _ctx))
     REGISTERED_TOOLS.update(register_verifier_tools(mcp, _ctx))
@@ -132,7 +134,7 @@ def hlf_entropy_anchor(
     """Evaluate semantic drift between packaged HLF meaning and an operator-readable intent baseline."""
     warnings.warn("hlf_entropy_anchor is deprecated, use sg_observe_drift instead", DeprecationWarning, stacklevel=2)
     if _ctx.compiler is None:
-        return {"status": "unavailable", "reason": "SWARMGLASS_EXPERIMENTAL=0, compiler not loaded"}
+        return {"status": "unavailable", "reason": "SWARMGLASS_HLF_ENABLED=0, compiler not loaded"}
     try:
         result = _ctx.compiler.compile(source)
         anchor = evaluate_entropy_anchor(
@@ -226,8 +228,8 @@ globals().update(REGISTERED_TOOLS)
 REGISTERED_PROMPTS = register_agent_prompts(mcp)
 REGISTERED_RESOURCES = register_resources(mcp, _ctx)
 _generated_instructions = build_server_instructions(REGISTERED_TOOLS, REGISTERED_RESOURCES)
-if get_env("SWARMGLASS_EXPERIMENTAL", "0") != "1":
-    _generated_instructions += "\n\n⚠️  Running in governance-only mode (SWARMGLASS_EXPERIMENTAL=0). HLF compilation/runtime/verification tools are not available."
+if get_env("SWARMGLASS_HLF_ENABLED", "0") != "1":
+    _generated_instructions += "\n\n⚠️  Running in governance-only mode (SWARMGLASS_HLF_ENABLED=0). HLF compilation/runtime/verification tools are not available."
 # FastMCP exposes instructions as a read-only property; the wrapped low-level
 # MCP server owns the writable field that initialize responses actually use.
 mcp._mcp_server.instructions = _generated_instructions
@@ -407,7 +409,7 @@ def _startup_self_index() -> None:
 
 
 def main() -> None:
-    """Start the HLF MCP server with the configured transport."""
+    """Start the SwarmGlass MCP server with the configured transport."""
     _db_path = _ctx.memory_store._db_path  # type: ignore[attr-defined]
     if _db_path == ":memory:":
         _log.warning(
@@ -426,22 +428,53 @@ def main() -> None:
         auth_middleware(transport)  # Enable Bearer token auth for HTTP transports
 
     if transport == "stdio":
+        _log.info("SwarmGlass MCP Server — stdio transport. Tools: %d sg_* MCP tools.", len(REGISTERED_TOOLS))
         mcp.run(transport="stdio")
     elif transport in ("sse", "http"):
         host, port = _get_http_bind()
         mcp.settings.host = host
         mcp.settings.port = port
+        _announce_dashboard(host, port)
         mcp.run(transport="sse")
     elif transport == "streamable-http":
         host, port = _get_http_bind()
         mcp.settings.host = host
         mcp.settings.port = port
+        _announce_dashboard(host, port)
         mcp.run(transport="streamable-http")
     else:
         print(
             f"Unknown transport: {transport!r}. Use: stdio, sse, streamable-http", file=sys.stderr
         )
         sys.exit(1)
+
+
+def _announce_dashboard(host: str, port: int, delay: float = 1.0) -> None:
+    """Print dashboard URLs and attempt to open the operator dashboard in browser.
+
+    Runs in a background thread after a short delay to allow the HTTP server
+    to start listening first.
+    """
+    import threading
+    display_host = "localhost" if host in ("0.0.0.0", "::") else host
+    base = f"http://{display_host}:{port}"
+    _log.info("=" * 56)
+    _log.info("  SwarmGlass Operator Dashboard")
+    _log.info("  Health:    %s/health", base)
+    _log.info("  HITL Gate: %s/hitl", base)
+    _log.info("  Gallery:   %s/hitl (or: sg-operator --dashboard)", base)
+    _log.info("=" * 56)
+    def _open_browser():
+        import time
+        import webbrowser
+        time.sleep(delay)
+        try:
+            dashboard_url = f"http://localhost:{port}/hitl"
+            _log.info("  Opening %s ...", dashboard_url)
+            webbrowser.open(dashboard_url)
+        except Exception:
+            pass
+    threading.Thread(target=_open_browser, daemon=True).start()
 
 
 if __name__ == "__main__":

@@ -280,9 +280,9 @@ class TestEnterpriseToolsRegistered:
             assert callable(fn), f"Tool {name} is not callable"
 
     def test_enterprise_tool_count(self, enterprise_tools):
-        """We expect exactly 20 enterprise tools (from 8 registrars)."""
+        """We expect exactly 30 registered tools (20 hlf_* + 10 sg_* aliases)."""
         tools, _mock_mcp = enterprise_tools
-        assert len(tools) == 20, f"Expected 20 enterprise tools, got {len(tools)}: {sorted(tools.keys())}"
+        assert len(tools) == 30, f"Expected 30 enterprise tools (20 hlf_* + 10 sg_*), got {len(tools)}: {sorted(tools.keys())}"
 
 
 class TestEnterpriseToolsBehavior:

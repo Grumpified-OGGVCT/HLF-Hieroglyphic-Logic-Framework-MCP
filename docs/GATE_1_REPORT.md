@@ -77,7 +77,7 @@ The boot path proof (`BOOT_PROOF.md`) identified:
 - **Root cause:** `server_context.py:3420` — `build_server_context()` instantiates `HLFCompiler()`, `HLFRuntime()`, `HLFBytecode()`, `HLFFormatter()`, `HLFLinter()`, `HLFBenchmark()`, and `FormalVerifier()` unconditionally.
 - **10 of 16 tool modules are DSL-free:** governance, memory, handoff, feedback, profiles, instinct, completion, prompts, enterprise, auth.
 - **6 of 16 require DSL:** core, translation, native, capsule, verifier, resources.
-- **Minimal viable fix:** ~20 lines changed across 2 files — make `build_server_context()` conditional on `SWARMGLASS_EXPERIMENTAL=1` and gate tool registration accordingly. The AST analysis in `boot_proof_test.py` proves 12/12 governance source files have zero DSL imports.
+- **Minimal viable fix:** ~20 lines changed across 2 files — make `build_server_context()` conditional on `SWARMGLASS_HLF_ENABLED=1` and gate tool registration accordingly. The AST analysis in `boot_proof_test.py` proves 12/12 governance source files have zero DSL imports.
 
 ---
 
@@ -86,7 +86,7 @@ The boot path proof (`BOOT_PROOF.md`) identified:
 The following are **structurally validated** and ready for implementation:
 
 1. **Package init fix** — Convert `hlf_mcp/__init__.py` and `hlf_mcp/hlf/__init__.py` to `__getattr__` lazy loading. This unblocks all 59 STABLE_DEFAULT files currently poisoned by the package init.
-2. **Conditional server boot** — Gate `build_server_context()` and tool registration on `SWARMGLASS_EXPERIMENTAL=1`. This enables experimental-mode-off boot with governance-only tools.
+2. **Conditional server boot** — Gate `build_server_context()` and tool registration on `SWARMGLASS_HLF_ENABLED=1`. This enables experimental-mode-off boot with governance-only tools.
 3. **`sg_` tool aliases** — Register governance tools under both `hlf_*` (deprecated) and `sg_*` names. The mapping table in `SHIM_DESIGN.md` covers 130+ tools across observe/validate/audit domains.
 4. **CI guard activation** — Remove the 10 `@pytest.mark.skip` decorators from `test_ci_import_guard.py` once the package init is fixed.
 

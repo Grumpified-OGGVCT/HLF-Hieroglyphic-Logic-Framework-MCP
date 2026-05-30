@@ -16,7 +16,7 @@ from hlf_mcp.server_workflow_benchmark import register_workflow_benchmark_tools
 class FakeMcp:
     """Fake MCP for testing that passes through decorators."""
 
-    def tool(self):
+    def tool(self, **kwargs):
         def decorator(fn):
             return fn
 

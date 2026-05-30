@@ -1029,7 +1029,7 @@ class Z3Solver:
     The solver name "z3" in results indicates formal SMT discharge was used.
     """
     def __init__(self) -> None:
-        self._ctx = z3.Context() if z3 else None
+        self._ctx = z3.main_ctx() if z3 else None
 
     @property
     def available(self) -> bool:
@@ -1248,6 +1248,18 @@ class Z3Solver:
                 duration_ms=(time.time() - start) * 1000,
             )
 
+        # Non-BoolRef encodings (e.g. Concat→SeqRef, Length→ArithRef)
+        # cannot be directly used as solver assertions; degrade gracefully.
+        if not isinstance(encoding, z3.BoolRef):
+            return VerificationResult(
+                property_name=name or f"string_{operation}",
+                status=VerificationStatus.RUNTIME_CHECKED,
+                kind=ConstraintKind.CUSTOM,
+                message=f"String op '{operation}' encoded (non-boolean, SMT check skipped)",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
         # Verify the Z3 encoding via SMT
         s = z3.Solver(ctx=self._ctx)
         s.add(encoding)
@@ -1305,6 +1317,16 @@ class Z3Solver:
                 status=VerificationStatus.RUNTIME_CHECKED,
                 kind=ConstraintKind.CUSTOM,
                 message=f"Set op '{operation}' encoded as: {encoding}",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        if not isinstance(encoding, z3.BoolRef):
+            return VerificationResult(
+                property_name=name or f"set_{operation}",
+                status=VerificationStatus.RUNTIME_CHECKED,
+                kind=ConstraintKind.CUSTOM,
+                message=f"Set op '{operation}' encoded (non-boolean, SMT check skipped)",
                 solver="z3",
                 duration_ms=(time.time() - start) * 1000,
             )
@@ -1368,6 +1390,16 @@ class Z3Solver:
                 status=VerificationStatus.RUNTIME_CHECKED,
                 kind=ConstraintKind.CUSTOM,
                 message=f"Container op '{operation}' encoded as: {encoding}",
+                solver="z3",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        if not isinstance(encoding, z3.BoolRef):
+            return VerificationResult(
+                property_name=name or f"container_{operation}",
+                status=VerificationStatus.RUNTIME_CHECKED,
+                kind=ConstraintKind.CUSTOM,
+                message=f"Container op '{operation}' encoded (non-boolean, SMT check skipped)",
                 solver="z3",
                 duration_ms=(time.time() - start) * 1000,
             )
@@ -2575,12 +2607,15 @@ class FormalVerifier:
                     n_base, base_value, base_property, ctx
                 )
                 z3_expressions.extend(base_exprs)
-                s_base.add(z3.parse_smt2_string(
-                    "(assert (= n_base {}))".format(
-                        int(base_value) if isinstance(base_value, (int, float)) else 0
-                    ),
-                    ctx=ctx,
-                ))
+
+                # Assert base value constraint using the already-created Z3 variable
+                s_base.add(
+                    n_base
+                    == z3.IntVal(
+                        int(base_value) if isinstance(base_value, (int, float)) else 0,
+                        ctx=ctx,
+                    )
+                )
 
                 # Assert base property
                 _add_property_to_solver(s_base, n_base, base_property, ctx)

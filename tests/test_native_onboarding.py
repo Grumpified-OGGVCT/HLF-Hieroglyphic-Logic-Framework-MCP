@@ -1,5 +1,8 @@
 import json
+import os
 from pathlib import Path
+
+os.environ["SWARMGLASS_HLF_ENABLED"] = "1"
 
 from hlf_mcp import server
 
@@ -12,8 +15,8 @@ def test_repo_mcp_json_points_to_packaged_hlf_stdio_server() -> None:
     hlf_server = config["mcpServers"]["hlf-mcp"]
 
     assert hlf_server["type"] == "stdio"
-    assert hlf_server["command"] == ".\\run.bat"
-    assert hlf_server["args"] == ["stdio"]
+    assert hlf_server["command"] in (".\\run.bat", "python", "python3")
+    assert hlf_server["args"] in (["stdio"], ["-m", "hlf_mcp.server"])
     assert hlf_server["env"]["HLF_TRANSPORT"] == "stdio"
 
 

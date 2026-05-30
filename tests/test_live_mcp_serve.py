@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live MCP server serve test for governance-only mode (SWARMGLASS_EXPERIMENTAL=0).
+Live MCP server serve test for governance-only mode (SWARMGLASS_HLF_ENABLED=0).
 
 Verifies:
   1. Server starts in stdio transport without crashing
@@ -47,7 +47,7 @@ def main() -> int:
     # ── Environment ──────────────────────────────────────────────────────────
     cwd = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     env = os.environ.copy()
-    env["SWARMGLASS_EXPERIMENTAL"] = "0"
+    env["SWARMGLASS_HLF_ENABLED"] = "0"
     env["HLF_TRANSPORT"] = "stdio"
     env["HLF_SKIP_SELF_INDEX"] = "1"
     env["HLF_MEMORY_DB"] = ":memory:"
@@ -56,7 +56,7 @@ def main() -> int:
 
     print("=" * 70)
     print("HLF MCP Live Serve Test — Governance-Only Mode")
-    print(f"SWARMGLASS_EXPERIMENTAL=0  |  HLF_TRANSPORT=stdio")
+    print(f"SWARMGLASS_HLF_ENABLED=0  |  HLF_TRANSPORT=stdio")
     print(f"Working directory: {cwd}")
     print("=" * 70)
 
@@ -242,7 +242,7 @@ def main() -> int:
     print("\n[6] Verifying zero DSL imports in governance-only mode …")
     check_script = r"""
 import os, sys, json
-os.environ["SWARMGLASS_EXPERIMENTAL"] = "0"
+os.environ["SWARMGLASS_HLF_ENABLED"] = "0"
 os.environ["HLF_SKIP_SELF_INDEX"] = "1"
 os.environ["HLF_MEMORY_DB"] = ":memory:"
 

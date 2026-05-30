@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import warnings
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -1326,6 +1327,344 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
             return {"indexed": 0, "error": "no_memory_store"}
         return store.index_embeddings(batch_size=batch_size)
 
+    @mcp.tool()
+    def sg_observe_status() -> dict[str, Any]:
+        """Return a live SwarmGlass operator dashboard snapshot as governed data.
+
+        Queries real telemetry from the active server context: swarm health
+        (active missions, phase distribution), verification gate status,
+        constitutional violations from governance events, manifest audit
+        from the audit chain, witness governance subject counts, and
+        memory/HKS statistics.
+
+        Returns one governed payload suitable for operator dashboards,
+        status checks, and automated health monitoring. Every field is
+        labeled with its data source ('live' or 'simulated').
+        """
+        from hlf_mcp.gallery.telemetry import (
+            _collect_swarm_health, _collect_verification_gate,
+            _collect_constitutional_violations, _collect_manifest_audit,
+            _compute_overall_readiness, _now_iso,
+        )
+        swarm = _collect_swarm_health(ctx)
+        verification = _collect_verification_gate(ctx)
+        violations = _collect_constitutional_violations(ctx)
+        manifest = _collect_manifest_audit(ctx)
+        witness = ctx.get_witness_status() or {}
+        memory = ctx.memory_store.stats() if ctx.memory_store else {}
+        archive = memory.get("memory_strata", {})
+        total_facts = memory.get("total_facts", 0)
+        archive_facts = archive.get("archive", 0)
+        active_facts = max(total_facts - archive_facts, 0)
+        snapshot_data = {
+            "swarm_health": swarm,
+            "verification_gate": verification,
+            "constitutional_violations": violations,
+            "manifest_audit": manifest,
+        }
+        overall = _compute_overall_readiness(snapshot_data)
+        payload = {
+            "status": "ok",
+            "source": "live",
+            "timestamp": _now_iso(),
+            "overall_readiness_pct": overall,
+            "swarm_health": swarm,
+            "verification_gate": verification,
+            "constitutional_violations": violations,
+            "manifest_audit": manifest,
+            "witness": {
+                "total_subjects": witness.get("summary", {}).get("total_subjects", 0),
+                "healthy": witness.get("summary", {}).get("healthy", 0),
+                "watched": witness.get("summary", {}).get("watched", 0),
+                "probation": witness.get("summary", {}).get("probation", 0),
+                "restricted": witness.get("summary", {}).get("restricted", 0),
+            },
+            "memory": {
+                "total_facts": total_facts,
+                "active_facts": active_facts,
+                "archive_facts": archive_facts,
+                "hks_exemplars": memory.get("hks_exemplars", 0),
+                "hot_tier_topics": memory.get("hot_tier_topics", 0),
+            },
+            "operator_summary": (
+                f"SwarmGlass status: readiness {overall}%. "
+                f"{swarm.get('active_missions', swarm.get('active_agents', 0))} active missions, "
+                f"{memory.get('total_facts', 0)} memory facts, "
+                f"{witness.get('summary', {}).get('total_subjects', 0)} witness subjects."
+            ),
+        }
+        ctx.audit_chain.log(
+            "sg_observe_status",
+            {"overall_readiness": overall},
+            agent_role="operator_observer",
+            goal_id="observed_status",
+        )
+        return payload
+
+    @mcp.tool()
+    def hlf_memory_register_evidence_bundle(
+        facts: list[dict[str, Any]],
+        bundle_id: str = "",
+        provenance_grade: str = "evidence-backed",
+        topic: str = "hlf_evidence_bundles",
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Register a bundle of governed evidence facts with shared provenance.
+
+        Each fact in the bundle gets the same provenance grade, topic, and
+        tags. Facts are stored atomically — if any store fails, the bundle
+        is reported as partial. This is the governed equivalent of
+        batch-inserting memory facts: every fact gets an evidence contract,
+        audit entry, and governance event.
+
+        Args:
+            facts: List of dicts, each with at least 'content' (str).
+                Optional per-fact: confidence, domain, solution_kind.
+            bundle_id: Identifier for this evidence bundle.
+            provenance_grade: Shared provenance grade (evidence-backed, basic).
+            topic: Topic for all facts in the bundle.
+            tags: Tags applied to all facts.
+        """
+        warnings.warn(
+            "hlf_memory_register_evidence_bundle is deprecated, "
+            "use sg_memory_register_evidence_bundle instead",
+            DeprecationWarning, stacklevel=2,
+        )
+        stored: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        effective_bundle_id = str(bundle_id or "").strip() or (
+            f"bundle-{int(time.time())}"
+        )
+        effective_tags = [str(t) for t in (tags or []) if t]
+        effective_tags.append(f"bundle:{effective_bundle_id}")
+
+        for idx, fact in enumerate(facts):
+            if not isinstance(fact, dict):
+                errors.append({"index": idx, "error": "fact_not_dict"})
+                continue
+            content = str(fact.get("content") or "").strip()
+            if not content:
+                errors.append({"index": idx, "error": "empty_content"})
+                continue
+            try:
+                entry = ctx.memory_store.store(
+                    content,
+                    topic=topic,
+                    confidence=float(fact.get("confidence", 1.0)),
+                    provenance=fact.get("provenance", "evidence_bundle"),
+                    tags=effective_tags,
+                    entry_kind="evidence",
+                    metadata={
+                        "domain": str(fact.get("domain") or ""),
+                        "solution_kind": str(fact.get("solution_kind") or ""),
+                        "bundle_id": effective_bundle_id,
+                        "provenance_grade": provenance_grade,
+                        "artifact_form": "canonical_knowledge",
+                        "source_authority_label": "canonical",
+                    },
+                    strict=True,
+                )
+                ctx.audit_chain.log(
+                    "hlf_memory_register_evidence_bundle",
+                    {
+                        "bundle_id": effective_bundle_id,
+                        "fact_index": idx,
+                        "sha256": entry.get("sha256"),
+                        "stored": entry.get("stored"),
+                    },
+                    agent_role="memory_store",
+                    goal_id=effective_bundle_id,
+                )
+                stored.append(entry)
+            except Exception as exc:
+                errors.append({"index": idx, "error": str(exc)})
+
+        ctx.emit_governance_event(
+            kind="memory_governance",
+            source="server_memory.hlf_memory_register_evidence_bundle",
+            action="register_evidence_bundle",
+            status="ok" if not errors else "partial",
+            severity="info",
+            subject_id=effective_bundle_id,
+            goal_id=effective_bundle_id,
+            details={
+                "bundle_id": effective_bundle_id,
+                "stored_count": len(stored),
+                "error_count": len(errors),
+                "provenance_grade": provenance_grade,
+            },
+            agent_role="memory_store",
+        )
+
+        return {
+            "status": "ok" if not errors else "partial",
+            "bundle_id": effective_bundle_id,
+            "stored_count": len(stored),
+            "error_count": len(errors),
+            "stored": stored,
+            "errors": errors[:10],
+            "provenance_grade": provenance_grade,
+            "topic": topic,
+        }
+
+    @mcp.tool()
+    def sg_memory_hks_research(
+        problem: str,
+        domain: str = "general-coding",
+        solution_kind: str = "research-inquiry",
+        topic: str = "hks_research_tasks",
+        tags: list[str] | None = None,
+        fresh_until_days: int = 7,
+    ) -> dict[str, Any]:
+        """Research-and-verify loop: recall governed knowledge, or create a research task.
+
+        Performs a governed recall for the given problem/query. If matching governed
+        evidence is found, returns it with full provenance. If nothing is found, creates
+        an ``hks_research_task`` in memory that can be picked up by a research agent later.
+
+        The research task is queryable via ``sg_memory_query(entry_kind="hks_research_task")``.
+
+        This tool works without SWARMGLASS_HLF_ENABLED=1 and has a graceful fallback
+        when Ollama/OpenRouter is unavailable — the research task is purely local.
+
+        Args:
+            problem: The problem or question to research.
+            domain: Knowledge domain (governance, memory, architecture, orchestration, persona, etc.)
+            solution_kind: Kind of solution being sought.
+            topic: Topic for the research task in memory.
+            tags: Tags for the research task.
+            fresh_until_days: Days until the research task is considered stale.
+        """
+        import time as _time
+
+        governance_event = ctx.emit_governance_event(
+            kind="memory_governance",
+            source="server_memory.sg_memory_hks_research",
+            action="hks_research_and_verify",
+            status="ok",
+            severity="info",
+            subject_id=problem,
+            goal_id=problem,
+            details={
+                "problem": problem,
+                "domain": domain,
+                "solution_kind": solution_kind,
+            },
+            agent_role="hks_research_agent",
+        )
+
+        try:
+            governed = hlf_governed_recall(
+                problem,
+                top_k=5,
+                domain=domain,
+                solution_kind=solution_kind,
+                include_weekly_artifacts=True,
+                include_hks=True,
+                include_witness_evidence=True,
+                require_provenance=True,
+            )
+        except Exception:
+            governed = {"results": [], "count": 0}
+
+        governed_results = governed.get("results") if isinstance(governed, dict) else []
+        if governed_results:
+            decorated, evidence_summary = _decorate_recalled_facts(list(governed_results))
+            return {
+                "status": "ok",
+                "research_phase": "recalled",
+                "problem": problem,
+                "domain": domain,
+                "solution_kind": solution_kind,
+                "result_count": len(decorated),
+                "results": decorated,
+                "evidence_summary": evidence_summary,
+                "operator_summary": (
+                    f"HKS research for '{problem}' returned {len(decorated)} governed result(s) "
+                    f"with {evidence_summary['evidence_backed_count']} evidence-backed."
+                ),
+                "governance_event": governance_event,
+            }
+
+        fresh_until_ts = _time.time() + (float(fresh_until_days) * 86400.0)
+        fresh_until_iso = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime(fresh_until_ts))
+
+        research_task_content = (
+            f"UNRESOLVED HKS RESEARCH TASK\n"
+            f"Problem: {problem}\n"
+            f"Domain: {domain}\n"
+            f"Solution kind: {solution_kind}\n"
+            f"Created: {_time.strftime('%Y-%m-%dT%H:%M:%SZ', _time.gmtime())}\n"
+            f"Fresh until: {fresh_until_iso}\n"
+            f"This task requires a research agent to investigate and capture a validated solution."
+        )
+
+        stored = ctx.memory_store.store(
+            research_task_content,
+            topic=topic,
+            confidence=1.0,
+            provenance="sg_memory_hks_research",
+            tags=(tags or []) + ["research-task", domain, solution_kind],
+            entry_kind="hks_research_task",
+            domain=domain,
+            solution_kind=solution_kind,
+            metadata={
+                "fresh_until": fresh_until_iso,
+                "governed_evidence": {
+                    "source_class": "hks_research_task",
+                    "source_type": "research_task",
+                    "source": "server_memory.sg_memory_hks_research",
+                    "collector": "hks_research_agent",
+                    "collected_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+                    "fresh_until": fresh_until_iso,
+                    "operator_summary": (
+                        f"Unresolved research task for problem: {problem} (domain: {domain})"
+                    ),
+                },
+            },
+        )
+
+        audit = ctx.audit_chain.log(
+            "sg_memory_hks_research",
+            {
+                "problem": problem,
+                "domain": domain,
+                "phase": "research_task_created",
+                "fact_id": stored.get("id"),
+                "sha256": stored.get("sha256"),
+                "fresh_until": fresh_until_iso,
+            },
+            agent_role="hks_research_agent",
+            goal_id=problem,
+        )
+
+        pointer_alias = f"{topic}-{stored.get('id', 'entry')}"
+        pointer = build_pointer_ref(pointer_alias, str(stored.get("sha256") or ""))
+
+        return {
+            "status": "ok",
+            "research_phase": "task_created",
+            "problem": problem,
+            "domain": domain,
+            "solution_kind": solution_kind,
+            "recall_result_count": 0,
+            "task_fact_id": stored.get("id"),
+            "task_sha256": stored.get("sha256"),
+            "task_pointer": pointer,
+            "task_entry_kind": "hks_research_task",
+            "task_topic": topic,
+            "fresh_until": fresh_until_iso,
+            "fresh_until_days": fresh_until_days,
+            "queryable_via": f'sg_memory_query(entry_kind="hks_research_task")',
+            "operator_summary": (
+                f"HKS research for '{problem}' found no governed results. "
+                f"Created hks_research_task (id={stored.get('id')}) valid until {fresh_until_iso}. "
+                f"Queryable via sg_memory_query with entry_kind='hks_research_task'."
+            ),
+            "audit": audit,
+            "governance_event": governance_event,
+        }
+
     def _register_sg_aliases(mcp: FastMCP, aliases: dict):
         """Register sg_ aliases that delegate to existing hlf_ tools."""
         import functools
@@ -1367,6 +1706,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "sg_memory_ingest_url": hlf_knowledge_ingest_url,
         "sg_memory_dedup": hlf_memory_dedup_check,
         "sg_memory_index": hlf_memory_index_embeddings,
+        "sg_memory_register_evidence_bundle": hlf_memory_register_evidence_bundle,
     })
 
     return {
@@ -1397,6 +1737,7 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_knowledge_ingest_url": hlf_knowledge_ingest_url,
         "hlf_memory_dedup_check": hlf_memory_dedup_check,
         "hlf_memory_index_embeddings": hlf_memory_index_embeddings,
+        "hlf_memory_register_evidence_bundle": hlf_memory_register_evidence_bundle,
         "sg_memory_store": hlf_memory_store,
         "sg_memory_query": hlf_memory_query,
         "sg_memory_hks_capture": hlf_hks_capture,
@@ -1424,4 +1765,8 @@ def register_memory_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "sg_memory_ingest_url": hlf_knowledge_ingest_url,
         "sg_memory_dedup": hlf_memory_dedup_check,
         "sg_memory_index": hlf_memory_index_embeddings,
+        "sg_memory_register_evidence_bundle": hlf_memory_register_evidence_bundle,
+        "sg_observe_status": sg_observe_status,
+        "sg_memory_hks_research": sg_memory_hks_research,
     }
+

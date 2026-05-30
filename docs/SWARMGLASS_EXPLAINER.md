@@ -145,8 +145,8 @@ BEFORE (HLF):
   Tool count: 215 total, all require DSL
 
 AFTER (SwarmGlass):
-  SWARMGLASS_EXPERIMENTAL=0  →  zero DSL imports, 141 governance tools active
-  SWARMGLASS_EXPERIMENTAL=1  →  193 tools, full compiler/runtime/translator available
+  SWARMGLASS_HLF_ENABLED=0  →  zero DSL imports, 141 governance tools active
+  SWARMGLASS_HLF_ENABLED=1  →  193 tools, full compiler/runtime/translator available
   Governance is always-on. DSL is opt-in.
 ```
 
@@ -160,7 +160,7 @@ The refactor touched 6 server files, moving DSL imports from module level into l
 | `server_translation.py` | 2 → inside `_build_translation_contract()` and `run_hlf_do()` | — |
 | `server_native.py` | 4 → inside `register_native_tools()` | — |
 | `server_capsule.py` | 6 → inside `register_capsule_tools()` | Added `capsule_for_tier` for module-level `_resolve_approval_request()` |
-| `server_resources.py` | 5 → inside `register_resources()` + SWARMGLASS_EXPERIMENTAL guard | Added `build_hlf_native_system_prompt`, `render_proof_markdown`, `verify_governance_proof`, local `HLFCompiler`/`HLFBytecode` in `_build_fixture_gallery_report()` |
+| `server_resources.py` | 5 → inside `register_resources()` + SWARMGLASS_HLF_ENABLED guard | Added `build_hlf_native_system_prompt`, `render_proof_markdown`, `verify_governance_proof`, local `HLFCompiler`/`HLFBytecode` in `_build_fixture_gallery_report()` |
 | `server_workflow_benchmark.py` | 1 → inside function | — |
 
 The critical discovery was a **two-layer bug pattern**: module-level helper functions referenced symbols that had been moved inside `register_*_tools()`. Functions like `_resolve_approval_request` (server_capsule.py), `run_hlf_swarm_mechanics` (server_core.py), and `_render_swarm_mechanics_status` (server_resources.py) couldn't see the lazily-imported symbols → `NameError` at runtime.

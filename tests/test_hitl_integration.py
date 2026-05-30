@@ -18,6 +18,9 @@ import tempfile
 import time
 from pathlib import Path
 
+# Repo root for subprocess cwd — works on all platforms
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
 import pytest
 
 
@@ -347,7 +350,7 @@ class TestCLIIntegration:
         result = subprocess.run(
             [sys.executable, "scripts/hlf_operator.py", "list"],
             capture_output=True, text=True, env=env,
-            cwd="C:/Users/gerry/generic_workspace/HLF_MCP",
+            cwd=str(REPO_ROOT),
         )
         assert "No pending approvals" in result.stdout
 
@@ -391,7 +394,7 @@ class TestCLIIntegration:
         r = subprocess.run(
             [sys.executable, "scripts/hlf_operator.py", "list"],
             capture_output=True, text=True, env=env,
-            cwd="C:/Users/gerry/generic_workspace/HLF_MCP",
+            cwd=str(REPO_ROOT),
         )
         assert capsule_id in r.stdout
 
@@ -400,7 +403,7 @@ class TestCLIIntegration:
             [sys.executable, "scripts/hlf_operator.py", "approve",
              "--capsule-id", capsule_id],
             capture_output=True, text=True, env=env,
-            cwd="C:/Users/gerry/generic_workspace/HLF_MCP",
+            cwd=str(REPO_ROOT),
         )
         assert "APPROVED" in r.stdout
 
@@ -409,7 +412,7 @@ class TestCLIIntegration:
             [sys.executable, "scripts/hlf_operator.py", "status",
              "--capsule-id", capsule_id],
             capture_output=True, text=True, env=env,
-            cwd="C:/Users/gerry/generic_workspace/HLF_MCP",
+            cwd=str(REPO_ROOT),
         )
         assert "COMPLETED" in r.stdout
 
@@ -453,7 +456,7 @@ class TestCLIIntegration:
             [sys.executable, "scripts/hlf_operator.py", "reject",
              "--capsule-id", capsule_id, "--reason", "test rejection"],
             capture_output=True, text=True, env=env,
-            cwd="C:/Users/gerry/generic_workspace/HLF_MCP",
+            cwd=str(REPO_ROOT),
         )
         assert "REJECTED" in r.stdout
 
@@ -461,6 +464,6 @@ class TestCLIIntegration:
             [sys.executable, "scripts/hlf_operator.py", "status",
              "--capsule-id", capsule_id],
             capture_output=True, text=True, env=env,
-            cwd="C:/Users/gerry/generic_workspace/HLF_MCP",
+            cwd=str(REPO_ROOT),
         )
         assert "REJECTED_HUMAN" in r.stdout

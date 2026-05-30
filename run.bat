@@ -12,6 +12,19 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
+REM -- Pre-flight: check for .env, invoke wizard if missing --
+if not exist ".env" (
+    echo [SETUP] First run detected - no .env found.
+    echo [SETUP] Launching quick setup wizard...
+    %PYTHON_EXE% setup_wizard.py --quick
+    if errorlevel 1 (
+        echo [WARN] Setup wizard had issues. Run 'python setup_wizard.py' to configure manually.
+    ) else (
+        echo [OK] Configuration complete.
+    )
+    echo.
+)
+
 if /I "%MODE%"=="stdio" goto stdio
 if /I "%MODE%"=="mcp" goto stdio
 if /I "%MODE%"=="http" goto http
@@ -26,6 +39,16 @@ if /I "%MODE%"=="docker-up" goto docker_up
 if /I "%MODE%"=="docker-down" goto docker_down
 if /I "%MODE%"=="docker-logs" goto docker_logs
 if /I "%MODE%"=="count" goto count
+if /I "%MODE%"=="setup" goto setup_wizard
+if /I "%MODE%"=="setup-wizard" goto setup_wizard
+if /I "%MODE%"=="overwatch" goto overwatch_daemon
+if /I "%MODE%"=="overwatch-daemon" goto overwatch_daemon
+if /I "%MODE%"=="recursivemas" goto recursivemas
+if /I "%MODE%"=="rmas" goto recursivemas
+if /I "%MODE%"=="recursivemas-train" goto recursivemas_train
+if /I "%MODE%"=="rmas-train" goto recursivemas_train
+if /I "%MODE%"=="recursivemas-governed" goto recursivemas_governed
+if /I "%MODE%"=="rmas-governed" goto recursivemas_governed
 if /I "%MODE%"=="help" goto help
 if /I "%MODE%"=="--help" goto help
 if /I "%MODE%"=="/?" goto help
@@ -126,26 +149,77 @@ if errorlevel 1 (
 docker logs grumprolled-hlf-mcp
 exit /b %errorlevel%
 
+:setup_wizard
+"%PYTHON_EXE%" setup_wizard.py %2 %3 %4
+exit /b %errorlevel%
+
+:overwatch_daemon
+echo [RUN] Starting overwatch daemon...
+if exist "Dockerfile.overwatch" (
+    where docker >nul 2>nul
+    if not errorlevel 1 (
+        echo [DOCKER] Building and starting overwatch container...
+        docker build -t hlf-overwatch:latest -f Dockerfile.overwatch .
+        docker run --rm --name hlf-overwatch -d hlf-overwatch:latest
+        echo [OK] Overwatch daemon started in Docker.
+        echo      View logs: docker logs -f hlf-overwatch
+        exit /b 0
+    )
+)
+echo [INFO] Docker not available, running overwatch in-process...
+"%PYTHON_EXE%" -m hlf_mcp.hlf.overwatch_daemon
+exit /b %errorlevel%
+
 :help
-echo HLF MCP run.bat
+echo SwarmGlass run.bat
 echo.
 echo Usage:
-echo   run.bat                 Start MCP stdio transport. MCP-safe: no stdout banner.
-echo   run.bat stdio           Same as default.
-echo   run.bat http [port]     Start Streamable HTTP on 127.0.0.1, default port 8123.
-echo   run.bat sse [port]      Start legacy SSE compatibility transport.
-echo   run.bat test            Run pytest suite.
-echo   run.bat lint            Run ruff over hlf_mcp and tests.
-echo   run.bat extension-test  Run VS Code bridge/operator shell npm tests.
-echo   run.bat count           Print live MCP tool/resource/prompt counts.
-echo   run.bat docker-build    Build grumprolled/hlf-mcp-mouthpiece:local.
-echo   run.bat docker-up       Build/start grumprolled-hlf-mcp on Streamable HTTP.
-echo   run.bat docker-down     Stop the Docker Compose stack.
-echo   run.bat docker-logs     Show grumprolled-hlf-mcp logs.
-echo   run.bat help            Show this help.
+echo   run.bat                  Start MCP stdio transport (default).
+echo   run.bat stdio            Same as default.
+echo   run.bat http [port]      Start Streamable HTTP on 127.0.0.1, default port 8123.
+echo   run.bat sse [port]       Start legacy SSE compatibility transport.
+echo   run.bat test             Run pytest suite.
+echo   run.bat lint             Run ruff over hlf_mcp and tests.
+echo   run.bat extension-test   Run VS Code bridge/operator shell npm tests.
+echo   run.bat count            Print live MCP tool/resource/prompt counts.
+echo   run.bat setup            Run the configuration wizard.
+echo   run.bat setup --quick    Quick setup (defaults + critical keys only).
+echo   run.bat setup --validate Verify .env configuration.
+echo   run.bat overwatch        Start overwatch daemon (Docker or in-process).
+echo   run.bat recursivemas         Run 4-Model RecursiveMAS Ring inference (SwarmGlass governed)
+echo   run.bat rmas                 Same as recursivemas (shorthand)
+echo   run.bat recursivemas-train   Train CrossModelAdapters for RecursiveMAS
+echo   run.bat rmas-train           Same as recursivemas-train (shorthand)
+echo   run.bat recursivemas-governed Run Governed RecursiveMAS with chain-trained checkpoints
+echo   run.bat rmas-governed        Same as recursivemas-governed (shorthand)
+echo   run.bat docker-build     Build grumprolled/hlf-mcp-mouthpiece:local.
+echo   run.bat docker-up        Build/start grumprolled-hlf-mcp on Streamable HTTP.
+echo   run.bat docker-down      Stop the Docker Compose stack.
+echo   run.bat docker-logs      Show grumprolled-hlf-mcp logs.
+echo   run.bat help             Show this help.
 exit /b 0
 
 :help_error
 echo.
-echo Usage: run.bat [stdio^|http [port]^|sse [port]^|test^|lint^|extension-test^|count^|docker-build^|docker-up^|docker-down^|docker-logs^|help] 1>&2
+echo Usage: run.bat [stdio^|http [port]^|sse [port]^|test^|lint^|extension-test^|count^|setup^|overwatch^|docker-build^|docker-up^|docker-down^|docker-logs^|help] 1>&2
 exit /b 1
+
+:recursivemas
+shift
+set "RMAS_ARGS=%1 %2 %3 %4 %5 %6 %7 %8 %9"
+echo [RUN] 4-Model RecursiveMAS Ring with SwarmGlass governance
+"%PYTHON_EXE%" -m hlf_mcp.recursivemas.inference %RMAS_ARGS%
+exit /b %errorlevel%
+
+:recursivemas_train
+shift
+set "RMAS_ARGS=%1 %2 %3 %4 %5 %6 %7 %8 %9"
+echo [RUN] Training CrossModelAdapters for RecursiveMAS
+"%PYTHON_EXE%" -m hlf_mcp.recursivemas.train %RMAS_ARGS%
+exit /b %errorlevel%
+:recursivemas_governed
+shift
+set "RMAS_ARGS=%1 %2 %3 %4 %5 %6 %7 %8 %9"
+echo [RUN] Governed RecursiveMAS Pipeline (SwarmGlass governance + official chain-trained checkpoints)
+"%PYTHON_EXE%" -m hlf_mcp.recursivemas.governed_pipeline %RMAS_ARGS%
+exit /b %errorlevel%

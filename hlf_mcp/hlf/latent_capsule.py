@@ -509,7 +509,8 @@ def governed_latent_infer(
                     "secret_hashes": secret_hashes,
                 }
 
-            _cache_root = "C:/Users/gerry/.cache/huggingface/recursivemas"
+            import os as _os
+            _cache_root = _os.path.expanduser("~/.cache/huggingface/recursivemas")
             _cp = _resolve_checkpoint_base
 
             agent_models = {

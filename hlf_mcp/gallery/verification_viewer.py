@@ -208,15 +208,78 @@ def display_verification_report(report_data: dict[str, Any]) -> None:
             print(f"\n  Gate Decision: [PROCEED] — All properties proven")
 
 
-def demo() -> None:
+def _build_live_verification_report(ctx: object) -> dict[str, Any]:
+    """Build verification report from live governance events."""
+    events: list[dict[str, Any]] = []
+    try:
+        if hasattr(ctx, "recent_governance_events"):
+            events = ctx.recent_governance_events(limit=50, kind="formal_verification")
+    except Exception:
+        pass
+
+    results: list[dict[str, Any]] = []
+    for evt in events:
+        verdict = str(evt.get("verdict", "")).lower()
+        status = "PROVEN" if verdict == "passed" else "COUNTEREXAMPLE" if verdict in ("failed", "blocked") else "RUNTIME_CHECKED"
+        results.append({
+            "property": str(evt.get("subject_id") or evt.get("event_id", "unknown"))[:48],
+            "status": status,
+            "kind": "FORMAL_VERIFICATION",
+            "message": str(evt.get("summary") or evt.get("details", {}).get("message", "") or "Governance verification event"),
+            "duration_ms": float(evt.get("duration_ms", 0.0)),
+        })
+
+    return {
+        "report_id": f"live-{len(events)}-events",
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "program": "live_verification_surface",
+        "compiled_version": "v3",
+        "trust_tier": "hearth",
+        "results": results,
+        "source": "live",
+    }
+
+
+def live(ctx: object) -> dict[str, Any]:
+    """Return live verification data from governance events (no demo fallback).
+
+    Args:
+        ctx: ServerContext with recent_governance_events() method.
+
+    Returns:
+        Report dict suitable for display_verification_report(), with ``source`` = ``"live"``.
+    """
+    return _build_live_verification_report(ctx)
+
+
+def demo(ctx: object | None = None) -> None:
     """Run the verification viewer demonstration.
 
-    Builds sample verification data and displays it with rich pass/fail/block
-    visualization suitable for operator inspection.
+    When *ctx* is a ServerContext, queries live governance events for
+    formal verification results.
+    When *ctx* is None (backward compatible), uses hardcoded sample data
+    tagged with ``"source": "demo"``.
+
+    Args:
+        ctx: Optional ServerContext for live verification queries.
     """
+    if ctx is not None:
+        try:
+            report = _build_live_verification_report(ctx)
+            if report.get("results"):
+                display_verification_report(report)
+                return
+        except Exception:
+            pass
     report = build_sample_report()
+    report["source"] = "demo"
     display_verification_report(report)
 
 
 if __name__ == "__main__":
-    demo()
+    try:
+        from hlf_mcp.server_context import build_server_context
+        ctx = build_server_context()
+    except Exception:
+        ctx = None
+    demo(ctx)

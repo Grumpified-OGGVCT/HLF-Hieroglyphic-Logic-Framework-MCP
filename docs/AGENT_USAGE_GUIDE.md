@@ -1,182 +1,148 @@
-# HLF Usage Guide for Non-Building Agents
+# SwarmGlass Usage Guide for Agents
 
-You are an agent that uses HLF — you do NOT need to build or modify the HLF toolkit itself. This guide shows you how to load it, speak it, and verify your output.
-
----
-
-## 1. Load HLF (One Line)
-
-```python
-from hlf_mcp.hlf.translator import language_to_hlf
-from hlf_mcp.hlf.compiler import HLFCompiler
-from hlf_mcp.hlf.pillar_auditor import PillarComplianceAuditor
-```
-
-No build steps. No config files. Just import and use.
+You are an agent that uses SwarmGlass — the universal AI governance layer. You do NOT need to build or modify the toolkit itself. This guide shows you how to load it, use its governance tools, and verify your output.
 
 ---
 
-## 2. Speak HLF: NLP → HLF → NLP
+## 1. Quickstart — One Line
 
-**Your job:** Receive user intent in natural language, process it through HLF, respond in natural language.
-
-```python
-# Step 1: Translate user intent to HLF
-hlf = language_to_hlf("Analyze /security/seccomp.json for vulnerabilities")
-# → produces structured HLF with Δ [INTENT], Ж [CONSTRAINT], etc.
-
-# Step 2: Validate before delivery
-compiler = HLFCompiler()
-result = compiler.compile_with_recovery(hlf)
-assert result["success"], f"HLF compile failed: {result}"
-
-# Step 3: Audit pillar compliance
-auditor = PillarComplianceAuditor()
-audit = auditor.audit(hlf)
-assert audit.compliant, f"Missing pillars: {audit.findings}"
-
-# Step 4: Respond to user in natural language
-# (HLF artifacts only shown if user explicitly requests them)
-```
-
----
-
-## 3. The 4 Pillars You MUST Check
-
-Every HLF message you produce or receive must have:
-
-| Pillar | Tag | Why It Matters |
-|--------|-----|----------------|
-| **Core** | `INTENT` | Every message declares its purpose |
-| **Verify** | `ASSERT`, `EXPECT`, or `RESULT` | Commitments are verifiable |
-| **Governance** | `VOTE`, `CONSTRAINT` | Multi-agent coordination is governed |
-| **Delegation** | `DELEGATE`, `ROUTE` | Work handoffs are explicit |
-
-**Quick check:**
-```python
-audit = PillarComplianceAuditor().audit(hlf_source)
-print(f"Score: {audit.overall_score:.2f}")
-print(f"Findings: {audit.findings}")
-```
-
----
-
-## 4. Use the Swarm (Multi-Agent)
-
-```python
-from hlf_mcp.hlf.swarm_orchestrator import SwarmOrchestrator
-from hlf_mcp.hlf.swarm_observer import SwarmObserver
-
-observer = SwarmObserver()
-swarm = SwarmOrchestrator(observer=observer)
-
-# Run a task through 3 agents
-result = swarm.run_3_agent_stack(task, translator_fn)
-
-# Check real-time progress
-for phase in result.phases:
-    print(f"{phase.role}: {phase.status} ({phase.metrics.get('time_ms', 0):.2f}ms)")
-```
-
----
-
-## 5. Available MCP Tools (What You Can Call)
-
-| Tool | What It Does |
-|------|-------------|
-| `hlf_translate_to_hlf` | Convert natural language → HLF |
-| `hlf_translate_to_english` | Convert HLF → natural language |
-| `hlf_compile` | Compile and validate HLF source |
-| `hlf_native_speak` | Validate your output before delivery |
-| `hlf_validate_output` | Self-check your HLF for completeness |
-| `hlf_pillar_audit` | Check pillar compliance of any HLF message |
-| `hlf_pillar_audit_conversation` | Audit a full agent conversation |
-| `hlf_cross_agent_consistency` | Compare how different agents handle the same task |
-| `hlf_self_improvement_swarm` | Run a swarm on an HLF improvement task |
-| `hlf_self_improvement_suite` | Run ALL improvement tasks and report |
-| `hlf_swarm_progress` | Query real-time swarm phase status |
-| `hlf_workflow_benchmark` | Benchmark a single task |
-| `hlf_repair` | Auto-repair broken HLF syntax |
-| `hlf_governance_event_log` | View audit trail |
-
----
-
-## 6. Quality Checklist (Before Every Response)
+SwarmGlass exposes **136 governance tools** as MCP tools. No imports needed. Just call them:
 
 ```
-□ HLF compiles successfully
-□ INTENT tag is present
-□ At least one verify pillar (ASSERT/EXPECT/RESULT)
-□ No unknown tags
-□ Pillar score >= 0.80
-□ If delegating: DELEGATE or ROUTE tag present
+Tool: sg_memory_store       → Store a fact with provenance tracking
+Tool: sg_audit_event_log    → Record a governed decision  
+Tool: sg_coordinate_handoff → Pass work between agents with cryptographic receipts
+Tool: sg_overwatch_scan     → Check health of all registered processes
+Tool: sg_secure_secret_store → Encrypt and store a secret
+```
+
+All tools work with natural language input. The governance layer validates, audits, and constrains automatically.
+
+---
+
+## 2. The Six Governance Pillars
+
+SwarmGlass is organized into six pillars. Every agent workflow touches at least three.
+
+### 🔍 Audit (12 tools) — Cryptographic Proof
+Every decision gets Merkle-chained with SHA-256. Tools: `sg_audit_event_log`, `sg_audit_merkle_verify`, `sg_audit_witness_record`, `sg_audit_evidence_show`
+
+### 🤝 Coordinate (9 tools) — Multi-Agent Orchestration
+Handoff work between agents with cryptographic receipts. Tools: `sg_coordinate_handoff_chain`, `sg_coordinate_instinct_step`, `sg_coordinate_drift_check`, `sg_coordinate_orchestration_contract`
+
+### 🧠 Memory (17 tools) — Provenance-Tracked Knowledge
+Store and retrieve facts with source tracking and hybrid search. Tools: `sg_memory_store`, `sg_memory_query`, `sg_memory_governed_recall`, `sg_memory_dream_run`, `sg_memory_resolve`
+
+### 👁️ Observe + Overwatch (7 tools) — Real-Time Monitoring
+Process health, feedback collection, watchdog daemon. Tools: `sg_overwatch_scan`, `sg_overwatch_status`, `sg_overwatch_health`, `sg_observe_feedback_submit`
+
+### 🔒 Secure (3 tools) — Encrypted Secrets
+AES-256-GCM encryption at rest. Tools: `sg_secure_secret_store`, `sg_secure_secret_retrieve`, `sg_secure_secret_rotate`
+
+### 📊 Model (1 tool)
+`sg_model_version_check` — Verify model compatibility and health.
+
+---
+
+## 3. Core Workflow: NL → Govern → Execute
+
+Every agent interaction follows this pattern:
+
+1. **Classify** — What is the user asking? (read, write, deploy, configure)
+2. **Validate** — Does it pass constraint checks? (`sg_coordinate_drift_check`)
+3. **Execute** — Perform the action under governance
+4. **Audit** — Record the decision (`sg_audit_event_log`)
+5. **Store** — Save results with provenance (`sg_memory_store`)
+6. **Report** — Return governed result to user
+
+You don't write HLF. You speak natural language. SwarmGlass handles the governance.
+
+---
+
+## 4. Common Agent Workflows
+
+### Store knowledge with provenance
+```
+sg_memory_store
+  content: "Deployed v2.3.1 to production at 14:22 UTC"
+  source: "deployment-pipeline"
+  tags: ["deployment", "production", "v2.3.1"]
+```
+
+### Recall governed knowledge
+```
+sg_memory_governed_recall
+  query: "last production deployment"
+  tier: "forge"
+```
+
+### Check process health
+```
+sg_overwatch_scan
+  targets: ["ollama", "chromadb", "hlf-mcp"]
+```
+
+### Pass work to another agent
+```
+sg_coordinate_handoff_chain
+  task: "Review security scan results"
+  to_agent: "security-reviewer"
+  evidence: {"scan_id": "abc123"}
 ```
 
 ---
 
-## 7. Directory Map (Read-Only for You)
+## 5. Quality Checklist
+
+Before completing any agent task:
+- □ Intent classified (`sg_coordinate_orchestration_contract`)
+- □ Constraints validated (`sg_coordinate_drift_check`)
+- □ Decision audited (`sg_audit_event_log`)
+- □ Results stored with provenance (`sg_memory_store`)
+- □ Handoff tracked if multi-agent (`sg_coordinate_handoff_record`)
+
+---
+
+## 6. Transport Modes
+
+| Mode | Windows | Mac/Linux | When to Use |
+|------|---------|-----------|-------------|
+| stdio | `run.bat` | `./run.sh` | Local MCP clients (Claude Desktop, Cursor) |
+| HTTP | `run.bat http 8123` | `./run.sh http 8123` | Networked MCP, Docker, remote agents |
+| SSE | `run.bat sse 8123` | `./run.sh sse 8123` | Legacy MCP clients |
+
+---
+
+## 7. Configuration
+
+On first run, the setup wizard prompts for:
+- **SWARMGLASS_MASTER_KEY** — AES-256 encryption key (required for secrets)
+- **SWARMGLASS_SESSION_SECRET** — HMAC signing secret
+- **SWARMGLASS_API_TOKEN** — HTTP auth bearer token
+- **OLLAMA_HOST** — Model server endpoint
+- **SWARMGLASS_AGENT_TIER** — Capability boundary (hearth/forge/sovereign)
+
+Run `python setup_wizard.py` anytime to reconfigure.
+
+---
+
+## 8. Key Files (Read-Only)
 
 ```
 hlf_mcp/
-  hlf/
-    translator.py       # NLP ↔ HLF conversion
-    compiler.py         # HLF compilation + recovery
-    pillar_auditor.py   # Compliance checking
-    swarm_orchestrator.py # Multi-agent coordination
-    swarm_observer.py   # Real-time progress
-    grammar.py          # Tag and glyph definitions
-  server.py             # All MCP tool registrations
-  server_swarm.py       # Swarm + compliance tools
-  server_native.py      # Native speak + validation
-  server_workflow_benchmark.py  # Benchmark tools
-tests/                  # 1080 tests you can read
+  server.py              # All 136 MCP tool registrations
+  server_audit.py        # Audit chain tools (12 sg_audit_*)
+  server_coordinate.py   # Coordination tools (9 sg_coordinate_*)
+  server_memory.py       # Memory tools (17 sg_memory_*)
+  server_overwatch.py    # Overwatch tools (4 sg_overwatch_*)
+  server_secure.py       # Secrets tools (3 sg_secure_*)
+docs/
+  SWARMGLASS_EXPLAINER.md  # Full architecture explainer
+  AGENTS_CATALOG.md        # Complete 136-tool catalog
+  AGENT_ONBOARDING.md      # Step-by-step onboarding
 ```
 
 ---
 
-## 8. Self-Improvement Tasks (What the Swarm Works On)
+**You do not need to modify SwarmGlass source code. You only need to call its tools correctly.**
 
-The swarm does NOT run random tasks. It improves HLF itself:
-
-- `add_tag_spec` — Add new HLF tags and grammar rules
-- `improve_translator` — Fix translator accuracy
-- `generate_test_cases` — Create edge-case tests
-- `improve_corrector` — Enhance self-healing parser
-- `optimize_gas_model` — Improve execution cost estimates
-- `expand_benchmark_corpus` — Add new benchmark domains
-
-Each task produces an actual artifact (code change, test file, config update).
-
----
-
-## 9. Example: Complete Agent Turn
-
-```python
-from hlf_mcp.hlf.translator import language_to_hlf
-from hlf_mcp.hlf.compiler import HLFCompiler
-from hlf_mcp.hlf.pillar_auditor import PillarComplianceAuditor
-
-# 1. User asks something
-user_input = "Deploy the app with auto routing and strict consensus"
-
-# 2. Translate to HLF
-hlf = language_to_hlf(user_input)
-
-# 3. Compile
-result = HLFCompiler().compile_with_recovery(hlf)
-if not result["success"]:
-    hlf = HLFCorrector().repair(hlf).repaired_source
-
-# 4. Audit pillars
-audit = PillarComplianceAuditor().audit(hlf)
-if not audit.compliant:
-    # Add missing pillars before responding
-    pass
-
-# 5. Respond to user (NLP)
-# HLF stays internal unless user asks to see it
-```
-
----
-
-**You do not need to modify HLF source code. You only need to use it correctly.**

@@ -17,11 +17,11 @@ Design principles (same as the rest of HLF):
 Usage::
 
     # Dry run — just list compliance status
-    python scripts/monitor_forks.py --repo Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP
+    python scripts/monitor_forks.py --repo Grumpified-OGGVCT/SwarmGlass-MCP
 
     # Create advisory issues on non-compliant forks (requires GITHUB_TOKEN)
     python scripts/monitor_forks.py \\
-        --repo Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP \\
+        --repo Grumpified-OGGVCT/SwarmGlass-MCP \\
         --create-issues \\
         --token $GITHUB_TOKEN
 
@@ -50,7 +50,7 @@ from typing import Any
 # ── Constants ────────────────────────────────────────────────────────────────
 
 GITHUB_API = "https://api.github.com"
-USER_AGENT = "HLF-Fork-Monitor/1.0 (github.com/Grumpified-OGGVCT/HLF-Hieroglyphic-Logic-Framework-MCP)"
+USER_AGENT = "HLF-Fork-Monitor/1.0 (github.com/Grumpified-OGGVCT/SwarmGlass-MCP)"
 
 # Files to spot-check via the GitHub contents API (raw presence check)
 SPOT_CHECK_FILES = [
@@ -66,7 +66,7 @@ ADVISORY_ISSUE_BODY_TEMPLATE = """\
 ## HLF Ethics Compliance Advisory
 
 Hi! This is an automated, non-invasive advisory from the upstream \
-[HLF-Hieroglyphic-Logic-Framework-MCP](https://github.com/{upstream_repo}) project.
+[SwarmGlass-MCP](https://github.com/{upstream_repo}) project.
 
 Our fork monitor noticed that the following governance files are missing or \
 may have been removed from this fork:

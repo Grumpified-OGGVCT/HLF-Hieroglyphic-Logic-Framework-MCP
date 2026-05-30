@@ -2134,6 +2134,36 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         )
         return {"status": "ok", "agent_id": agent_id, "evaluation": evaluation}
 
+    def _register_sg_aliases(mcp: FastMCP, aliases: dict):
+        """Register sg_ aliases that delegate to existing hlf_ tools."""
+        import functools
+        for sg_name, hlf_func in aliases.items():
+            def _make_wrapper(_name, _func):
+                @functools.wraps(_func)
+                def _wrapper(*args, **kwargs):
+                    return _func(*args, **kwargs)
+                _wrapper.__name__ = _name
+                return _wrapper
+            wrapper = _make_wrapper(sg_name, hlf_func)
+            mcp.tool(name=sg_name)(wrapper)
+
+    _register_sg_aliases(mcp, {
+        "sg_model_probe_hardware": hlf_probe_local_hardware,
+        "sg_model_recommend_embedding": hlf_recommend_embedding_profile,
+        "sg_model_sync_catalog": hlf_sync_model_catalog,
+        "sg_model_query_capabilities": hlf_query_profile_capabilities,
+        "sg_validate_align_check": hlf_align_check,
+        "sg_coordinate_route_request": hlf_route_governed_request,
+        "sg_model_get_embedding": hlf_get_embedding_profile,
+        "sg_model_get_catalog": hlf_get_model_catalog,
+        "sg_model_get_catalog_status": hlf_get_model_catalog_status,
+        "sg_bench_record_artifact": hlf_record_benchmark_artifact,
+        "sg_bench_get_artifact": hlf_get_benchmark_artifact,
+        "sg_model_evaluate_against_profile": hlf_evaluate_model_against_profile,
+        "sg_model_evaluate_requirements": hlf_evaluate_model_requirements,
+        "sg_model_evaluate_tiers": hlf_evaluate_model_requirement_tiers,
+    })
+
     return {
         "hlf_probe_local_hardware": hlf_probe_local_hardware,
         "hlf_recommend_embedding_profile": hlf_recommend_embedding_profile,
@@ -2149,4 +2179,18 @@ def register_profile_tools(mcp: FastMCP, ctx: ServerContext) -> dict[str, Any]:
         "hlf_evaluate_model_against_profile": hlf_evaluate_model_against_profile,
         "hlf_evaluate_model_requirements": hlf_evaluate_model_requirements,
         "hlf_evaluate_model_requirement_tiers": hlf_evaluate_model_requirement_tiers,
+        "sg_model_probe_hardware": hlf_probe_local_hardware,
+        "sg_model_recommend_embedding": hlf_recommend_embedding_profile,
+        "sg_model_sync_catalog": hlf_sync_model_catalog,
+        "sg_model_query_capabilities": hlf_query_profile_capabilities,
+        "sg_validate_align_check": hlf_align_check,
+        "sg_coordinate_route_request": hlf_route_governed_request,
+        "sg_model_get_embedding": hlf_get_embedding_profile,
+        "sg_model_get_catalog": hlf_get_model_catalog,
+        "sg_model_get_catalog_status": hlf_get_model_catalog_status,
+        "sg_bench_record_artifact": hlf_record_benchmark_artifact,
+        "sg_bench_get_artifact": hlf_get_benchmark_artifact,
+        "sg_model_evaluate_against_profile": hlf_evaluate_model_against_profile,
+        "sg_model_evaluate_requirements": hlf_evaluate_model_requirements,
+        "sg_model_evaluate_tiers": hlf_evaluate_model_requirement_tiers,
     }

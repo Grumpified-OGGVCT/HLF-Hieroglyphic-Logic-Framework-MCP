@@ -1,0 +1,104 @@
+{
+  "results": {
+    "Tier 6 - Formal Proofs": [
+      {
+        "question": "Prove by induction that the sum of the first n odd numbers equals n\u00b2. Show the base case and inductive step explicitly.",
+        "success": true,
+        "answer": " \\]\nSo, the base case is true.\n\n**Step 2: Inductive Step**\n\nAssume the statement is true for \\( n = k \\). That is, the sum of the first \\( k \\) odd numbers is \\( k^2 \\). We need to show that the sum of the first \\( k + 1 \\) odd numbers is \\( (k + 1)^2 \\).\n\nThe sum of the first \\( k + 1 \\) odd numbers is the sum of the first \\( k \\) odd numbers plus the \\( (k + 1) \\)-th odd number. The \\( (k + 1) \\)-th odd number is \\( 2(k + 1) - 1 = 2k + 1 \\). Therefore, we have:\n\\[ \\text{Sum of the first } (k +",
+        "time_s": 82.90742564201355
+      },
+      {
+        "question": "Prove: if a graph has n vertices and n edges, it must contain at least one cycle. Provide a rigorous proof.",
+        "success": true,
+        "answer": " length 2.\n\n2. **Inductive Step**: Assume that for some \\( k \\geq 2 \\), a graph with \\( k \\) vertices and \\( k \\) edges must contain at least one cycle. We need to show that a graph with \\( k+1 \\) vertices and \\( k+1 \\) edges must also contain at least one cycle.\n\n   - Consider a graph \\( G \\) with \\( k+1 \\) vertices and \\( k+1 \\) edges.\n   - Remove one edge from \\( G \\). The resulting graph \\( G' \\) has \\( k+1 \\) vertices and \\( k \\) edges.\n   - By the inductive hypothesis, \\( G' \\) must contai",
+        "time_s": 84.16460275650024
+      },
+      {
+        "question": "Prove that \u221a2 is irrational using proof by contradiction. Show every logical step.",
+        "success": true,
+        "answer": " with no common factors other than 1 (i.e., the fraction is in simplest form), and \\(b \\neq 0\\).\n\nSo, we have:\n\\[\n\\sqrt{2} = \\frac{a}{b}\n\\]\n\nSquaring both sides of the equation, we get:\n\\[\n2 = \\frac{a^2}{b^2}\n\\]\n\nMultiplying both sides by \\(b^2\\) gives:\n\\[\n2b^2 = a^2\n\\]\n\nThis equation tells us that \\(a^2\\) is an even number because it is equal to \\(2b^2\\), which is clearly even. Therefore, \\(a\\) must also be an even number (since the square of an odd number is odd, and the square of an even numb",
+        "time_s": 89.65706777572632
+      }
+    ],
+    "Tier 7 - Systems Design": [
+      {
+        "question": "Explain how Raft consensus works. Include leader election, log replication, and how it handles network partitions. Give pseudocode for the leader election timeout mechanism.",
+        "success": true,
+        "answer": " timeout)\n2.     // Check if leader election is complete\n3.     // If not, wait for the leader election to complete\n4.     // If leader election is complete, return the leader\n5. end while\n```\n\nThe algorithm can be implemented in Python as follows:\n\n```\ndef leader election timeout(time):\n    while time < timeout:\n        # Check if leader election is complete\n        # If not, wait for the leader election to complete\n        # If leader election is complete, return the leader\n        # end while",
+        "time_s": 79.50079846382141
+      },
+      {
+        "question": "A social media app has 100M users. Design a sharding strategy for the posts table. Explain shard key choice, rebalancing strategy, and how you'd handle cross-shard queries for a user's feed.",
+        "success": true,
+        "answer": "Key choices**: We can use a balanced sharding strategy where each shard contains approximately the same number of posts. Since there are 100M users and each user has a feed, we can assume that each user will see a certain number of posts. Let's say each user sees an average of 100 posts. Therefore, the total number of posts is 100M * 100 = 10^10 posts. If we use 100 sharding nodes, each node will contain approximately 10^8 posts. This is a balanced distribution.\n\n2. **Rebalanced strategy**: To i",
+        "time_s": 85.27775716781616
+      },
+      {
+        "question": "Design a rate limiter that can handle 1M requests/second across a distributed system. Explain the algorithm, data structures, and how you handle clock skew between nodes.",
+        "success": true,
+        "answer": " each node in the system. A good choice is a distributed average, which can be calculated by each node keeping a local average of the request rates and updating it based on the new request rate received.\n\n3. **Implement the ratelimiter**: The ratelimiter will have the following components:\n   - A distributed average of the request rates of all nodes.\n   - A clock skew meter to measure the skew between nodes.\n   - A rate limiter algorithm that will check the current rate of each node and limit th",
+        "time_s": 100.59909200668335
+      }
+    ],
+    "Tier 8 - Advanced Algorithms": [
+      {
+        "question": "Solve the 0/1 knapsack problem: given items with weights [2,3,4,5] and values [3,4,5,6], capacity 8. Show the DP table and trace the optimal selection.",
+        "success": true,
+        "answer": "where:\n- \\( w_i \\) is the weight of the i-th item\n- \\( v_i \\) is the value of the i-th item\n\nLet's fill in the DP table step by step:\n\n1. Initialize the table with zeros for the first row (no items):\n   \\[\n   \\begin{array}{c|ccccc}\n     & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 \\\\\n     \\hline\n     0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\\\\n   \\end{array}\n   \\]\n\n2. For the first item (weight = 2, value = 3):\n   \\[\n   \\begin{array}{c|ccccc}\n     & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 \\\\\n     \\hline\n     0 & ",
+        "time_s": 103.37762093544006
+      },
+      {
+        "question": "Implement the Levenshtein edit distance algorithm. Given 'kitten' and 'sitting', show the full DP matrix and trace the edits.",
+        "success": true,
+        "answer": " = [[0] * (n + 1) for _ in range(m + 1)]\n    \n    for i in range(m + 1):\n        dp[i][0] = i\n    for j in range(n + 1):\n        dp[0][j] = j\n    \n    for i in range(1, m + 1):\n        for j in range(1, n + 1):\n            if s1[i - 1] == s2[j - 1]:\n                dp[i][j] = dp[i - 1][j - 1]\n            else:\n                dp[i][j] = min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]) + 1\n    \n    return dp[m][n]\n\ns1 = \"kitten\"\ns2 = \"sitting\"\ndp = [[0] * (len(s2) + 1) for _ in range(len(s1) + 1",
+        "time_s": 88.93527626991272
+      },
+      {
+        "question": "Design an admissible and consistent heuristic for A* pathfinding on a grid with diagonal movement. Prove it's both admissible and consistent.",
+        "success": true,
+        "answer": " admissible if it never overestimates the cost from the current node \\( n \\) to the goal. Mathematically, for any node \\( n \\), \\( h(n) \\leq h^*(n) \\), where \\( h^*(n) \\) is the true cost from \\( n \\) to the goal.\n\n### Step 3: Definition of consistent (or Monotonic) Heuristic\nA heuristic \\( h(n) \\) is consistent if for every node \\( n \\) and every neighbor \\( n' \\) of \\( n \\), the following inequality holds:\n\\[ h(n) \\leq c(n, n') + h(n') \\]\nwhere \\( c(n, n') \\) is the cost of moving from \\( n \\)",
+        "time_s": 99.96276140213013
+      }
+    ],
+    "Tier 9 - Multi-File Code Gen": [
+      {
+        "question": "Create a minimal task queue system in Python with 3 files: queue.py (Redis-backed enqueue/dequeue), worker.py (processes tasks with retries), and main.py (wires them together with example usage). Include error handling for Redis connection failures.",
+        "success": true,
+        "answer": " # error handling\n            except:\n                task.addError()\n\n    def run self, tasks):\n        self processes the tasks one by one\n\nclass worker:\n    def __init__(self, retry_count=5):\n        self retry_count = retry_count\n\n    def process task self, task):\n        for _ in range self retry_count):\n            try:\n                result = task running the task\n                return result\n            except:\n                task.addError()\n        return task error\n\nclass main:\n    ",
+        "time_s": 86.60501289367676
+      },
+      {
+        "question": "Write a Python library with 3 modules: parser.py (recursive descent JSON parser from scratch), validator.py (schema validation against a JSON Schema-like spec), and serializer.py (pretty-printer with configurable indentation). Include __init__.py that exports the public API.",
+        "success": true,
+        "answer": ".remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.py')\nos.remove('py3000.p",
+        "time_s": 103.0738263130188
+      }
+    ],
+    "Tier 10 - Edge Cases & Ambiguity": [
+      {
+        "question": "What is 0/0? Explain the mathematical reasoning. If this is used in a program that must NOT crash, what should it return and why?",
+        "success": true,
+        "answer": " in 0. Therefore, there is no unique value for \\(c\\) that satisfies this equation. This means that \\(0/0\\) is indeterminate.\n\n3. **Indeterminate Form**: An indeterminate form is a mathematical expression that does not have a unique value. It means that the expression can take on different values depending on the context or the limits involved.\n\n4. **Conclusion**: Since \\(0/0\\) is indeterminate, it does not have a specific numerical value. In a program, if \\(0/0\\) is used, it should return an err",
+        "time_s": 80.82420039176941
+      },
+      {
+        "question": "A function is specified as: 'Given a list, return the most frequent element.' What edge cases exist? List at least 5 and how you'd handle each. Then implement it.",
+        "success": true,
+        "answer": ":\n        return lst[0]\n    \n    from collections import Counter\n    \n    frequency = Counter(lst)\n    most_common, most_common_count = frequency.most_common(1)[0]\n    \n    if len(lst) == 1:\n        return most_common\n    \n    for element, count in frequency.items():\n        if count == most_common_count:\n            return element\n```\n edge cases:\n1. Empty list: Return an error or a message indicating that the list is empty.\n2. List with one element: Return that element.\n3. List with multiple e",
+        "time_s": 80.6011323928833
+      },
+      {
+        "question": "You have a sorting algorithm that must be stable, in-place, and O(n log n) worst-case. Is this possible? If yes, which algorithm? If no, why not (prove the impossibility)?",
+        "success": true,
+        "answer": " any comparison-based sorting algorithm must have a worst-case time complexity of at least \u03a9(n log n).\n\nSince a stable sorting algorithm must maintain the relative order of equal elements, it cannot be asymptotically faster than any other sorting algorithm that does not maintain stability. Therefore, a stable, in-place, and O(n log n) worst-case sorting algorithm is impossible because it would contradict the fundamental lower bound for comparison-based sorting algorithms.\n\nThus, the answer is:\n\n",
+        "time_s": 79.39116072654724
+      }
+    ]
+  },
+  "total_time": 1255.1838891506195,
+  "summary": {
+    "passed": 14,
+    "total": 14,
+    "rate": "14/14"
+  }
+}

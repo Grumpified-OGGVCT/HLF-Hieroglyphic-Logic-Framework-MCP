@@ -1,0 +1,57 @@
+........................................................................ [  8%]
+..............................F..................FFFFFFFFFF............. [ 16%]
+FFFFFFFFFFFFFFFF........................................................ [ 25%]
+..............................................................x......... [ 33%]
+........................................................................ [ 41%]
+........................................................................ [ 50%]
+........................................................................ [ 58%]
+........................................................................ [ 67%]
+........................................................................ [ 75%]
+..................................................FFFF.FFF.FFF.......... [ 83%]
+.........................FF..................................F..F....... [ 92%]
+..........................................................F........      [100%]Running teardown with pytest sessionfinish...
+
+=========================== short test summary info ===========================
+FAILED tests/test_server_enterprise.py::TestEnterpriseToolsRegistered::test_enterprise_tool_count
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_enterprise_tools
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_auth
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_hitl
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_evidence
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_merkle
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_secrets
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_ab_test
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_load_test
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_chaos
+FAILED tests/test_server_enterprise.py::TestAgentOnboarding::test_onboarding_mentions_274_tests
+FAILED tests/test_server_native.py::TestHlfNativeSpeak::test_valid_hlf_returns_ok
+FAILED tests/test_server_native.py::TestHlfNativeSpeak::test_invalid_hlf_strict_rejects
+FAILED tests/test_server_native.py::TestHlfNativeSpeak::test_invalid_hlf_auto_repair
+FAILED tests/test_server_native.py::TestHlfNativeSpeak::test_returns_natural_language
+FAILED tests/test_server_native.py::TestHlfNativeSpeak::test_corrections_list_present
+FAILED tests/test_server_native.py::TestHlfValidateOutput::test_valid_output_passes
+FAILED tests/test_server_native.py::TestHlfValidateOutput::test_missing_tag_fails
+FAILED tests/test_server_native.py::TestHlfValidateOutput::test_missing_omega_fails
+FAILED tests/test_server_native.py::TestHlfValidateOutput::test_empty_output_fails
+FAILED tests/test_server_native.py::TestHlfValidateOutput::test_gas_check_passes
+FAILED tests/test_server_native.py::TestHlfCodeExecute::test_compile_error - ...
+FAILED tests/test_server_native.py::TestHlfCodeExecute::test_valid_hlf_executes
+FAILED tests/test_server_native.py::TestHlfCodeExecute::test_dry_run_does_not_execute
+FAILED tests/test_server_native.py::TestHlfCodeExecute::test_gas_limit_enforced
+FAILED tests/test_server_native.py::TestHlfCodeExecute::test_trace_present - ...
+FAILED tests/test_server_native.py::TestHlfCodeExecute::test_returns_hlf_result_block
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_string_op_concat
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_string_op_length
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_string_op_contains_true
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_string_op_contains_false
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_set_op_member
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_set_op_subset
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_set_op_cardinality
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_container_op_list_length
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_container_op_list_contains
+FAILED tests/test_verification_deepening.py::TestZ3SolverOperatorDispatch::test_check_container_op_map_keys
+FAILED tests/test_verification_deepening.py::TestInductiveProverStepAndTermination::test_well_founded_check_rejects_empty
+FAILED tests/test_verification_deepening.py::TestInductiveProverStepAndTermination::test_well_founded_check_rejects_constant
+FAILED tests/test_verification_deepening.py::TestEdgeCasesAndRegression::test_infinite_type_termination_measure
+FAILED tests/test_verification_deepening.py::TestEdgeCasesAndRegression::test_non_terminating_recursion_detection
+FAILED tests/test_workflow_benchmark.py::test_register_workflow_benchmark_tools
+42 failed, 816 passed, 1 xfailed in 54.33s

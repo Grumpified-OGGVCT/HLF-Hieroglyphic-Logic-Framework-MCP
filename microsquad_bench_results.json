@@ -1,0 +1,59 @@
+{
+  "results": {
+    "Tier 0 - Arithmetic": [
+      {
+        "question": "What is 15% of 240?",
+        "success": true,
+        "answer": " we can break it down:\n\\[ 0.15 \\times 240 = \\frac{15}{100} \\times 240 = \\frac{15 \\times 240}{100} \\]\n\nNow, calculate the numerator:\n\\[ 15 \\times 240 = 3600 \\]\n\nThen, divide by the denominator:\n\\[ \\",
+        "time_s": 78.60520672798157
+      },
+      {
+        "question": "What is 7*8+15?",
+        "success": true,
+        "answer": "5: \\(56 + 15\\).\n   \\[\n   56 + 15 = 71\n   \\]\n\nSo, the final answer is \\(\\boxed{71}\\).",
+        "time_s": 74.24664044380188
+      }
+    ],
+    "Tier 1 - Word Problems": [
+      {
+        "question": "If a bat and a ball cost $1.10 together, and the bat costs $1.00 more than the ball, how much does the ball cost?",
+        "success": true,
+        "answer": " the second equation into the first equation to solve for \\( A \\):\n\\[ (A + 1.00) + A = 1.10 \\]\n\\[ 2A + 1.00 = 1.10 \\]\n\\[ 2A = 1.10 - ",
+        "time_s": 77.71331071853638
+      }
+    ],
+    "Tier 2 - Prime/Sieve": [
+      {
+        "question": "Write a Python function that returns all prime numbers up to n using a sieve.",
+        "success": true,
+        "answer": "[i]:\n            for j in range(i**2, n + 1, i):\n                is_prime[j] = False\n    \n    # Extract the prime numbers\n    primes = [i for i in range(n + 1) if is_prime[i]]\n    \n    return primes\n`",
+        "time_s": 76.95098042488098
+      }
+    ],
+    "Tier 3 - Algebra": [
+      {
+        "question": "Solve for x: 3x^2 - 12x + 9 = 0",
+        "success": true,
+        "answer": " So, we factor out 3:\n   \\[\n   3(x^2 - 4x + 3) = 0\n   \\]\n   This simplifies to:\n   \\[\n   x^2 - 4x + 3 = 0\n   \\]\n\n3. **Factor the quadratic expression**: Next, we factor the quadratic expression \\(x^",
+        "time_s": 76.16974973678589
+      }
+    ],
+    "Tier 4 - Multi-Step Reasoning": [
+      {
+        "question": "A train leaves Station A at 60 mph. Another train leaves Station B at 80 mph heading toward A. The stations are 420 miles apart. When do they meet?",
+        "success": true,
+        "answer": ".\n\n4. Calculate the time it takes for the trains to meet:\n   - Time = Distance / Combined speed\n   - Time = 420 miles / 140 mph = 3 hours.\n\nTherefore, the trains will meet in \\boxed{3} hours.",
+        "time_s": 75.62198114395142
+      }
+    ],
+    "Tier 5 - Code Synthesis": [
+      {
+        "question": "Write a Python function that finds the longest palindromic substring in O(n) time (Manacher's algorithm).",
+        "success": true,
+        "answer": "]` represents the length of the longest palindromic substring ending at index `i`.\n   - The algorithm iterates through the string and expands around each character to find palindromes.\n\n2. **Python Im",
+        "time_s": 75.49936842918396
+      }
+    ]
+  },
+  "total_time": 534.8102350234985
+}

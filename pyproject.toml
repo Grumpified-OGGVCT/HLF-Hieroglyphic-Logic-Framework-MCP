@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hlf-mcp"
 version = "0.5.0"
-description = "HLF (Hieroglyphic Logic Framework) MCP Server — deterministic orchestration protocol for agentic systems"
+description = "SwarmGlass Governance Framework MCP Server — deterministic orchestration and governed execution for agentic systems (HLF language engine included)"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
@@ -31,6 +31,7 @@ hot  = ["valkey>=6.0.0"]
 # Full tier — hot + beartype for strict host-function type enforcement at runtime
 # Install:  uv sync --extra full  |   pip install "hlf-mcp[full]"
 full = ["valkey>=6.0.0", "beartype>=0.18.0", "z3-solver>=4.8.0"]
+recursivemas = ["torch>=2.0.0", "transformers>=4.45.0", "peft>=0.12.0", "bitsandbytes>=0.43.0", "accelerate>=0.30.0", "datasets>=2.0.0", "trl>=0.10.0"]
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
@@ -50,10 +51,15 @@ hlftest  = "hlf_mcp.hlf.hlftest:main"
 hlf-test-runner = "hlf_mcp.test_runner:main"
 hlf-evidence = "hlf_mcp.evidence_query:main"
 hlf-operator = "hlf_mcp.operator_cli:main"
+sg-operator = "hlf_mcp.operator_cli:sg_main"
 hlf-bench = "hlf_mcp.hlf.bench_tui:main"
+hlf-recursivemas = "hlf_mcp.recursivemas.cli:main_inference"
+hlf-recursivemas-train = "hlf_mcp.recursivemas.cli:main_train"
+hlf-recursivemas-official = "hlf_mcp.recursivemas.cli:main_official"
+hlf-recursivemas-governed = "hlf_mcp.recursivemas.cli:main_governed"
 
 [tool.hatch.build.targets.wheel]
-packages = ["hlf_mcp", "governance"]
+packages = ["hlf_mcp", "hlf_mcp.recursivemas", "governance"]
 
 [tool.hatch.build.targets.wheel.shared-data]
 "fixtures" = "hlf_mcp/fixtures"

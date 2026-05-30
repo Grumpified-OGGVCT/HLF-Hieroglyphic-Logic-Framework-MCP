@@ -335,7 +335,7 @@ class TestDashboardWithLiveTelemetry:
 
         assert enriched["telemetry"]["integrated"] is True
         assert enriched["telemetry"]["snapshot_id"] == snap.snapshot_id
-        assert enriched["swarm"]["source"] == "telemetry"
+        assert enriched["swarm"]["source"] == "simulated"  # no ctx passed → simulated fallback
 
     def test_integrate_telemetry_updates_overall_status(self) -> None:
         """Telemetry integration updates overall_status based on readiness."""
@@ -1479,10 +1479,10 @@ class TestTypedEffectPillarScore:
         assert total_weight == pytest.approx(1.0, abs=0.01)
 
     def test_status_is_valid(self) -> None:
-        """Status is one of healthy/degraded/critical."""
+        """Status is one of healthy/degraded/critical or requires_dsl."""
         from hlf_mcp.gallery.operator_dashboard import compute_typed_effect_pillar_score
         result = compute_typed_effect_pillar_score()
-        assert result["status"] in ("healthy", "degraded", "critical")
+        assert result["status"] in ("healthy", "degraded", "critical", "requires_dsl")
 
     def test_weighted_average_matches_score(self) -> None:
         """Score equals weighted average of component scores."""
@@ -1543,10 +1543,10 @@ class TestFormalVerificationPillarScore:
         assert total_weight == pytest.approx(1.0, abs=0.01)
 
     def test_status_is_valid(self) -> None:
-        """Status is one of healthy/degraded/critical."""
+        """Status is one of healthy/degraded/critical or no_verification_data."""
         from hlf_mcp.gallery.operator_dashboard import compute_formal_verification_pillar_score
         result = compute_formal_verification_pillar_score()
-        assert result["status"] in ("healthy", "degraded", "critical")
+        assert result["status"] in ("healthy", "degraded", "critical", "no_verification_data")
 
     def test_all_four_components_present(self) -> None:
         """The four required components are present."""
@@ -1896,6 +1896,20 @@ class TestDashboardFeedbackIntegration:
         assert "operator_saturation_score" in metrics
         assert "signal_to_noise_ratio" in metrics
         assert "mttr_seconds" in metrics
+        assert metrics["source"] == "no_data"
+        assert metrics["message"] == "No feedback collector available"
+
+    def test_compute_feedback_metrics_returns_zeros_without_collector(self) -> None:
+        """compute_feedback_metrics without collector returns honest zeros."""
+        from hlf_mcp.gallery.operator_dashboard import compute_feedback_metrics
+        metrics = compute_feedback_metrics()
+        assert metrics["total_alerts"] == 0
+        assert metrics["resolved"] == 0
+        assert metrics["dismissed"] == 0
+        assert metrics["escalated"] == 0
+        assert metrics["snoozed"] == 0
+        assert metrics["orphaned"] == 0
+        assert metrics["mttr_seconds"] == 0.0
 
     def test_compute_feedback_metrics_with_collector(self) -> None:
         """compute_feedback_metrics with collector returns live stats."""

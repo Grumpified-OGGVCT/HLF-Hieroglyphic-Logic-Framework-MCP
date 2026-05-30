@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 
 # SwarmGlass: capsule/host tools require DSL — gate behind EXP=1
-os.environ["SWARMGLASS_EXPERIMENTAL"] = "1"
+os.environ["SWARMGLASS_HLF_ENABLED"] = "1"
 
 from mcp.server.fastmcp import FastMCP
 from starlette.testclient import TestClient

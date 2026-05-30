@@ -115,7 +115,14 @@ def test_resolve_persona_runtime_metadata_uses_bounded_persona_catalog() -> None
 
     assert metadata is not None
     assert metadata["persona"] == "sentinel"
-    assert metadata["runtime_authority"] is False
+    assert metadata["runtime_authority"] is True  # sovereign tier default
+    assert metadata["authority_model"] == "tier_gated"
     assert metadata["internal_role"] == "security_boundary_reviewer"
     assert metadata["hat"] == "black"
     assert "cove" in metadata["cross_awareness"]
+
+    # Hearth tier returns advisory (no runtime authority)
+    advisory = resolve_persona_runtime_metadata("sentinel", active_tier="hearth")
+    assert advisory is not None
+    assert advisory["runtime_authority"] is False
+    assert advisory["authority_level"] == "advisory"

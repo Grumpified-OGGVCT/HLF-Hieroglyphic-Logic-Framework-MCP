@@ -54,7 +54,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0   # Full history required by SonarCloud for blame/coverage mapping
 
@@ -122,7 +122,7 @@ jobs:
 
       # ── Step 4: Codecov upload ────────────────────────────────────────────
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: /tmp/coverage.xml
